@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { supabase, signInWithGoogle, signOut, getSession, getProfile } from "./supabase.js";
+import { supabase, signInWithGoogle, signOut, getSession, getProfile, loadUserData, saveUserData, loadGlobalSkills, saveGlobalSkills } from "./supabase.js";
 
 /* ================================================================
    SEED DATA - 48 players from Excel + random fills
@@ -255,28 +255,75 @@ function calcSDBonus(pl, slot, sdState, totalSP) {
    ================================================================ */
 function useMedia(q){var _s=useState(false);var m=_s[0];var setM=_s[1];useEffect(function(){var mq=window.matchMedia(q);var fn=function(e){setM(e.matches);};setM(mq.matches);if(mq.addEventListener){mq.addEventListener("change",fn);}else{mq.addListener(fn);}return function(){if(mq.removeEventListener){mq.removeEventListener("change",fn);}else{mq.removeListener(fn);}};}, [q]);return m;}
 
-function useData(){
+function useData(userId, sdState, setSdState){
   var _p=useState([]);var players=_p[0];var setPlayers=_p[1];
   var _lm=useState({});var lineupMap=_lm[0];var setLineupMap=_lm[1];
   var _sk=useState(DEFAULT_SKILLS);var skills=_sk[0];var setSkills=_sk[1];
   var _lo=useState(true);var loading=_lo[0];var setLoading=_lo[1];
-  useEffect(function(){(async function(){
-    var ver = await sGet(SK.version);
-    var needReset = (!ver || ver < DATA_VERSION);
-    if (needReset) { await sSet(SK.version, DATA_VERSION); }
-    var p=await sGet(SK.players);
-    if(!needReset && p && p.length>=SEED_PLAYERS.length){setPlayers(p);}else{setPlayers(SEED_PLAYERS);await sSet(SK.players,SEED_PLAYERS);}
-    var lm=await sGet(SK.lineupMap);
-    if(!needReset && lm && Object.keys(lm).length>0){setLineupMap(lm);}else{setLineupMap(SEED_LINEUP);await sSet(SK.lineupMap,SEED_LINEUP);}
-    var sk=await sGet(SK.skills);
-    if(!needReset && sk && sk["타자"]){setSkills(sk);SKILL_DATA=sk;if(sk.weights)LIVE_WEIGHTS=sk.weights;}else{setSkills(DEFAULT_SKILLS);SKILL_DATA=DEFAULT_SKILLS;await sSet(SK.skills,DEFAULT_SKILLS);}
-    setLoading(false);
-  })();},[]);
+  var uidRef=React.useRef(userId);uidRef.current=userId;
+
+  useEffect(function(){
+    if(!userId)return;
+    (async function(){
+      if(supabase){
+        /* Load user data from Supabase */
+        var ud=await loadUserData(userId);
+        if(ud && ud.players && ud.players.length>0){
+          setPlayers(ud.players);
+          if(ud.lineupMap)setLineupMap(ud.lineupMap);
+          if(ud.sdConfig)setSdState(ud.sdConfig);
+        }else{
+          setPlayers(SEED_PLAYERS);setLineupMap(SEED_LINEUP);
+          await saveUserData(userId,{players:SEED_PLAYERS,lineupMap:SEED_LINEUP,sdConfig:{liveSetPo:0}});
+        }
+        /* Load global skills from Supabase */
+        var gsk=await loadGlobalSkills();
+        if(gsk && gsk["타자"]){setSkills(gsk);SKILL_DATA=gsk;if(gsk.weights)LIVE_WEIGHTS=gsk.weights;}
+        else{setSkills(DEFAULT_SKILLS);SKILL_DATA=DEFAULT_SKILLS;}
+      }else{
+        /* Fallback: localStorage */
+        var ver=await sGet(SK.version);var needReset=(!ver||ver<DATA_VERSION);
+        if(needReset){await sSet(SK.version,DATA_VERSION);}
+        var p2=await sGet(SK.players);
+        if(!needReset&&p2&&p2.length>=SEED_PLAYERS.length){setPlayers(p2);}else{setPlayers(SEED_PLAYERS);await sSet(SK.players,SEED_PLAYERS);}
+        var lm2=await sGet(SK.lineupMap);
+        if(!needReset&&lm2&&Object.keys(lm2).length>0){setLineupMap(lm2);}else{setLineupMap(SEED_LINEUP);await sSet(SK.lineupMap,SEED_LINEUP);}
+        var sk2=await sGet(SK.skills);
+        if(!needReset&&sk2&&sk2["타자"]){setSkills(sk2);SKILL_DATA=sk2;if(sk2.weights)LIVE_WEIGHTS=sk2.weights;}else{setSkills(DEFAULT_SKILLS);SKILL_DATA=DEFAULT_SKILLS;await sSet(SK.skills,DEFAULT_SKILLS);}
+      }
+      setLoading(false);
+    })();
+  },[userId]);
+
   SKILL_DATA=skills;if(skills.weights)LIVE_WEIGHTS=skills.weights;
-  var saveP=useCallback(async function(d){setPlayers(d);await sSet(SK.players,d);},[]);
-  var saveLM=useCallback(async function(d){setLineupMap(d);await sSet(SK.lineupMap,d);},[]);
-  var saveSK=useCallback(async function(d){setSkills(d);SKILL_DATA=d;await sSet(SK.skills,d);},[]);
-  return{players:players,lineupMap:lineupMap,skills:skills,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK};
+
+  var dbSave=useCallback(async function(np,nlm,nsd){
+    if(supabase&&uidRef.current){await saveUserData(uidRef.current,{players:np,lineupMap:nlm,sdConfig:nsd});}
+  },[]);
+
+  var saveP=useCallback(async function(d){
+    setPlayers(d);
+    if(supabase&&uidRef.current){await saveUserData(uidRef.current,{players:d,lineupMap:lineupMap,sdConfig:sdState});}
+    else{await sSet(SK.players,d);}
+  },[lineupMap,sdState]);
+
+  var saveLM=useCallback(async function(d){
+    setLineupMap(d);
+    if(supabase&&uidRef.current){await saveUserData(uidRef.current,{players:players,lineupMap:d,sdConfig:sdState});}
+    else{await sSet(SK.lineupMap,d);}
+  },[players,sdState]);
+
+  var saveSK=useCallback(async function(d){
+    setSkills(d);SKILL_DATA=d;
+    if(supabase){await saveGlobalSkills(d);}
+    else{await sSet(SK.skills,d);}
+  },[]);
+
+  var saveSdState=useCallback(async function(nsd){
+    if(supabase&&uidRef.current){await saveUserData(uidRef.current,{players:players,lineupMap:lineupMap,sdConfig:nsd});}
+  },[players,lineupMap]);
+
+  return{players:players,lineupMap:lineupMap,skills:skills,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState};
 }
 
 /* ================================================================
@@ -1819,9 +1866,7 @@ function Nav(p){
       <div style={{position:"fixed",left:open?0:-260,top:0,bottom:0,width:240,background:"var(--side)",borderRight:"1px solid var(--bd)",zIndex:160,transition:"left 0.25s ease",display:"flex",flexDirection:"column",padding:"60px 0 16px"}}>
         {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid #FFD54F":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:12,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}</button>);})}
         <div style={{marginTop:"auto",padding:"12px 16px",borderTop:"1px solid var(--bd)"}}>
-          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:10,color:"var(--td)",cursor:"pointer",marginBottom:8}}>
-            <input type="checkbox" checked={p.isAdmin} onChange={function(e){p.setAdmin(e.target.checked);}} />{"관리자 모드"}
-          </label>
+  {p.isAdmin&&(<div style={{fontSize:9,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
           <button onClick={p.logout} style={{width:"100%",padding:8,fontSize:10,background:"rgba(255,255,255,0.03)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
         </div>
       </div>
@@ -1835,9 +1880,7 @@ function Nav(p){
         {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid #FFD54F":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:11,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40}}><span style={{fontSize:13}}>{t.icon}</span>{t.label}</button>);})}
       </div>
       <div style={{padding:"10px 14px",borderTop:"1px solid var(--bd)"}}>
-        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:10,color:"var(--td)",cursor:"pointer",marginBottom:8}}>
-          <input type="checkbox" checked={p.isAdmin} onChange={function(e){p.setAdmin(e.target.checked);}} style={{accentColor:"var(--acc)"}} />{"관리자 모드"}
-        </label>
+{p.isAdmin&&(<div style={{fontSize:9,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
           {p.authType==="google"?(
             <div style={{width:26,height:26,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -2566,9 +2609,19 @@ export default function App(){
   var _a=useState(false);var isAdmin=_a[0];var setAdmin=_a[1];
   var _at=useState("");var authType=_at[0];var setAuthType=_at[1];
   var _sd=useState({liveSetPo:0});var sdState=_sd[0];var setSdState=_sd[1];
+  var _uid=useState(null);var userId=_uid[0];var setUserId=_uid[1];
   var _authChecked=useState(false);var authChecked=_authChecked[0];var setAuthChecked=_authChecked[1];
   var mob=useMedia("(max-width:640px)");var tbl=useMedia("(min-width:641px) and (max-width:1024px)");
-  var store=useData();
+  var store=useData(userId,sdState,setSdState);
+
+  /* Save sdState to Supabase when it changes */
+  var sdTimerRef=React.useRef(null);
+  useEffect(function(){
+    if(!userId||store.loading)return;
+    if(sdTimerRef.current)clearTimeout(sdTimerRef.current);
+    sdTimerRef.current=setTimeout(function(){store.saveSdState(sdState);},800);
+    return function(){if(sdTimerRef.current)clearTimeout(sdTimerRef.current);};
+  },[sdState,userId,store.loading]);
 
   /* Supabase auth state listener */
   useEffect(function(){
@@ -2579,6 +2632,7 @@ export default function App(){
         setUser(session.user.user_metadata.name || session.user.email || "User");
         setAuthType("google");
         setAdmin(profile ? profile.is_admin : false);
+        setUserId(session.user.id);
         setLi(true);
       }
       setAuthChecked(true);
@@ -2595,7 +2649,7 @@ export default function App(){
   if(!li)return(<LoginPage onLogin={function(u,type,adm){setUser(u);setAuthType(type||"dev");setAdmin(adm||false);setLi(true);}}/>);
   if(store.loading)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 데이터 로딩중..."}</div></div>);
 
-  var lo=function(){if(supabase){signOut();}setLi(false);setUser("");setAuthType("");setTab("lineup");setAdmin(false);};
+  var lo=function(){if(supabase){signOut();}setLi(false);setUser("");setAuthType("");setTab("lineup");setAdmin(false);setUserId(null);};
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} skills={store.skills}/>);
@@ -2608,7 +2662,7 @@ export default function App(){
 
   return(
     <div style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
-      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin} setAdmin={setAdmin}/>
+      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin}/>
       <div style={{flex:1,overflowY:"auto",minHeight:"100vh",paddingTop:tbl?50:0}}>{pg}</div>
       <style>{"\
         @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');\
