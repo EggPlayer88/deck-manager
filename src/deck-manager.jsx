@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { supabase, signInWithGoogle, signOut, getSession, getProfile } from "./supabase.js";
 
 /* ================================================================
    SEED DATA - 48 players from Excel + random fills
@@ -1701,11 +1702,7 @@ function PosTrainPage(p) {
    Google: 서버 DB 저장, 여러 팀 관리 가능
    Guest: localStorage 저장, 1팀만 관리
    ================================================================ */
-var AUTH_CONFIG = {
-  googleClientId: "YOUR_GOOGLE_CLIENT_ID",
-  redirectUri: "YOUR_REDIRECT_URI",
-  enabled: false
-};
+/* Auth handled by Supabase */
 
 function LoginPage(p) {
   var mob = useMedia("(max-width:600px)");
@@ -1714,22 +1711,21 @@ function LoginPage(p) {
   var _nick = useState(""); var nick = _nick[0]; var setNick = _nick[1];
 
   var googleLogin = function() {
-    if (AUTH_CONFIG.enabled) {
-      var url = "https://accounts.google.com/o/oauth2/v2/auth?"
-        + "client_id=" + AUTH_CONFIG.googleClientId
-        + "&redirect_uri=" + encodeURIComponent(AUTH_CONFIG.redirectUri)
-        + "&response_type=token&scope=email%20profile";
-      window.location.href = url;
+    if (supabase) {
+      setLd(true);
+      signInWithGoogle().then(function(res) {
+        if (res.error) { alert("로그인 실패: " + res.error.message); setLd(false); }
+      });
     } else {
       setLd(true);
-      setTimeout(function() { p.onLogin("Google 사용자", "google"); }, 800);
+      setTimeout(function() { p.onLogin("Google 사용자", "google", false); }, 800);
     }
   };
 
   var guestLogin = function() {
     if (!nick.trim()) return;
     setLd(true);
-    setTimeout(function() { p.onLogin(nick, "guest"); }, 500);
+    setTimeout(function() { p.onLogin(nick, "guest", false); }, 500);
   };
 
   return (
@@ -2570,13 +2566,36 @@ export default function App(){
   var _a=useState(false);var isAdmin=_a[0];var setAdmin=_a[1];
   var _at=useState("");var authType=_at[0];var setAuthType=_at[1];
   var _sd=useState({liveSetPo:0});var sdState=_sd[0];var setSdState=_sd[1];
+  var _authChecked=useState(false);var authChecked=_authChecked[0];var setAuthChecked=_authChecked[1];
   var mob=useMedia("(max-width:640px)");var tbl=useMedia("(min-width:641px) and (max-width:1024px)");
   var store=useData();
 
-  if(!li)return(<LoginPage onLogin={function(u,type){setUser(u);setAuthType(type||"dev");setLi(true);}}/>);
+  /* Supabase auth state listener */
+  useEffect(function(){
+    if(!supabase){setAuthChecked(true);return;}
+    var handleAuth = async function(session) {
+      if(session && session.user) {
+        var profile = await getProfile(session.user.id);
+        setUser(session.user.user_metadata.name || session.user.email || "User");
+        setAuthType("google");
+        setAdmin(profile ? profile.is_admin : false);
+        setLi(true);
+      }
+      setAuthChecked(true);
+    };
+    getSession().then(function(session){handleAuth(session);});
+    var sub = supabase.auth.onAuthStateChange(function(event, session){
+      if(event==="SIGNED_IN" && session){handleAuth(session);}
+      if(event==="SIGNED_OUT"){setLi(false);setUser("");setAdmin(false);}
+    });
+    return function(){if(sub && sub.data && sub.data.subscription){sub.data.subscription.unsubscribe();}};
+  },[]);
+
+  if(!authChecked)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 인증 확인중..."}</div></div>);
+  if(!li)return(<LoginPage onLogin={function(u,type,adm){setUser(u);setAuthType(type||"dev");setAdmin(adm||false);setLi(true);}}/>);
   if(store.loading)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 데이터 로딩중..."}</div></div>);
 
-  var lo=function(){setLi(false);setUser("");setAuthType("");setTab("lineup");};
+  var lo=function(){if(supabase){signOut();}setLi(false);setUser("");setAuthType("");setTab("lineup");setAdmin(false);};
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} skills={store.skills}/>);
@@ -2602,3 +2621,4 @@ export default function App(){
     </div>
   );
 }
+
