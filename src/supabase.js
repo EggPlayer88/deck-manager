@@ -7,13 +7,13 @@ export var supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) 
   : null;
 
+/* ============ Auth ============ */
 export async function signInWithGoogle() {
   if (!supabase) return { error: 'Supabase not configured' };
-  var result = await supabase.auth.signInWithOAuth({
+  return await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin }
   });
-  return result;
 }
 
 export async function signOut() {
@@ -23,17 +23,57 @@ export async function signOut() {
 
 export async function getSession() {
   if (!supabase) return null;
-  var result = await supabase.auth.getSession();
-  return result.data.session;
+  var r = await supabase.auth.getSession();
+  return r.data.session;
 }
 
 export async function getProfile(userId) {
   if (!supabase) return null;
-  var result = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-  return result.data;
+  var r = await supabase.from('profiles').select('*').eq('id', userId).single();
+  return r.data;
+}
+
+/* ============ User Data (per-user) ============ */
+export async function loadUserData(userId) {
+  if (!supabase || !userId) return null;
+  var r = await supabase.from('user_settings').select('sd_state').eq('user_id', userId).single();
+  if (r.data && r.data.sd_state) return r.data.sd_state;
+  return null;
+}
+
+export async function saveUserData(userId, data) {
+  if (!supabase || !userId) return false;
+  var r = await supabase.from('user_settings').upsert({
+    user_id: userId,
+    sd_state: data,
+    updated_at: new Date().toISOString()
+  });
+  return !r.error;
+}
+
+/* ============ Global Skills (admin) ============ */
+export async function loadGlobalSkills() {
+  if (!supabase) return null;
+  var r = await supabase.from('global_skills').select('data,weights').order('updated_at', { ascending: false }).limit(1).single();
+  if (r.data) {
+    var sk = r.data.data;
+    if (r.data.weights) sk.weights = r.data.weights;
+    return sk;
+  }
+  return null;
+}
+
+export async function saveGlobalSkills(skillsData) {
+  if (!supabase) return false;
+  var w = skillsData.weights || {};
+  var d = Object.assign({}, skillsData);
+  delete d.weights;
+  var r = await supabase.from('global_skills').upsert({
+    id: '00000000-0000-0000-0000-000000000001',
+    data: d,
+    weights: w,
+    updated_at: new Date().toISOString()
+  });
+  return !r.error;
 }
 
