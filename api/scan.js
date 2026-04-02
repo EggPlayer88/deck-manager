@@ -1,6 +1,6 @@
 /**
  * /api/scan.js — Vercel 서버리스 함수
- * Claude claude-3-5-haiku 비전 API 사용
+ * Claude claude-sonnet-4-6 비전 API 사용
  *
  * Vercel 환경변수 설정 필요:
  *   ANTHROPIC_API_KEY=sk-ant-...
@@ -14,7 +14,7 @@
  */
 
 const DAILY_LIMIT = 500;
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 4096;
 
 export default async function handler(req, res) {
