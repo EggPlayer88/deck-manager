@@ -2694,22 +2694,28 @@ function BulkScanModal(p) {
       // 타자 분석
       setMsg('⚾ 타자 라인업 분석 중…');
       var batRaw = await scanLineupScreen(imgs[0].base64, imgs[0].mediaType, '타자');
-      var bats = batRaw.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
+      var batParsed = typeof batRaw === 'string' ? JSON.parse(batRaw) : batRaw;
+      if (!Array.isArray(batParsed)) throw new Error('타자 분석 결과 형식 오류');
+      var bats = batParsed.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
       if (imgs[1]) {
         setMsg('⚡ 타자 스킬 분석 중…');
-        var bSkill = await scanSkillScreen(imgs[1].base64, imgs[1].mediaType, bats.map(function(b){return b.name;}));
-        bats = mergeSkillsInto(bats, bSkill);
+        var bSkillRaw = await scanSkillScreen(imgs[1].base64, imgs[1].mediaType, bats.map(function(b){return b.name;}));
+        var bSkill = typeof bSkillRaw === 'string' ? JSON.parse(bSkillRaw) : bSkillRaw;
+        bats = mergeSkillsInto(bats, Array.isArray(bSkill) ? bSkill : []);
       }
       allPlayers = allPlayers.concat(bats);
       // 투수 분석
       if (imgs[2]) {
         setMsg('🎯 투수 라인업 분석 중…');
         var pitRaw = await scanLineupScreen(imgs[2].base64, imgs[2].mediaType, '투수');
-        var pits = pitRaw.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
+        var pitParsed = typeof pitRaw === 'string' ? JSON.parse(pitRaw) : pitRaw;
+        if (!Array.isArray(pitParsed)) throw new Error('투수 분석 결과 형식 오류');
+        var pits = pitParsed.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
         if (imgs[3]) {
           setMsg('⚡ 투수 스킬 분석 중…');
-          var pSkill = await scanSkillScreen(imgs[3].base64, imgs[3].mediaType, pits.map(function(b){return b.name;}));
-          pits = mergeSkillsInto(pits, pSkill);
+          var pSkillRaw = await scanSkillScreen(imgs[3].base64, imgs[3].mediaType, pits.map(function(b){return b.name;}));
+          var pSkill = typeof pSkillRaw === 'string' ? JSON.parse(pSkillRaw) : pSkillRaw;
+          pits = mergeSkillsInto(pits, Array.isArray(pSkill) ? pSkill : []);
         }
         allPlayers = allPlayers.concat(pits);
       }
