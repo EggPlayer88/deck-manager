@@ -29,16 +29,17 @@ export async function getSession() {
 
 export async function getProfile(userId) {
   if (!supabase) return null;
-  var r = await supabase.from('profiles').select('*').eq('id', userId).single();
-  return r.data;
+  var r = await supabase.from('profiles').select('*').eq('id', userId);
+  if (r.error || !r.data || r.data.length === 0) return null;
+  return r.data[0];
 }
 
 /* ============ User Data (per-user) ============ */
 export async function loadUserData(userId) {
   if (!supabase || !userId) return null;
-  var r = await supabase.from('user_settings').select('sd_state').eq('user_id', userId).single();
-  if (r.data && r.data.sd_state) return r.data.sd_state;
-  return null;
+  var r = await supabase.from('user_settings').select('sd_state').eq('user_id', userId);
+  if (r.error || !r.data || r.data.length === 0) return null;
+  return r.data[0].sd_state || null;
 }
 
 export async function saveUserData(userId, data) {
@@ -54,13 +55,11 @@ export async function saveUserData(userId, data) {
 /* ============ Global Skills (admin) ============ */
 export async function loadGlobalSkills() {
   if (!supabase) return null;
-  var r = await supabase.from('global_skills').select('data,weights').order('updated_at', { ascending: false }).limit(1).single();
-  if (r.data) {
-    var sk = r.data.data;
-    if (r.data.weights) sk.weights = r.data.weights;
-    return sk;
-  }
-  return null;
+  var r = await supabase.from('global_skills').select('data,weights').order('updated_at', { ascending: false }).limit(1);
+  if (r.error || !r.data || r.data.length === 0) return null;
+  var sk = r.data[0].data;
+  if (r.data[0].weights) sk.weights = r.data[0].weights;
+  return sk;
 }
 
 export async function saveGlobalSkills(skillsData) {
