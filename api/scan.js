@@ -31,7 +31,7 @@ export default async function handler(req, res) {
   }
 
   /* Gemini 1.5 Flash — 무료 티어 사용 */
-  const GEMINI_MODEL = 'gemini-1.5-flash';
+  const GEMINI_MODEL = 'gemini-2.0-flash';
   const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const body = {
