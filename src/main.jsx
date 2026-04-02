@@ -16,7 +16,8 @@ import {
   deleteGlobalPlayer,
 } from './supabase.js';
 
-/* Inject supabase functions into global scope for deck-manager.jsx */
+/* window._SUPABASE를 먼저 설정한 뒤 deck-manager를 동적으로 import
+   → ES 모듈 호이스팅으로 인해 정적 import시 supabase가 null로 인식되는 문제 해결 */
 window._SUPABASE = {
   supabase,
   signInWithGoogle,
@@ -32,8 +33,9 @@ window._SUPABASE = {
   deleteGlobalPlayer,
 };
 
-import App from './deck-manager.jsx';
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  React.createElement(App)
-);
+import('./deck-manager.jsx').then(function(module) {
+  var App = module.default;
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    React.createElement(App)
+  );
+});
