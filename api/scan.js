@@ -15,7 +15,7 @@
 
 const DAILY_LIMIT = 500;
 const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
-const MAX_TOKENS = 1024;
+const MAX_TOKENS = 4096;
 
 export default async function handler(req, res) {
   /* CORS */
