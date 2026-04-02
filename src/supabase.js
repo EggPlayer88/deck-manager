@@ -77,3 +77,21 @@ export async function saveGlobalSkills(skillsData) {
   return !r.error;
 }
 
+/* ============ Global Players (admin) ============ */
+export async function loadGlobalPlayers() {
+  if (!supabase) return [];
+  var r = await supabase.from('global_players').select('*').order('card_type').order('name');
+  return r.data || [];
+}
+
+export async function saveGlobalPlayer(player) {
+  if (!supabase) return false;
+  var r = await supabase.from('global_players').upsert(player, { onConflict: 'id' });
+  return !r.error;
+}
+
+export async function deleteGlobalPlayer(id) {
+  if (!supabase) return false;
+  var r = await supabase.from('global_players').delete().eq('id', id);
+  return !r.error;
+}
