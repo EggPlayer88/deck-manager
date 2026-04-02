@@ -853,12 +853,12 @@ function PCard(p) {
    BULLPEN DROPDOWN + LAYOUT
    ================================================================ */
 function getPotmBonus(pl, sdState) {
-  var potmNames = sdState.potmNames || [];
-  if (!potmNames.length || !pl || !pl.name) return 0;
+  var potmList = sdState.potmList || [];
+  if (!potmList.length || !pl) return 0;
+  var dbId = pl.dbId || pl.id;
   var isPotm = false;
-  for (var i = 0; i < potmNames.length; i++) {
-    var n = potmNames[i];
-    if (pl.name.indexOf(n) >= 0 || n.indexOf(pl.name) >= 0) { isPotm = true; break; }
+  for (var i = 0; i < potmList.length; i++) {
+    if (potmList[i].id === dbId) { isPotm = true; break; }
   }
   if (!isPotm) return 0;
   var ct = pl.cardType;
@@ -1389,15 +1389,12 @@ function LineupPage(p) {
   /* Auto-calculate set points from lineup card types */
   var calcSetPoint = function() {
     var total = 0;
-    var potmNames = sdState.potmNames || [];
+    var potmList = sdState.potmList || [];
     var teamName = sdState.teamName || "";
     var getPotmSetDelta = function(pl) {
-      if (!potmNames.length || !pl || !pl.name) return 0;
-      var isPotm = false;
-      for (var i = 0; i < potmNames.length; i++) {
-        var n = potmNames[i];
-        if (pl.name.indexOf(n) >= 0 || n.indexOf(pl.name) >= 0) { isPotm = true; break; }
-      }
+      if (!potmList.length || !pl) return 0;
+      var dbId = pl.dbId || pl.id;
+      var isPotm = potmList.some(function(p) { return p.id === dbId; });
       if (!isPotm) return 0;
       var ct = pl.cardType;
       var teamMatch = !teamName || !pl.team || pl.team === teamName;
@@ -2157,23 +2154,33 @@ function LockerRoomPage(p) {
     );
   };
 
-  /* POTM roster (admin-managed names) */
-  var potmNames = sdState.potmNames || [];
-  var addPotm = function() {
-    if (!newPotm.trim()) return;
-    upd("potmNames", potmNames.concat([newPotm.trim()]));
-    setNewPotm("");
-  };
-  var rmPotm = function(idx) { upd("potmNames", potmNames.filter(function(_, i) { return i !== idx; })); };
+  /* POTM roster - potmList: [{id, name, team, cardType, stars}] */
+  var potmList = sdState.potmList || [];
+  var _potmSearch = useState(""); var potmSearch = _potmSearch[0]; var setPotmSearch = _potmSearch[1];
+  var _potmSearchOpen = useState(false); var potmSearchOpen = _potmSearchOpen[0]; var setPotmSearchOpen = _potmSearchOpen[1];
 
-  /* Match POTM names to players (내 선수 전체 기준) */
+  var addPotmPlayer = function(sp) {
+    var already = potmList.some(function(x) { return x.id === sp.id; });
+    if (already) return;
+    upd("potmList", potmList.concat([{id: sp.id, name: sp.name, team: sp.team || "", cardType: sp.cardType, stars: sp.stars || 5}]));
+    setPotmSearch(""); setPotmSearchOpen(false);
+  };
+  var rmPotm = function(idx) { upd("potmList", potmList.filter(function(_, i) { return i !== idx; })); };
+
+  /* 선수도감 검색 결과 */
+  var potmSearchResults = potmSearch.trim().length >= 1
+    ? SEED_PLAYERS.filter(function(sp) {
+        var q = potmSearch.trim();
+        return (sp.name && sp.name.indexOf(q) >= 0) || (sp.team && sp.team.indexOf(q) >= 0);
+      }).slice(0, 10)
+    : [];
+
+  /* 유저 내 선수 중 POTM 매칭 (dbId 기준) */
   var potmMatched = [];
-  potmNames.forEach(function(pname) {
-    players.forEach(function(pl) {
-      if (pl.name && (pl.name.indexOf(pname) >= 0 || pname.indexOf(pl.name) >= 0)) {
-        if (potmMatched.indexOf(pl) < 0) potmMatched.push(pl);
-      }
-    });
+  players.forEach(function(pl) {
+    var dbId = pl.dbId || pl.id;
+    var found = potmList.some(function(p) { return p.id === dbId; });
+    if (found && potmMatched.indexOf(pl) < 0) potmMatched.push(mergePl(pl));
   });
 
   var updPotm = function(id, field, val) {
@@ -2258,28 +2265,49 @@ function LockerRoomPage(p) {
             <span style={{ fontSize: 14 }}>{"🌟"}</span>
             <span style={{ fontSize: 13, fontWeight: 800, color: "#FFD54F", fontFamily: "var(--h)" }}>{"POTM (이달의 선수)"}</span>
           </div>
-          <button onClick={function() {
-            upd("potmNames", []);
-          }} style={{ padding: "3px 8px", fontSize: 8, background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 3, color: "#EF5350", cursor: "pointer" }}>{"명단 초기화"}</button>
+          <button onClick={function() { upd("potmList", []); }} style={{ padding: "3px 8px", fontSize: 8, background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 3, color: "#EF5350", cursor: "pointer" }}>{"명단 초기화"}</button>
         </div>
 
-        {/* Admin: manage POTM roster */}
+        {/* Admin: manage POTM roster - 선수도감 검색 */}
         {isAdmin && (
           <div style={{ padding: 10, background: "var(--inner)", borderRadius: 8, border: "1px solid var(--bd)", marginBottom: 10 }}>
-            <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 6 }}>{"관리자: POTM 선수 명단 (이름으로 라인업 자동 매칭)"}</div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-              <input type="text" value={newPotm} onChange={function(e) { setNewPotm(e.target.value); }} placeholder="선수 이름 입력" onKeyDown={function(e) { if (e.key === "Enter") addPotm(); }}
-                style={{ flex: 1, padding: "6px 10px", fontSize: 12, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", outline: "none" }} />
-              <button onClick={addPotm} style={{ padding: "6px 14px", fontSize: 11, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6, color: "#1a1100", cursor: "pointer" }}>{"추가"}</button>
+            <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 6 }}>{"관리자: POTM 선수 지정 (선수도감 검색)"}</div>
+            <div style={{ position: "relative", marginBottom: 8 }} onBlur={function(e) { if (!e.currentTarget.contains(e.relatedTarget)) setPotmSearchOpen(false); }}>
+              <input type="text" value={potmSearch} onChange={function(e) { setPotmSearch(e.target.value); setPotmSearchOpen(true); }}
+                onFocus={function() { setPotmSearchOpen(true); }}
+                placeholder="선수 이름 또는 팀 검색..."
+                style={{ width: "100%", padding: "7px 10px", fontSize: 12, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", outline: "none", boxSizing: "border-box" }} />
+              {potmSearchOpen && potmSearchResults.length > 0 && (
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, background: "#141a24", border: "1px solid var(--bd)", borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.6)" }}>
+                  {potmSearchResults.map(function(sp) {
+                    var already = potmList.some(function(x) { return x.id === sp.id; });
+                    return (
+                      <div key={sp.id} onClick={function() { if (!already) addPotmPlayer(sp); }}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--bd)", cursor: already ? "not-allowed" : "pointer", opacity: already ? 0.4 : 1, background: already ? "transparent" : undefined }}>
+                        <Badge type={sp.cardType} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>{sp.name}</span>
+                        <span style={{ fontSize: 10, color: "var(--td)" }}>{sp.team || ""}</span>
+                        <span style={{ fontSize: 9, color: "var(--td)", marginLeft: "auto" }}>{sp.cardType + " " + (sp.stars || 5) + "성"}</span>
+                        {already && <span style={{ fontSize: 9, color: "var(--acc)" }}>{"등록됨"}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {potmSearchOpen && potmSearch.trim().length >= 1 && potmSearchResults.length === 0 && (
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, background: "#141a24", border: "1px solid var(--bd)", borderRadius: 8, marginTop: 4, padding: "10px 12px", fontSize: 11, color: "var(--td)" }}>{"검색 결과 없음"}</div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {potmNames.map(function(n, i) {
+              {potmList.map(function(pl, i) {
                 return (<span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 4, fontSize: 10, color: "var(--acc)" }}>
-                  {n}
+                  <Badge type={pl.cardType} />
+                  {pl.name}
+                  {pl.team && <span style={{ fontSize: 9, color: "var(--td)" }}>{" (" + pl.team + ")"}</span>}
                   <button onClick={function() { rmPotm(i); }} style={{ background: "none", border: "none", color: "rgba(239,83,80,0.6)", cursor: "pointer", fontSize: 10, padding: 0, marginLeft: 2 }}>{"×"}</button>
                 </span>);
               })}
-              {potmNames.length === 0 && (<span style={{ fontSize: 10, color: "var(--td)" }}>{"등록된 POTM 선수가 없습니다"}</span>)}
+              {potmList.length === 0 && (<span style={{ fontSize: 10, color: "var(--td)" }}>{"등록된 POTM 선수가 없습니다"}</span>)}
             </div>
           </div>
         )}
@@ -2336,7 +2364,7 @@ function LockerRoomPage(p) {
           </div>
         ) : (
           <div style={{ padding: 16, textAlign: "center", color: "var(--td)", fontSize: 11 }}>
-            {potmNames.length > 0 ? "내 선수 중 매칭되는 POTM 선수가 없습니다" : "관리자가 POTM 명단을 등록하면 자동으로 매칭됩니다"}
+            {potmList.length > 0 ? "내 선수 중 매칭되는 POTM 선수가 없습니다" : "관리자가 POTM 명단을 등록하면 자동으로 매칭됩니다"}
           </div>
         )}
       </div>
