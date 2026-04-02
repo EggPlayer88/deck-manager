@@ -1,52 +1,55 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { supabase, signInWithGoogle, signOut, getSession, getProfile, loadUserData, saveUserData, loadGlobalSkills, saveGlobalSkills } from "./supabase.js";
+
+/* Supabase: injected via window._SUPABASE from main.jsx (Vercel deployment).
+   In artifact preview / standalone, these remain as stubs → localStorage-only mode. */
+var _SB = (typeof window !== "undefined" && window._SUPABASE) || {};
+var supabase = _SB.supabase || null;
+var signInWithGoogle = _SB.signInWithGoogle || function(){ return Promise.resolve(); };
+var signOut = _SB.signOut || function(){ return Promise.resolve(); };
+var getSession = _SB.getSession || function(){ return Promise.resolve(null); };
+var getProfile = _SB.getProfile || function(){ return Promise.resolve(null); };
+var loadUserData = _SB.loadUserData || function(){ return Promise.resolve(null); };
+var saveUserData = _SB.saveUserData || function(){ return Promise.resolve(); };
+var loadGlobalSkills = _SB.loadGlobalSkills || function(){ return Promise.resolve(null); };
+var saveGlobalSkills = _SB.saveGlobalSkills || function(){ return Promise.resolve(); };
+var loadGlobalPlayers = _SB.loadGlobalPlayers || function(){ return Promise.resolve([]); };
+var saveGlobalPlayer = _SB.saveGlobalPlayer || function(){ return Promise.resolve(false); };
+var deleteGlobalPlayer = _SB.deleteGlobalPlayer || function(){ return Promise.resolve(false); };
 
 /* ================================================================
    SEED DATA - 48 players from Excel + random fills
    ================================================================ */
-var SEED_PLAYERS = [
-  // 타자 (9명)
-  {id:"b1",team:"삼성",cardType:"골든글러브",name:"구자욱24",year:"2024",hand:"좌",stars:5,subPosition:"LF",role:"타자",power:79,accuracy:80,eye:74,specPower:4,specAccuracy:1,specEye:2,trainP:16,trainA:18,trainE:11,enhance:"4각성",skill1:"베스트포지션",s1Lv:6,skill2:"정밀타격",s2Lv:7,skill3:"수비안정성(타순O)",s3Lv:6,pot1:"",pot2:""},
-  {id:"b2",team:"삼성",cardType:"골든글러브",name:"김도영24",year:"2024",hand:"우",stars:5,subPosition:"3B",role:"타자",power:81,accuracy:82,eye:70,specPower:5,specAccuracy:2,specEye:1,trainP:17,trainA:21,trainE:11,enhance:"3각성",skill1:"저니맨",s1Lv:7,skill2:"빅게임헌터",s2Lv:6,skill3:"컨택트히터(타순O)",s3Lv:6,pot1:"",pot2:""},
-  {id:"b3",team:"삼성",cardType:"골든글러브",name:"이승엽99",year:"1999",hand:"좌",stars:5,subPosition:"1B",role:"타자",power:90,accuracy:76,eye:68,specPower:3,specAccuracy:0,specEye:3,trainP:20,trainA:18,trainE:9,enhance:"6각성",skill1:"정밀타격",s1Lv:6,skill2:"빅게임헌터",s2Lv:6,skill3:"직구킬러",s3Lv:7,pot1:"",pot2:""},
-  {id:"b4",team:"키움",cardType:"골든글러브",name:"로하스20",year:"2020",hand:"양",stars:5,subPosition:"RF",role:"타자",power:86,accuracy:82,eye:68,specPower:4,specAccuracy:1,specEye:2,trainP:22,trainA:11,trainE:9,enhance:"7각성",skill1:"저니맨",s1Lv:6,skill2:"좌완킬러",s2Lv:7,skill3:"정밀타격",s3Lv:6,pot1:"",pot2:""},
-  {id:"b5",team:"키움",cardType:"시그니처",name:"송성문24",year:"2024",hand:"좌",stars:5,subPosition:"DH",role:"타자",power:70,accuracy:80,eye:74,specPower:5,specAccuracy:6,specEye:4,trainP:20,trainA:14,trainE:12,enhance:"9각성",skill1:"정밀타격",s1Lv:7,skill2:"역전의명수",s2Lv:6,skill3:"오버페이스",s3Lv:5,pot1:"",pot2:""},
-  {id:"b6",team:"키움",cardType:"국가대표",name:"강정호14",year:"2014",hand:"우",stars:5,subPosition:"SS",role:"타자",power:84,accuracy:79,eye:65,specPower:8,specAccuracy:1,specEye:2,trainP:17,trainA:17,trainE:7,enhance:"9각성",skill1:"홈어드밴티지",s1Lv:6,skill2:"황금세대",s2Lv:5,skill3:"배팅머신",s3Lv:6,pot1:"",pot2:""},
-  {id:"b7",team:"키움",cardType:"시그니처",name:"이정후22",year:"2022",hand:"좌",stars:5,subPosition:"CF",role:"타자",power:73,accuracy:82,eye:90,specPower:5,specAccuracy:1,specEye:1,trainP:15,trainA:20,trainE:13,enhance:"9각성",skill1:"홈어드밴티지",s1Lv:6,skill2:"오버페이스",s2Lv:5,skill3:"공포의하위타선(타순O)",s3Lv:5,pot1:"",pot2:""},
-  {id:"b8",team:"키움",cardType:"시그니처",name:"김혜성24",year:"2024",hand:"좌",stars:5,subPosition:"2B",role:"타자",power:64,accuracy:77,eye:76,specPower:2,specAccuracy:2,specEye:0,trainP:18,trainA:18,trainE:11,enhance:"9각성",skill1:"공포의하위타선(타순O)",s1Lv:6,skill2:"역전의명수",s2Lv:5,skill3:"정밀타격",s3Lv:5,pot1:"",pot2:""},
-  {id:"b9",team:"키움",cardType:"임팩트",name:"박경완",year:"",impactType:"안방마님",hand:"우",stars:4,subPosition:"C",role:"타자",power:85,accuracy:78,eye:62,specPower:5,specAccuracy:0,specEye:2,trainP:11,trainA:16,trainE:6,enhance:"9각성",skill1:"저니맨",s1Lv:7,skill2:"결정적한방",s2Lv:5,skill3:"포수리드",s3Lv:5,pot1:"",pot2:""},
-  // 선발 (5명)
-  {id:"sp1",team:"키움",cardType:"시그니처",name:"요키시22",year:"2022",hand:"좌",stars:5,subPosition:"SP1",role:"투수",position:"선발",change:68,stuff:74,specChange:2,specStuff:6,trainC:16,trainS:19,enhance:"9각성",skill1:"좌승사자",s1Lv:6,skill2:"평정심",s2Lv:7,skill3:"긴급투입",s3Lv:5,pot1:"",pot2:""},
-  {id:"sp2",team:"키움",cardType:"골든글러브",name:"안우진22",year:"2022",hand:"우",stars:5,subPosition:"SP2",role:"투수",position:"선발",change:84,stuff:77,specChange:2,specStuff:5,trainC:17,trainS:20,enhance:"7각성",skill1:"저니맨",s1Lv:6,skill2:"원투펀치(1,2선발)",s2Lv:7,skill3:"긴급투입",s3Lv:6,pot1:"",pot2:""},
-  {id:"sp3",team:"키움",cardType:"시그니처",name:"김수경98",year:"1998",hand:"우",stars:5,subPosition:"SP3",role:"투수",position:"선발",change:77,stuff:72,specChange:1,specStuff:7,trainC:12,trainS:24,enhance:"9각성",skill1:"도전정신(5성)",s1Lv:7,skill2:"저니맨",s2Lv:5,skill3:"빅게임헌터",s3Lv:6,pot1:"",pot2:""},
-  {id:"sp4",team:"키움",cardType:"임팩트",name:"최창호",year:"",impactType:"좌완에이스",hand:"좌",stars:4,subPosition:"SP4",role:"투수",position:"선발",change:82,stuff:83,specChange:4,specStuff:6,trainC:14,trainS:13,enhance:"9각성",skill1:"좌승사자",s1Lv:6,skill2:"리그탑플레이어",s2Lv:7,skill3:"평정심",s3Lv:7,pot1:"",pot2:""},
-  {id:"sp5",team:"키움",cardType:"골든글러브",name:"페디23",year:"2023",hand:"우",stars:5,subPosition:"SP5",role:"투수",position:"선발",change:80,stuff:77,specChange:1,specStuff:5,trainC:15,trainS:21,enhance:"3각성",skill1:"파이어볼",s1Lv:6,skill2:"빅게임헌터",s2Lv:6,skill3:"필승카드",s3Lv:6,pot1:"",pot2:""},
-  // 중계 (6명)
-  {id:"rp1",team:"키움",cardType:"임팩트",name:"조웅천",year:"",impactType:"키플레이어",hand:"우",stars:4,subPosition:"RP1",role:"투수",position:"중계",change:73,stuff:75,specChange:3,specStuff:4,trainC:11,trainS:13,enhance:"9각성",weight:0.8,skill1:"마당쇠",s1Lv:6,skill2:"워크에식",s2Lv:5,skill3:"필승카드(필승조,셋업맨)",s3Lv:6,pot1:"",pot2:""},
-  {id:"rp2",team:"키움",cardType:"시그니처",name:"신철인06",year:"2016",hand:"우",stars:5,subPosition:"RP2",role:"투수",position:"중계",change:69,stuff:69,specChange:2,specStuff:3,trainC:19,trainS:16,enhance:"9각성",weight:0.8,skill1:"전천후",s1Lv:6,skill2:"패기(시그)",s2Lv:5,skill3:"긴급투입",s3Lv:5,pot1:"",pot2:""},
-  {id:"rp3",team:"키움",cardType:"임팩트",name:"신완근",year:"",impactType:"키플레이어",hand:"우",stars:4,subPosition:"RP3",role:"투수",position:"중계",change:70,stuff:74,specChange:2,specStuff:4,trainC:9,trainS:14,enhance:"9각성",weight:0.7,skill1:"마당쇠",s1Lv:6,skill2:"저니맨",s2Lv:5,skill3:"평정심",s3Lv:7,pot1:"",pot2:""},
-  {id:"rp4",team:"키움",cardType:"시그니처",name:"한현희14",year:"2014",hand:"우",stars:5,subPosition:"RP4",role:"투수",position:"중계",change:66,stuff:65,specChange:2,specStuff:6,trainC:21,trainS:15,enhance:"9각성",weight:0.5,skill1:"마당쇠",s1Lv:6,skill2:"위기관리",s2Lv:5,skill3:"전천후",s3Lv:5,pot1:"",pot2:""},
-  {id:"rp5",team:"키움",cardType:"임팩트",name:"이강철",year:"",impactType:"키플레이어",hand:"우",stars:4,subPosition:"RP5",role:"투수",position:"중계",change:68,stuff:72,specChange:1,specStuff:4,trainC:9,trainS:14,enhance:"9각성",weight:0.1,skill1:"마당쇠",s1Lv:6,skill2:"라이징스타(셋업맨/3,4,5중계)",s2Lv:5,skill3:"저니맨",s3Lv:5,pot1:"",pot2:""},
-  {id:"rp6",team:"키움",cardType:"국가대표",name:"최지민23",year:"2023",hand:"좌",stars:5,subPosition:"RP6",role:"투수",position:"중계",change:60,stuff:66,specChange:0,specStuff:4,trainC:15,trainS:12,enhance:"10강",weight:0.1,skill1:"국대에이스",s1Lv:6,skill2:"위기관리",s2Lv:6,skill3:"투쟁심",s3Lv:5,pot1:"",pot2:""},
-  // 마무리 (1명)
-  {id:"cp1",team:"키움",cardType:"임팩트",name:"위재영",year:"",impactType:"키플레이어",hand:"우",stars:4,subPosition:"CP",role:"투수",position:"마무리",change:75,stuff:79,specChange:1,specStuff:4,trainC:10,trainS:14,enhance:"9각성",skill1:"마당쇠",s1Lv:6,skill2:"평정심",s2Lv:6,skill3:"저니맨",s3Lv:5,pot1:"",pot2:""},
-  // 추가 도감 선수 (다양한 카드타입)
-  {id:"ex1",team:"두산",cardType:"골든글러브",name:"양의지18",year:"2018",hand:"우",stars:5,subPosition:"C",role:"타자",power:73,accuracy:81,eye:80},
-  {id:"ex2",team:"두산",cardType:"골든글러브",name:"김재환18",year:"2018",hand:"우",stars:5,subPosition:"RF",role:"타자",power:84,accuracy:79,eye:66},
-  {id:"ex3",team:"KIA",cardType:"골든글러브",name:"최형우16",year:"2016",hand:"좌",stars:5,subPosition:"LF",role:"타자",power:79,accuracy:87,eye:76},
-  {id:"ex4",team:"LG",cardType:"시그니처",name:"서건창16",year:"2016",hand:"좌",stars:5,subPosition:"2B",role:"타자",power:60,accuracy:76,eye:78},
-  {id:"ex5",team:"한화",cardType:"국가대표",name:"김재환18",year:"2018",hand:"우",stars:5,subPosition:"DH",role:"타자",power:82,accuracy:77,eye:64},
-  {id:"ex6",team:"삼성",cardType:"라이브",name:"이병헌25",year:"2025",hand:"우",stars:3,subPosition:"RP1",role:"투수",position:"중계",change:56,stuff:58,setScore:2},
-  {id:"ex7",team:"KIA",cardType:"골든글러브",name:"린드블럼19",year:"2019",hand:"좌",stars:5,subPosition:"SP1",role:"투수",position:"선발",change:74,stuff:75},
-  {id:"ex8",team:"두산",cardType:"임팩트",name:"선동열",year:"",impactType:"좌완에이스",hand:"좌",stars:4,subPosition:"SP2",role:"투수",position:"선발",change:82,stuff:80},
-  {id:"ex9",team:"NC",cardType:"시그니처",name:"김민성16",year:"2016",hand:"우",stars:5,subPosition:"3B",role:"타자",power:68,accuracy:73,eye:70},
-  {id:"ex10",team:"SSG",cardType:"국가대표",name:"박병호15",year:"2015",hand:"우",stars:5,subPosition:"1B",role:"타자",power:87,accuracy:79,eye:62},
-  {id:"ex11",team:"키움",cardType:"시즌",name:"김동현25",year:"2025",hand:"우",stars:4,subPosition:"RP2",role:"투수",position:"중계",change:55,stuff:56},
-  {id:"ex12",team:"롯데",cardType:"올스타",name:"전준우18",year:"2018",hand:"우",stars:5,subPosition:"RF",role:"타자",power:77,accuracy:81,eye:75},
-  {id:"ex13",team:"KIA",cardType:"골든글러브",name:"폰세25",year:"2025",hand:"우",stars:5,subPosition:"SP3",role:"투수",position:"선발",change:89,stuff:78},
-  {id:"ex14",team:"삼성",cardType:"임팩트",name:"김상진",year:"",impactType:"키플레이어",hand:"우",stars:4,subPosition:"SP4",role:"투수",position:"선발",change:76,stuff:77},
-  {id:"ex15",team:"두산",cardType:"국가대표",name:"오승환06",year:"2006",hand:"우",stars:5,subPosition:"CP",role:"투수",position:"마무리",change:76,stuff:73},
-];
+var KBO_TEAMS = ["키움","삼성","LG","두산","KT","SSG","롯데","한화","NC","KIA"];
+var SEED_PLAYERS = [];
+var POT_GRADES = ["C","C+","B","B+","A","A+","S","S+","SS","SS+","SR","SR+"];
+var DEFAULT_POT_SCORES = {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6,"S+":7,"SS":8,"SS+":9,"SR":10,"SR+":12};
+function getPotScore(grade, skills) {
+  if (!grade) return 0;
+  var sc = (skills && skills.potScores) ? skills.potScores : DEFAULT_POT_SCORES;
+  return sc[grade] || 0;
+}
+function mergePl(userPl) {
+  if (!userPl) return null;
+  if (!userPl.dbId) return userPl;
+  var seed = null;
+  for (var i = 0; i < SEED_PLAYERS.length; i++) { if (SEED_PLAYERS[i].id === userPl.dbId) { seed = SEED_PLAYERS[i]; break; } }
+  if (!seed) return userPl;
+  return Object.assign({}, seed, {
+    id: userPl.id, dbId: userPl.dbId,
+    trainP: userPl.trainP||0, trainA: userPl.trainA||0, trainE: userPl.trainE||0,
+    trainC: userPl.trainC||0, trainS: userPl.trainS||0,
+    specPower: userPl.specPower||0, specAccuracy: userPl.specAccuracy||0, specEye: userPl.specEye||0,
+    specChange: userPl.specChange||0, specStuff: userPl.specStuff||0,
+    skill1: userPl.skill1||"", s1Lv: userPl.s1Lv||0,
+    skill2: userPl.skill2||"", s2Lv: userPl.s2Lv||0,
+    skill3: userPl.skill3||"", s3Lv: userPl.s3Lv||0,
+    enhance: userPl.enhance||"",
+    pot1: userPl.pot1||"", pot2: userPl.pot2||"",
+    isFa: userPl.isFa||false,
+    liveType: userPl.liveType||seed.liveType||"",
+    photoUrl: userPl.photoUrl||seed.photoUrl||"",
+  });
+}
 
 /* ================================================================
    REFERENCE DATA (same as before, abbreviated for space)
@@ -93,7 +96,7 @@ function getW(){return LIVE_WEIGHTS||DEFAULT_WEIGHTS;}
 var SK = { players:"deck-players", lineupMap:"deck-lineup-map", skills:"deck-skills", version:"deck-version" };
 var DATA_VERSION = 10; /* bump this to force storage reload */
 
-var SEED_LINEUP = {"C":"b9","1B":"b3","2B":"b8","3B":"b2","SS":"b6","LF":"b1","CF":"b7","RF":"b4","DH":"b5","SP1":"sp1","SP2":"sp2","SP3":"sp3","SP4":"sp4","SP5":"sp5","RP1":"rp1","RP2":"rp2","RP3":"rp3","RP4":"rp4","RP5":"rp5","RP6":"rp6","CP":"cp1"};
+var SEED_LINEUP = {};
 
 var DEFAULT_SKILLS = {"타자": {"정밀타격": [{"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 11, "aF": 1, "eV": 11, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "황금세대": [{"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 1, "cF": 1, "sV": 1, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 11, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}], "좌타해결사(좌타)": [{"pV": 5, "pF": 1.28, "aV": 5, "aF": 1.28, "eV": 0, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 5, "pF": 1.28, "aV": 5, "aF": 1.28, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 6, "pF": 1.23, "aV": 6, "aF": 1.23, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 6, "pF": 1.23, "aV": 6, "aF": 1.23, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 1.2, "aV": 7, "aF": 1.2, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 1.2, "aV": 7, "aF": 1.2, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}], "좌타해결사(양타)": [{"pV": 5, "pF": 1.28, "aV": 5, "aF": 1.28, "eV": 0, "eF": 1, "cV": 3, "cF": 0.7, "sV": 3, "sF": 0.7}, {"pV": 5, "pF": 1.28, "aV": 5, "aF": 1.28, "eV": 0, "eF": 1, "cV": 4, "cF": 0.7, "sV": 4, "sF": 0.7}, {"pV": 6, "pF": 1.23, "aV": 6, "aF": 1.23, "eV": 0, "eF": 1, "cV": 4, "cF": 0.7, "sV": 4, "sF": 0.7}, {"pV": 6, "pF": 1.23, "aV": 6, "aF": 1.23, "eV": 0, "eF": 1, "cV": 5, "cF": 0.7, "sV": 5, "sF": 0.7}, {"pV": 7, "pF": 1.2, "aV": 7, "aF": 1.2, "eV": 0, "eF": 1, "cV": 5, "cF": 0.7, "sV": 5, "sF": 0.7}, {"pV": 7, "pF": 1.2, "aV": 7, "aF": 1.2, "eV": 0, "eF": 1, "cV": 6, "cF": 0.7, "sV": 6, "sF": 0.7}], "전승우승": [{"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 4, "cF": 0.67, "sV": 4, "sF": 0.67}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 6, "cF": 0.67, "sV": 6, "sF": 0.67}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 8, "cF": 0.67, "sV": 8, "sF": 0.67}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 10, "cF": 0.67, "sV": 10, "sF": 0.67}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 12, "cF": 0.67, "sV": 12, "sF": 0.67}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 14, "cF": 0.67, "sV": 14, "sF": 0.67}], "워크에식": [{"pV": 5, "pF": 1.7, "aV": 5, "aF": 1.7, "eV": 5, "eF": 1.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 5, "pF": 1.7, "aV": 5, "aF": 1.7, "eV": 5, "eF": 1.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1.58, "aV": 6, "aF": 1.58, "eV": 6, "eF": 1.58, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1.58, "aV": 6, "aF": 1.58, "eV": 6, "eF": 1.58, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1.5, "aV": 7, "aF": 1.5, "eV": 7, "eF": 1.5, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1.5, "aV": 7, "aF": 1.5, "eV": 7, "eF": 1.5, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "해결사": [{"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 5, "cF": 0.75, "sV": 5, "sF": 0.75}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 7, "cF": 0.75, "sV": 7, "sF": 0.75}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 9, "cF": 0.75, "sV": 9, "sF": 0.75}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 11, "cF": 0.75, "sV": 11, "sF": 0.75}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 13, "cF": 0.75, "sV": 13, "sF": 0.75}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 15, "cF": 0.75, "sV": 15, "sF": 0.75}], "빅게임헌터": [{"pV": 10, "pF": 1, "aV": 5, "aF": 1, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 5, "aF": 1, "eV": 11, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 13, "pF": 1, "aV": 6, "aF": 1, "eV": 13, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 14, "pF": 1, "aV": 6, "aF": 1, "eV": 14, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 16, "pF": 1, "aV": 7, "aF": 1, "eV": 16, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 17, "pF": 1, "aV": 7, "aF": 1, "eV": 17, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "저니맨": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}], "대표타자": [{"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 11, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "오버페이스": [{"pV": 5, "pF": 1.6, "aV": 5, "aF": 1.6, "eV": 5, "eF": 1.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 5, "pF": 1.6, "aV": 5, "aF": 1.6, "eV": 5, "eF": 1.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1.5, "aV": 6, "aF": 1.5, "eV": 6, "eF": 1.5, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1.5, "aV": 6, "aF": 1.5, "eV": 6, "eF": 1.5, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1.428571, "aV": 7, "aF": 1.428571, "eV": 7, "eF": 1.428571, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1.428571, "aV": 7, "aF": 1.428571, "eV": 7, "eF": 1.428571, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "컨택트히터(타순O)": [{"pV": 0, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "리그탑플레이어": [{"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 11, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "배팅머신": [{"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 11, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(주수280-299)": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 14, "pF": 1, "aV": 14, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(275-279)": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 13, "pF": 1, "aV": 13, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(주수267-274)": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 13, "pF": 1, "aV": 13, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "도전정신(4성)": [{"pV": 5, "pF": 1.14, "aV": 5, "aF": 1.14, "eV": 5, "eF": 1.14, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1.12, "aV": 6, "aF": 1.12, "eV": 6, "eF": 1.12, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1.09, "aV": 7, "aF": 1.09, "eV": 7, "eF": 1.09, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1.075, "aV": 8, "aF": 1.075, "eV": 8, "eF": 1.075, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1.07, "aV": 9, "aF": 1.07, "eV": 9, "eF": 1.07, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1.06, "aV": 10, "aF": 1.06, "eV": 10, "eF": 1.06, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "투쟁심": [{"pV": 5, "pF": 1.3, "aV": 5, "aF": 1.3, "eV": 5, "eF": 1.5, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1.333333, "aV": 6, "aF": 1.333333, "eV": 6, "eF": 1.333333, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1.285714, "aV": 7, "aF": 1.285714, "eV": 7, "eF": 1.285714, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1.25, "aV": 8, "aF": 1.25, "eV": 8, "eF": 1.25, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1.222222, "aV": 9, "aF": 1.222222, "eV": 9, "eF": 1.222222, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1.2, "aV": 10, "aF": 1.2, "eV": 10, "eF": 1.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "선봉장(타순O)": [{"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.9, "sV": 3, "sF": 0.9}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 0.9, "sV": 4, "sF": 0.9}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.9, "sV": 6, "sF": 0.9}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.9, "sV": 8, "sF": 0.9}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.9, "sV": 10, "sF": 0.9}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0.9, "sV": 12, "sF": 0.9}], "비FA계약": [{"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "공포의하위타선(타순O)": [{"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 10, "sF": 1}], "약속의8회": [{"pV": 5, "pF": 1.1, "aV": 5, "aF": 1.1, "eV": 5, "eF": 1.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1.1, "aV": 6, "aF": 1.1, "eV": 6, "eF": 1.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1.1, "aV": 7, "aF": 1.1, "eV": 7, "eF": 1.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1.1, "aV": 8, "aF": 1.1, "eV": 8, "eF": 1.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1.1, "aV": 9, "aF": 1.1, "eV": 9, "eF": 1.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1.1, "aV": 10, "aF": 1.1, "eV": 10, "eF": 1.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(주수260-266)": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 13, "pF": 1, "aV": 13, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(주수250-259)": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 1, "aV": 12, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(주수240-249)": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12.322844, "pF": 1, "aV": 12.322844, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(주수234-239)": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "도전정신(5성)": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "대도": [{"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 2, "cF": 0.5, "sV": 2, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 3, "cF": 0.5, "sV": 3, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 3, "cF": 0.5, "sV": 3, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 4, "cF": 0.5, "sV": 4, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 4, "cF": 0.5, "sV": 4, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 5, "cF": 0.5, "sV": 5, "sF": 0.5}], "가을사나이": [{"pV": 6, "pF": 1, "aV": 5, "aF": 1, "eV": 6, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 6, "aF": 1, "eV": 7, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 7, "aF": 1, "eV": 8, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 8, "aF": 1, "eV": 9, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 9, "aF": 1, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 10, "aF": 1, "eV": 11, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "난세의영웅": [{"pV": 6, "pF": 0.7, "aV": 6, "aF": 0.7, "eV": 6, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.7, "aV": 8, "aF": 0.7, "eV": 8, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.7, "aV": 9, "aF": 0.7, "eV": 9, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.7, "aV": 11, "aF": 0.7, "eV": 11, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0.7, "aV": 12, "aF": 0.7, "eV": 12, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 14, "pF": 0.7, "aV": 14, "aF": 0.7, "eV": 14, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "순위경쟁": [{"pV": 6, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "좌타해결사(우타)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "홈어드밴티지": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "얼리스타트": [{"pV": 5, "pF": 1.2, "aV": 2, "aF": 0.5, "eV": 5, "eF": 1.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1.25, "aV": 3, "aF": 0.5, "eV": 6, "eF": 1.25, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1.285714, "aV": 4, "aF": 0.5, "eV": 7, "eF": 1.285714, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1.3125, "aV": 5, "aF": 0.5, "eV": 8, "eF": 1.3125, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1.333333, "aV": 6, "aF": 0.5, "eV": 9, "eF": 1.333333, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1.35, "aV": 7, "aF": 0.5, "eV": 10, "eF": 1.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(주수225-233)": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(주수220-224)": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "5툴플레이어(주수200-219)": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "핵타선(타순O)": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "베스트포지션": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 11, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 13, "pF": 1, "aV": 13, "aF": 1, "eV": 13, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "백전노장": [{"pV": 6, "pF": 0.6, "aV": 5, "aF": 1, "eV": 6, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.6, "aV": 6, "aF": 1, "eV": 8, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.6, "aV": 7, "aF": 1, "eV": 9, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.6, "aV": 8, "aF": 1, "eV": 10, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.6, "aV": 9, "aF": 1, "eV": 11, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0.6, "aV": 10, "aF": 1, "eV": 12, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "패기(임팩)": [{"pV": 7, "pF": 0.6, "aV": 7, "aF": 0.6, "eV": 7, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.6, "aV": 8, "aF": 0.6, "eV": 8, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.6, "aV": 9, "aF": 0.6, "eV": 9, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.6, "aV": 10, "aF": 0.6, "eV": 10, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.6, "aV": 11, "aF": 0.6, "eV": 11, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0.6, "aV": 12, "aF": 0.6, "eV": 12, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "컨택트히터(타순X)": [{"pV": 0, "pF": 1, "aV": 4, "aF": 0, "eV": 4, "eF": 0, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 0, "pF": 1, "aV": 5, "aF": 0, "eV": 5, "eF": 0, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 0, "pF": 1, "aV": 5, "aF": 0, "eV": 5, "eF": 0, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0, "eV": 6, "eF": 0, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0, "eV": 6, "eF": 0, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0, "eV": 7, "eF": 0, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "짜릿한손맛": [{"pV": 3, "pF": 1.5, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 4, "pF": 1.45, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 4, "pF": 1.525, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 5, "pF": 1.48, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 5, "pF": 1.54, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1.5, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "수비안정성(타순O)": [{"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 12, "aF": 1, "eV": 12, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 14, "aF": 1, "eV": 14, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 16, "aF": 1, "eV": 16, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "집중력": [{"pV": 2, "pF": 0.4, "aV": 6, "aF": 1.13, "eV": 2, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 3, "pF": 0.4, "aV": 7, "aF": 1.17, "eV": 3, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 3, "pF": 0.4, "aV": 8, "aF": 1.15, "eV": 3, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 4, "pF": 0.4, "aV": 9, "aF": 1.18, "eV": 4, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 4, "pF": 0.4, "aV": 10, "aF": 1.16, "eV": 4, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 5, "pF": 0.4, "aV": 11, "aF": 1.181818, "eV": 5, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "승리의함성": [{"pV": 7, "pF": 0.35, "aV": 5, "aF": 1, "eV": 7, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.35, "aV": 6, "aF": 1, "eV": 8, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.35, "aV": 7, "aF": 1, "eV": 9, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.35, "aV": 8, "aF": 1, "eV": 10, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.35, "aV": 9, "aF": 1, "eV": 11, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0.35, "aV": 10, "aF": 1, "eV": 12, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "선봉장(타순배치X)": [{"pV": 3, "pF": 0, "aV": 3, "aF": 0, "eV": 0, "eF": 1, "cV": 3, "cF": 0.9, "sV": 3, "sF": 0.9}, {"pV": 3, "pF": 0, "aV": 3, "aF": 0, "eV": 0, "eF": 1, "cV": 4, "cF": 0.9, "sV": 4, "sF": 0.9}, {"pV": 4, "pF": 0, "aV": 4, "aF": 0, "eV": 0, "eF": 1, "cV": 6, "cF": 0.9, "sV": 6, "sF": 0.9}, {"pV": 4, "pF": 0, "aV": 4, "aF": 0, "eV": 0, "eF": 1, "cV": 8, "cF": 0.9, "sV": 8, "sF": 0.9}, {"pV": 5, "pF": 0, "aV": 5, "aF": 0, "eV": 0, "eF": 1, "cV": 10, "cF": 0.9, "sV": 10, "sF": 0.9}, {"pV": 5, "pF": 0, "aV": 5, "aF": 0, "eV": 0, "eF": 1, "cV": 12, "cF": 0.9, "sV": 12, "sF": 0.9}], "승부사": [{"pV": 5, "pF": 1, "aV": 3, "aF": 0.7, "eV": 3, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 3, "aF": 0.7, "eV": 3, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 3, "aF": 0.7, "eV": 3, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 3, "aF": 0.7, "eV": 3, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 3, "aF": 0.7, "eV": 3, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 3, "aF": 0.7, "eV": 3, "eF": 0.7, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "결정적한방": [{"pV": 2, "pF": 1, "aV": 2, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.15, "sV": 9, "sF": 0.15}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.15, "sV": 10, "sF": 0.15}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.15, "sV": 11, "sF": 0.15}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0.15, "sV": 12, "sF": 0.15}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 0.15, "sV": 13, "sF": 0.15}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 14, "cF": 0.15, "sV": 14, "sF": 0.15}], "노림수": [{"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 12, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 13, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "우완킬러": [{"pV": 5, "pF": 0.7, "aV": 5, "aF": 0.7, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.7, "aV": 6, "aF": 0.7, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.7, "aV": 7, "aF": 0.7, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.7, "aV": 8, "aF": 0.7, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.7, "aV": 9, "aF": 0.7, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.7, "aV": 10, "aF": 0.7, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "대타스페셜": [{"pV": 9, "pF": 0, "aV": 9, "aF": 0, "eV": 9, "eF": 0, "cV": 5, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0, "aV": 10, "aF": 0, "eV": 10, "eF": 0, "cV": 6, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0, "aV": 11, "aF": 0, "eV": 11, "eF": 0, "cV": 7, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0, "aV": 12, "aF": 0, "eV": 12, "eF": 0, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 13, "pF": 0, "aV": 13, "aF": 0, "eV": 13, "eF": 0, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 14, "pF": 0, "aV": 14, "aF": 0, "eV": 14, "eF": 0, "cV": 10, "cF": 1, "sV": 0, "sF": 1}], "공포의하위타선(타순X)": [{"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 5, "sF": 0}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 6, "sF": 0}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 7, "sF": 0}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 8, "sF": 0}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 9, "sF": 0}, {"pV": 0, "pF": 1, "aV": 11, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 10, "sF": 0}], "히든카드": [{"pV": 2, "pF": 1, "aV": 2, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "리드오프(타순O)": [{"pV": 0, "pF": 1, "aV": 3, "aF": 1, "eV": 7, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 3, "aF": 1, "eV": 8, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 4, "aF": 1, "eV": 9, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 4, "aF": 1, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 11, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 12, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "타선연결": [{"pV": 5, "pF": 0.35, "aV": 5, "aF": 0.35, "eV": 5, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.35, "aV": 6, "aF": 0.35, "eV": 6, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.35, "aV": 7, "aF": 0.35, "eV": 7, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.35, "aV": 8, "aF": 0.35, "eV": 8, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.35, "aV": 9, "aF": 0.35, "eV": 9, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.35, "aV": 10, "aF": 0.35, "eV": 10, "eF": 0.35, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "역전의명수": [{"pV": 5, "pF": 0.33, "aV": 5, "aF": 0.33, "eV": 5, "eF": 0.33, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.33, "aV": 6, "aF": 0.33, "eV": 6, "eF": 0.33, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.33, "aV": 7, "aF": 0.33, "eV": 7, "eF": 0.33, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.33, "aV": 8, "aF": 0.33, "eV": 8, "eF": 0.33, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.33, "aV": 9, "aF": 0.33, "eV": 9, "eF": 0.33, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.33, "aV": 10, "aF": 0.33, "eV": 10, "eF": 0.33, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "승부근성": [{"pV": 5, "pF": 0.3, "aV": 5, "aF": 0.3, "eV": 5, "eF": 0.3, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.3, "aV": 6, "aF": 0.3, "eV": 6, "eF": 0.3, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.3, "aV": 7, "aF": 0.3, "eV": 7, "eF": 0.3, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.3, "aV": 8, "aF": 0.3, "eV": 8, "eF": 0.3, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.3, "aV": 9, "aF": 0.3, "eV": 9, "eF": 0.3, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.3, "aV": 10, "aF": 0.3, "eV": 10, "eF": 0.3, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "클러치히터": [{"pV": 5, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "테이블세터": [{"pV": 0, "pF": 1, "aV": 5, "aF": 0.6, "eV": 5, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0.6, "eV": 6, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0.6, "eV": 7, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0.6, "eV": 8, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0.6, "eV": 9, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0.6, "eV": 10, "eF": 0.6, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "패기(국대)": [{"pV": 7, "pF": 0.2, "aV": 7, "aF": 0.2, "eV": 7, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.2, "aV": 8, "aF": 0.2, "eV": 8, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.2, "aV": 9, "aF": 0.2, "eV": 9, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.2, "aV": 10, "aF": 0.2, "eV": 10, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.2, "aV": 11, "aF": 0.2, "eV": 11, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0.2, "aV": 12, "aF": 0.2, "eV": 12, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "하이볼히터": [{"pV": 8, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 14, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 16, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 18, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "좌완킬러": [{"pV": 5, "pF": 0.3, "aV": 5, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.3, "aV": 6, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.3, "aV": 7, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.3, "aV": 8, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.3, "aV": 9, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.3, "aV": 10, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "초구공략": [{"pV": 5, "pF": 0.25, "aV": 5, "aF": 0.25, "eV": 5, "eF": 0.25, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.25, "aV": 6, "aF": 0.25, "eV": 6, "eF": 0.25, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.25, "aV": 7, "aF": 0.25, "eV": 7, "eF": 0.25, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.25, "aV": 8, "aF": 0.25, "eV": 8, "eF": 0.25, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.25, "aV": 9, "aF": 0.25, "eV": 9, "eF": 0.25, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.25, "aV": 10, "aF": 0.25, "eV": 10, "eF": 0.25, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "타점기계": [{"pV": 6, "pF": 0.25, "aV": 6, "aF": 0.25, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.25, "aV": 7, "aF": 0.25, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.25, "aV": 8, "aF": 0.25, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.25, "aV": 9, "aF": 0.25, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.25, "aV": 10, "aF": 0.25, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.25, "aV": 11, "aF": 0.25, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "변화구킬러": [{"pV": 0, "pF": 1, "aV": 5, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "스윗스팟": [{"pV": 7, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 13, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 15, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "패기(시그/올스타/라이브)": [{"pV": 7, "pF": 0.15, "aV": 7, "aF": 0.15, "eV": 7, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.15, "aV": 8, "aF": 0.15, "eV": 8, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.15, "aV": 9, "aF": 0.15, "eV": 9, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.15, "aV": 10, "aF": 0.15, "eV": 10, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.15, "aV": 11, "aF": 0.15, "eV": 11, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0.15, "aV": 12, "aF": 0.15, "eV": 12, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "리드오프(타순X)": [{"pV": 0, "pF": 1, "aV": 3, "aF": 0, "eV": 7, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 3, "aF": 0, "eV": 8, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 4, "aF": 0, "eV": 9, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 4, "aF": 0, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 5, "aF": 0, "eV": 11, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 5, "aF": 0, "eV": 12, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "당겨치기": [{"pV": 5, "pF": 0.4, "aV": 5, "aF": 0.4, "eV": 5, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.4, "aV": 6, "aF": 0.4, "eV": 6, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.4, "aV": 7, "aF": 0.4, "eV": 7, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.4, "aV": 8, "aF": 0.4, "eV": 8, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.4, "aV": 9, "aF": 0.4, "eV": 9, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.4, "aV": 10, "aF": 0.4, "eV": 10, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "밀어치기": [{"pV": 5, "pF": 0.4, "aV": 5, "aF": 0.4, "eV": 5, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.4, "aV": 6, "aF": 0.4, "eV": 6, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.4, "aV": 7, "aF": 0.4, "eV": 7, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.4, "aV": 8, "aF": 0.4, "eV": 8, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.4, "aV": 9, "aF": 0.4, "eV": 9, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.4, "aV": 10, "aF": 0.4, "eV": 10, "eF": 0.4, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "직구킬러": [{"pV": 0, "pF": 1, "aV": 5, "aF": 0.45, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0.45, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0.45, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0.45, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0.45, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0.45, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "어퍼스윙": [{"pV": 5, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.35, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "패기(골글)": [{"pV": 7, "pF": 0.1, "aV": 7, "aF": 0.1, "eV": 7, "eF": 0.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.1, "aV": 8, "aF": 0.1, "eV": 8, "eF": 0.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.1, "aV": 9, "aF": 0.1, "eV": 9, "eF": 0.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.1, "aV": 10, "aF": 0.1, "eV": 10, "eF": 0.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.1, "aV": 11, "aF": 0.1, "eV": 11, "eF": 0.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0.1, "aV": 12, "aF": 0.1, "eV": 12, "eF": 0.1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "진검승부": [{"pV": 5, "pF": 0.05, "aV": 5, "aF": 0.05, "eV": 5, "eF": 0.05, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.05, "aV": 6, "aF": 0.05, "eV": 6, "eF": 0.05, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.05, "aV": 7, "aF": 0.05, "eV": 7, "eF": 0.05, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.05, "aV": 8, "aF": 0.05, "eV": 8, "eF": 0.05, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.05, "aV": 9, "aF": 0.05, "eV": 9, "eF": 0.05, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.05, "aV": 10, "aF": 0.05, "eV": 10, "eF": 0.05, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "매의눈": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "수비안정성(타순X)": [{"pV": 0, "pF": 1, "aV": 6, "aF": 0, "eV": 6, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0, "eV": 8, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0, "eV": 10, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 12, "aF": 0, "eV": 12, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 14, "aF": 0, "eV": 14, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 16, "aF": 0, "eV": 16, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "리그의강자": [{"pV": 8, "pF": 0, "aV": 0, "aF": 1, "eV": 8, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0, "aV": 0, "aF": 1, "eV": 10, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 12, "pF": 0, "aV": 0, "aF": 1, "eV": 12, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 14, "pF": 0, "aV": 0, "aF": 1, "eV": 14, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 16, "pF": 0, "aV": 0, "aF": 1, "eV": 16, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 18, "pF": 0, "aV": 0, "aF": 1, "eV": 18, "eF": 0, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "빠른발": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "핵타선(타순X)": [{"pV": 5, "pF": 0, "aV": 5, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0, "aV": 6, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0, "aV": 7, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0, "aV": 8, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0, "aV": 9, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0, "aV": 10, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "번트전문": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "국대에이스": [{"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "포수리드": [{"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}]}, "선발": {"좌승사자(좌투)": [{"pV": 9, "pF": 0.733333, "aV": 9, "aF": 0.733333, "eV": 9, "eF": 0.733333, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 11, "pF": 0.727273, "aV": 11, "aF": 0.727273, "eV": 11, "eF": 0.727273, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 13, "pF": 0.769231, "aV": 13, "aF": 0.769231, "eV": 13, "eF": 0.769231, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 15, "pF": 0.8, "aV": 15, "aF": 0.8, "eV": 15, "eF": 0.8, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 17, "pF": 0.8, "aV": 17, "aF": 0.8, "eV": 17, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 19, "pF": 0.8, "aV": 19, "aF": 0.8, "eV": 19, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "황금세대": [{"pV": 1, "pF": 1, "aV": 1, "aF": 1, "eV": 1, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "철완(지구력140-149)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}], "철완(지구력134-139)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}], "파이어볼": [{"pV": 6, "pF": 0.42, "aV": 6, "aF": 0.42, "eV": 6, "eF": 0.42, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 0.42, "aV": 7, "aF": 0.42, "eV": 7, "eF": 0.42, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 8, "pF": 0.42, "aV": 8, "aF": 0.42, "eV": 8, "eF": 0.42, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 9, "pF": 0.42, "aV": 9, "aF": 0.42, "eV": 9, "eF": 0.42, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 10, "pF": 0.42, "aV": 10, "aF": 0.42, "eV": 10, "eF": 0.42, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 11, "pF": 0.42, "aV": 11, "aF": 0.42, "eV": 11, "eF": 0.42, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "투쟁심": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.3, "sV": 5, "sF": 1.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.4, "sV": 6, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.34, "sV": 7, "sF": 1.34}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.3, "sV": 8, "sF": 1.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.27, "sV": 9, "sF": 1.27}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.24, "sV": 10, "sF": 1.24}], "철완(지구력120-133)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "철완(지구력117-119)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "저니맨": [{"pV": 2, "pF": 1, "aV": 2, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "패기(임팩)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.95, "sV": 7, "sF": 0.95}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.95, "sV": 8, "sF": 0.95}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.95, "sV": 9, "sF": 0.95}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.95, "sV": 10, "sF": 0.95}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 12, "sF": 1}], "비FA계약": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "필승카드": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "전승우승": [{"pV": 4, "pF": 0.6, "aV": 4, "aF": 0.6, "eV": 4, "eF": 0.6, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 6, "pF": 0.6, "aV": 6, "aF": 0.6, "eV": 6, "eF": 0.6, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 8, "pF": 0.6, "aV": 8, "aF": 0.6, "eV": 8, "eF": 0.6, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 10, "pF": 0.6, "aV": 10, "aF": 0.6, "eV": 10, "eF": 0.6, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 12, "pF": 0.6, "aV": 12, "aF": 0.6, "eV": 12, "eF": 0.6, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 14, "pF": 0.6, "aV": 14, "aF": 0.6, "eV": 14, "eF": 0.6, "cV": 6, "cF": 1, "sV": 6, "sF": 1}], "빅게임헌터": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 13, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 14, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 16, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 17, "sF": 1}], "해결사": [{"pV": 5, "pF": 0.5, "aV": 5, "aF": 0.5, "eV": 5, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 7, "pF": 0.5, "aV": 7, "aF": 0.5, "eV": 7, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 9, "pF": 0.5, "aV": 9, "aF": 0.5, "eV": 9, "eF": 0.5, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 11, "pF": 0.5, "aV": 11, "aF": 0.5, "eV": 11, "eF": 0.5, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 13, "pF": 0.5, "aV": 13, "aF": 0.5, "eV": 13, "eF": 0.5, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 15, "pF": 0.5, "aV": 15, "aF": 0.5, "eV": 15, "eF": 0.5, "cV": 5, "cF": 1, "sV": 5, "sF": 1}], "긴급투입": [{"pV": 0, "pF": 1, "aV": 5, "aF": 0.33, "eV": 5, "eF": 0.33, "cV": 6, "cF": 0.85, "sV": 6, "sF": 0.85}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0.33, "eV": 6, "eF": 0.33, "cV": 7, "cF": 0.85, "sV": 7, "sF": 0.85}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0.33, "eV": 7, "eF": 0.33, "cV": 8, "cF": 0.85, "sV": 8, "sF": 0.85}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0.33, "eV": 8, "eF": 0.33, "cV": 9, "cF": 0.85, "sV": 9, "sF": 0.85}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0.33, "eV": 9, "eF": 0.33, "cV": 10, "cF": 0.85, "sV": 10, "sF": 0.85}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0.33, "eV": 10, "eF": 0.33, "cV": 11, "cF": 0.85, "sV": 11, "sF": 0.85}], "구속제어": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 13, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 15, "cF": 1, "sV": 15, "sF": 1}], "리그톱플레이어": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "전천후": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "철완(지구력 100-116)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}], "순위경쟁": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "도전정신(4성)": [{"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "원투펀치(1,2선발)": [{"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 12, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 14, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 16, "sF": 1}], "난세의영웅": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.7, "sV": 6, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.7, "sV": 8, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.7, "sV": 9, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.7, "sV": 11, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0.7, "sV": 12, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 14, "cF": 0.7, "sV": 14, "sF": 0.7}], "홈어드밴티지": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "약속의8회": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.02, "sV": 5, "sF": 1.02}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.02, "sV": 6, "sF": 1.02}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.02, "sV": 7, "sF": 1.02}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.02, "sV": 8, "sF": 1.02}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.02, "sV": 9, "sF": 1.02}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.02, "sV": 10, "sF": 1.02}], "국대에이스(중복)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "도전정신(5성)": [{"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "에이스": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "가을사나이": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 11, "sF": 1}], "부동심": [{"pV": 7, "pF": 0.28, "aV": 7, "aF": 0.28, "eV": 7, "eF": 0.28, "cV": 6, "cF": 1.1, "sV": 5, "sF": 0.1}, {"pV": 8, "pF": 0.28, "aV": 8, "aF": 0.28, "eV": 8, "eF": 0.28, "cV": 7, "cF": 1.1, "sV": 6, "sF": 0.1}, {"pV": 10, "pF": 0.28, "aV": 10, "aF": 0.28, "eV": 10, "eF": 0.28, "cV": 8, "cF": 1.1, "sV": 7, "sF": 0.1}, {"pV": 12, "pF": 0.28, "aV": 12, "aF": 0.28, "eV": 12, "eF": 0.28, "cV": 9, "cF": 1.1, "sV": 8, "sF": 0.1}, {"pV": 14, "pF": 0.28, "aV": 14, "aF": 0.28, "eV": 14, "eF": 0.28, "cV": 10, "cF": 1.1, "sV": 9, "sF": 0.1}, {"pV": 16, "pF": 0.28, "aV": 16, "aF": 0.28, "eV": 16, "eF": 0.28, "cV": 11, "cF": 1.1, "sV": 10, "sF": 0.1}], "패기(시그/올스타/라이브)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.7, "sV": 7, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.7, "sV": 8, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.7, "sV": 9, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.7, "sV": 10, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.7, "sV": 11, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0.7, "sV": 12, "sF": 0.7}], "좌승사자(우투)": [{"pV": 4, "pF": 0.35, "aV": 4, "aF": 0.35, "eV": 4, "eF": 0.35, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 5, "pF": 0.35, "aV": 5, "aF": 0.35, "eV": 5, "eF": 0.35, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 5, "pF": 0.35, "aV": 5, "aF": 0.35, "eV": 5, "eF": 0.35, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 5, "pF": 0.35, "aV": 5, "aF": 0.35, "eV": 5, "eF": 0.35, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 5, "pF": 0.35, "aV": 5, "aF": 0.35, "eV": 5, "eF": 0.35, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 5, "pF": 0.35, "aV": 5, "aF": 0.35, "eV": 5, "eF": 0.35, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "오버페이스": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1.8, "sV": 3, "sF": 1.8}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1.8, "sV": 3, "sF": 1.8}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1.6, "sV": 4, "sF": 1.6}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1.6, "sV": 4, "sF": 1.6}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.6, "sV": 5, "sF": 1.6}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.6, "sV": 5, "sF": 1.6}], "워크에식": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.1, "sV": 5, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.1, "sV": 5, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.1, "sV": 6, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.1, "sV": 6, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.1, "sV": 7, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.1, "sV": 7, "sF": 1.1}], "베스트포지션": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 13, "sF": 1}], "마당쇠": [{"pV": 6, "pF": 0, "aV": 6, "aF": 0, "eV": 6, "eF": 0, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 7, "pF": 0, "aV": 7, "aF": 0, "eV": 7, "eF": 0, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 8, "pF": 0, "aV": 8, "aF": 0, "eV": 8, "eF": 0, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 9, "pF": 0, "aV": 9, "aF": 0, "eV": 9, "eF": 0, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 10, "pF": 0, "aV": 10, "aF": 0, "eV": 10, "eF": 0, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 11, "pF": 0, "aV": 11, "aF": 0, "eV": 11, "eF": 0, "cV": 9, "cF": 1, "sV": 9, "sF": 1}], "집중력": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.1, "sV": 2, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.2, "sV": 3, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.25, "sV": 3, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.3, "sV": 4, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.35, "sV": 4, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1.4, "sV": 5, "sF": 0.3}], "집념": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1.2, "sV": 3, "sF": 1.2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1.2, "sV": 4, "sF": 1.2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.2, "sV": 5, "sF": 1.2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.2, "sV": 6, "sF": 1.2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.2, "sV": 7, "sF": 1.2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.2, "sV": 8, "sF": 1.2}], "패기(골글)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.5, "sV": 7, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.5, "sV": 8, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.5, "sV": 9, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.5, "sV": 10, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "백전노장": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 6, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 8, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 9, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 10, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 11, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 12, "sF": 0.25}], "아티스트": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 0, "sF": 1}], "언터쳐블": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 0, "sF": 1}], "승리의함성": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 7, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 8, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 9, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 10, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 11, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 12, "sF": 0.33}], "원투펀치(3,4,5선발)": [{"pV": 0, "pF": 1, "aV": 5, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 12, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 14, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 16, "sF": 1}], "승부사": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 10, "sF": 1}], "첫단추": [{"pV": 0, "pF": 1, "aV": 6, "aF": 0.2, "eV": 6, "eF": 0.2, "cV": 0, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0.2, "eV": 7, "eF": 0.2, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0.2, "eV": 8, "eF": 0.2, "cV": 0, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0.2, "eV": 9, "eF": 0.2, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0.2, "eV": 10, "eF": 0.2, "cV": 0, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 11, "aF": 0.2, "eV": 11, "eF": 0.2, "cV": 0, "cF": 1, "sV": 10, "sF": 1}], "얼리스타트": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 0.3, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.3, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.3, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.3, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.3, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.3, "sV": 10, "sF": 1}], "라이징스타(3,4,5선발)": [{"pV": 5, "pF": 0.1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}], "라이징스타(1,2선발)": [{"pV": 5, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}], "평정심": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 10, "sF": 1}], "위닝샷": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 1, "cF": 1, "sV": 1, "sF": 2.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.4}], "원포인트릴리프": [{"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 9, "cF": 0.03, "sV": 9, "sF": 0.03}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 10, "cF": 0.03, "sV": 10, "sF": 0.03}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 11, "cF": 0.03, "sV": 11, "sF": 0.03}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 12, "cF": 0.03, "sV": 12, "sF": 0.03}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 13, "cF": 0.03, "sV": 13, "sF": 0.03}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 14, "cF": 0.03, "sV": 14, "sF": 0.03}], "우타킬러": [{"pV": 5, "pF": 0.6, "aV": 5, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.6, "aV": 6, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.6, "aV": 7, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.6, "aV": 8, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.6, "aV": 9, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.6, "aV": 10, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "완급조절": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.3, "sV": 5, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.3, "sV": 6, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.3, "sV": 7, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.3, "sV": 8, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.3, "sV": 9, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.3, "sV": 10, "sF": 0.3}], "클러치피처": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.65, "sV": 0, "sF": 1}], "좌타킬러": [{"pV": 5, "pF": 0.3, "aV": 5, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.3, "aV": 6, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.3, "aV": 7, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.3, "aV": 8, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.3, "aV": 9, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.3, "aV": 10, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "변화구선호": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.58, "sV": 0, "sF": 1}], "위기관리": [{"pV": 6, "pF": 0.24, "aV": 6, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.24, "aV": 7, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.24, "aV": 8, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.24, "aV": 9, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.24, "aV": 10, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.24, "aV": 11, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "더러운볼끝": [{"pV": 6, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "자신감": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.2, "sV": 0, "sF": 1}], "흐름끊기": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.1, "sV": 6, "sF": 0.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.1, "sV": 7, "sF": 0.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.1, "sV": 8, "sF": 0.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.1, "sV": 9, "sF": 0.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.1, "sV": 10, "sF": 0.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.1, "sV": 11, "sF": 0.1}], "속구선호": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 3, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 3, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}], "수호신": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.05, "sV": 6, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.05, "sV": 7, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.05, "sV": 8, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.05, "sV": 9, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.05, "sV": 10, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.05, "sV": 11, "sF": 0.05}], "진검승부": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.05, "sV": 5, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.05, "sV": 6, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.05, "sV": 7, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.05, "sV": 8, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.05, "sV": 9, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.05, "sV": 10, "sF": 0.05}], "기선제압": [{"pV": 5, "pF": 0.03, "aV": 5, "aF": 0.03, "eV": 5, "eF": 0.03, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.03, "aV": 6, "aF": 0.03, "eV": 6, "eF": 0.03, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.03, "aV": 7, "aF": 0.03, "eV": 7, "eF": 0.03, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.03, "aV": 8, "aF": 0.03, "eV": 8, "eF": 0.03, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.03, "aV": 9, "aF": 0.03, "eV": 9, "eF": 0.03, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.03, "aV": 10, "aF": 0.03, "eV": 10, "eF": 0.03, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "리그의강자": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0, "sV": 8, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0, "sV": 10, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0, "sV": 12, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 14, "cF": 0, "sV": 14, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 16, "cF": 0, "sV": 16, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 18, "cF": 0, "sV": 18, "sF": 0}], "사고방지": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "이닝이터": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "타선지원": [{"pV": 5, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}]}, "중계": {"마당쇠": [{"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 11, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}], "긴급투입(추격조)": [{"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 6, "cF": 1.1, "sV": 6, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 7, "cF": 1.05, "sV": 7, "sF": 1.05}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 8, "cF": 1.04, "sV": 8, "sF": 1.04}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 9, "cF": 1.03, "sV": 9, "sF": 1.03}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 10, "cF": 1.02, "sV": 10, "sF": 1.02}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 11, "cF": 1.02, "sV": 11, "sF": 1.02}], "황금세대": [{"pV": 1, "pF": 1, "aV": 1, "aF": 1, "eV": 1, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "전승우승(추격조)": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 12, "pF": 1, "aV": 12, "aF": 1, "eV": 12, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 14, "pF": 1, "aV": 14, "aF": 1, "eV": 14, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}], "철완(지구력134-139)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}], "투쟁심": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.4, "sV": 5, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.5, "sV": 6, "sF": 1.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.44, "sV": 7, "sF": 1.44}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.4, "sV": 8, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.37, "sV": 9, "sF": 1.37}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.34, "sV": 10, "sF": 1.34}], "약속의8회(셋업맨2)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.4, "sV": 5, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.5, "sV": 6, "sF": 1.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.43, "sV": 7, "sF": 1.43}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.375, "sV": 8, "sF": 1.375}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.33, "sV": 9, "sF": 1.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.3, "sV": 10, "sF": 1.3}], "파이어볼": [{"pV": 6, "pF": 0.42, "aV": 6, "aF": 0.42, "eV": 6, "eF": 0.42, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 0.42, "aV": 7, "aF": 0.42, "eV": 7, "eF": 0.42, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 8, "pF": 0.42, "aV": 8, "aF": 0.42, "eV": 8, "eF": 0.42, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 9, "pF": 0.42, "aV": 9, "aF": 0.42, "eV": 9, "eF": 0.42, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 10, "pF": 0.42, "aV": 10, "aF": 0.42, "eV": 10, "eF": 0.42, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 11, "pF": 0.42, "aV": 11, "aF": 0.42, "eV": 11, "eF": 0.42, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "철완(지구력120-133)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "철완(지구력117-119)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "패기(임팩/국대/올스타/라이브)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 12, "sF": 1}], "비FA계약": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "저니맨": [{"pV": 2, "pF": 1, "aV": 2, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "필승카드(승리조,셋업맨)": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "필승카드(롱릴리프)": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "필승카드(추격조)": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "긴급투입(롱릴리프)": [{"pV": 0, "pF": 1, "aV": 5, "aF": 0.6, "eV": 5, "eF": 0.6, "cV": 6, "cF": 0.8, "sV": 6, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0.6, "eV": 6, "eF": 0.6, "cV": 7, "cF": 0.8, "sV": 7, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0.6, "eV": 7, "eF": 0.6, "cV": 8, "cF": 0.8, "sV": 8, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0.6, "eV": 8, "eF": 0.6, "cV": 9, "cF": 0.8, "sV": 9, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0.6, "eV": 9, "eF": 0.6, "cV": 10, "cF": 0.8, "sV": 10, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0.6, "eV": 10, "eF": 0.6, "cV": 11, "cF": 0.8, "sV": 11, "sF": 0.8}], "전승우승(롱릴리프)": [{"pV": 4, "pF": 0.8, "aV": 4, "aF": 0.8, "eV": 4, "eF": 0.6, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 6, "pF": 0.8, "aV": 6, "aF": 0.8, "eV": 6, "eF": 0.6, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 8, "pF": 0.8, "aV": 8, "aF": 0.8, "eV": 8, "eF": 0.6, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 10, "pF": 0.8, "aV": 10, "aF": 0.8, "eV": 10, "eF": 0.6, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 12, "pF": 0.8, "aV": 12, "aF": 0.8, "eV": 12, "eF": 0.6, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 14, "pF": 0.8, "aV": 14, "aF": 0.8, "eV": 14, "eF": 0.6, "cV": 6, "cF": 1, "sV": 6, "sF": 1}], "빅게임헌터": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 13, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 14, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 16, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 17, "sF": 1}], "패기(시그)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.9, "sV": 7, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.9, "sV": 8, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.9, "sV": 9, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.9, "sV": 10, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.9, "sV": 11, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0.9, "sV": 12, "sF": 0.9}], "약속의8회(추격조,롱릴리프)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.1, "sV": 5, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.1, "sV": 6, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.1, "sV": 7, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.1, "sV": 8, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.1, "sV": 9, "sF": 1.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.1, "sV": 10, "sF": 1.1}], "워크에식": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1, "sV": 5, "sF": 2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1, "sV": 5, "sF": 2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 6, "sF": 1.85}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 6, "sF": 1.85}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 7, "sF": 1.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 7, "sF": 1.7}], "구속제어": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 13, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 15, "cF": 1, "sV": 15, "sF": 1}], "리그탑플레이어": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "전천후": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "철완(지구력100-116)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}], "국민계투(셋업맨)": [{"pV": 8, "pF": 0.5, "aV": 8, "aF": 0.5, "eV": 8, "eF": 0.5, "cV": 2, "cF": 1, "sV": 2, "sF": 1}, {"pV": 10, "pF": 0.5, "aV": 10, "aF": 0.5, "eV": 10, "eF": 0.5, "cV": 2, "cF": 1, "sV": 2, "sF": 1}, {"pV": 12, "pF": 0.5, "aV": 12, "aF": 0.5, "eV": 12, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 14, "pF": 0.5, "aV": 14, "aF": 0.5, "eV": 14, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 16, "pF": 0.5, "aV": 16, "aF": 0.5, "eV": 16, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 18, "pF": 0.5, "aV": 18, "aF": 0.5, "eV": 18, "eF": 0.5, "cV": 4, "cF": 1, "sV": 4, "sF": 1}], "순위경쟁": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "도전정신(4성)": [{"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "수호신(셋업맨2)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "약속의8회(셋업맨1)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "홈어드밴티지": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "국대에이스(중복)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "도전정신(5성)": [{"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "에이스": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "가을사나이": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 11, "sF": 1}], "부동심": [{"pV": 7, "pF": 0.28, "aV": 7, "aF": 0.28, "eV": 7, "eF": 0.28, "cV": 6, "cF": 1.1, "sV": 5, "sF": 0.1}, {"pV": 8, "pF": 0.28, "aV": 8, "aF": 0.28, "eV": 8, "eF": 0.28, "cV": 7, "cF": 1.1, "sV": 6, "sF": 0.1}, {"pV": 10, "pF": 0.28, "aV": 10, "aF": 0.28, "eV": 10, "eF": 0.28, "cV": 8, "cF": 1.1, "sV": 7, "sF": 0.1}, {"pV": 12, "pF": 0.28, "aV": 12, "aF": 0.28, "eV": 12, "eF": 0.28, "cV": 9, "cF": 1.1, "sV": 8, "sF": 0.1}, {"pV": 14, "pF": 0.28, "aV": 14, "aF": 0.28, "eV": 14, "eF": 0.28, "cV": 10, "cF": 1.1, "sV": 9, "sF": 0.1}, {"pV": 16, "pF": 0.28, "aV": 16, "aF": 0.28, "eV": 16, "eF": 0.28, "cV": 11, "cF": 1.1, "sV": 10, "sF": 0.1}], "승리의함성(승리조,셋업맨)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 7, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 8, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 9, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 10, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 11, "sF": 0.8}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 12, "sF": 0.8}], "국민계투(셋업맨X)": [{"pV": 8, "pF": 0.3, "aV": 8, "aF": 0.3, "eV": 8, "eF": 0.3, "cV": 2, "cF": 1, "sV": 2, "sF": 1}, {"pV": 10, "pF": 0.3, "aV": 10, "aF": 0.3, "eV": 10, "eF": 0.3, "cV": 2, "cF": 1, "sV": 2, "sF": 1}, {"pV": 12, "pF": 0.3, "aV": 12, "aF": 0.3, "eV": 12, "eF": 0.3, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 14, "pF": 0.3, "aV": 14, "aF": 0.3, "eV": 14, "eF": 0.3, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 16, "pF": 0.3, "aV": 16, "aF": 0.3, "eV": 16, "eF": 0.3, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 18, "pF": 0.3, "aV": 18, "aF": 0.3, "eV": 18, "eF": 0.3, "cV": 4, "cF": 1, "sV": 4, "sF": 1}], "전승우승(승리조,셋업맨)": [{"pV": 4, "pF": 0.6, "aV": 4, "aF": 0.6, "eV": 4, "eF": 0.6, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 6, "pF": 0.6, "aV": 6, "aF": 0.6, "eV": 6, "eF": 0.6, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 8, "pF": 0.6, "aV": 8, "aF": 0.6, "eV": 8, "eF": 0.6, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 10, "pF": 0.6, "aV": 10, "aF": 0.6, "eV": 10, "eF": 0.6, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 12, "pF": 0.6, "aV": 12, "aF": 0.6, "eV": 12, "eF": 0.6, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 14, "pF": 0.6, "aV": 14, "aF": 0.6, "eV": 14, "eF": 0.6, "cV": 6, "cF": 1, "sV": 6, "sF": 1}], "라이징스타(셋업맨/3,4,5중계)": [{"pV": 5, "pF": 0.8, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.8, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.8, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.8, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.8, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.8, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}], "수호신(승리조)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.7, "sV": 6, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.7, "sV": 7, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.7, "sV": 8, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.7, "sV": 9, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.7, "sV": 10, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.7, "sV": 11, "sF": 0.7}], "난세의영웅": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.7, "sV": 6, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.7, "sV": 8, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.7, "sV": 9, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.7, "sV": 11, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0.7, "sV": 12, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 14, "cF": 0.7, "sV": 14, "sF": 0.7}], "원포인트릴리프(셋업맨)": [{"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 9, "cF": 0.2, "sV": 9, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 10, "cF": 0.2, "sV": 10, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 11, "cF": 0.2, "sV": 11, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 12, "cF": 0.2, "sV": 12, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 13, "cF": 0.2, "sV": 13, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 14, "cF": 0.2, "sV": 14, "sF": 0.2}], "라이징스타(셋업맨X/3,4,5중계)": [{"pV": 5, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.7, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}], "베스트포지션": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 13, "sF": 1}], "흐름끊기(셋업맨)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.7, "sV": 6, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.7, "sV": 7, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.7, "sV": 8, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.7, "sV": 9, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.7, "sV": 10, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.7, "sV": 11, "sF": 0.7}], "집중력": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.1, "sV": 2, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.2, "sV": 3, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.25, "sV": 3, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.3, "sV": 4, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.35, "sV": 4, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1.4, "sV": 5, "sF": 0.3}], "원포인트릴리프(셋업맨X)": [{"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 9, "cF": 0.15, "sV": 9, "sF": 0.15}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 10, "cF": 0.15, "sV": 10, "sF": 0.15}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 11, "cF": 0.15, "sV": 11, "sF": 0.15}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 12, "cF": 0.15, "sV": 12, "sF": 0.15}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 13, "cF": 0.15, "sV": 13, "sF": 0.15}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 14, "cF": 0.15, "sV": 14, "sF": 0.15}], "얼리스타트(셋업맨)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 0.7, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.7, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.7, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.7, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.7, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.7, "sV": 10, "sF": 1}], "얼리스타트(셋업맨X)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 0.5, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.5, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.5, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.5, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.5, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.5, "sV": 10, "sF": 1}], "백전노장": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 6, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 8, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 9, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 10, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 11, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 12, "sF": 0.25}], "아티스트": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 0, "sF": 1}], "언터처블": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 0, "sF": 1}], "원투펀치": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 12, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 14, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 16, "sF": 1}], "승리의함성(롱릴리프)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 7, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 8, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 9, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 10, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 11, "sF": 0.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 12, "sF": 0.33}], "승부사": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 10, "sF": 1}], "오버페이스": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1.7, "sV": 3, "sF": 1.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1.7, "sV": 3, "sF": 1.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1.5, "sV": 4, "sF": 1.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1.5, "sV": 4, "sF": 1.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.4, "sV": 5, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.4, "sV": 5, "sF": 1.4}], "흐름끊기(셋업맨X)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.5, "sV": 6, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.5, "sV": 7, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.5, "sV": 8, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.5, "sV": 9, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.5, "sV": 10, "sF": 0.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.5, "sV": 11, "sF": 0.5}], "긴급투입(승리조,셋업맨)": [{"pV": 0, "pF": 1, "aV": 5, "aF": 0.1, "eV": 5, "eF": 0.1, "cV": 6, "cF": 0.4, "sV": 6, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0.1, "eV": 6, "eF": 0.1, "cV": 7, "cF": 0.4, "sV": 7, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0.1, "eV": 7, "eF": 0.1, "cV": 8, "cF": 0.4, "sV": 8, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0.1, "eV": 8, "eF": 0.1, "cV": 9, "cF": 0.4, "sV": 9, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0.1, "eV": 9, "eF": 0.1, "cV": 10, "cF": 0.4, "sV": 10, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0.1, "eV": 10, "eF": 0.1, "cV": 11, "cF": 0.4, "sV": 11, "sF": 0.4}], "라이징스타(1,2,6중계)": [{"pV": 5, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}], "수호신(추격조,롱릴리프)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.4, "sV": 6, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.4, "sV": 7, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.4, "sV": 8, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.4, "sV": 9, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.4, "sV": 10, "sF": 0.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.4, "sV": 11, "sF": 0.4}], "평정심": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 10, "sF": 1}], "첫단추": [{"pV": 0, "pF": 1, "aV": 6, "aF": 0, "eV": 6, "eF": 0, "cV": 0, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0, "eV": 7, "eF": 0, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0, "eV": 8, "eF": 0, "cV": 0, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0, "eV": 9, "eF": 0, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0, "eV": 10, "eF": 0, "cV": 0, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 11, "aF": 0, "eV": 11, "eF": 0, "cV": 0, "cF": 1, "sV": 10, "sF": 1}], "승리의함성(추격조)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 7, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 8, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 9, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 10, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 11, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 12, "sF": 0}], "위닝샷": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 1, "cF": 1, "sV": 1, "sF": 2.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.4}], "우타킬러": [{"pV": 5, "pF": 0.6, "aV": 5, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.6, "aV": 6, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.6, "aV": 7, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.6, "aV": 8, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.6, "aV": 9, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.6, "aV": 10, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "완급조절": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.3, "sV": 5, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.3, "sV": 6, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.3, "sV": 7, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.3, "sV": 8, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.3, "sV": 9, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.3, "sV": 10, "sF": 0.3}], "클러치피처": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.65, "sV": 0, "sF": 1}], "좌타킬러": [{"pV": 5, "pF": 0.3, "aV": 5, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.3, "aV": 6, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.3, "aV": 7, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.3, "aV": 8, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.3, "aV": 9, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.3, "aV": 10, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "변화구선호": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.58, "sV": 0, "sF": 1}], "위기관리": [{"pV": 6, "pF": 0.24, "aV": 6, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.24, "aV": 7, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.24, "aV": 8, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.24, "aV": 9, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.24, "aV": 10, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.24, "aV": 11, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "기선제압(셋업맨)": [{"pV": 5, "pF": 0.2, "aV": 5, "aF": 0.2, "eV": 5, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.2, "aV": 6, "aF": 0.2, "eV": 6, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.2, "aV": 7, "aF": 0.2, "eV": 7, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.2, "aV": 8, "aF": 0.2, "eV": 8, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.2, "aV": 9, "aF": 0.2, "eV": 9, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.2, "aV": 10, "aF": 0.2, "eV": 10, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "더러운볼끝": [{"pV": 6, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "기선제압(셋업맨X)": [{"pV": 5, "pF": 0.15, "aV": 5, "aF": 0.15, "eV": 5, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.15, "aV": 6, "aF": 0.15, "eV": 6, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.15, "aV": 7, "aF": 0.15, "eV": 7, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.15, "aV": 8, "aF": 0.15, "eV": 8, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.15, "aV": 9, "aF": 0.15, "eV": 9, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.15, "aV": 10, "aF": 0.15, "eV": 10, "eF": 0.15, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "자신감": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.2, "sV": 0, "sF": 1}], "속구선호": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 3, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 3, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}], "수호신(셋업맨1)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.05, "sV": 6, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.05, "sV": 7, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.05, "sV": 8, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.05, "sV": 9, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.05, "sV": 10, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.05, "sV": 11, "sF": 0.05}], "진검승부": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.05, "sV": 5, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.05, "sV": 6, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.05, "sV": 7, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.05, "sV": 8, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.05, "sV": 9, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.05, "sV": 10, "sF": 0.05}], "리그의강자": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0, "sV": 8, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0, "sV": 10, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0, "sV": 12, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 14, "cF": 0, "sV": 14, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 16, "cF": 0, "sV": 16, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 18, "cF": 0, "sV": 18, "sF": 0}], "사고방지": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "이닝이터": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "타선지원": [{"pV": 5, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}]}, "마무리": {"마당쇠": [{"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 10, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 11, "pF": 1, "aV": 11, "aF": 1, "eV": 11, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}], "황금세대": [{"pV": 1, "pF": 1, "aV": 1, "aF": 1, "eV": 1, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 3, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "철완(지구력134-139)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}], "투쟁심": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.4, "sV": 5, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.5, "sV": 6, "sF": 1.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.44, "sV": 7, "sF": 1.44}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.4, "sV": 8, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.37, "sV": 9, "sF": 1.37}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.34, "sV": 10, "sF": 1.34}], "파이어볼": [{"pV": 6, "pF": 0.42, "aV": 6, "aF": 0.42, "eV": 6, "eF": 0.42, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 0.42, "aV": 7, "aF": 0.42, "eV": 7, "eF": 0.42, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 8, "pF": 0.42, "aV": 8, "aF": 0.42, "eV": 8, "eF": 0.42, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 9, "pF": 0.42, "aV": 9, "aF": 0.42, "eV": 9, "eF": 0.42, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 10, "pF": 0.42, "aV": 10, "aF": 0.42, "eV": 10, "eF": 0.42, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 11, "pF": 0.42, "aV": 11, "aF": 0.42, "eV": 11, "eF": 0.42, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "철완(지구력120-133)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "철완(지구력117-119)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "저니맨": [{"pV": 2, "pF": 1, "aV": 2, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 3, "pF": 1, "aV": 3, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "패기(일팩)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 12, "sF": 1}], "비FA계약": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "빅게임헌터": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 13, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 14, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 16, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 17, "sF": 1}], "패기(국대)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 12, "sF": 1}], "필승카드": [{"pV": 4, "pF": 1, "aV": 4, "aF": 1, "eV": 4, "eF": 1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 5, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 6, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 7, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 8, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 9, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}], "해결사": [{"pV": 5, "pF": 0.5, "aV": 5, "aF": 0.5, "eV": 5, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 7, "pF": 0.5, "aV": 7, "aF": 0.5, "eV": 7, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 9, "pF": 0.5, "aV": 9, "aF": 0.5, "eV": 9, "eF": 0.5, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 11, "pF": 0.5, "aV": 11, "aF": 0.5, "eV": 11, "eF": 0.5, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 13, "pF": 0.5, "aV": 13, "aF": 0.5, "eV": 13, "eF": 0.5, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 15, "pF": 0.5, "aV": 15, "aF": 0.5, "eV": 15, "eF": 0.5, "cV": 5, "cF": 1, "sV": 5, "sF": 1}], "패기(시그/올스타/라이브)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 12, "sF": 1}], "구속제어": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 13, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 15, "cF": 1, "sV": 15, "sF": 1}], "리그톱플레이어": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "전천후": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "수호신": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "철완(지구력100-116)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}], "국민계투": [{"pV": 8, "pF": 0.5, "aV": 8, "aF": 0.5, "eV": 8, "eF": 0.5, "cV": 2, "cF": 1, "sV": 2, "sF": 1}, {"pV": 10, "pF": 0.5, "aV": 10, "aF": 0.5, "eV": 10, "eF": 0.5, "cV": 2, "cF": 1, "sV": 2, "sF": 1}, {"pV": 12, "pF": 0.5, "aV": 12, "aF": 0.5, "eV": 12, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 14, "pF": 0.5, "aV": 14, "aF": 0.5, "eV": 14, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 16, "pF": 0.5, "aV": 16, "aF": 0.5, "eV": 16, "eF": 0.5, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 18, "pF": 0.5, "aV": 18, "aF": 0.5, "eV": 18, "eF": 0.5, "cV": 4, "cF": 1, "sV": 4, "sF": 1}], "순위경쟁": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}], "도전정신(4성)": [{"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "워크에식": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1, "sV": 5, "sF": 1.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1, "sV": 5, "sF": 1.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 6, "sF": 1.75}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 6, "sF": 1.75}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 7, "sF": 1.6}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 7, "sF": 1.6}], "승리의함성": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 7, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 8, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 9, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 10, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 11, "sF": 0.9}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 12, "sF": 0.9}], "홈어드벤티지": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "국대에이스(중복)": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "도전정신(5성)": [{"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 1, "pF": 0, "aV": 1, "aF": 0, "eV": 1, "eF": 0, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "에이스": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 10, "sF": 1}], "약속의8회": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.4, "sV": 5, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.5, "sV": 6, "sF": 1.5}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.43, "sV": 7, "sF": 1.43}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.375, "sV": 8, "sF": 1.375}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.33, "sV": 9, "sF": 1.33}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.3, "sV": 10, "sF": 1.3}], "가을사나이": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 11, "sF": 1}], "부동심": [{"pV": 7, "pF": 0.28, "aV": 7, "aF": 0.28, "eV": 7, "eF": 0.28, "cV": 6, "cF": 1.1, "sV": 5, "sF": 0.1}, {"pV": 8, "pF": 0.28, "aV": 8, "aF": 0.28, "eV": 8, "eF": 0.28, "cV": 7, "cF": 1.1, "sV": 6, "sF": 0.1}, {"pV": 10, "pF": 0.28, "aV": 10, "aF": 0.28, "eV": 10, "eF": 0.28, "cV": 8, "cF": 1.1, "sV": 7, "sF": 0.1}, {"pV": 12, "pF": 0.28, "aV": 12, "aF": 0.28, "eV": 12, "eF": 0.28, "cV": 9, "cF": 1.1, "sV": 8, "sF": 0.1}, {"pV": 14, "pF": 0.28, "aV": 14, "aF": 0.28, "eV": 14, "eF": 0.28, "cV": 10, "cF": 1.1, "sV": 9, "sF": 0.1}, {"pV": 16, "pF": 0.28, "aV": 16, "aF": 0.28, "eV": 16, "eF": 0.28, "cV": 11, "cF": 1.1, "sV": 10, "sF": 0.1}], "난세의영웅": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.7, "sV": 6, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.7, "sV": 8, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.7, "sV": 9, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.7, "sV": 11, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0.7, "sV": 12, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 14, "cF": 0.7, "sV": 14, "sF": 0.7}], "원포인트릴리프": [{"pV": 0, "pF": 1, "aV": 5, "aF": 1, "eV": 5, "eF": 1, "cV": 9, "cF": 0.2, "sV": 9, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 6, "aF": 1, "eV": 6, "eF": 1, "cV": 10, "cF": 0.2, "sV": 10, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 7, "aF": 1, "eV": 7, "eF": 1, "cV": 11, "cF": 0.2, "sV": 11, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 8, "aF": 1, "eV": 8, "eF": 1, "cV": 12, "cF": 0.2, "sV": 12, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 9, "aF": 1, "eV": 9, "eF": 1, "cV": 13, "cF": 0.2, "sV": 13, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 10, "aF": 1, "eV": 10, "eF": 1, "cV": 14, "cF": 0.2, "sV": 14, "sF": 0.2}], "베스트포지션": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 11, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 13, "sF": 1}], "흐름끊기": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.7, "sV": 6, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.7, "sV": 7, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.7, "sV": 8, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.7, "sV": 9, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.7, "sV": 10, "sF": 0.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.7, "sV": 11, "sF": 0.7}], "집중력": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1.1, "sV": 2, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1.2, "sV": 3, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1.25, "sV": 3, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1.3, "sV": 4, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1.35, "sV": 4, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1.4, "sV": 5, "sF": 0.3}], "얼리스타트": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 0.7, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.7, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.7, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.7, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.7, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.7, "sV": 10, "sF": 1}], "전승우승": [{"pV": 4, "pF": 0.1, "aV": 4, "aF": 0.1, "eV": 4, "eF": 0.1, "cV": 3, "cF": 1, "sV": 3, "sF": 1}, {"pV": 6, "pF": 0.1, "aV": 6, "aF": 0.1, "eV": 6, "eF": 0.1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 8, "pF": 0.1, "aV": 8, "aF": 0.1, "eV": 8, "eF": 0.1, "cV": 4, "cF": 1, "sV": 4, "sF": 1}, {"pV": 10, "pF": 0.1, "aV": 10, "aF": 0.1, "eV": 10, "eF": 0.1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 12, "pF": 0.1, "aV": 12, "aF": 0.1, "eV": 12, "eF": 0.1, "cV": 5, "cF": 1, "sV": 5, "sF": 1}, {"pV": 14, "pF": 0.1, "aV": 14, "aF": 0.1, "eV": 14, "eF": 0.1, "cV": 6, "cF": 1, "sV": 6, "sF": 1}], "백전노장": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1, "sV": 6, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 8, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 9, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 10, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 11, "sF": 0.25}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 12, "sF": 0.25}], "아티스트": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 0, "sF": 1}], "인터처블": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 13, "cF": 1, "sV": 0, "sF": 1}], "원투펀치": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 10, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 12, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 14, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 16, "sF": 1}], "승부사": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 0.3, "sV": 10, "sF": 1}], "오버페이스": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1.6, "sV": 3, "sF": 1.7}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 3, "cF": 1.6, "sV": 3, "sF": 1.6}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1.4, "sV": 4, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 4, "cF": 1.4, "sV": 4, "sF": 1.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.3, "sV": 5, "sF": 1.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 1.3, "sV": 5, "sF": 1.3}], "라이징스타": [{"pV": 5, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 1, "sV": 0, "sF": 1}], "평정심": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 10, "sF": 1}], "첫단추": [{"pV": 0, "pF": 1, "aV": 6, "aF": 0, "eV": 6, "eF": 0, "cV": 0, "cF": 1, "sV": 5, "sF": 1}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0, "eV": 7, "eF": 0, "cV": 0, "cF": 1, "sV": 6, "sF": 1}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0, "eV": 8, "eF": 0, "cV": 0, "cF": 1, "sV": 7, "sF": 1}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0, "eV": 9, "eF": 0, "cV": 0, "cF": 1, "sV": 8, "sF": 1}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0, "eV": 10, "eF": 0, "cV": 0, "cF": 1, "sV": 9, "sF": 1}, {"pV": 0, "pF": 1, "aV": 11, "aF": 0, "eV": 11, "eF": 0, "cV": 0, "cF": 1, "sV": 10, "sF": 1}], "위닝샷": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 1, "cF": 1, "sV": 1, "sF": 2.4}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.2}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 2, "cF": 1, "sV": 2, "sF": 2.4}], "우타킬러": [{"pV": 5, "pF": 0.6, "aV": 5, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.6, "aV": 6, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.6, "aV": 7, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.6, "aV": 8, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.6, "aV": 9, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.6, "aV": 10, "aF": 0.6, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "완급조절": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.3, "sV": 5, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.3, "sV": 6, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.3, "sV": 7, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.3, "sV": 8, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.3, "sV": 9, "sF": 0.3}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.3, "sV": 10, "sF": 0.3}], "긴급투입": [{"pV": 0, "pF": 1, "aV": 5, "aF": 0.1, "eV": 5, "eF": 0.1, "cV": 6, "cF": 0.2, "sV": 6, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 6, "aF": 0.1, "eV": 6, "eF": 0.1, "cV": 7, "cF": 0.2, "sV": 7, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 7, "aF": 0.1, "eV": 7, "eF": 0.1, "cV": 8, "cF": 0.2, "sV": 8, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 8, "aF": 0.1, "eV": 8, "eF": 0.1, "cV": 9, "cF": 0.2, "sV": 9, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 9, "aF": 0.1, "eV": 9, "eF": 0.1, "cV": 10, "cF": 0.2, "sV": 10, "sF": 0.2}, {"pV": 0, "pF": 1, "aV": 10, "aF": 0.1, "eV": 10, "eF": 0.1, "cV": 11, "cF": 0.2, "sV": 11, "sF": 0.2}], "클러치피처": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.65, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.65, "sV": 0, "sF": 1}], "좌타킬러": [{"pV": 5, "pF": 0.3, "aV": 5, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.3, "aV": 6, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.3, "aV": 7, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.3, "aV": 8, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.3, "aV": 9, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.3, "aV": 10, "aF": 0.3, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "변화구선호": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.58, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.58, "sV": 0, "sF": 1}], "위기관리": [{"pV": 6, "pF": 0.24, "aV": 6, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.24, "aV": 7, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.24, "aV": 8, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.24, "aV": 9, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.24, "aV": 10, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.24, "aV": 11, "aF": 0.24, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "기선제압": [{"pV": 5, "pF": 0.2, "aV": 5, "aF": 0.2, "eV": 5, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 0.2, "aV": 6, "aF": 0.2, "eV": 6, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.2, "aV": 7, "aF": 0.2, "eV": 7, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.2, "aV": 8, "aF": 0.2, "eV": 8, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.2, "aV": 9, "aF": 0.2, "eV": 9, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.2, "aV": 10, "aF": 0.2, "eV": 10, "eF": 0.2, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "더러운볼끝": [{"pV": 6, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 11, "pF": 0.3, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "자신감": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.2, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 11, "cF": 0.2, "sV": 0, "sF": 1}], "속구선호": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 3, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 3, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 4, "sF": 0.42}], "진검승부": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 5, "cF": 0.05, "sV": 5, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 6, "cF": 0.05, "sV": 6, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 7, "cF": 0.05, "sV": 7, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0.05, "sV": 8, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 9, "cF": 0.05, "sV": 9, "sF": 0.05}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0.05, "sV": 10, "sF": 0.05}], "리그의강자": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 8, "cF": 0, "sV": 8, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 10, "cF": 0, "sV": 10, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 12, "cF": 0, "sV": 12, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 14, "cF": 0, "sV": 14, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 16, "cF": 0, "sV": 16, "sF": 0}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 18, "cF": 0, "sV": 18, "sF": 0}], "타선지원": [{"pV": 5, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 6, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 7, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 8, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 9, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 10, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "사교왕": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}], "이닝이터": [{"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}, {"pV": 0, "pF": 1, "aV": 0, "aF": 1, "eV": 0, "eF": 1, "cV": 0, "cF": 1, "sV": 0, "sF": 1}]}, "weights": {"p": 1.0, "a": 0.9, "e": 0.3, "c": 1.175, "s": 1.275}};
 async function sGet(k){try{var r=await window.storage.get(k);return r?JSON.parse(r.value):null;}catch(e){return null;}}
@@ -105,21 +108,23 @@ async function sSet(k,d){try{await window.storage.set(k,JSON.stringify(d));retur
 function calcBat(pl,lu,sdB){
   if(!pl||!lu)return{power:0,accuracy:0,eye:0,total:0,skillScore:0};
   var w=getW();var sb=sdB||{p:0,a:0,e:0};
-  var fP=(pl.power||0)+getEnhVal(pl.cardType,"파워",lu.enhance||"")+(lu.trainP||0)+(pl.specPower||0)+sb.p+(pl.potmP||0);
-  var fA=(pl.accuracy||0)+getEnhVal(pl.cardType,"정확",lu.enhance||"")+(lu.trainA||0)+(pl.specAccuracy||0)+sb.a+(pl.potmA||0);
-  var fE=(pl.eye||0)+getEnhVal(pl.cardType,"선구",lu.enhance||"")+(lu.trainE||0)+(pl.specEye||0)+sb.e+(pl.potmE||0);
+  var fP=(pl.power||0)+getEnhVal(pl.cardType,"파워",lu.enhance||"")+(lu.trainP||0)+(pl.specPower||0)+sb.p;
+  var fA=(pl.accuracy||0)+getEnhVal(pl.cardType,"정확",lu.enhance||"")+(lu.trainA||0)+(pl.specAccuracy||0)+sb.a;
+  var fE=(pl.eye||0)+getEnhVal(pl.cardType,"선구",lu.enhance||"")+(lu.trainE||0)+(pl.specEye||0)+sb.e;
   var ss=getSkillScore(lu.skill1,lu.s1Lv||0,"타자")+getSkillScore(lu.skill2,lu.s2Lv||0,"타자")+getSkillScore(lu.skill3,lu.s3Lv||0,"타자");
   var t=fP*w.p+fA*w.a+fE*w.e+ss;
   /* 국대에이스(타자): 종합점수에만 반영 */
   if(sdB&&sdB._sdState){var nb2=sdB._sdState.natBat||sdB._sdState._autoNatBat||"없음";if(nb2==="5렙"){t+=1*w.p+1*w.a;}if(nb2==="6렙"){t+=2*w.p+2*w.a;}}
+  /* 잠재력 점수 */
+  t += getPotScore(pl.pot1, SKILL_DATA) + getPotScore(pl.pot2, SKILL_DATA);
   return{power:fP,accuracy:fA,eye:fE,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
 }
 
 function calcPit(pl,lu,sdB){
   if(!pl||!lu)return{change:0,stuff:0,total:0,skillScore:0};
   var w=getW();var sb=sdB||{c:0,s:0};
-  var fC=(pl.change||0)+getEnhVal(pl.cardType,"변화",lu.enhance||"")+(lu.trainC||0)+(pl.specChange||0)+sb.c+(pl.potmC||0);
-  var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s+(pl.potmS||0);
+  var fC=(pl.change||0)+getEnhVal(pl.cardType,"변화",lu.enhance||"")+(lu.trainC||0)+(pl.specChange||0)+sb.c;
+  var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s;
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
   var ss=getSkillScore(lu.skill1,lu.s1Lv||0,pt)+getSkillScore(lu.skill2,lu.s2Lv||0,pt)+getSkillScore(lu.skill3,lu.s3Lv||0,pt);
   var t=fC*w.c+fS*w.s+ss;
@@ -129,6 +134,8 @@ function calcPit(pl,lu,sdB){
     var cl2=sdB._sdState.catchLead||sdB._sdState._autoCatch||"없음";
     if(cl2==="5렙"){t+=1*w.c;}if(cl2==="6렙"){t+=1*w.c+1*w.s;}if(cl2==="7렙"){t+=1*w.c+1*w.s;}if(cl2==="8렙"){t+=2*w.c+1*w.s;}if(cl2==="9렙"){t+=2*w.c+1*w.s;}if(cl2==="10렙"){t+=2*w.c+2*w.s;}
   }
+  /* 잠재력 점수 */
+  t += getPotScore(pl.pot1, SKILL_DATA) + getPotScore(pl.pot2, SKILL_DATA);
   return{change:fC,stuff:fS,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
 }
 
@@ -222,11 +229,11 @@ function calcSDBonus(pl, slot, sdState, totalSP) {
   /* 국대에이스/포수리드: 종합점수에만 반영 (calcBat/calcPit에서 처리) */
 
   /* 유니폼 효과 (기본 +1) */
-  bp += (sdState.uniP !== undefined ? sdState.uniP : 1);
-  ba += (sdState.uniA !== undefined ? sdState.uniA : 1);
-  be += (sdState.uniE !== undefined ? sdState.uniE : 1);
-  pc += (sdState.uniC !== undefined ? sdState.uniC : 1);
-  ps += (sdState.uniS !== undefined ? sdState.uniS : 1);
+  bp += (sdState.uniP || 0);
+  ba += (sdState.uniA || 0);
+  be += (sdState.uniE || 0);
+  pc += (sdState.uniC || 0);
+  ps += (sdState.uniS || 0);
 
   /* 포지션 특훈 (POS_TRAIN 테이블 참조) */
   var ptData = sdState["pt_" + slot];
@@ -244,8 +251,13 @@ function calcSDBonus(pl, slot, sdState, totalSP) {
   }
 
   /* 주장 보너스 (라커룸에서 설정) */
-  if (isBat && sdState.capBatId) { bp += sdState.capBatP || 0; ba += sdState.capBatA || 0; be += sdState.capBatE || 0; }
-  if (!isBat && sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
+  if (isBat && pl.id === sdState.capBatId) { bp += sdState.capBatP || 0; ba += sdState.capBatA || 0; be += sdState.capBatE || 0; }
+  if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
+
+  /* POTM 자동 보너스 */
+  var potmB = getPotmBonus(pl, sdState);
+  if (isBat) { bp += potmB; ba += potmB; be += potmB; }
+  else { pc += potmB; ps += potmB; }
 
   return isBat ? {p:bp,a:ba,e:be,_sdState:sdState} : {c:pc,s:ps,_sdState:sdState};
 }
@@ -273,21 +285,24 @@ function useData(userId, sdState, setSdState){
           if(ud.lineupMap)setLineupMap(ud.lineupMap);
           if(ud.sdConfig)setSdState(ud.sdConfig);
         }else{
-          setPlayers(SEED_PLAYERS);setLineupMap(SEED_LINEUP);
-          await saveUserData(userId,{players:SEED_PLAYERS,lineupMap:SEED_LINEUP,sdConfig:{liveSetPo:0}});
+          setPlayers([]);setLineupMap({});
+          await saveUserData(userId,{players:[],lineupMap:{},sdConfig:{liveSetPo:0}});
         }
         /* Load global skills from Supabase */
         var gsk=await loadGlobalSkills();
         if(gsk && gsk["타자"]){setSkills(gsk);SKILL_DATA=gsk;if(gsk.weights)LIVE_WEIGHTS=gsk.weights;}
         else{setSkills(DEFAULT_SKILLS);SKILL_DATA=DEFAULT_SKILLS;}
+        /* Load global players from Supabase */
+        var gpl=await loadGlobalPlayers();
+        if(gpl && gpl.length>0){SEED_PLAYERS.length=0;gpl.forEach(function(p){SEED_PLAYERS.push(p);});}
       }else{
         /* Fallback: localStorage */
         var ver=await sGet(SK.version);var needReset=(!ver||ver<DATA_VERSION);
         if(needReset){await sSet(SK.version,DATA_VERSION);}
         var p2=await sGet(SK.players);
-        if(!needReset&&p2&&p2.length>=SEED_PLAYERS.length){setPlayers(p2);}else{setPlayers(SEED_PLAYERS);await sSet(SK.players,SEED_PLAYERS);}
+        if(!needReset&&p2&&p2.length>0){setPlayers(p2);}else{setPlayers([]);await sSet(SK.players,[]);}
         var lm2=await sGet(SK.lineupMap);
-        if(!needReset&&lm2&&Object.keys(lm2).length>0){setLineupMap(lm2);}else{setLineupMap(SEED_LINEUP);await sSet(SK.lineupMap,SEED_LINEUP);}
+        if(!needReset&&lm2&&Object.keys(lm2).length>0){setLineupMap(lm2);}else{setLineupMap({});await sSet(SK.lineupMap,{});}
         var sk2=await sGet(SK.skills);
         if(!needReset&&sk2&&sk2["타자"]){setSkills(sk2);SKILL_DATA=sk2;if(sk2.weights)LIVE_WEIGHTS=sk2.weights;}else{setSkills(DEFAULT_SKILLS);SKILL_DATA=DEFAULT_SKILLS;await sSet(SK.skills,DEFAULT_SKILLS);}
       }
@@ -428,6 +443,8 @@ function PlayerSelector(p) {
   var isBench = slot.indexOf("BN") === 0;
   var w = getW();
 
+  var isPitSlot = !isBatSlot && !isBench;
+  var pitRole = slot === "CP" ? "마무리" : slot.indexOf("SP") === 0 ? "선발" : slot.indexOf("RP") === 0 ? "중계" : "";
   var candidates = players.filter(function(pl) {
     if (isBench) return pl.role === "타자";
     if (isBatSlot) {
@@ -436,7 +453,7 @@ function PlayerSelector(p) {
       return pl.subPosition === slot;
     } else {
       if (pl.role !== "투수") return false;
-      return pl.subPosition === slot;
+      return pl.position === pitRole;
     }
   });
 
@@ -487,7 +504,7 @@ function PlayerSelector(p) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{slot + " 선수 선택"}</div>
-              <div style={{ fontSize: 10, color: "var(--td)", marginTop: 2 }}>{isBatSlot ? (slot === "DH" ? "모든 타자" : slot + " 포지션") : (isBench ? "후보 (타자)" : slot + " 투수")}{" · " + total + "명"}</div>
+              <div style={{ fontSize: 10, color: "var(--td)", marginTop: 2 }}>{isBatSlot ? (slot === "DH" ? "모든 타자" : slot + " 포지션") : (isBench ? "후보 (타자)" : pitRole + " 투수")}{" · " + total + "명"}</div>
             </div>
             <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18 }}>{"✕"}</button>
           </div>
@@ -578,15 +595,20 @@ var BAT_POS=["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var PIT_POS_MAP={"선발":["SP1","SP2","SP3","SP4","SP5"],"중계":["RP1","RP2","RP3","RP4","RP5","RP6"],"마무리":["CP"]};
 
 function PlayerDBPage(p){
-  var players=p.players;var save=p.savePlayers;var mob=p.mobile;
+  var mob=p.mobile;
   var _t=useState("골든글러브");var at=_t[0];var setAt=_t[1];
   var _e=useState(null);var editing=_e[0];var setEditing=_e[1];
   var _f=useState(null);var form=_f[0];var setForm=_f[1];
+  var _sv=useState(false);var saving=_sv[0];var setSaving=_sv[1];
+  var _reload=useState(0);var reload=_reload[0];var setReload=_reload[1];
 
+  var players=SEED_PLAYERS;
   var filtered=players.filter(function(x){return x.cardType===at;});
 
+  var genUUID=function(){return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(c){var r=Math.random()*16|0;return(c==="x"?r:(r&0x3|0x8)).toString(16);});};
+
   var newP=function(role){
-    var base={id:"p_"+Date.now(),cardType:at,role:role,name:"",year:"",hand:"우",stars:CARD_STARS[at]||5,subPosition:role==="타자"?"RF":"SP1"};
+    var base={id:genUUID(),cardType:at,role:role,name:"",year:"",hand:"우",stars:CARD_STARS[at]||5,subPosition:role==="타자"?"RF":"SP1"};
     if(role==="타자"){Object.assign(base,{power:0,accuracy:0,eye:0,patience:0,running:0,defense:0,launchAngle:0,hotColdZone:0,subPosition:""});}
     else{Object.assign(base,{position:"선발",change:0,stuff:0,speed:0,control:0,stamina:0,defense:0});}
     setForm(base);setEditing("new");
@@ -595,12 +617,22 @@ function PlayerDBPage(p){
   var editP=function(pl){setForm(Object.assign({},pl));setEditing(pl.id);};
   var uf=function(k,v){setForm(function(prev){var c=Object.assign({},prev);c[k]=v;return c;});};
 
-  var saveF=function(){
+  var saveF=async function(){
     if(!form||!form.name)return;
-    var upd=editing==="new"?players.concat([form]):players.map(function(x){return x.id===form.id?form:x;});
-    save(upd);setEditing(null);setForm(null);
+    setSaving(true);
+    var ok=await saveGlobalPlayer(form);
+    if(ok){
+      var idx=SEED_PLAYERS.findIndex(function(x){return x.id===form.id;});
+      if(idx>=0){SEED_PLAYERS[idx]=form;}else{SEED_PLAYERS.push(form);}
+      setReload(function(r){return r+1;});
+    }
+    setSaving(false);setEditing(null);setForm(null);
   };
-  var delP=function(id){save(players.filter(function(x){return x.id!==id;}));setEditing(null);setForm(null);};
+  var delP=async function(id){
+    var ok=await deleteGlobalPlayer(id);
+    if(ok){var idx=SEED_PLAYERS.findIndex(function(x){return x.id===id;});if(idx>=0)SEED_PLAYERS.splice(idx,1);}
+    setReload(function(r){return r+1;});setEditing(null);setForm(null);
+  };
 
   return(
     <div style={{padding:mob?12:18,maxWidth:1000,paddingBottom:mob?80:18}}>
@@ -644,12 +676,13 @@ function PlayerDBPage(p){
               <Inp label="손잡이" type="select" value={form.hand} onChange={function(v){uf("hand",v);}} options={form.role==="투수"?["우","좌"]:["우","좌","양"]} />
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {form.cardType==="라이브"?(<Inp label="별(1~5)" type="select" value={String(form.stars||3)} onChange={function(v){uf("stars",parseInt(v));}} options={["1","2","3","4","5"]} />):(<div><div style={{fontSize:10,color:"var(--td)",marginBottom:4}}>{"별"}</div><span style={{fontSize:14,color:"var(--acc)"}}>{"★"+(CARD_STARS[form.cardType]||5)}</span></div>)}
+              {CARD_STARS_SELECTABLE[form.cardType]?(<Inp label={form.cardType==="골든글러브"?"별(4~5)":"별(1~5)"} type="select" value={String(form.stars||(CARD_STARS[form.cardType]||5))} onChange={function(v){uf("stars",parseInt(v));}} options={form.cardType==="골든글러브"?["4","5"]:["1","2","3","4","5"]} />):(<div><div style={{fontSize:10,color:"var(--td)",marginBottom:4}}>{"별"}</div><span style={{fontSize:14,color:"var(--acc)"}}>{"★"+(CARD_STARS[form.cardType]||5)}</span></div>)}
               {form.role==="타자"?(<Inp label="포지션" type="select" value={form.subPosition} onChange={function(v){uf("subPosition",v);}} options={BAT_POS} />):(<Inp label="역할" type="select" value={form.position||"선발"} onChange={function(v){uf("position",v);uf("subPosition",(PIT_POS_MAP[v]||["SP1"])[0]);}} options={["선발","중계","마무리"]} />)}
             </div>
             {form.role==="타자"&&null}
             {form.cardType==="임팩트"&&(<Inp label="종류" value={form.impactType||""} onChange={function(v){uf("impactType",v);}} ph="좌완에이스,안방마님..." />)}
             {form.cardType==="라이브"&&(<Inp label="세트덱스코어" type="number" value={form.setScore||0} onChange={function(v){uf("setScore",parseInt(v)||0);}} />)}
+            {form.cardType==="라이브"&&(<Inp label="라이브종류" type="select" value={form.liveType||""} onChange={function(v){uf("liveType",v);}} options={["","V1","V2","V3"]} />)}
             <div>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
                   <Inp label="사진" value={form.photoUrl||""} onChange={function(v){uf("photoUrl",v);}} ph="URL 또는 파일 선택" />
@@ -716,7 +749,7 @@ function PlayerDBPage(p){
                 try {
                   var XL = window.XLSX; if (!XL) { alert("잠시 후 다시 시도하세요."); return; }
                   var wb2 = XL.read(rd.result, { type: "array" });
-                  var added2 = 0; var updated2 = 0; var np = players.slice();
+                  var added2 = 0; var updated2 = 0; var np = SEED_PLAYERS.slice();
                   var cm = {"골든글러브(타자)":"골든글러브","골든글러브(투수)":"골든글러브","시그니처(타자)":"시그니처","시그니처(투수)":"시그니처","국가대표(타자)":"국가대표","국가대표(투수)":"국가대표","임팩트(타자)":"임팩트","임팩트(투수)":"임팩트","라이브(타자)":"라이브","라이브(투수)":"라이브","시즌(타자)":"시즌","시즌(투수)":"시즌","올스타(타자)":"올스타","올스타(투수)":"올스타"};
                   var sm = {"골든글러브":5,"시그니처":5,"국가대표":5,"임팩트":4};
                   wb2.SheetNames.forEach(function(sn2) { if (sn2==="안내"||sn2==="임팩트종류") return; var ct2=cm[sn2]; if(!ct2)return; var iB=sn2.indexOf("타자")>=0;
@@ -724,7 +757,7 @@ function PlayerDBPage(p){
                       var nm=String(row["이름"]||"").replace(/[0-9]/g,"").trim(); if(!nm)return;
                       var yr=String(row["연도"]||""); var ex=null;
                       for(var i=0;i<np.length;i++){if((np[i].name||"").replace(/[0-9]/g,"").trim()===nm&&np[i].cardType===ct2&&String(np[i].year||"")===yr){ex=i;break;}}
-                      var pl2=ex!==null?Object.assign({},np[ex]):{id:"db"+Date.now()+"_"+Math.random().toString(36).slice(2,6)};
+                      var pl2=ex!==null?Object.assign({},np[ex]):{id:"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(c){var r=Math.random()*16|0;return(c==="x"?r:(r&0x3|0x8)).toString(16);})};
                       pl2.cardType=ct2;pl2.name=nm;pl2.year=yr;pl2.team=row["팀"]||"";pl2.hand=row["손잡이"]||"우";pl2.role=iB?"타자":"투수";pl2.stars=row["별"]?parseInt(row["별"]):(sm[ct2]||5);
                       if(iB){pl2.subPosition=row["세부포지션"]||"DH";pl2.power=parseInt(row["파워"])||0;pl2.accuracy=parseInt(row["정확"])||0;pl2.eye=parseInt(row["선구"])||0;}
                       else{pl2.position=row["역할"]||"선발";pl2.subPosition=pl2.subPosition||"SP1";pl2.speed=parseInt(row["구속"])||0;pl2.change=parseInt(row["변화"])||0;pl2.stuff=parseInt(row["구위"])||0;}
@@ -733,7 +766,7 @@ function PlayerDBPage(p){
                       if(ex!==null){np[ex]=pl2;updated2++;}else{np.push(pl2);added2++;}
                     });
                   });
-                  save(np); alert("완료! 추가:"+added2+"명 업데이트:"+updated2+"명");
+                  SEED_PLAYERS.length=0;np.forEach(function(pp){SEED_PLAYERS.push(pp);});np.forEach(function(pp){saveGlobalPlayer(pp);}); alert("완료! 추가:"+added2+"명 업데이트:"+updated2+"명");
                 } catch(err) { alert("오류: "+err.message); }
               }; rd.readAsArrayBuffer(f2); e.target.value="";
             }} />
@@ -742,13 +775,13 @@ function PlayerDBPage(p){
             var XL=window.XLSX; if(!XL){alert("잠시 후 다시 시도하세요.");return;}
             var wb3=XL.utils.book_new(); var cts=["골든글러브","시그니처","국가대표","임팩트","라이브","시즌","올스타"]; var sm2={"골든글러브":5,"시그니처":5,"국가대표":5,"임팩트":4};
             cts.forEach(function(ct3){["타자","투수"].forEach(function(role2){
-              var pls2=players.filter(function(x){return x.cardType===ct3&&x.role===role2;});
+              var pls2=SEED_PLAYERS.filter(function(x){return x.cardType===ct3&&x.role===role2;});
               var rows2=pls2.map(function(pl3){
                 var rw={"팀":pl3.team||"","이름":(pl3.name||"").replace(/[0-9]/g,""),"연도":pl3.year||"","손잡이":pl3.hand||""};
                 if(role2==="타자"){rw["세부포지션"]=pl3.subPosition||"";rw["파워"]=pl3.power||0;rw["정확"]=pl3.accuracy||0;rw["선구"]=pl3.eye||0;}
                 else{rw["역할"]=pl3.position||"선발";rw["구속"]=pl3.speed||0;rw["변화"]=pl3.change||0;rw["구위"]=pl3.stuff||0;}
                 if(ct3==="임팩트")rw["임팩트종류"]=pl3.impactType||"";
-                if(!sm2[ct3])rw["별"]=pl3.stars||5;
+                if(!sm2[ct3]||ct3==="골든글러브")rw["별"]=pl3.stars||(CARD_STARS[ct3]||5);
                 if(ct3==="라이브"){rw["세트덱스코어"]=pl3.setScore||0;rw["라이브종류"]=pl3.liveType||"";}
                 return rw;
               });
@@ -819,7 +852,51 @@ function PCard(p) {
 /* ================================================================
    BULLPEN DROPDOWN + LAYOUT
    ================================================================ */
-var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1}];
+function getPotmBonus(pl, sdState) {
+  var potmNames = sdState.potmNames || [];
+  if (!potmNames.length || !pl || !pl.name) return 0;
+  var isPotm = false;
+  for (var i = 0; i < potmNames.length; i++) {
+    var n = potmNames[i];
+    if (pl.name.indexOf(n) >= 0 || n.indexOf(pl.name) >= 0) { isPotm = true; break; }
+  }
+  if (!isPotm) return 0;
+  var ct = pl.cardType;
+  var stars = pl.stars || 5;
+  var teamName = sdState.teamName || "";
+  var teamMatch = !teamName || !pl.team || pl.team === teamName;
+  var isLive = ct === "라이브";
+  var isOlstar = ct === "올스타";
+  if (isLive) {
+    var b = stars >= 5 ? 6 : stars === 4 ? 12 : 16;
+    return teamMatch ? b : Math.round(b * 0.5);
+  }
+  if (isOlstar && stars === 5) { return teamMatch ? 6 : 3; }
+  if (!teamMatch) return 0;
+  return {"임팩트":2,"시그니처":2,"국가대표":2,"골든글러브":1}[ct] || 0;
+}
+
+var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0}];
+var RP_WEIGHTS = [
+  {w:[1.30],          l:[1.10],             r:[0.40,0.10,0.08,0.02]},
+  {w:[1.20],          l:[0.80,0.60],        r:[0.20,0.12,0.08]},
+  {w:[1.20],          l:[0.80,0.50,0.10],   r:[0.30,0.10]},
+  {w:[0.90,0.60],     l:[1.00],             r:[0.30,0.12,0.08]},
+  {w:[0.90,0.60],     l:[0.70,0.40],        r:[0.30,0.10]},
+  {w:[0.90,0.60],     l:[0.70,0.30,0.10],   r:[0.40]},
+  {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[1.00],          r:[0.30,0.10]},
+  {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[0.60,0.40],     r:[0.40]},
+  {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[0.70,0.50,0.20],r:[]},
+];
+function getRPWeight(bpcIdx, slot, isWinSplit) {
+  var cfg = BPC[bpcIdx]; var wts = RP_WEIGHTS[bpcIdx];
+  if (!cfg || !wts) return 0;
+  var rpSlots = ["RP1","RP2","RP3","RP4","RP5","RP6"];
+  var si = rpSlots.indexOf(slot); if (si < 0) return 0;
+  if (si < cfg.w) { var wArr = (isWinSplit && wts.wSplit) ? wts.wSplit : wts.w; return wArr[si] || 0; }
+  if (si < cfg.w + cfg.l) return wts.l[si - cfg.w] || 0;
+  return (wts.r[si - cfg.w - cfg.l] || 0);
+}
 
 function BullpenLayout(p) {
   var mob = p.mobile;
@@ -827,7 +904,10 @@ function BullpenLayout(p) {
   var cps = p.closers;
   var rpSlots = p.rpSlots || [];
   var onSlotClick = p.onSlotClick;
-  var _i = useState(4); var idx = _i[0]; var setIdx = _i[1];
+  var idx = p.bpcIdx !== undefined ? p.bpcIdx : 4;
+  var setIdx = p.setBpcIdx || function(){};
+  var isWinSplit = p.isWinSplit || false;
+  var setIsWinSplit = p.setIsWinSplit || function(){};
   var _o = useState(false); var open = _o[0]; var setOpen = _o[1];
   var cfg = BPC[idx];
   var cs = { flex: 1, minWidth: 0, background: "var(--inner)", borderRadius: 6, padding: "6px 2px", border: "1px solid var(--bd)" };
@@ -849,6 +929,9 @@ function BullpenLayout(p) {
             </div>
           )}
         </div>
+        {cfg.w === 3 && (
+          <button onClick={function() { setIsWinSplit(!isWinSplit); }} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
+        )}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
         {[
@@ -881,6 +964,7 @@ function BullpenLayout(p) {
    ================================================================ */
 var SET_POINTS = {"골든글러브":6,"시그니처":8,"임팩트":7,"국가대표":8,"시즌":0,"라이브":0,"올스타":0};
 var CARD_STARS = {"골든글러브":5,"시그니처":5,"임팩트":4,"국가대표":5};
+var CARD_STARS_SELECTABLE = {"골든글러브":true,"라이브":true};
 
 /* Complete set deck rules: L/R radio selection */
 var SD_ROWS = [
@@ -1238,6 +1322,11 @@ function LineupPage(p) {
   var _dragOver = useState(null); var dragOverSlot = _dragOver[0]; var setDragOverSlot = _dragOver[1];
   var _sdOpen = useState(false); var sdOpen = _sdOpen[0]; var setSdOpen = _sdOpen[1];
   var sdState = p.sdState; var setSdState = p.setSdState;
+  /* bpcIdx/isWinSplit는 sdState에서 읽고, 변경 시 sdState에 저장 */
+  var bpcIdx = sdState.bpcIdx !== undefined ? sdState.bpcIdx : 4;
+  var isWinSplit = sdState.isWinSplit || false;
+  var setBpcIdx = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { bpcIdx: typeof v === "function" ? v(prev.bpcIdx !== undefined ? prev.bpcIdx : 4) : v }); }); };
+  var setIsWinSplit = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { isWinSplit: typeof v === "function" ? v(!!prev.isWinSplit) : v }); }); };
   var skillsDB = p.skills || {};
 
   /* Skill category for position */
@@ -1260,7 +1349,7 @@ function LineupPage(p) {
     for (var i = 0; i < players.length; i++) { if (players[i].id === id) return players[i]; }
     return null;
   };
-  var pick = function(slot) { return byId(lm[slot]); };
+  var pick = function(slot) { var pl = byId(lm[slot]); return pl ? mergePl(pl) : null; };
 
   /* Assign player to slot */
   var assignSlot = function(slot, playerId) {
@@ -1300,12 +1389,34 @@ function LineupPage(p) {
   /* Auto-calculate set points from lineup card types */
   var calcSetPoint = function() {
     var total = 0;
+    var potmNames = sdState.potmNames || [];
+    var teamName = sdState.teamName || "";
+    var getPotmSetDelta = function(pl) {
+      if (!potmNames.length || !pl || !pl.name) return 0;
+      var isPotm = false;
+      for (var i = 0; i < potmNames.length; i++) {
+        var n = potmNames[i];
+        if (pl.name.indexOf(n) >= 0 || n.indexOf(pl.name) >= 0) { isPotm = true; break; }
+      }
+      if (!isPotm) return 0;
+      var ct = pl.cardType;
+      var teamMatch = !teamName || !pl.team || pl.team === teamName;
+      var isLive = ct === "라이브";
+      var isOlstar = ct === "올스타";
+      var baseScore = isLive ? (pl.setScore || 0) : (SET_POINTS[ct] || 0);
+      if (pl.isFa) baseScore = Math.max(0, baseScore - 1);
+      if (isLive || isOlstar) {
+        return baseScore >= 10 ? 1 : (10 - baseScore);
+      }
+      return teamMatch ? 1 : 0;
+    };
     var allSlots = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP"]);
     allSlots.forEach(function(slot) {
       var pl = pick(slot);
       if (!pl) return;
       var sc = pl.cardType === "라이브" ? (pl.setScore || 0) : (SET_POINTS[pl.cardType] || 0);
       if (pl.isFa) sc = Math.max(0, sc - 1);
+      sc += getPotmSetDelta(pl);
       total += sc;
     });
     for (var bn = 1; bn <= 6; bn++) {
@@ -1313,6 +1424,7 @@ function LineupPage(p) {
       if (!bnPl) continue;
       var bnSc = bnPl.cardType === "라이브" ? (bnPl.setScore || 0) : (SET_POINTS[bnPl.cardType] || 0);
       if (bnPl.isFa) bnSc = Math.max(0, bnSc - 1);
+      bnSc += getPotmSetDelta(bnPl);
       total += bnSc;
     }
     return total;
@@ -1344,7 +1456,7 @@ function LineupPage(p) {
       t += calc.total * mult;
     });
     lSP.forEach(function(x) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * 1.1; });
-    lRP.forEach(function(x) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * (x.pl.weight || 0); });
+    lRP.forEach(function(x) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * getRPWeight(bpcIdx, x.slot, isWinSplit); });
     if (lCP.pl) t += calcPitSD(lCP.pl, "CP").total;
     return Math.round(t * 100) / 100;
   };
@@ -1436,7 +1548,7 @@ function LineupPage(p) {
             <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color: "var(--acc)", fontFamily: "var(--m)" }}>{Math.round((getSkillScore(pl.skill1,pl.s1Lv||0,"타자")+getSkillScore(pl.skill2,pl.s2Lv||0,"타자")+getSkillScore(pl.skill3,pl.s3Lv||0,"타자"))*100)/100 || ""}</div>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 11, color: "var(--td)" }}>{"잠재"}</div>
-              <div style={{ fontSize: 13, color: "var(--t2)" }}>{(pl.pot1 || "-") + "/" + (pl.pot2 || "-")}</div>
+              <div style={{ fontSize: 13, color: "var(--t2)" }}>{(<span><span style={{fontSize:9,color:"var(--td)"}}>풀</span>{pl.pot1||"-"} <span style={{fontSize:9,color:"var(--td)"}}>클</span>{pl.pot2||"-"}</span>)}</div>
             </div>
           </React.Fragment>)}
         </div>
@@ -1446,7 +1558,7 @@ function LineupPage(p) {
             {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 13, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "trainP", pl.trainP, "#EF5350")}<span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "trainA", pl.trainA, "#42A5F5")}<span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "trainE", pl.trainE, "#66BB6A")}</div></div>
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "specPower", pl.specPower, "#EF5350", 15)}<span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "specAccuracy", pl.specAccuracy, "#42A5F5", 15)}<span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "specEye", pl.specEye, "#66BB6A", 15)}</div></div>
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3, alignItems: "center" }}><input value={pl.pot1 || ""} onChange={function(e) { updatePl(pl.id, "pot1", e.target.value); }} placeholder="풀" style={{ width: 40, padding: "2px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 10, outline: "none" }} /><input value={pl.pot2 || ""} onChange={function(e) { updatePl(pl.id, "pot2", e.target.value); }} placeholder="클" style={{ width: 40, padding: "2px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 10, outline: "none" }} /></div></div>
+            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3, alignItems: "center" }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span style={{fontSize:8,color:"var(--td)"}}>풀스윙</span><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:46}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span style={{fontSize:8,color:"var(--td)"}}>클러치</span><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:46}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
             <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
           </div>
         </div>)}
@@ -1471,7 +1583,7 @@ function LineupPage(p) {
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
           <PlayerCard player={pl} size={mob?"sm":"md"} score={Math.round(calc.total)} />
           <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span>{showWt && pl.weight !== undefined && (<span style={{ fontSize: 9, color: "#FF9800", fontFamily: "var(--m)", fontWeight: 700, background: "rgba(255,152,0,0.08)", borderRadius: 3, padding: "1px 4px" }}>{"×" + pl.weight}</span>)}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span></div>
             <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" /></div>) : null}
@@ -1498,7 +1610,7 @@ function LineupPage(p) {
             <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color: "var(--acp)", fontFamily: "var(--m)" }}>{(function(){var pt2=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";return Math.round((getSkillScore(pl.skill1,pl.s1Lv||0,pt2)+getSkillScore(pl.skill2,pl.s2Lv||0,pt2)+getSkillScore(pl.skill3,pl.s3Lv||0,pt2))*100)/100||"";})()}</div>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 11, color: "var(--td)" }}>{"잠재"}</div>
-              <div style={{ fontSize: 13, color: "var(--t2)" }}>{(pl.pot1 || "-") + "/" + (pl.pot2 || "-")}</div>
+              <div style={{ fontSize: 13, color: "var(--t2)" }}>{(<span><span style={{fontSize:9,color:"var(--td)"}}>장</span>{pl.pot1||"-"} <span style={{fontSize:9,color:"var(--td)"}}>침</span>{pl.pot2||"-"}</span>)}</div>
             </div>
           </React.Fragment>)}
         </div>
@@ -1508,8 +1620,8 @@ function LineupPage(p) {
             {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 13, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}</div></div>
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}<span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}</div></div>
-            {showWt && (<div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"가중치"}</div><input type="number" step="0.1" min="0" max="1" value={pl.weight || 0} onChange={function(e) { updatePl(pl.id, "weight", parseFloat(e.target.value) || 0); }} style={{ width: 50, padding: "2px 4px", background: "var(--inner)", border: "1px solid rgba(255,152,0,0.3)", borderRadius: 3, color: "#FF9800", fontSize: 11, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} /></div>)}
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><input value={pl.pot1 || ""} onChange={function(e) { updatePl(pl.id, "pot1", e.target.value); }} placeholder="-" style={{ width: 40, padding: "2px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 10, outline: "none" }} /><input value={pl.pot2 || ""} onChange={function(e) { updatePl(pl.id, "pot2", e.target.value); }} placeholder="-" style={{ width: 40, padding: "2px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 10, outline: "none" }} /></div></div>
+            
+            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span style={{fontSize:8,color:"var(--td)"}}>장타억제</span><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:46}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span style={{fontSize:8,color:"var(--td)"}}>침착</span><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:46}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
             <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
           </div>
         </div>)}
@@ -1517,13 +1629,19 @@ function LineupPage(p) {
     );
   };
 
+  var _teamDrop = useState(false); var teamDropOpen = _teamDrop[0]; var setTeamDrop = _teamDrop[1];
+  var teamName = sdState.teamName || "";
+  var selectTeam = function(t) { setSdState(function(prev) { return Object.assign({}, prev, {teamName: t}); }); setTeamDrop(false); };
+
   return (
     <div style={{ padding: mob ? 12 : 18, maxWidth: 1200, paddingBottom: mob ? 80 : 18 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: mob ? "flex-start" : "center", justifyContent: "space-between", flexDirection: mob ? "column" : "row", gap: 8, marginBottom: 14, padding: mob ? 14 : "18px 20px", background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)" }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: mob ? 18 : 22, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)" }}>{"MY LINEUP"}</h1>
-          <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--td)" }}>{"키움 히어로즈 · 타자 " + diamondPl + " · 선발 " + spPl.length + " · 중계 " + rpPl.length + " · 마무리 " + cpPl.length + ""}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <DeckDropdown decks={p.decks||[]} curDeckId={p.curDeckId} onSwitch={p.onSwitchDeck} onAdd={p.onAddDeck} onDelete={p.onDeleteDeck}/>
+          </div>
+          <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--td)" }}>{"가중치: 파워 " + LIVE_WEIGHTS.p + " / 정확 " + LIVE_WEIGHTS.a + " / 선구 " + LIVE_WEIGHTS.e + " / 변화 " + LIVE_WEIGHTS.c + " / 구위 " + LIVE_WEIGHTS.s}</p>
         </div>
         <div style={{ textAlign: mob ? "left" : "right" }}>
           <div style={{ fontSize: 9, color: "var(--td)", letterSpacing: 1 }}>{"TOTAL SCORE"}</div>
@@ -1543,7 +1661,7 @@ function LineupPage(p) {
               {SP_SLOTS.map(function(pos) { var pl = pick(pos); return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} /></div>) : (<div key={pos} onClick={function() { setPickerSlot(pos); }} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--re)" }}><span style={{ fontSize: 9, color: "var(--td)" }}>{pos}</span></div>); })}
             </div>
           </div>
-          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} />
+          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} />
         </div>
       </div>
 
@@ -1847,26 +1965,98 @@ function LoginPage(p) {
 /* ================================================================
    NAV (with admin toggle for DB page)
    ================================================================ */
+/* ── 덱 드롭다운: 팀 이름 클릭 → 내 덱 리스트 + 추가 버튼 ── */
+function DeckDropdown(p){
+  /* props: decks, curDeckId, onSwitch(deckId), onAdd(), onDelete(deckId) */
+  var _open=useState(false);var open=_open[0];var setOpen=_open[1];
+  var _confirmDel=useState(null);var confirmDel=_confirmDel[0];var setConfirmDel=_confirmDel[1];
+  var cur=(p.decks||[]).find(function(d){return d.deckId===p.curDeckId;})||(p.decks&&p.decks[0])||null;
+  var label=cur?cur.teamName:"팀 선택";
+  var canAdd=(p.decks||[]).length<5;
+  return(
+    <div style={{position:"relative"}}>
+      <button onClick={function(){setOpen(!open);setConfirmDel(null);}}
+        style={{display:"flex",alignItems:"center",gap:5,padding:"6px 10px",background:"rgba(255,255,255,0.05)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--acc)",cursor:"pointer",fontSize:12,fontWeight:800,fontFamily:"var(--h)",letterSpacing:1,maxWidth:160}}>
+        <span style={{fontSize:14}}>⚾</span>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</span>
+        <span style={{fontSize:8,color:"var(--td)",marginLeft:"auto"}}>{open?"▲":"▼"}</span>
+      </button>
+      {open&&(
+        <React.Fragment>
+          <div onClick={function(){setOpen(false);setConfirmDel(null);}} style={{position:"fixed",inset:0,zIndex:299}}/>
+          <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,minWidth:200,zIndex:300,background:"var(--side)",border:"1px solid var(--bd)",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,0.6)"}}>
+            {(p.decks||[]).map(function(d){
+              var isCur=d.deckId===p.curDeckId;
+              var isDel=confirmDel===d.deckId;
+              return(
+                <div key={d.deckId} style={{display:"flex",alignItems:"center",borderBottom:"1px solid var(--bd)",background:isCur?"rgba(255,213,79,0.06)":"transparent"}}>
+                  <button onClick={function(){p.onSwitch(d.deckId);setOpen(false);setConfirmDel(null);}}
+                    style={{flex:1,display:"flex",alignItems:"center",gap:6,padding:"10px 14px",background:"transparent",border:"none",color:isCur?"var(--acc)":"var(--t1)",fontSize:12,fontWeight:isCur?800:500,cursor:"pointer",textAlign:"left"}}>
+                    {isCur&&<span style={{fontSize:8}}>▶</span>}
+                    <span>{d.teamName}</span>
+                  </button>
+                  {isDel?(
+                    <div style={{display:"flex",gap:4,padding:"0 8px"}}>
+                      <button onClick={function(e){e.stopPropagation();p.onDelete(d.deckId);setConfirmDel(null);setOpen(false);}}
+                        style={{padding:"3px 8px",fontSize:10,background:"#c62828",border:"none",borderRadius:4,color:"#fff",cursor:"pointer",fontWeight:700}}>{"삭제"}</button>
+                      <button onClick={function(e){e.stopPropagation();setConfirmDel(null);}}
+                        style={{padding:"3px 8px",fontSize:10,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"취소"}</button>
+                    </div>
+                  ):(
+                    <button onClick={function(e){e.stopPropagation();setConfirmDel(d.deckId);}}
+                      title="덱 삭제"
+                      style={{padding:"0 10px",height:"100%",background:"transparent",border:"none",color:"rgba(255,255,255,0.2)",cursor:"pointer",fontSize:14,lineHeight:1}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#ef5350";}}
+                      onMouseLeave={function(e){e.currentTarget.style.color="rgba(255,255,255,0.2)";}}
+                    >{"✕"}</button>
+                  )}
+                </div>
+              );
+            })}
+            {canAdd&&(
+              <button onClick={function(){p.onAdd();setOpen(false);}}
+                style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"10px 14px",background:"transparent",border:"none",color:"#81C784",fontSize:12,fontWeight:700,cursor:"pointer",textAlign:"left"}}>
+                <span>{"＋ 덱 추가"}</span>
+                <span style={{fontSize:9,color:"var(--td)"}}>{(p.decks||[]).length+"/5"}</span>
+              </button>
+            )}
+            {!canAdd&&(
+              <div style={{padding:"8px 14px",fontSize:10,color:"var(--td)",textAlign:"center"}}>{"최대 5개 · ✕ 버튼으로 삭제 가능"}</div>
+            )}
+          </div>
+        </React.Fragment>
+      )}
+    </div>
+  );
+}
+
 function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
-  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",icon:"👥"},{id:"postrain",label:"포지션 특훈",icon:"🏋️"},{id:"locker",label:"라커룸",icon:"🏠"},{id:"community",label:"커뮤니티",icon:"💬"}];
+  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",icon:"👥"},{id:"postrain",label:"포지션 특훈",icon:"🏋️"},{id:"locker",label:"라커룸",icon:"🏠"},{id:"community",label:"정보",icon:"📢"}];
   if(p.isAdmin){tabs.splice(4,0,{id:"db",label:"선수 도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
-
+  var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck};
 
   if(p.mobile){return(
-    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px"}}>
-      {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18}}>{t.icon}</span><span style={{fontSize:9,fontWeight:p.tab===t.id?700:500}}>{t.label}</span></button>);})}
-    </div>
+    <React.Fragment>
+      <div style={{position:"fixed",top:0,left:0,right:0,height:44,zIndex:110,background:"var(--side)",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",padding:"0 10px",gap:8}}>
+        <span style={{fontSize:10,fontWeight:900,fontFamily:"var(--h)",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",whiteSpace:"nowrap"}}>{"DECK"}</span>
+        <DeckDropdown {...deckProps}/>
+      </div>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px"}}>
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18}}>{t.icon}</span><span style={{fontSize:9,fontWeight:p.tab===t.id?700:500}}>{t.label}</span></button>);})}
+      </div>
+    </React.Fragment>
   );}
 
   if(p.tablet){return(
     <React.Fragment>
       <button onClick={function(){setOpen(!open);}} style={{position:"fixed",top:10,left:10,zIndex:200,width:40,height:40,borderRadius:8,background:"var(--card)",border:"1px solid var(--bd)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"var(--t1)"}}>{open?"✕":"☰"}</button>
       {open&&(<div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:150}}/>)}
-      <div style={{position:"fixed",left:open?0:-260,top:0,bottom:0,width:240,background:"var(--side)",borderRight:"1px solid var(--bd)",zIndex:160,transition:"left 0.25s ease",display:"flex",flexDirection:"column",padding:"60px 0 16px"}}>
+      <div style={{position:"fixed",left:open?0:-260,top:0,bottom:0,width:240,background:"var(--side)",borderRight:"1px solid var(--bd)",zIndex:160,transition:"left 0.25s ease",display:"flex",flexDirection:"column",padding:"14px 0 16px"}}>
+        <div style={{padding:"0 14px 12px"}}><DeckDropdown {...deckProps}/></div>
         {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid #FFD54F":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:12,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}</button>);})}
         <div style={{marginTop:"auto",padding:"12px 16px",borderTop:"1px solid var(--bd)"}}>
-  {p.isAdmin&&(<div style={{fontSize:9,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
+          {p.isAdmin&&(<div style={{fontSize:9,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
           <button onClick={p.logout} style={{width:"100%",padding:8,fontSize:10,background:"rgba(255,255,255,0.03)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
         </div>
       </div>
@@ -1875,12 +2065,15 @@ function Nav(p){
 
   return(
     <div style={{width:200,minHeight:"100vh",background:"var(--side)",borderRight:"1px solid var(--bd)",display:"flex",flexDirection:"column",padding:"14px 0",flexShrink:0}}>
-      <div style={{padding:"0 14px",marginBottom:24}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:20}}>{"⚾"}</span><div><div style={{fontSize:12,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{"DECK MANAGER"}</div><div style={{fontSize:7,color:"var(--td)",letterSpacing:1}}>{"COM2US PRO BASEBALL v26"}</div></div></div></div>
+      <div style={{padding:"0 14px",marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}><span style={{fontSize:18}}>{"⚾"}</span><div><div style={{fontSize:11,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{"DECK MANAGER"}</div><div style={{fontSize:7,color:"var(--td)",letterSpacing:1}}>{"COM2US PRO BASEBALL v26"}</div></div></div>
+        <DeckDropdown {...deckProps}/>
+      </div>
       <div style={{flex:1}}>
         {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid #FFD54F":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:11,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40}}><span style={{fontSize:13}}>{t.icon}</span>{t.label}</button>);})}
       </div>
       <div style={{padding:"10px 14px",borderTop:"1px solid var(--bd)"}}>
-{p.isAdmin&&(<div style={{fontSize:9,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
+        {p.isAdmin&&(<div style={{fontSize:9,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
           {p.authType==="google"?(
             <div style={{width:26,height:26,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1889,7 +2082,7 @@ function Nav(p){
           ):(
             <div style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#1a1100"}}>{p.user[0]}</div>
           )}
-          <div><div style={{fontSize:10,fontWeight:700,color:"var(--t1)"}}>{p.user}</div><div style={{fontSize:7,color:"var(--td)"}}>{p.authType==="google"?"Google 계정":"게스트 (1팀)"}</div></div>
+          <div><div style={{fontSize:10,fontWeight:700,color:"var(--t1)"}}>{p.user}</div><div style={{fontSize:7,color:"var(--td)"}}>{p.authType==="google"?"Google 계정":"게스트"}</div></div>
         </div>
         <button onClick={p.logout} style={{width:"100%",padding:5,fontSize:9,background:"rgba(255,255,255,0.03)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
       </div>
@@ -1973,12 +2166,11 @@ function LockerRoomPage(p) {
   };
   var rmPotm = function(idx) { upd("potmNames", potmNames.filter(function(_, i) { return i !== idx; })); };
 
-  /* Match POTM names to lineup */
+  /* Match POTM names to players (내 선수 전체 기준) */
   var potmMatched = [];
-  var allLineup = lineupBats.concat(lineupPits);
   potmNames.forEach(function(pname) {
-    allLineup.forEach(function(pl) {
-      if (pl.name.indexOf(pname) >= 0 || pname.indexOf(pl.name) >= 0) {
+    players.forEach(function(pl) {
+      if (pl.name && (pl.name.indexOf(pname) >= 0 || pname.indexOf(pl.name) >= 0)) {
         if (potmMatched.indexOf(pl) < 0) potmMatched.push(pl);
       }
     });
@@ -2007,7 +2199,7 @@ function LockerRoomPage(p) {
           {batCap && (<div style={{ padding: "6px 8px", background: "var(--ta)", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={batCap.cardType} /><span style={{ fontWeight: 700, fontSize: 12, color: "var(--t1)" }}>{batCap.name}</span><span style={{ fontSize: 14, marginLeft: "auto" }}>{"👑"}</span></div>
           </div>)}
-          <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (전체 타자 적용)"}</div>
+          <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)"}</div>
           <div style={{ display: "flex", gap: 6 }}>
             {miniStat("파", "#EF5350", "capBatP", sdState.capBatP)}
             {miniStat("정", "#42A5F5", "capBatA", sdState.capBatA)}
@@ -2028,7 +2220,7 @@ function LockerRoomPage(p) {
           {pitCap && (<div style={{ padding: "6px 8px", background: "rgba(206,147,216,0.06)", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pitCap.cardType} /><span style={{ fontWeight: 700, fontSize: 12, color: "var(--t1)" }}>{pitCap.name}</span><span style={{ fontSize: 14, marginLeft: "auto" }}>{"👑"}</span></div>
           </div>)}
-          <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (전체 투수 적용)"}</div>
+          <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)"}</div>
           <div style={{ display: "flex", gap: 6 }}>
             {miniStat("변", "#AB47BC", "capPitC", sdState.capPitC)}
             {miniStat("구", "#FF7043", "capPitS", sdState.capPitS)}
@@ -2050,7 +2242,7 @@ function LockerRoomPage(p) {
                 <div style={{ fontSize: 9, color: s.c, fontWeight: 700, marginBottom: 4 }}>{s.l}</div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
                   <span style={{ fontSize: 12, color: s.c }}>{"+"}</span>
-                  <input type="number" value={sdState[s.k] || 1} onChange={function(e) { upd(s.k, parseInt(e.target.value) || 0); }}
+                  <input type="number" value={sdState[s.k] || 0} onChange={function(e) { upd(s.k, parseInt(e.target.value) || 0); }}
                     style={{ width: 32, padding: "4px 2px", textAlign: "center", background: "rgba(0,0,0,0.2)", border: "1px solid " + s.c + "44", borderRadius: 4, color: s.c, fontSize: 16, fontFamily: "var(--m)", fontWeight: 800, outline: "none" }} />
                 </div>
               </div>
@@ -2067,8 +2259,8 @@ function LockerRoomPage(p) {
             <span style={{ fontSize: 13, fontWeight: 800, color: "#FFD54F", fontFamily: "var(--h)" }}>{"POTM (이달의 선수)"}</span>
           </div>
           <button onClick={function() {
-            save(players.map(function(x) { var c = Object.assign({}, x); c.potmP = 0; c.potmA = 0; c.potmE = 0; c.potmC = 0; c.potmS = 0; return c; }));
-          }} style={{ padding: "3px 8px", fontSize: 8, background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 3, color: "#EF5350", cursor: "pointer" }}>{"보너스 초기화"}</button>
+            upd("potmNames", []);
+          }} style={{ padding: "3px 8px", fontSize: 8, background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 3, color: "#EF5350", cursor: "pointer" }}>{"명단 초기화"}</button>
         </div>
 
         {/* Admin: manage POTM roster */}
@@ -2092,36 +2284,51 @@ function LockerRoomPage(p) {
           </div>
         )}
 
-        {/* Matched POTM players with manual stat inputs */}
+        {/* Matched POTM players with auto-calculated bonuses */}
         {potmMatched.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {potmMatched.map(function(pl) {
               var isBat = pl.role === "타자";
-              var hasPotm = (pl.potmP || 0) + (pl.potmA || 0) + (pl.potmE || 0) + (pl.potmC || 0) + (pl.potmS || 0) > 0;
+              var ct = pl.cardType;
+              var stars = pl.stars || 5;
+              var teamName = sdState.teamName || "";
+              var teamMatch = !teamName || !pl.team || pl.team === teamName;
+              var isLive = ct === "라이브";
+              var isOlstar = ct === "올스타";
+              var isSpecial = !isLive && !isOlstar;
+              var statBonus = getPotmBonus(pl, sdState);
+              var baseScore = isLive ? (pl.setScore || 0) : (SET_POINTS[ct] || 0);
+              if (pl.isFa) baseScore = Math.max(0, baseScore - 1);
+              var setDelta = 0;
+              if (isLive || isOlstar) setDelta = baseScore >= 10 ? 1 : (10 - baseScore);
+              else if (teamMatch) setDelta = 1;
               return (
-                <div key={pl.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 6, background: hasPotm ? "rgba(255,213,79,0.06)" : "var(--inner)", border: hasPotm ? "1px solid rgba(255,213,79,0.2)" : "1px solid var(--bd)" }}>
-                  {hasPotm && (<span style={{ fontSize: 10, flexShrink: 0 }}>{"🌟"}</span>)}
+                <div key={pl.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderRadius: 6, background: "rgba(255,213,79,0.06)", border: "1px solid rgba(255,213,79,0.2)" }}>
+                  <span style={{ fontSize: 12, flexShrink: 0 }}>{"🌟"}</span>
                   <Badge type={pl.cardType} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--t1)", minWidth: 50 }}>{pl.name}</span>
-                  <span style={{ fontSize: 8, color: "var(--td)" }}>{pl.subPosition}</span>
-                  <div style={{ display: "flex", gap: 3, alignItems: "center", marginLeft: "auto" }}>
-                    {isBat ? (
-                      <React.Fragment>
-                        <span style={{ fontSize: 8, color: "#EF5350" }}>{"파"}</span>
-                        <input type="number" value={pl.potmP || 0} onChange={function(e) { updPotm(pl.id, "potmP", e.target.value); }} style={{ width: 26, padding: "2px", textAlign: "center", background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 3, color: "#EF5350", fontSize: 10, fontFamily: "var(--m)", outline: "none" }} />
-                        <span style={{ fontSize: 8, color: "#42A5F5" }}>{"정"}</span>
-                        <input type="number" value={pl.potmA || 0} onChange={function(e) { updPotm(pl.id, "potmA", e.target.value); }} style={{ width: 26, padding: "2px", textAlign: "center", background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 3, color: "#42A5F5", fontSize: 10, fontFamily: "var(--m)", outline: "none" }} />
-                        <span style={{ fontSize: 8, color: "#66BB6A" }}>{"선"}</span>
-                        <input type="number" value={pl.potmE || 0} onChange={function(e) { updPotm(pl.id, "potmE", e.target.value); }} style={{ width: 26, padding: "2px", textAlign: "center", background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 3, color: "#66BB6A", fontSize: 10, fontFamily: "var(--m)", outline: "none" }} />
-                      </React.Fragment>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--t1)" }}>{pl.name}</div>
+                    <div style={{ fontSize: 9, color: "var(--td)" }}>{ct + (stars ? " " + stars + "성" : "") + (pl.team ? " · " + pl.team : "")}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                    {isSpecial ? (
+                      <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 3, background: "rgba(171,71,188,0.12)", color: "#CE93D8", fontWeight: 700 }}>{"스페셜 POTM"}</span>
                     ) : (
-                      <React.Fragment>
-                        <span style={{ fontSize: 8, color: "#AB47BC" }}>{"변"}</span>
-                        <input type="number" value={pl.potmC || 0} onChange={function(e) { updPotm(pl.id, "potmC", e.target.value); }} style={{ width: 26, padding: "2px", textAlign: "center", background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 3, color: "#AB47BC", fontSize: 10, fontFamily: "var(--m)", outline: "none" }} />
-                        <span style={{ fontSize: 8, color: "#FF7043" }}>{"구"}</span>
-                        <input type="number" value={pl.potmS || 0} onChange={function(e) { updPotm(pl.id, "potmS", e.target.value); }} style={{ width: 26, padding: "2px", textAlign: "center", background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 3, color: "#FF7043", fontSize: 10, fontFamily: "var(--m)", outline: "none" }} />
-                      </React.Fragment>
+                      <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 3, background: "rgba(255,213,79,0.12)", color: "#FFD54F", fontWeight: 700 }}>{"POTM"}</span>
                     )}
+                    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      {statBonus > 0 && (
+                        <span style={{ fontSize: 10, color: "#66BB6A", fontFamily: "var(--m)", fontWeight: 700 }}>
+                          {"능력치 +" + statBonus + (isSpecial ? " (팀일치)" : teamMatch ? "" : " (50%)")}
+                        </span>
+                      )}
+                      {statBonus === 0 && isSpecial && !teamMatch && (
+                        <span style={{ fontSize: 10, color: "var(--td)" }}>{"팀 불일치 — 효과 없음"}</span>
+                      )}
+                      {setDelta > 0 && (
+                        <span style={{ fontSize: 10, color: "#FF9800", fontFamily: "var(--m)", fontWeight: 700 }}>{"세트덱 +" + setDelta}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -2129,7 +2336,7 @@ function LockerRoomPage(p) {
           </div>
         ) : (
           <div style={{ padding: 16, textAlign: "center", color: "var(--td)", fontSize: 11 }}>
-            {potmNames.length > 0 ? "라인업에 매칭되는 POTM 선수가 없습니다" : "관리자가 POTM 명단을 등록하면 자동으로 매칭됩니다"}
+            {potmNames.length > 0 ? "내 선수 중 매칭되는 POTM 선수가 없습니다" : "관리자가 POTM 명단을 등록하면 자동으로 매칭됩니다"}
           </div>
         )}
       </div>
@@ -2181,14 +2388,565 @@ function LockerRoomPage(p) {
 /* ================================================================
    MY PLAYERS PAGE - 전체 선수 관리 (훈련/스킬/특훈 편집 가능)
    ================================================================ */
+
+/* ================================================================
+   BULK SCAN - AI 사진 인식으로 선수 일괄 등록
+   ================================================================ */
+
+// Gemini API 호출 — Vercel 서버리스 함수(/api/scan) 경유
+// GEMINI_API_KEY는 Vercel 환경변수에만 저장, 클라이언트에 노출 안 됨
+async function callClaudeVision(base64, mediaType, prompt) {
+  var res = await fetch('/api/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base64: base64, mediaType: mediaType, prompt: prompt }),
+  });
+  if (!res.ok) {
+    var e = await res.json().catch(function(){return{};});
+    throw new Error(e.error || 'API 오류 ' + res.status);
+  }
+  var data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.result;
+}
+
+// 라인업 화면 분석
+async function scanLineupScreen(base64, mediaType, role) {
+  var isBat = role === '타자';
+  var prompt = '당신은 컴투스 프로야구 FOR 매니저 라인업 화면 분석 전문가입니다.\n이미지는 ' + role + ' 라인업 화면입니다.\n' +
+    (isBat ? '다이아몬드 배치 【주전 타자 9명만】 분석. 하단 후보 무시.' : '투수 카드들을 모두 분석.') + '\n\n' +
+    '■ 카드 종류(배경색): 황금빛→"골든글러브", 진분홍/마젠타→"시그니처", 초록→"임팩트", 파란→"국가대표", 주황/빨간→"라이브", 보라→"올스타", 그외→"시즌"\n' +
+    '■ 임팩트 종류(이름 왼쪽 텍스트): 2025TOP3,5툴선수,FA선수,WAR상위,가을사나이,거포,교타자,구조대,구종마스터,끝내기,난세의영웅,느림의미학,대체외인,대표타자,도루왕,돌격대장,라이징스타,마당쇠,마무리,마성의주자,백전노장,베스트포지션,베테랑,분위기메이커,비FA계약,빅게임헌터,신인왕,안경에이스,안방마님,얼리스타터,여름사나이,외국인,우완에이스,원클럽맨,원투펀치,이벤트,저니맨,전천후,좌완에이스,좌타해결사,주력선수,중간계투,철완,최강야구,추억의선수,캡틴,키플레이어,키스톤,파이어볼러,프랜차이즈,필승계투,해외파,호타준족,홈런타자 중 하나\n' +
+    '■ 임팩트 카드는 연도 없음 → year:""\n' +
+    '■ 팀 로고→팀명: T(호랑이)=기아, H(해태)=기아, E=한화, D=두산, LG=LG, SL=삼성, NC=NC, SSG=SSG, R(쌍방울)=SSG, G=롯데, KT=KT, K/Nexen=키움\n' +
+    '■ 이름·연도: "김재환\'18"→name:"김재환",year:"18" / "로하스B\'20"→name:"로하스B",year:"20" / "윤석민S"→name:"윤석민S",year:"" (S는 이름 일부)\n' +
+    '■ OVR: 카드 왼쪽 큰 숫자\n' +
+    (isBat
+      ? '■ 슬롯: C/1B/2B/3B/SS/LF/CF/RF/DH 중 하나\n'
+      : '■ 투수 슬롯: 1선발→SP1, 2선발→SP2, 3선발→SP3, 4선발→SP4, 5선발→SP5, 승리조1번→승리조1, 추격조1번→추격조1, 추격조2번→추격조2, 추격조3번→추격조3, 롱릴리프1번→롱릴리프1, 롱릴리프2번→롱릴리프2, 마무리→CP\n') +
+    '\nJSON 배열만 출력(마크다운 없이):\n' +
+    '[{"name":"","year":"","team":"","slot":"","cardType":"","impactType":"","role":"' + role + '","hand":"우","stars":5,"ovr":0}]';
+  return await callClaudeVision(base64, mediaType, prompt);
+}
+
+// 스킬 화면 분석
+async function scanSkillScreen(base64, mediaType, nameList) {
+  var names = nameList.map(function(n,i){return (i+1)+'. '+n;}).join('\n');
+  var prompt = '컴투스 프로야구 "한 눈에 보기" 화면. 아래 선수들의 스킬만 추출(후보 무시):\n' + names + '\n\n' +
+    '규칙: 각 선수 행 오른쪽 스킬 아이콘 3개 → 이름+레벨. "어드밴티지"→"홈어드밴티지". 없으면 ""와 0.\n' +
+    'JSON 배열만:\n[{"name":"","skill1":"","s1Lv":0,"skill2":"","s2Lv":0,"skill3":"","s3Lv":0}]';
+  return await callClaudeVision(base64, mediaType, prompt);
+}
+
+// 스킬 매칭
+function mergeSkillsInto(players, skillData) {
+  return players.map(function(p) {
+    var m = skillData.find(function(s){ return s.name === p.name; }) ||
+            skillData.find(function(s){ return s.name && p.name && s.name.replace(/'\d+/,'') === p.name.replace(/'\d+/,''); }) ||
+            skillData.find(function(s){ return s.name && p.name && (s.name.indexOf(p.name)>=0 || p.name.indexOf(s.name)>=0); });
+    if (!m) return p;
+    return Object.assign({}, p, { skill1:m.skill1||'', s1Lv:m.s1Lv||0, skill2:m.skill2||'', s2Lv:m.s2Lv||0, skill3:m.skill3||'', s3Lv:m.s3Lv||0 });
+  });
+}
+
+// 연도 2자리 → 4자리
+function expandYr(y) {
+  if (!y || y === '') return '';
+  var n = parseInt(y); if (isNaN(n)) return y;
+  // 26 이상(26~99) → 1900년대, 25 이하(00~25) → 2000년대
+  // 50 이상(50~99) → 1900년대, 50 미만(00~49) → 2000년대
+  return n >= 50 ? '19' + String(n).padStart(2,'0') : '20' + String(n).padStart(2,'0');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 스킬 이름 퍼지 매칭
+// rawName  : AI가 읽은 스킬명 (예: "패기", "철완", "5툴플레이어")
+// category : "타자"|"선발"|"중계"|"마무리"
+// seedPlayer: 도감 선수 객체 (cardType, stars, stamina, running 등)
+// skillsDB : DEFAULT_SKILLS
+// slot     : lineupMap slot (예: "승리조1", "추격조2", "롱릴리프1", "CP" …)
+// 반환: { name: string|null, missing: bool }
+// ─────────────────────────────────────────────────────────────────
+function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
+  if (!rawName) return { name: '', missing: false };
+  var catSkills = (skillsDB && skillsDB[category]) || {};
+  var allNames  = Object.keys(catSkills);
+
+  // ── 헬퍼 ──────────────────────────────────────────────────────
+  // 괄호 제거 기본명
+  var base = function(n) { return n.replace(/\(.*?\)/g, '').trim(); };
+  // 슬롯 → 중계 역할 분류
+  var slotRole = function(s) {
+    if (!s) return '';
+    if (s === '승리조1') return '승리조';
+    if (s.indexOf('추격조') === 0) return '추격조';
+    if (s.indexOf('롱릴리프') === 0) return '롱릴리프';
+    return '';
+  };
+  // DB 스킬 Lv10 점수 계산 (DEFAULT_SKILLS 직접 참조)
+  var skillScore10 = function(skillName, cat) {
+    var w = getW();
+    var entry = (catSkills[skillName] || [])[5]; // index5 = Lv10
+    if (!entry) return 0;
+    if (typeof entry === 'number') return entry;
+    return (entry.cV||0)*(entry.cF||0)*w.c +
+           (entry.sV||0)*(entry.sF||0)*w.s +
+           (entry.pV||0)*(entry.pF||0)*w.p +
+           (entry.aV||0)*(entry.aF||0)*w.a +
+           (entry.eV||0)*(entry.eF||0)*w.e;
+  };
+
+  // ── 1. 정확 일치 ───────────────────────────────────────────────
+  if (catSkills[rawName]) return { name: rawName, missing: false };
+
+  var baseName = base(rawName);
+
+  // 후보 수집 (기본명 동일)
+  var candidates = allNames.filter(function(n) { return base(n) === baseName; });
+  if (candidates.length === 0) {
+    // 부분 포함 허용
+    candidates = allNames.filter(function(n) {
+      var b = base(n);
+      return b.indexOf(baseName) >= 0 || baseName.indexOf(b) >= 0;
+    });
+  }
+  if (candidates.length === 0) return { name: null, missing: true };
+  if (candidates.length === 1) return { name: candidates[0], missing: false };
+
+  // ── 2. 특수 규칙 ──────────────────────────────────────────────
+
+  // ── 2-A. 패기: 카드 종류 기반 ──────────────────────────────────
+  if (baseName === '패기') {
+    var ct = (seedPlayer && seedPlayer.cardType) || '';
+    var ctHit = {
+      '골든글러브': '골글',
+      '시그니처':   '시그',
+      '임팩트':     '임팩',
+      '국가대표':   '국대',
+      '라이브':     '라이브',
+      '올스타':     '올스타',
+      '시즌':       '시즌',
+    }[ct] || '';
+    var m = candidates.find(function(n) { return ctHit && n.indexOf(ctHit) >= 0; });
+    if (m) return { name: m, missing: false };
+    // 복합 괄호 (예: 패기(시그/올스타/라이브)) 재탐색
+    m = candidates.find(function(n) { return ctHit && n.replace(/\s/g,'').indexOf(ctHit) >= 0; });
+    if (m) return { name: m, missing: false };
+    // 매칭 실패시 후보 중 첫번째
+    return { name: candidates[0], missing: false };
+  }
+
+  // ── 2-B. 철완: 지구력 구간 → 중간값 선택 ─────────────────────
+  if (baseName === '철완') {
+    // 구간 정렬 (숫자 높은 순)
+    var sorted = candidates.slice().sort(function(a, b) {
+      var am = a.match(/(\d+)/); var bm = b.match(/(\d+)/);
+      return (bm ? parseInt(bm[1]) : 0) - (am ? parseInt(am[1]) : 0);
+    });
+    var mid = Math.floor((sorted.length - 1) / 2);
+    return { name: sorted[mid], missing: false };
+  }
+
+  // ── 2-C. 5툴플레이어: 주루 구간 → 중간값 선택 ───────────────
+  if (baseName.indexOf('5툴') >= 0 || baseName.indexOf('5툴플레이어') >= 0) {
+    var sorted2 = candidates.slice().sort(function(a, b) {
+      var am = a.match(/(\d+)/); var bm = b.match(/(\d+)/);
+      return (bm ? parseInt(bm[1]) : 0) - (am ? parseInt(am[1]) : 0);
+    });
+    var mid2 = Math.floor((sorted2.length - 1) / 2);
+    return { name: sorted2[mid2], missing: false };
+  }
+
+  // ── 2-D. 도전정신: 별 수 기반 ────────────────────────────────
+  if (baseName === '도전정신') {
+    var stars = (seedPlayer && seedPlayer.stars) || 5;
+    var m2 = candidates.find(function(n) { return n.indexOf(stars + '성') >= 0; });
+    return { name: m2 || candidates[0], missing: false };
+  }
+
+  // ── 2-E. 중계 역할 기반 스킬 (긴급투입·전승우승·필승카드·승리의함성) ──
+  if (category === '중계') {
+    var roleSkills = ['긴급투입', '전승우승', '필승카드', '승리의함성'];
+    if (roleSkills.indexOf(baseName) >= 0) {
+      var role = slotRole(slot);
+      // 역할명이 괄호 안에 포함되는 후보 우선
+      var roleMatch = candidates.find(function(n) {
+        if (role === '승리조') return n.indexOf('승리조') >= 0;
+        if (role === '추격조') return n.indexOf('추격조') >= 0;
+        if (role === '롱릴리프') return n.indexOf('롱릴리프') >= 0;
+        return false;
+      });
+      if (roleMatch) return { name: roleMatch, missing: false };
+    }
+
+    // ── 2-F. 기타 중계 괄호 스킬 → Lv10 점수 높은 것 ──────────
+    var best = candidates.reduce(function(acc, n) {
+      return skillScore10(n) > skillScore10(acc) ? n : acc;
+    }, candidates[0]);
+    return { name: best, missing: false };
+  }
+
+  // ── 3. 그 외: 점수 높은 것 ────────────────────────────────────
+  var bestOther = candidates.reduce(function(acc, n) {
+    return skillScore10(n) > skillScore10(acc) ? n : acc;
+  }, candidates[0]);
+  return { name: bestOther, missing: false };
+}
+
+// SEED_PLAYERS에서 매칭
+function matchSeedPlayer(scanned) {
+  var ct = scanned.cardType; var nm = scanned.name; var yr = expandYr(scanned.year); var it = scanned.impactType||'';
+  return SEED_PLAYERS.find(function(sp) {
+    if ((sp.cardType||'') !== ct) return false;
+    if ((sp.name||'') !== nm) return false;
+    if (ct === '임팩트') return (sp.impactType||'') === it;
+    return (sp.year||'') === yr || (sp.year||'').replace(/'\d+/,'') === yr;
+  }) || null;
+}
+
+
+// 업로드 가이드 썸네일 (예시 사진)
+var SCAN_THUMBS = [
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAB4ADMDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDGVwsYBgRs5+Y5z/OlllSRFVbeOMgnLLnLfXJqil4zsqEIoJ6s3ApZLoxOVAjfH8SsSDXt2PJ5WWMc470Hg4PWux03wnbXNja3v26eOSWJZMKo+UkZwDU//CHW0rea2oXe/wBWQZrF4imnYv2FTscPipPIm3qnkybnGVXacsPUDvXaHwTZ4/4/5/8Av2tTDw4zyQudXvw8K4jYoMoOmAal4mHQpYefU4JlZWKsCrA4IPBFFdxJ4LtpZGkk1K4Z2OWYouSaKf1mAfV59iuh0kJEradlkA3n++e/finsNKLEppwUEcAjOP1piwgDnoOtS+V7V5/M+53cq7Edw8LKgto2iC5zgkD271JFNbLEqyROzgcnJOTnr1qrqErWkCyJEZWaRU2ggdfrTLO7juwhAC787fmBPHXjt0qXJLco0fPs/wDn3cfif/iqPPs9oH2d885OT/8AFVF5YGM9+lL5XtTAJJrYtlIZAMDjef8AGiozGc0UAT6ggjsXZjtAIyfTmsOxvI5tWiWKWWRGYAHsp5zuye9dHrQHkvZw3EMVz8rgyNgD5v8A6xrm4dEuobp76G4tTErM7lDuIbB749SDitIcnK+Zg3JbGh4jKR6Yr+esW2ZPn2bsdR0rB8PNF/b0QdpBIUYKspyQADnoMc5q+99OnlxyXkbruCOPKBOc9MZ7itDVZrS0AmtWWMqOXMQUDPHPt71kpR7FODulcl1aJXW2UOwJkONhb0PXHOKz9GS5Goul0soJjYjLErjcAMcn0q1pl5NfJIbedHeJl/erwM9wPUcYqaxECXr3st1AQ4bP7wDGTk9fpUfaHf3bIu+VRWolk7oHTBUjINFXcgw/E1j9u1yWN1ZIxarunC8ry2BkfN19B0zVPSWMWg3EIijHmSNG2AcH5QM/U11t9o8d5d/aDPLGxj8s7Mcj/JpbLSbfT7OS2jXzI5G3MHA9Mf0rOO+qLb0VjzyLSfLn81Ujj5GAoPTGMe9W9SSdmXyYQ42MCWAIX8K3dY05bSIyx7mhYhNoGWBP86zhFJbuqPbRqxjkkLIcYVemRk8kAmqS0syk9VLqM8MtcQzMk1tHGJCoAReD7jHesCfa0z+VCF8uMYjcAKdxOWPrgg10Fjp96LlLy1QvE8kRHzDMYydzYzkDjv61uf8ACHWBdnaWUs38RwTj0zRKV2mTtdG5bf8AHrD2/dr0+lFSxoI41QdFAA/CikSUL3V7fT4PPvJUii3BdzZ6n6VQ/wCEx0P/AJ/4vyb/AAqLVZoxpk7O4UKudzD7vI5rCSG6ttQtXuV/0aeRViPUk56kehBq7AvM0dZ8QaNqVkIIdWhgcSK+8oxHB6dKy/PsI7p2utcg3NC6bfKcY3LgHHSpZOfMnSGWWFSzM8Z4XHbGOucd6TUYL66vHGmQ+YV2AruVQMqPX9aaG00+XsRfbrJprZ38RW+2Bl+VY3G5QeldZZ+JtNvrgQWd1HLKQSFGc4HXtXJ+eF0aP7S/2ecSyI3mr8wYY+U4HODWh4ZuYpomO4tIirukxwTznBocXbyF0Uu51n2pvQUVn+av940VIjK1ENLp08cTLvKcb+n41gqLy91a0bzoxHDKGKZPyqCCccfSrB1UvbO4jiGONrScn8MVHxbOTb/IzyebKF+YOQOgz0zntVJj0sEgvTbNaKyAK5OUDc8nGfl96ddaTevem4imVX2IFcSbWDBQCentWq/h+WYRObx7acLlvLg3YyORknmpE0W4jnjeTVbmRCwUobfrx161cYR5b3X4/wCRcrPVMx5NL1CS3i/fRNOJJHd2OeWxg9MdqtaJp91YTTvdTK/mKAMHqcnJPA9q3ZNMSGNn8+R8dljyf51CbVFeRT9oIQ43LFnP05qfea8iL6WDeP71FSR6ekiBxLMoPZosEfrRUiPJVtYioJ1S2UkZwfMyP/Hav2p06Cwmhllspp3zsn3yhkyMDA29jzW4/wAPkjZFfVmy4yNtoSPx+apLPwLtYyw6uykKT89ken0Jqr+RlyS/mf4f5HKeQv8A0GoP++pf/iavWUtlBaTRT3FtcyyZ2SmWYFPlxwNvY803V/D5sNR+zJdrLuiWXc6iP73bBNU4YJbG6jljlj39R0Yc8c80XXYXs5/zP8P8hPIH/Qah/wC+pf8A4mr1jLZ20Ey3M9teO/3CZZgV4PA+X15/CqEunOoZ2li9flZT+maWzgkinWeCVA8ZyN+P5E80rrsP2c/5n+H+RSE82B++l/77NFTtBvYsXGWOeFopGtjqU1S72Nm7n3H7p84jFRW+rakl+X+0XEibcBWkJAPqAcjNFFepVinE82nJqRWuJWubuWW6Xcx4G47sD0BNLMtqXHlW6KuBkHB5ooqoQjyrQU5NyeoFLbyBiFA+euB0+lJHHbkHdFH0wOAOaKKrlj2J5pbXGbIs/cT/AL5FFFFL2cexftZ9z//Z",
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAB4ADMDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDGVwsYBgRs5+Y5z/OlllSRFVbeOMgnLLnLfXJrMbUHAxsXA96P7Qcf8s1/M16nt6fc832E+xexzjvQeDg9agtri8m/fW0CkqwQFZMHJGf5VLI2pb/MktxuwPmMvqMjnPoKf1ml3D6vU7DsVJ5E29U8mTc4yq7Tlh6gd6y/7SfH+qTH1NW017U5ri3CSO0sfyQnecr2wDUvEw6Maw8+pMysrFWBVgcEHgiiqM2pTtPI0yBpCx3knJJ70U/rNPuH1efYgiSEhjMzg4+XYV6++TUBGCA344INSpZyyR+cMeUCA0nZeM80k0MscSeZGqLjIbAy2fWvOumd9n1IskfdYgZ9cUm49N360qNt3EKrfKRyuce9SJOVspIRCpDMMyEHIPb+VICfSU0+S+C6rNJFbbGy0fXdjgdDxn2rcS08G7x5mo3YXuV3E/8AoFcy9vMkCTvE4ic4VyvBqSS3nkvDD5GybH+rVcdBn+VGgF+8h0RblxaXM7w8bSRk9BnsO+e1FZIHFFMDXN3MfDZsDFGqiUSBhGQ0nU8t0OKrvFIqKyTK7bAdoiPA7c4psTh7OZsxRvGqbeWBOD27ZOf5011tTGAjYfbyxkJGfpipQ5JXViu4kDtv+RsZOeMioxnYeflyMjPX8KeyoCQX3DHBUd/xpgxtOSd2ePTFOwmy2+Bp8DeYrfOQ0ZH3R2785q1ImNWMK3UDDb/ryGx0z659qrSGJtOtlQsJwx35lypGeOM/LVlUtH1Q+VNMkBjzu8wbgcdM59aQzNYksScAk84ooP3j9aKoRoPaSxaUZZEQLKFKyA5yM9OP69xTZXkFsBJZukZQfN5Srn3zipDa30WjC6IL2rgquDkAZwcjtyfzqJ4pdgLS2xwgIByePyofLZWYO99SkxQE7UJBGMMc49+KjyMEYGfWpQzuWKAL8pyFwOO9Rjd5ZxnZkZ+vakLqW5mU6fbxmADBJWTy8F8nkZzzVu38+LVpStkyyCJsw+R0UjGdpPGAetU3DDTYX3p5ZkIKhySCO5Hbr2qzcLNHqrxtPFI4X5ZfPYKRjPDZyc9OaRZncdunailYkuxIwc80UyTqLexv73wc8serR/ZbdW/0ZxtAxyVBxyT1/SsNkg2DE8pbaOsi46dKv2yaO3hmZZbmcXhbdsH3d/O3jHTHv3rNkki8oK0ATKgbhFgn3yTSQPcrMgUkM68DIK8gn0puF8ssW+fOAu3qPXNOYxgnAZlI4zwQaYCuwgr8xIIOeg+lMRdYf6BbMBJv8w5BUAY4xg47+9SrGp1Bx50+3yyQQq7wewPbrVd9osYFMW0lyRIUPzevJ6gelTSy2suqtMbaJYurQhGC9McAcj1oKKLfeOTnnrRQcZOOmeKKALhgI0+SRQrRqVOQDkk/j0FE7TNCjS+U6hRtUy5I49M1rWOnXtz4amltZY2iVydrPt6DlSCME85HNZbpiIFLqUvtGAQAOnHOfrVScWtCL6lPcxLGNAuVIIA7d+tMDP5JUD5NwJ47/WpJA5dvNkAYLnJOc+3FRY+UnI4PTuagqyLsjynTraN8m3DEghwdpJ54I4/lVuGScazuVS8rRnnerDGM5z0wMfniqbRAWVu4l3szDMaw4I/4F/EalngRdRaOGdjEEJV2typIx024454z+NAyicliSCCT0NFLj3B9xRVWEIHcKUDsFPVQxx+VJRRSQBRRRTAKcM+tNHJp1CAOewopcUU7COgSG0KNm3i3H7p4GKZZhYNS85LaN1VflBUfKfUDBGaKK9KrCLjsefTk1IQxQ+fKWtYkBPCheB7CpZo7MuPKtY1XA4IB5ooqoRjyrQU5NyeohitPIGLeMPnrgdPpRHDbHO6GPpgcAc0UVXLHsTzS2uM8qH/nnH/3yKKKKXJHsV7WXc//2Q==",
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAB4ADMDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDlkYIg3QIwJPzHP+NOnmSVFVLaKIqTlkzk/XJruz4Bs9mP7RuCBzgRrSL4AsiAf7QuR7GNay5Jdj6D6/h73b/M8/AJOB1oIIOCOasXq/YNUuIIXb9xKyK+cE4OM0y5kdbjcZxK+P8AWI5Pt1rdYOs+hDzbC3+L8H/kRVL9muN6J5Mm9xlV2HLD1A711eg+EbXVdGgvpLyaNpN2UVAQMEj+lbQ8Ls8sDnWdQD267YmKDKDpgGsXSknZop5jResX+Z5s6MjFXUqwOCDwRRXoUvgS1mleWXU7l3clmYxqST60UuSXYpZjQ6sVbzTlSNHgcsgHmHzT8xxz/FxT2u9PJykLICOMyZ/9m5rmZbaUajcyqm5fMKttBBCgf+PU8WiTW8M1lEmyKNtozznPrnjPNb+0p83Ld/18z51Rk2bN2LGXa0MMaEE7ycc5/E0+H+zBEqvaxM4Xk4ByfXrXOPAJY5VjaJnkmQuNhYg4Y4PPXj8Kt2cNu9yi3Kh5WjYAkn7vOcc89/pTdaCtq9f67i9k30RvJc6coCpCFXsobp/49Si6sQeYzx1G7/7KsdNMgVVWcKkMboVDthSTnGOevWs0xrEZXuHjVJ5JMjBXPJ4xnnp1FU5U+7/r5jcJLTQ6dpYGOUR9p6YY/wCNFQWKK1lEbcbYtvygc4FFStVdCK32iewvtSENpOJXJ2TfNg5A6cY/+vVE2Umo6PAzW91BcMWxlSrJg5Gfqf6GtrWYbuz1NmOo3KRPysYOFXtgd/eqSQaheRzSxavfRhMHC4PPoPy/WpautC1dO5Ri0uW3sGE8Fw5Mi8xj5j97knHTn3pLKKdbhl8i4YGOTZujJx8p4zjv6VOZL0xCJdWvC/8AeB+Yn09P/wBVWHeawmWK41u5ld49wSQ84zjPFFrasfNKOnRjrq8naC2tbewKwqylj5RzkHI7diSazJLcxz3Uj2t2TC7skbKSJHycMMDpg8DOM1pLFf3UUk8WrXyBeiLjn2H+e9VvNvXijRNSvPMJAO0/N+PahSvsrlL3ru9rm5pEfmaVbOYzBlB+7YYK+2KK2NP0+ZLGFZWMzheZH6t7mincy20MfxnMFu1iMHmBo88vtA571Bod1LNa6jJKsahFBCoSc4B5OfpW1ruhx6reLLJcSR7FKbVAIPOc1Si0aPRtOvitxJIkkZzuAG0AHpUpdzd1IezSS17nNi+jD7oomWaTariQnCqvOeO9X9XtftGqpEpRG+yhldyFAO5uh9ayYYLScrJbzSSMy8Ed/wClbOv28cl5byyTyRlYdu0cqwyeT71MUmrXuxVJxc06asWbGF7WLUPMlimURrIhQk4GG4PuMVkPPsaJzAocFV35Y4Ut3A9K0tCtw9vqESzN+9CqRsA2ZBHFKvhWMMH+2S7h1JQc/rVRhGOi2FGSUWpLXodta/8AHrH/ALoootv+PaP/AHaKDMoyXB8w8CqWrTltKuxtPML9P900M6lj8xqC+dRYzlnIURsSQcYGDTEco9s8dl9phmjRztDRMDn9P89qu+KL+OK5gt2s2ufPg2hQ23uaxy1q1mhW9nK4BEhwWOexJHvXTalotvqciSTzsNqBNoAI4Oc896KcYJvzG5Nu5F4Yu2dbjMCRKqRhUUk468E9z9PWt3zz/dFZWmaXFpSSLFcPIHxwwA24z0x9asJdW7zGFbhGkHVAeRTdr6Cu+pvwXJECDA6UVQjkURqNx6UUgKe4Z61X1An+zrnaTu8l8fXaay11YmEyeXGADjaZfm/LFSXNw0kUkRUFWRgdrEHp0HHU54pgc/MZXe3XGFlPmOzg7w20ZUheMehPPbjFdqG+Uc9qpDwszWsURv7iJtg3r5IcDjpnjJ96sR6JPFNE76rcOm4KUNv1469auFOPJdy1+f8AkV8Su2SnDD71Y1tpU8N5GzvH5Ub7g4+83+c10U+mrBA8omkk2jO1E5P05qL7KoZ1b7T8ndYs5+nNSk2SCuAo+aipY9PSSMOJZlB7NFg/zopAeSraxFQTqlspIzg+Zkf+O1etv7OgsJoZZbKad87Jy8oZMjjA29jzW6/w+SNkV9WbLjI22hI/H5qlsvA21jNBq7KVXPz2Xb6E1V/Iy5JfzP8AD/I5PyF/6DUH/fUv/wATV6yksoLSaKe4trmWTOyUyzApxjgbfXmm6v4fNhqP2ZbxZS0ay7mURfezxgmqSW0tpOjpOofGQVII59cGlfyBU5fzv8P8hfIA/wCY1D/31L/8TV2xls7aCZLie2vHf7hMswK8HgfL68/hWfLpzqC7zRnucOCT+tLa20iSiWGZVZDnLED+Z5ouuwKnL+Z/h/kU/OnHWaXP++aKma33MWaUknkkiika2N+PWL0xPuvbjefuHzyAPXIpLLWtRW+Lm7nkTb91pCcH1AORn60UVyRbTPosTRh7N6FW9unub2WW4+ZicAElto9ATSXUlqZB9nhCLtGQTnmiilK9y6NGHItBC1v9lUiJfN3cnI6fSki8lg29E6YXkDB9aKKk19lDsRlkz91Pyooopj9lDsf/2Q==",
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAB4ADMDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDlkYIg3QIwJPzHP+NOnmSVFVLaKIqTlkzk/XJqq07bduBgdqb5xH8IrP2cj3/r+Gve/wCZMAScDrQQQcEc061F3J++tY+VbaCr4OSM/wAqmkh1IyebJGd+B8xkGeRxzn0FTySK/tGh3/Blepfs1xvRPJk3uMquw5YeoHeqf2g/3R+dXk1nU57i22TytNF8kB38rnjANPkZMsxo/Zf5/wCRC6MjFXUqwOCDwRRUU91M88jTjdKWO8scknvRRySKWY0Or/BkIK5O4n2xTolRnHmlvL5ztIz096UWsptHu9pESuE3EHBJ9P8APentaXJhXMACgbgwAyR7nNdFz5yzIXGxj5bNszxlhn9DTNx6bv1pY22ksqhsDoVyKl+1ZtZYvIjxI+4uFI2n0HYUgJtJTT5L4Lqs0kVtsbLR9d2OB0PGfatxLTwbvHmajdhe5XcT/wCgVzf2WcQwzGJhHMxWNj0Yip5bC8e/kt/s2J1Xc0aAYAA/KgC1eQ6Ity4tLmd4eNpIyegz2HfPaiskUUwNiTUro+Go9PMiRweZu2YILjP3s9Mbs/lVV4ZAgZZVdgoIURflzinu6TaPvnuN84cBAxJKgDGOuMYx+VQuLQxgJkOVHzGQkA/TFSiprVXIHEu5t52Nt5z8uRUXOw8jGemf6U9goyC+eOCo7035PLzlt+emOMUydtS1IB9htdskZyTlAW3Id3cdDnGePWrD27f2rLGL2D5VOJTuCsPbvVd2gNjahA3nq53hpPlPPGB/DU4a2fUnkZ5UgKZwJhnOMAFs8jNIZnc9zz3opfxzRVCNC2nVLCR2t1kCyDdlflORgA46d+hokMzwqv2KQJsHIhAJHc5xUlt9pfTJAhd12tiJE3ZAABJHpyeagnE0aRtvik3KAFQEkDHfiojfU2rNe6l27W/4f1KZZBu2pkFcfMc496ZkeWRtGcg7u49qlPmEthdp28gDbxUY3+ScH93uGRnviqMGW3ybC3VoiF3ny5WiOG9RnPOD/OrJm3avNOtorMsbExrB93jBO3jBA71X8xvsNt8y7Ek+6Zc7eRyRjgVakjuTrUyRzxiQRsS4lIDcZPzd+aRZkj2ooycnd1zz9aKZJ0kFpLD4WN7DqgiE7LiJE2ncpPy569RnPSsaZY/Lj8mdy5A3b3GBx2xUsBtDZvFIrBG581uofHYDt9aimeFo1XyPLGB8yx4JOOeSamPUua0iys68ne4JAyCPmz7U3C+Xu3fPnG3Hb1zTmMYzgFgRgZOMGmZG0jHzZ657UyNy1MgGnW7LK5mLH5GACqP4cf8A16liWJdRkE80wUISGQDdwOM54qJzELG3VYF37yWfB+f2P06cVYM0KalMxtI4lKY8vyyQvuARkUDM7uec89aKOMnHTPFFMDctJkPhq4ik0rzlVj/pCLgof72cdsgfSqF08/kwmfy3TGEXzd2OPTPFW4NVv4dEltFlKxbdgQxjBRsk89zVWRMRqVupS+0YBAA9hnNJIJO7RU3Md3loBlSGAHbv1poZ/JK/8s92Tx3x605wxLeZIAQueTnPtUePlJ3Dr070E2V9S7J9p/syz3HEHmNsO4cHPJ6ZHNX/AC7463cRXAU3DQkOC4HHBIzjms940WytWjeQy7iHRocBeeMH+KpEijOosj3DiMISriDJPplcfrQWUeSSSMHPIxRQBx1B9xRVWJDJyDk5AwOe3pRRRSAKKKKYBSr60g5NOoQBz2FFLiinYRrRrbGJ90Me8/cOQMeuRSWDJFqHmiCNwF4BUfKfUAgjNFFcUW0z6TE0Yezeg2byftMp8iJAW4RRwvsKfdGzMo8i3VF2jIODzRRSle5dGjDkWgEWv2UEQp5u7k8dPpSRLbsG3Rx9ML0GDRRSNfZQ7EZMYONif98iiiijXuP2MOyP/9k=",
+];
+
+// BulkScanModal 컴포넌트
+function BulkScanModal(p) {
+  var onClose = p.onClose;
+  var players = p.players;
+  var savePlayers = p.savePlayers;
+  var lineupMap = p.lineupMap;
+  var saveLineupMap = p.saveLineupMap;
+
+  // API 키는 서버(/api/scan)에서 관리 - 클라이언트 불필요
+
+  var _imgs = useState([null,null,null,null]); var imgs = _imgs[0]; var setImgs = _imgs[1];
+  var _step = useState('upload'); var step = _step[0]; var setStep = _step[1];
+  var _msg = useState(''); var msg = _msg[0]; var setMsg = _msg[1];
+  var _err = useState(''); var err = _err[0]; var setErr = _err[1];
+  var _extracted = useState([]); var extracted = _extracted[0]; var setExtracted = _extracted[1];
+  var _result = useState(null); var result = _result[0]; var setResult = _result[1];
+  var _confirm = useState(false); var confirmOpen = _confirm[0]; var setConfirmOpen = _confirm[1];
+
+  var fileRefs = [React.useRef(), React.useRef(), React.useRef(), React.useRef()];
+
+  var imgLabels = [
+    {title:'타자 라인업', hint:'화면 1 (필수)', color:'#00d4ff', icon:'⚾'},
+    {title:'타자 스킬', hint:'한 눈에 보기 (선택)', color:'#a78bfa', icon:'⚡'},
+    {title:'투수 라인업', hint:'화면 1 (선택)', color:'#fb923c', icon:'🎯'},
+    {title:'투수 스킬', hint:'한 눈에 보기 (선택)', color:'#a78bfa', icon:'⚡'},
+  ];
+
+  var readImg = function(file) {
+    return new Promise(function(res, rej) {
+      if (!file||!file.type.startsWith('image/')) { rej(new Error('이미지 파일만 가능')); return; }
+      var r = new FileReader();
+      r.onload = function(e) { var src=e.target.result; res({src:src, base64:src.split(',')[1], mediaType:file.type, name:file.name}); };
+      r.onerror = function(){ rej(new Error('읽기 실패')); };
+      r.readAsDataURL(file);
+    });
+  };
+
+  var handleFile = function(idx, file) {
+    readImg(file).then(function(img) {
+      var n = imgs.slice(); n[idx]=img; setImgs(n); setErr('');
+    }).catch(function(e){ setErr(e.message); });
+  };
+
+
+
+  var runScan = async function() {
+    if (!imgs[0]) { setErr('타자 라인업 화면(①)은 필수입니다.'); return; }
+    setStep('scanning'); setErr('');
+    try {
+      var allPlayers = [];
+      // 타자 분석
+      setMsg('⚾ 타자 라인업 분석 중…');
+      var batRaw = await scanLineupScreen(imgs[0].base64, imgs[0].mediaType, '타자');
+      var bats = batRaw.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
+      if (imgs[1]) {
+        setMsg('⚡ 타자 스킬 분석 중…');
+        var bSkill = await scanSkillScreen(imgs[1].base64, imgs[1].mediaType, bats.map(function(b){return b.name;}));
+        bats = mergeSkillsInto(bats, bSkill);
+      }
+      allPlayers = allPlayers.concat(bats);
+      // 투수 분석
+      if (imgs[2]) {
+        setMsg('🎯 투수 라인업 분석 중…');
+        var pitRaw = await scanLineupScreen(imgs[2].base64, imgs[2].mediaType, '투수');
+        var pits = pitRaw.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
+        if (imgs[3]) {
+          setMsg('⚡ 투수 스킬 분석 중…');
+          var pSkill = await scanSkillScreen(imgs[3].base64, imgs[3].mediaType, pits.map(function(b){return b.name;}));
+          pits = mergeSkillsInto(pits, pSkill);
+        }
+        allPlayers = allPlayers.concat(pits);
+      }
+      // 도감 매칭
+      var withMatch = allPlayers.map(function(sc) {
+        var seed = matchSeedPlayer(sc);
+        return { scanned: sc, seed: seed, matched: !!seed };
+      });
+      setExtracted(withMatch);
+      setStep('review');
+    } catch(e) {
+      setErr('분석 실패: ' + e.message);
+      setStep('upload');
+    }
+    setMsg('');
+  };
+
+  var runSave = function() {
+    var newPlayers = players.slice();
+    var newLm = Object.assign({}, lineupMap);
+    var ok = []; var warn = []; var skip = [];
+    // 스킬 카테고리 결정
+    var getSkillCat = function(seed) {
+      if (seed.role === '타자') return '타자';
+      if (seed.position === '선발') return '선발';
+      if (seed.position === '마무리') return '마무리';
+      return '중계';
+    };
+    // 스킬 이름 퍼지 매칭 + 저장값 결정
+    var resolveSkills = function(sc, seed) {
+      var cat = getSkillCat(seed);
+      var sDB = p.skills || {};
+      var missingNames = [];
+      var resolve = function(raw, lv) {
+        if (!raw) return { name: '', lv: 0 };
+        var res = resolveSkillName(raw, cat, seed, sDB, sc.slot);
+        if (res.missing) missingNames.push(raw);
+        return { name: res.name || raw, lv: lv || 0 };
+      };
+      var s1 = resolve(sc.skill1, sc.s1Lv);
+      var s2 = resolve(sc.skill2, sc.s2Lv);
+      var s3 = resolve(sc.skill3, sc.s3Lv);
+      return { s1: s1, s2: s2, s3: s3, missing: missingNames };
+    };
+    extracted.forEach(function(item) {
+      if (!item.matched) { skip.push(item.scanned.name + ': 선수도감 미등록'); return; }
+      var sc = item.scanned; var seed = item.seed;
+      // 스킬 퍼지 매칭
+      var skRes = resolveSkills(sc, seed);
+      if (skRes.missing.length > 0) {
+        warn.push(sc.name + ': 인식 불가 스킬 → ' + skRes.missing.join(', '));
+      }
+      // 중복 체크
+      var already = newPlayers.some(function(x){ return x.name===seed.name && (x.cardType||'')===(seed.cardType||'') && (x.year||'')===(seed.year||'') && (x.impactType||'')===(seed.impactType||''); });
+      var id2 = already
+        ? newPlayers.find(function(x){ return x.name===seed.name && (x.cardType||'')===(seed.cardType||''); }).id
+        : 'p'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+      if (!already) {
+        var np = {
+          id: id2, dbId: seed.id,
+          liveType: seed.liveType || "",
+          trainP:0, trainA:0, trainE:0, trainC:0, trainS:0,
+          specPower:0, specAccuracy:0, specEye:0, specChange:0, specStuff:0,
+          skill1: skRes.s1.name, s1Lv: skRes.s1.lv,
+          skill2: skRes.s2.name, s2Lv: skRes.s2.lv,
+          skill3: skRes.s3.name, s3Lv: skRes.s3.lv,
+          pot1:'', pot2:'', isFa:false, enhance:''
+        };
+        newPlayers.push(np);
+        ok.push(sc.name);
+      } else {
+        // 스킬만 업데이트
+        newPlayers = newPlayers.map(function(x){ if(x.id!==id2)return x; return Object.assign({},x,{skill1:skRes.s1.name||x.skill1,s1Lv:skRes.s1.lv||x.s1Lv,skill2:skRes.s2.name||x.skill2,s2Lv:skRes.s2.lv||x.s2Lv,skill3:skRes.s3.name||x.skill3,s3Lv:skRes.s3.lv||x.s3Lv}); });
+        ok.push(sc.name + '(스킬갱신)');
+      }
+      // 라인업 슬롯 배치
+      var slot = sc.slot;
+      if (slot) {
+        if (slot === 'DH' && seed.subPosition && seed.subPosition !== 'DH') {
+          warn.push(sc.name + ' → DH 배치 (도감포지션:' + seed.subPosition + ')');
+        }
+        newLm[slot] = id2;
+      }
+    });
+    savePlayers(newPlayers);
+    saveLineupMap(newLm);
+    setResult({ ok: ok, warn: warn, skip: skip });
+    setStep('done');
+    setConfirmOpen(false);
+  };
+
+  var OVERLAY = { position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 };
+  var BOX = { background:'#111827', border:'1px solid #1e3a5f', borderRadius:16, width:'100%', maxWidth:540, maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.7)' };
+  var HDR = { padding:'18px 24px 14px', borderBottom:'1px solid #1e3a5f', display:'flex', justifyContent:'space-between', alignItems:'flex-start' };
+  var BODY = { padding:'18px 24px 24px', display:'flex', flexDirection:'column', gap:14 };
+  var BTN_P = { background:'linear-gradient(135deg,#4ade80,#22c55e)', color:'#000', fontWeight:900, fontSize:13, padding:'10px 20px', borderRadius:8, border:'none', cursor:'pointer' };
+  var BTN_G = { background:'transparent', border:'1px solid #1e3a5f', color:'#94a3b8', fontSize:12, padding:'9px 16px', borderRadius:8, cursor:'pointer' };
+
+  return (
+    React.createElement('div', {style:OVERLAY, onClick:onClose},
+      React.createElement('div', {style:BOX, onClick:function(e){e.stopPropagation();}},
+        // Header
+        React.createElement('div', {style:HDR},
+          React.createElement('div', null,
+            React.createElement('div', {style:{fontSize:11,fontWeight:900,background:'linear-gradient(135deg,#00d4ff,#0080ff)',color:'#000',display:'inline-block',padding:'1px 7px',borderRadius:3,letterSpacing:1,marginBottom:6}}, 'AI SCANNER'),
+            React.createElement('div', {style:{fontSize:17,fontWeight:900,color:'#e2e8f0'}}, '선수 일괄 업데이트'),
+            React.createElement('div', {style:{fontSize:11,color:'#64748b',marginTop:2}}, '라인업 캡처 → 선수도감 매칭 → 내 선수 자동 등록')
+          ),
+          React.createElement('button', {onClick:onClose,style:{background:'none',border:'none',color:'#64748b',fontSize:20,cursor:'pointer',padding:'0 4px'}}, '✕')
+        ),
+
+        React.createElement('div', {style:BODY},
+
+
+
+          // Upload step
+          step === 'upload' && React.createElement(React.Fragment, null,
+            React.createElement('div', {style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}},
+              imgLabels.map(function(lbl, i) {
+                var img = imgs[i];
+                return React.createElement('div', {key:i, style:{display:'flex',flexDirection:'column',gap:5}},
+                  React.createElement('div', {style:{display:'flex',alignItems:'center',gap:5}},
+                    React.createElement('span', {style:{fontSize:10,fontWeight:900,padding:'1px 6px',borderRadius:3,background:lbl.color+'22',color:lbl.color,border:'1px solid '+lbl.color+'44'}}, '화면'+(i+1)),
+                    React.createElement('span', {style:{fontSize:11,fontWeight:700,color:'#e2e8f0'}}, lbl.title),
+
+                  ),
+                  React.createElement('div', {
+                    style:{border:'2px dashed '+(img?lbl.color+'88':'#1e3a5f'),borderRadius:9,background:'#0d1117',minHeight:110,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:8,transition:'all 0.2s'},
+                    onClick:function(idx){return function(){fileRefs[idx].current&&fileRefs[idx].current.click();};}(i),
+                    onDragOver:function(e){e.preventDefault();},
+                    onDrop:function(idx){return function(e){e.preventDefault();var f=e.dataTransfer.files[0];if(f)handleFile(idx,f);};}(i)
+                  },
+                    React.createElement('input', {ref:fileRefs[i],type:'file',accept:'image/*',style:{display:'none'},onChange:function(idx){return function(e){if(e.target.files[0])handleFile(idx,e.target.files[0]);};}(i)}),
+                    img
+                      ? React.createElement('img', {src:img.src,alt:'',style:{maxWidth:'100%',maxHeight:120,objectFit:'contain',borderRadius:5}})
+                      : React.createElement('div', {style:{display:'flex',flexDirection:'column',alignItems:'center',gap:4}},
+                          React.createElement('div', {style:{position:'relative'}},
+                            React.createElement('img', {src:SCAN_THUMBS[i],alt:'예시',style:{height:90,objectFit:'contain',borderRadius:4,opacity:0.5,border:'1px solid #1e3a5f'}}),
+                            React.createElement('div', {style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.3)',borderRadius:4}},
+                              React.createElement('span', {style:{fontSize:9,color:'#e2e8f0',fontWeight:700,textAlign:'center',padding:'2px 4px',background:'rgba(0,0,0,0.5)',borderRadius:3}}, '예시')
+                            )
+                          ),
+                          React.createElement('div', {style:{fontSize:9,color:'#64748b'}}, '클릭 또는 드래그')
+                        )
+                  ),
+                  img&&React.createElement('div', {style:{fontSize:10,color:'#22c55e'}}, '✓ '+img.name)
+                );
+              })
+            ),
+            err&&React.createElement('div', {style:{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'#fca5a5'}}, '⚠️ '+err),
+            React.createElement('div', {style:{display:'flex',gap:10}},
+              React.createElement('button', {style:{...BTN_P,opacity:imgs[0]?1:0.35,cursor:imgs[0]?'pointer':'not-allowed'},disabled:!imgs[0],onClick:runScan},
+                '🔍 분석 시작' + (imgs[0]&&imgs[2]?' (타자+투수)':imgs[0]?' (타자만)':'')
+              ),
+              (imgs[0]||imgs[1]||imgs[2]||imgs[3])&&React.createElement('button', {style:BTN_G,onClick:function(){setImgs([null,null,null,null]);setErr('');}}, '초기화')
+            )
+          ),
+
+          // Scanning
+          step === 'scanning' && React.createElement('div', {style:{display:'flex',alignItems:'center',gap:14,padding:'24px 0',justifyContent:'center'}},
+            React.createElement('div', {style:{width:24,height:24,border:'3px solid #1e3a5f',borderTopColor:'#00d4ff',borderRadius:'50%',animation:'spin 0.8s linear infinite',flexShrink:0}}),
+            React.createElement('div', null,
+              React.createElement('div', {style:{color:'#e2e8f0',fontWeight:600,fontSize:13}}, msg),
+              React.createElement('div', {style:{color:'#64748b',fontSize:11,marginTop:3}}, '잠시만 기다려주세요…')
+            )
+          ),
+
+          // Review
+          step === 'review' && React.createElement(React.Fragment, null,
+            React.createElement('div', {style:{fontSize:14,fontWeight:700,color:'#22c55e'}},
+              '✅ ' + extracted.length + '명 추출 완료'
+            ),
+            React.createElement('div', {style:{display:'flex',flexDirection:'column',gap:6,maxHeight:340,overflowY:'auto'}},
+              extracted.map(function(item, i) {
+                var sc = item.scanned; var matched = item.matched;
+                var isDH = sc.slot==='DH' && item.seed && item.seed.subPosition && item.seed.subPosition!=='DH';
+                var CARD_CLR = {골든글러브:{bg:'#78350f',brd:'#fbbf24',txt:'#fde68a'},시그니처:{bg:'#701a75',brd:'#e879f9',txt:'#f5d0fe'},임팩트:{bg:'#14532d',brd:'#4ade80',txt:'#bbf7d0'},국가대표:{bg:'#1e3a8a',brd:'#60a5fa',txt:'#bfdbfe'},라이브:{bg:'#7c2d12',brd:'#fb923c',txt:'#fed7aa'},시즌:{bg:'#1e293b',brd:'#64748b',txt:'#cbd5e1'},올스타:{bg:'#4a1d96',brd:'#a78bfa',txt:'#ede9fe'}};
+                var cs = CARD_CLR[sc.cardType]||CARD_CLR['시즌'];
+                return React.createElement('div', {key:i, style:{background:'#0d1117',borderRadius:8,padding:'8px 12px',border:'1px solid '+(matched?'#1e3a5f':'rgba(239,68,68,0.3)'),opacity:matched?1:0.65}},
+                  React.createElement('div', {style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
+                    React.createElement('span', {style:{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:3,background:cs.bg,color:cs.txt,border:'1px solid '+cs.brd,whiteSpace:'nowrap'}}, sc.cardType||'?'),
+                    React.createElement('span', {style:{fontWeight:900,fontSize:13,color:'#e2e8f0'}}, sc.name),
+                    sc.year&&React.createElement('span', {style:{fontSize:10,color:'#64748b'}}, "'"+sc.year),
+                    sc.slot&&React.createElement('span', {style:{fontSize:11,fontWeight:700,color:'#00d4ff',background:'rgba(0,212,255,0.1)',padding:'1px 6px',borderRadius:4}}, sc.slot),
+                    matched
+                      ? React.createElement('span', {style:{fontSize:10,color:'#22c55e'}}, '✓ 매칭됨')
+                      : React.createElement('span', {style:{fontSize:10,color:'#ef4444'}}, '✗ 도감 미등록'),
+                    isDH&&React.createElement('span', {style:{fontSize:9,color:'#fbbf24'}}, '⚠️ DH(포지션 상이)')
+                  ),
+                  (sc.skill1||sc.skill2||sc.skill3)&&React.createElement('div', {style:{fontSize:10,color:'#a78bfa',marginTop:4}},
+                    [sc.skill1&&('S1:'+sc.skill1+'('+sc.s1Lv+')'), sc.skill2&&('S2:'+sc.skill2+'('+sc.s2Lv+')'), sc.skill3&&('S3:'+sc.skill3+'('+sc.s3Lv+')')].filter(Boolean).join(' · ')
+                  )
+                );
+              })
+            ),
+            err&&React.createElement('div', {style:{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'#fca5a5'}}, '⚠️ '+err),
+            React.createElement('div', {style:{display:'flex',gap:10,flexWrap:'wrap'}},
+              React.createElement('button', {style:BTN_P,onClick:function(){setConfirmOpen(true);}},
+                '💾 저장하기 ('+extracted.filter(function(x){return x.matched;}).length+'명 매칭)'
+              ),
+              React.createElement('button', {style:BTN_G,onClick:function(){setStep('upload');setExtracted([]);}}, '처음부터')
+            )
+          ),
+
+          // Done
+          step === 'done' && result && React.createElement('div', {style:{display:'flex',flexDirection:'column',alignItems:'center',gap:10,padding:'16px 0'}},
+            React.createElement('div', {style:{fontSize:40}}, '✅'),
+            React.createElement('div', {style:{fontSize:18,fontWeight:900,color:'#22c55e'}}, result.ok.length+'명 처리 완료'),
+            result.ok.length>0&&React.createElement('div', {style:{background:'#0d1117',border:'1px solid #1e3a5f',borderRadius:8,padding:'10px 14px',width:'100%',fontSize:11,color:'#94a3b8'}},
+              result.ok.map(function(n,i){return React.createElement('div',{key:i},'✓ '+n);})
+            ),
+            result.warn.length>0&&React.createElement('div', {style:{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:8,padding:'10px 14px',width:'100%',fontSize:11,color:'#fbbf24'}},
+              result.warn.map(function(n,i){return React.createElement('div',{key:i},'⚠️ '+n);})
+            ),
+            result.skip.length>0&&React.createElement('div', {style:{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:8,padding:'10px 14px',width:'100%',fontSize:11,color:'#fca5a5'}},
+              result.skip.map(function(n,i){return React.createElement('div',{key:i},'✗ '+n);})
+            ),
+            React.createElement('div', {style:{display:'flex',gap:10}},
+              React.createElement('button', {style:BTN_P,onClick:function(){setStep('upload');setImgs([null,null,null,null]);setExtracted([]);setResult(null);}}, '계속 추가'),
+              React.createElement('button', {style:BTN_G,onClick:onClose}, '닫기')
+            )
+          )
+        ),
+
+        // Confirm modal
+        confirmOpen&&React.createElement('div', {style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}},
+          React.createElement('div', {style:{background:'#111827',border:'1px solid #1e3a5f',borderRadius:14,padding:'24px 22px',maxWidth:400,width:'100%',display:'flex',flexDirection:'column',alignItems:'center',gap:10}},
+            React.createElement('div', {style:{fontSize:28}}, '⚠️'),
+            React.createElement('div', {style:{fontSize:15,fontWeight:900,color:'#e2e8f0'}}, '라인업 저장 확인'),
+            React.createElement('div', {style:{fontSize:12,color:'#94a3b8',textAlign:'center'}},
+              '매칭된 ' + extracted.filter(function(x){return x.matched;}).length + '명을 내 선수에 추가하고 라인업 슬롯에 배치합니다.'
+            ),
+            React.createElement('div', {style:{background:'#0d1117',border:'1px solid #1e3a5f',borderRadius:8,padding:'10px 14px',width:'100%',maxHeight:180,overflowY:'auto'}},
+              extracted.filter(function(x){return x.matched;}).map(function(item,i){
+                return React.createElement('div', {key:i, style:{display:'flex',justifyContent:'space-between',fontSize:11,padding:'3px 0',borderBottom:'1px solid #1e3a5f',color:'#e2e8f0'}},
+                  React.createElement('span', null, item.scanned.name),
+                  React.createElement('span', {style:{color:'#00d4ff'}}, item.scanned.slot||'-')
+                );
+              })
+            ),
+            React.createElement('div', {style:{fontSize:10,color:'#ef4444'}}, '기존 해당 슬롯 선수는 교체됩니다.'),
+            React.createElement('div', {style:{display:'flex',gap:10,marginTop:4}},
+              React.createElement('button', {style:{...BTN_P,flex:1},onClick:runSave}, '✅ 확인, 저장'),
+              React.createElement('button', {style:{...BTN_G,flex:1},onClick:function(){setConfirmOpen(false);}}, '취소')
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
+
 function MyPlayersPage(p) {
   var mob = p.mobile;
   var players = p.players;
   var save = p.savePlayers;
   var lm = p.lineupMap || {};
+  var saveLM = p.saveLineupMap || function(){};
   var skillsDB = p.skills || {};
   var _sel = useState(null); var selId = _sel[0]; var setSelId = _sel[1];
   var _filter = useState("타자"); var filter = _filter[0]; var setFilter = _filter[1];
+  var _addOpen = useState(false); var addOpen = _addOpen[0]; var setAddOpen = _addOpen[1];
+  var _addQuery = useState(""); var addQuery = _addQuery[0]; var setAddQuery = _addQuery[1];
+  var _scanOpen = useState(false); var scanOpen = _scanOpen[0]; var setScanOpen = _scanOpen[1];
   
 
   var getSlot = function(plId) {
@@ -2298,11 +3056,12 @@ function MyPlayersPage(p) {
               <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"카드"}</div><Badge type={pl.cardType} /></div>
               {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><span style={{ fontSize: 12, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
               {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"세트덱"}</div><input type="number" value={pl.setScore||0} onChange={function(e){upd(pl.id,"setScore",parseInt(e.target.value)||0);}} style={{ width: 36, padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--acc)", borderRadius: 3, color: "var(--acc)", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} /></div>)}
-              {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><select value={pl.stars||3} onChange={function(e){upd(pl.id,"stars",parseInt(e.target.value));}} style={{ width: 38, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", outline: "none" }}>{[1,2,3,4,5].map(function(s){return(<option key={s} value={s}>{s}</option>);})}</select></div>)}
+              {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><select value={pl.liveType||""} onChange={function(e){upd(pl.id,"liveType",e.target.value);}} style={{ width: 44, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", outline: "none" }}><option value="">-</option><option value="V1">V1</option><option value="V2">V2</option><option value="V3">V3</option></select></div>)}
+              {CARD_STARS_SELECTABLE[pl.cardType]&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><select value={pl.stars||(CARD_STARS[pl.cardType]||5)} onChange={function(e){upd(pl.id,"stars",parseInt(e.target.value));}} style={{ width: 38, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", outline: "none" }}>{(pl.cardType==="골든글러브"?[4,5]:[1,2,3,4,5]).map(function(s){return(<option key={s} value={s}>{s}</option>);})}</select></div>)}
               <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"강화"}</div><select value={pl.enhance || ""} onChange={function(e) { upd(pl.id, "enhance", e.target.value); }} style={{ width: 64, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", outline: "none" }}>
                 {["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e) { return (<option key={e} value={e}>{e}</option>); })}
               </select></div>
-              <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><span style={{ fontSize: 13, color: "var(--acc)" }}>{"★" + (pl.stars || 5)}</span></div>
+              {!CARD_STARS_SELECTABLE[pl.cardType]&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><span style={{ fontSize: 13, color: "var(--acc)" }}>{"★" + (pl.stars || CARD_STARS[pl.cardType] || 5)}</span></div>)}
               {!isBat && (<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"세부포지션"}</div><select value={pl.subPosition||""} onChange={function(e){upd(pl.id,"subPosition",e.target.value);}} style={{ width: 56, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--acp)", borderRadius: 3, color: "var(--acp)", fontWeight: 700, outline: "none" }}>
                 {(pl.position==="선발"?["SP1","SP2","SP3","SP4","SP5"]:pl.position==="마무리"?["CP"]:["RP1","RP2","RP3","RP4","RP5","RP6"]).map(function(s){return(<option key={s} value={s}>{s}</option>);})}
               </select></div>)}
@@ -2358,10 +3117,20 @@ function MyPlayersPage(p) {
               </div>
               {/* Potential */}
               <div>
-                <div style={{ fontSize: 11, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"잠재력"}</div>
+                <div style={{ fontSize: 11, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{pl.role === "타자" ? "잠재력 (풀스윙/클러치)" : "잠재력 (장타억제/침착)"}</div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  <input value={pl.pot1 || ""} onChange={function(e) { upd(pl.id, "pot1", e.target.value); }} placeholder="풀" style={{ width: 40, padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 12, outline: "none" }} />
-                  <input value={pl.pot2 || ""} onChange={function(e) { upd(pl.id, "pot2", e.target.value); }} placeholder="클" style={{ width: 40, padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 12, outline: "none" }} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: 9, color: "var(--td)" }}>{pl.role === "타자" ? "풀스윙" : "장타억제"}</span>
+                    <select value={pl.pot1||""} onChange={function(e){upd(pl.id,"pot1",e.target.value);}} style={{ padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 12, outline: "none", width: 52 }}>
+                      <option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: 9, color: "var(--td)" }}>{pl.role === "타자" ? "클러치" : "침착"}</span>
+                    <select value={pl.pot2||""} onChange={function(e){upd(pl.id,"pot2",e.target.value);}} style={{ padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 12, outline: "none", width: 52 }}>
+                      <option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2388,17 +3157,85 @@ function MyPlayersPage(p) {
             var a = f.k === filter;
             return (<button key={f.k} onClick={function(){setFilter(f.k);}} style={{ padding: "5px 10px", fontSize: 10, fontWeight: a?700:400, background: a?"var(--ta)":"var(--inner)", color: a?"var(--acc)":"var(--t2)", border: a?"1px solid var(--acc)":"1px solid var(--bd)", borderRadius: 5, cursor: "pointer" }}>{f.l}</button>);
           })}
-          <button onClick={function() {
-            var id = "p" + Date.now();
-            var isBat = filter === "타자";
-            var pos = filter === "타자" ? undefined : filter;
-            var newPl = { id: id, cardType: "시즌", name: "새 선수", year: "2025", hand: "우", stars: CARD_STARS["시즌"]||5, subPosition: isBat ? "DH" : (filter === "선발" ? "SP1" : filter === "중계" ? "RP1" : "CP"), role: isBat ? "타자" : "투수" };
-            if (isBat) { Object.assign(newPl, { power: 60, accuracy: 60, eye: 60 }); }
-            else { Object.assign(newPl, { position: pos, change: 60, stuff: 60 }); }
-            save(players.concat([newPl]));
-          }} style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 5, color: "#1a1100", cursor: "pointer", marginLeft: 4 }}>{"+ 추가"}</button>
+          <button onClick={function() { setAddOpen(true); setAddQuery(""); }} style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 5, color: "#1a1100", cursor: "pointer", marginLeft: 4 }}>{"+ 추가"}</button>
+          <button onClick={function() { setScanOpen(true); }} style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, background: "linear-gradient(135deg,#4ade80,#22c55e)", border: "none", borderRadius: 5, color: "#0a0a0a", cursor: "pointer", marginLeft: 4 }}>{"📸 일괄 업데이트"}</button>
         </div>
       </div>
+
+      {/* Bulk Scan Modal */}
+      {scanOpen && React.createElement(BulkScanModal, {
+        onClose: function(){setScanOpen(false);},
+        players: players,
+        savePlayers: save,
+        lineupMap: lm,
+        saveLineupMap: saveLM
+      })}
+
+      {/* Add Player Popup */}
+      {addOpen && (function() {
+        var isBat = filter === "타자";
+        var dbPlayers = SEED_PLAYERS.filter(function(sp) {
+          if (isBat) return sp.role === "타자";
+          return sp.role === "투수" && sp.position === filter;
+        });
+        if (addQuery.trim()) {
+          var q2 = addQuery.trim().toLowerCase();
+          dbPlayers = dbPlayers.filter(function(sp) { return sp.name.toLowerCase().indexOf(q2) >= 0 || (sp.cardType||"").indexOf(q2) >= 0 || (sp.team||"").indexOf(q2) >= 0; });
+        }
+        var addPl = function(src) {
+          var id2 = "p" + Date.now() + "_" + Math.random().toString(36).slice(2,5);
+          var np = { id: id2, dbId: src.id, liveType: src.liveType || "",
+            trainP: 0, trainA: 0, trainE: 0, trainC: 0, trainS: 0,
+            specPower: 0, specAccuracy: 0, specEye: 0, specChange: 0, specStuff: 0,
+            skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
+            enhance: "", pot1: "", pot2: "", isFa: false };
+          save(players.concat([np]));
+          setAddOpen(false);
+          setSelId(id2);
+        };
+        return (
+          <div onClick={function(){setAddOpen(false);}} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <div onClick={function(e){e.stopPropagation();}} style={{ background: "#141a24", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 440, width: "100%", maxHeight: "80vh", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--bd)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"도감에서 선수 추가"}</div>
+                  <div style={{ fontSize: 10, color: "var(--td)", marginTop: 2 }}>{filter + " · " + dbPlayers.length + "명"}</div>
+                </div>
+                <button onClick={function(){setAddOpen(false);}} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18 }}>{"✕"}</button>
+              </div>
+              <div style={{ padding: "8px 18px", borderBottom: "1px solid var(--bd)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, padding: "6px 10px" }}>
+                  <span style={{ fontSize: 14, opacity: 0.4 }}>{"🔍"}</span>
+                  <input type="text" value={addQuery} onChange={function(e){setAddQuery(e.target.value);}} placeholder="이름, 카드종류, 팀 검색..." style={{ flex: 1, background: "transparent", border: "none", color: "var(--t1)", fontSize: 12, outline: "none" }} />
+                </div>
+              </div>
+              <div style={{ overflowY: "auto", maxHeight: "60vh" }}>
+                {dbPlayers.length === 0 ? (
+                  <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--td)", fontSize: 12 }}>{"도감에 등록된 선수가 없습니다."}</div>
+                ) : dbPlayers.map(function(sp) {
+                  var already = players.some(function(x){ return x.name===sp.name && x.cardType===sp.cardType && (x.year||"")===(sp.year||""); });
+                  return (
+                    <div key={sp.id} onClick={function(){if(!already)addPl(sp);}} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 18px", borderBottom: "1px solid var(--bd)", cursor: already?"not-allowed":"pointer", opacity: already?0.4:1 }}>
+                      <PlayerCard player={sp} size="sm" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <Badge type={sp.cardType} />
+                          <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 13 }}>{sp.name}</span>
+                          {sp.year && (<span style={{ fontSize: 9, color: "var(--td)" }}>{sp.year}</span>)}
+                        </div>
+                        <div style={{ fontSize: 9, color: "var(--td)", marginTop: 2 }}>
+                          {isBat ? (sp.team + " · " + sp.hand + "타 · 파" + (sp.power||0) + " 정" + (sp.accuracy||0) + " 선" + (sp.eye||0)) : (sp.team + " · " + sp.hand + "투 · 변" + (sp.change||0) + " 구" + (sp.stuff||0))}
+                        </div>
+                      </div>
+                      {already && (<span style={{ fontSize: 9, color: "var(--acc)" }}>{"등록됨"}</span>)}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", overflow: "hidden" }}>
         {/* Header */}
@@ -2558,6 +3395,24 @@ function SkillManagePage(p) {
           })}
         </div>
       </div>
+      {/* Potential Scores */}
+      <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 14 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 6 }}>{"잠재력 등급별 점수"}</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {POT_GRADES.map(function(g) {
+            var ps = (skills.potScores || DEFAULT_POT_SCORES)[g] !== undefined ? (skills.potScores || DEFAULT_POT_SCORES)[g] : DEFAULT_POT_SCORES[g];
+            return (<div key={g} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--acc)", marginBottom: 2 }}>{g}</div>
+              <input type="number" step="1" value={ps} onChange={function(e) {
+                var copy = JSON.parse(JSON.stringify(skills));
+                if (!copy.potScores) copy.potScores = Object.assign({}, DEFAULT_POT_SCORES);
+                copy.potScores[g] = parseFloat(e.target.value) || 0;
+                saveSK(copy);
+              }} style={{ width: 40, padding: "4px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--t1)", fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
+            </div>);
+          })}
+        </div>
+      </div>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
         {cats.map(function(c){ var a=c===cat; return (<button key={c} onClick={function(){setCat(c);setExpName("");}} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: a?800:500, background: a?"var(--ta)":"var(--inner)", color: a?"var(--acc)":"var(--t2)", border: a?"1px solid var(--acc)":"1px solid var(--bd)", cursor: "pointer" }}>{c+" ("+Object.keys(skills[c]||{}).length+")"}</button>); })}
@@ -2590,8 +3445,8 @@ function SkillManagePage(p) {
 
 function CommunityPage(p){return(
   <div style={{padding:p.mobile?12:18,maxWidth:760,paddingBottom:p.mobile?80:18}}>
-    <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"커뮤니티"}</h2>
-    <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}><div style={{fontSize:40,marginBottom:10}}>{"🚧"}</div><h3 style={{fontSize:15,fontWeight:700,color:"var(--t1)",margin:"0 0 6px"}}>{"커뮤니티 기능 준비중"}</h3></div>
+    <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"정보"}</h2>
+    <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}><div style={{fontSize:40,marginBottom:10}}>{"📢"}</div><h3 style={{fontSize:15,fontWeight:700,color:"var(--t1)",margin:"0 0 6px"}}>{"추후 업데이트 예정"}</h3><p style={{fontSize:12,color:"var(--td)",margin:0}}>{"새로운 기능이 준비되면 이 페이지에서 안내드리겠습니다."}</p></div>
   </div>
 );}
 
@@ -2612,9 +3467,41 @@ export default function App(){
   var _uid=useState(null);var userId=_uid[0];var setUserId=_uid[1];
   var _authChecked=useState(false);var authChecked=_authChecked[0];var setAuthChecked=_authChecked[1];
   var mob=useMedia("(max-width:640px)");var tbl=useMedia("(min-width:641px) and (max-width:1024px)");
+
+  /* ── 멀티덱 상태 ── */
+  var _decks=useState([]);var decks=_decks[0];var setDecks=_decks[1];
+  var _curId=useState(null);var curDeckId=_curId[0];var setCurDeckId=_curId[1];
+  /* showTeamSelect: "first"(첫 덱 추가), "add"(추가 덱), false(숨김) */
+  var _sts=useState(false);var showTeamSelect=_sts[0];var setShowTeamSelect=_sts[1];
+
   var store=useData(userId,sdState,setSdState);
 
-  /* Save sdState to Supabase when it changes */
+  /* ── localStorage 덱 목록 로드/저장 헬퍼 ── */
+  var loadDecks=React.useCallback(async function(){
+    var list=await sGet("deck-list");return list||[];
+  },[]);
+  var saveDecks=React.useCallback(async function(list,curId){
+    await sSet("deck-list",list);await sSet("deck-current",curId);
+  },[]);
+
+  /* ── 로그인 성공 후 덱 목록 로드 ── */
+  useEffect(function(){
+    if(!userId)return;
+    (async function(){
+      var list=await loadDecks();
+      if(list&&list.length>0){
+        setDecks(list);
+        var saved=await sGet("deck-current");
+        var found=list.find(function(d){return d.deckId===saved;});
+        setCurDeckId(found?saved:list[0].deckId);
+      }else{
+        /* 덱이 없으면 팀 선택 화면 */
+        setShowTeamSelect("first");
+      }
+    })();
+  },[userId]);
+
+  /* ── sdState 자동 저장 ── */
   var sdTimerRef=React.useRef(null);
   useEffect(function(){
     if(!userId||store.loading)return;
@@ -2623,7 +3510,7 @@ export default function App(){
     return function(){if(sdTimerRef.current)clearTimeout(sdTimerRef.current);};
   },[sdState,userId,store.loading]);
 
-  /* Supabase auth state listener */
+  /* ── Supabase auth 리스너 ── */
   useEffect(function(){
     if(!supabase){setAuthChecked(true);return;}
     var handleAuth = async function(session) {
@@ -2645,14 +3532,92 @@ export default function App(){
     return function(){if(sub && sub.data && sub.data.subscription){sub.data.subscription.unsubscribe();}};
   },[]);
 
-  if(!authChecked)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 인증 확인중..."}</div></div>);
-  if(!li)return(<LoginPage onLogin={function(u,type,adm){setUser(u);setAuthType(type||"dev");setAdmin(adm||false);setLi(true);}}/>);
-  if(store.loading)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 데이터 로딩중..."}</div></div>);
+  /* ── 팀 선택 → 덱 생성 → 메인페이지 이동 ── */
+  var handleSelectTeam=async function(teamName){
+    var newId="dk_"+Date.now();
+    var newDeck={deckId:newId,teamName:teamName};
+    var newList=decks.concat([newDeck]);
+    /* 먼저 화면 전환 (await 전에 처리해야 중간 재렌더 없이 즉시 이동) */
+    setDecks(newList);
+    setCurDeckId(newId);
+    setTab("lineup");
+    setShowTeamSelect(false);
+    /* 이후 비동기 저장 */
+    await saveDecks(newList,newId);
+  };
 
-  var lo=function(){if(supabase){signOut();}setLi(false);setUser("");setAuthType("");setTab("lineup");setAdmin(false);setUserId(null);};
+  /* ── 덱 삭제 ── */
+  var handleDeleteDeck=async function(deckId){
+    var newList=decks.filter(function(d){return d.deckId!==deckId;});
+    if(newList.length===0){
+      /* 마지막 덱 삭제 → 팀 선택 화면으로 */
+      setDecks([]);setCurDeckId(null);
+      await sSet("deck-list",[]);await sSet("deck-current",null);
+      setShowTeamSelect("first");
+      return;
+    }
+    var nextId=(curDeckId===deckId)?newList[0].deckId:curDeckId;
+    setDecks(newList);
+    setCurDeckId(nextId);
+    await sSet("deck-list",newList);await sSet("deck-current",nextId);
+  };
+  var handleSwitchDeck=async function(deckId){
+    if(deckId===curDeckId)return;
+    setCurDeckId(deckId);
+    await sSet("deck-current",deckId);
+  };
+
+  /* ── 로그아웃 ── */
+  var lo=function(){
+    if(supabase){signOut();}
+    setLi(false);setUser("");setAuthType("");setTab("lineup");setAdmin(false);setUserId(null);
+    setDecks([]);setCurDeckId(null);setShowTeamSelect(false);setSdState({liveSetPo:0});
+  };
+
+  var CSS=(<style>{"\
+    @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');\
+    :root{--bg:#0d1117;--side:#0a0e14;--card:rgba(22,27,38,0.8);--inner:rgba(255,255,255,0.03);--bd:rgba(255,255,255,0.06);--re:rgba(255,255,255,0.015);--bar:rgba(255,255,255,0.06);--ta:rgba(255,213,79,0.06);--t1:#e6edf3;--t2:#8b949e;--td:rgba(255,255,255,0.35);--acc:#FFD54F;--acp:#CE93D8;--h:'Oswald',sans-serif;--m:'JetBrains Mono',monospace;}\
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}html{-webkit-text-size-adjust:100%;}body{margin:0;font-family:'Noto Sans KR',sans-serif;background:var(--bg);overflow-x:hidden;-webkit-font-smoothing:antialiased;}\
+    ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.06);border-radius:2px;}\
+    select{-webkit-appearance:none;appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;}\
+    input[type=number]{-moz-appearance:textfield;}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}\
+  "}</style>);
+
+  if(!authChecked)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0d1117",color:"#e6edf3"}}><div>{"⚾ 인증 확인중..."}</div>{CSS}</div>);
+  if(!li)return(<React.Fragment><LoginPage onLogin={function(u,type,adm){setUser(u);setAuthType(type||"dev");setAdmin(adm||false);if(!userId)setUserId("guest_"+Date.now());setLi(true);}}/>{CSS}</React.Fragment>);
+
+  /* ── 팀 선택 화면 ── */
+  if(showTeamSelect){
+    var isFirst=showTeamSelect==="first";
+    return(
+      <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)",padding:20}}>
+        <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--bd)",padding:mob?24:40,maxWidth:420,width:"100%",textAlign:"center"}}>
+          <div style={{fontSize:48,marginBottom:12}}>{"⚾"}</div>
+          <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--acc)"}}>{isFirst?"팀 선택":"덱 추가"}</h2>
+          <p style={{margin:"0 0 6px",fontSize:12,color:"var(--td)"}}>{isFirst?"덱 매니저에서 사용할 팀을 선택하세요":"추가할 팀을 선택하세요"}</p>
+          <p style={{margin:"0 0 18px",fontSize:10,color:"var(--td)"}}>{isFirst?"팀 선택은 덱 저장 이름입니다. 선수 팀 정보와는 무관합니다":decks.length+"/5 덱 사용 중"}</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {KBO_TEAMS.map(function(t){return(
+              <button key={t} onClick={function(){handleSelectTeam(t);}}
+                style={{padding:"14px 0",fontSize:16,fontWeight:800,fontFamily:"var(--h)",letterSpacing:2,background:"rgba(255,255,255,0.03)",border:"1px solid var(--bd)",borderRadius:8,color:"var(--t1)",cursor:"pointer"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,213,79,0.12)";e.currentTarget.style.borderColor="rgba(255,213,79,0.3)";e.currentTarget.style.color="#FFD54F";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.borderColor="rgba(255,255,255,0.06)";e.currentTarget.style.color="var(--t1)";}}>
+                {t}
+              </button>
+            );})}
+          </div>
+          {!isFirst&&(<button onClick={function(){setShowTeamSelect(false);}} style={{marginTop:14,padding:"8px 20px",fontSize:11,background:"transparent",border:"1px solid var(--bd)",borderRadius:8,color:"var(--td)",cursor:"pointer"}}>{"취소"}</button>)}
+        </div>
+        {CSS}
+      </div>
+    );
+  }
+
+  if(store.loading||!curDeckId)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0d1117",color:"#e6edf3"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
+
   var pg=null;
-  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills}/>);
-  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} skills={store.skills}/>);
+  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck}/>);
+  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdState} setSdState={setSdState}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills} saveSkills={store.saveSkills} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
@@ -2662,17 +3627,13 @@ export default function App(){
 
   return(
     <div style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
-      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin}/>
-      <div style={{flex:1,overflowY:"auto",minHeight:"100vh",paddingTop:tbl?50:0}}>{pg}</div>
-      <style>{"\
-        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');\
-        :root{--bg:#0d1117;--side:#0a0e14;--card:rgba(22,27,38,0.8);--inner:rgba(255,255,255,0.03);--bd:rgba(255,255,255,0.06);--re:rgba(255,255,255,0.015);--bar:rgba(255,255,255,0.06);--ta:rgba(255,213,79,0.06);--t1:#e6edf3;--t2:#8b949e;--td:rgba(255,255,255,0.35);--acc:#FFD54F;--acp:#CE93D8;--h:'Oswald',sans-serif;--m:'JetBrains Mono',monospace;}\
-        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}html{-webkit-text-size-adjust:100%;}body{margin:0;font-family:'Noto Sans KR',sans-serif;background:var(--bg);overflow-x:hidden;-webkit-font-smoothing:antialiased;}\
-        ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.06);border-radius:2px;}\
-        select{-webkit-appearance:none;appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;}\
-        input[type=number]{-moz-appearance:textfield;}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}\
-      "}</style>
+      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin}
+        decks={decks} curDeckId={curDeckId}
+        onSwitchDeck={handleSwitchDeck}
+        onAddDeck={function(){setShowTeamSelect("add");}}
+        onDeleteDeck={handleDeleteDeck}/>
+      <div style={{flex:1,overflowY:"auto",minHeight:"100vh",paddingTop:mob?44:(tbl?50:0)}}>{pg}</div>
+      {CSS}
     </div>
   );
 }
-
