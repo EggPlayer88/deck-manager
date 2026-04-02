@@ -1,13 +1,21 @@
 /**
  * /api/scan.js — Vercel 서버리스 함수
- * Gemini 1.5 Flash (무료 티어: 하루 1,500회 / 분당 15회)
+ * Claude claude-3-5-haiku 비전 API 사용
  *
  * Vercel 환경변수 설정 필요:
- *   GEMINI_API_KEY=AIza...
+ *   ANTHROPIC_API_KEY=sk-ant-...
+ *   VITE_SUPABASE_URL=https://xxxx.supabase.co
+ *   VITE_SUPABASE_ANON_KEY=eyJ...
+ *
+ * 일일 한도: 500회 (Supabase scan_usage 테이블로 추적)
  *
  * 요청: POST { base64: string, mediaType: string, prompt: string }
  * 응답: { result: string } | { error: string }
  */
+
+const DAILY_LIMIT = 500;
+const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+const MAX_TOKENS = 1024;
 
 export default async function handler(req, res) {
   /* CORS */
@@ -20,9 +28,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY 환경변수가 설정되지 않았습니다.' });
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.' });
   }
 
   const { base64, mediaType, prompt } = req.body || {};
@@ -30,75 +38,103 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: '요청 형식 오류: base64, prompt 필요' });
   }
 
-  /* Gemini 1.5 Flash — 무료 티어 사용 */
-  const GEMINI_MODEL = 'gemini-2.0-flash';
-  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  /* ── 일일 사용량 체크 (Supabase) ── */
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
-  const body = {
-    contents: [
-      {
-        parts: [
-          {
-            inline_data: {
-              mime_type: mediaType || 'image/jpeg',
-              data: base64,
-            },
-          },
-          {
-            text: prompt,
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      temperature: 0.1,      /* 낮을수록 일관된 출력 */
-      maxOutputTokens: 2048,
-      responseMimeType: 'text/plain',
-    },
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-    ],
-  };
+  if (supabaseUrl && supabaseKey) {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
 
-  try {
-    const geminiRes = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+      const getRes = await fetch(`${supabaseUrl}/rest/v1/scan_usage?date=eq.${today}`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+      });
+      const rows = await getRes.json();
+      const currentCount = rows && rows[0] ? rows[0].count : 0;
 
-    if (!geminiRes.ok) {
-      const errData = await geminiRes.json().catch(() => ({}));
-
-      /* 무료 티어 한도 초과 */
-      if (geminiRes.status === 429) {
+      if (currentCount >= DAILY_LIMIT) {
         return res.status(429).json({
-          error: '오늘 무료 사용 한도(1,500회)를 초과했습니다. 내일 다시 시도해주세요.',
+          error: `오늘 일일 한도(${DAILY_LIMIT}회)를 초과했습니다. 내일 다시 시도해주세요.`,
         });
       }
 
-      return res.status(geminiRes.status).json({
-        error: errData?.error?.message || `Gemini API 오류 (${geminiRes.status})`,
+      await fetch(`${supabaseUrl}/rest/v1/scan_usage`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify({ date: today, count: currentCount + 1 }),
+      });
+    } catch (e) {
+      console.warn('사용량 추적 오류:', e.message);
+    }
+  }
+
+  /* ── Claude Vision API 호출 ── */
+  try {
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: MAX_TOKENS,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mediaType || 'image/jpeg',
+                  data: base64,
+                },
+              },
+              {
+                type: 'text',
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!claudeRes.ok) {
+      const errData = await claudeRes.json().catch(() => ({}));
+      if (claudeRes.status === 429) {
+        return res.status(429).json({
+          error: '요청이 너무 많습니다. 1~2분 후 다시 시도해주세요.',
+        });
+      }
+      return res.status(claudeRes.status).json({
+        error: errData?.error?.message || `Claude API 오류 (${claudeRes.status})`,
       });
     }
 
-    const data = await geminiRes.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const data = await claudeRes.json();
+    const text = data?.content?.[0]?.text;
 
     if (!text) {
-      return res.status(500).json({ error: 'Gemini 응답이 비어있습니다.' });
+      return res.status(500).json({ error: 'Claude 응답이 비어있습니다.' });
     }
 
-    /* JSON 마크다운 펜스 제거 (```json ... ``` 형태로 올 수 있음) */
     const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
     return res.status(200).json({ result: cleaned });
 
   } catch (err) {
-    console.error('Gemini API 오류:', err);
+    console.error('Claude API 오류:', err);
     return res.status(500).json({ error: err.message || '서버 오류' });
   }
 }
