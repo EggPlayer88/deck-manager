@@ -2458,13 +2458,15 @@ async function scanLineupScreen(base64, mediaType, role) {
   var isBat = role === '타자';
   var prompt = '당신은 컴투스 프로야구 FOR 매니저 라인업 화면 분석 전문가입니다.\n이미지는 ' + role + ' 라인업 화면입니다.\n' +
     (isBat ? '다이아몬드 배치 【주전 타자 9명만】 분석. 하단 후보 무시.' : '투수 카드들을 모두 분석.') + '\n\n' +
-    '■ 카드 종류 판별 (아래 순서대로 확인):\n' +
-    '  1순위: 카드에 LIVE V1/V2/V3 텍스트 있으면 → "라이브"\n' +
-    '  2순위: 분홍색 별 4개(★★★★)이거나 이름 왼쪽에 임팩트 종류 텍스트(안방마님,중견수,우완에이스 등) → "임팩트"\n' +
-    '  3순위: 카드 배경이 파란색/남색 계열 → "국가대표"\n' +
-    '  4순위: 카드 배경이 황금/금색 계열 → "골든글러브"\n' +
-    '  5순위: 카드 배경이 진분홍/마젠타/보라 계열 → "시그니처"\n' +
-    '  6순위: 그 외 → "시즌"\n' +
+    '■ 카드 종류 판별 규칙 (우선순위 순서대로 적용):\n' +
+    '  1순위: 카드에 [LIVE V1] [LIVE V2] [LIVE V3] 뱃지가 있으면 → "라이브"\n' +
+    '  2순위: 카드에 [ALL STAR] 텍스트가 있으면 → "올스타"\n' +
+    '  3순위: 선수 이름 왼쪽/위에 종류 텍스트(중견수/유격수/안방마님/우완에이스 등)가 있으면 → "임팩트"\n' +
+    '  4순위: 카드 배경이 파란색/남색/군청색 계열 → "국가대표"\n' +
+    '  5순위: 카드 배경이 황금색/금색/황토색 계열 → "골든글러브"\n' +
+    '  6순위: 카드 배경이 진분홍/마젠타/자주 계열 → "시그니처"\n' +
+    '  7순위: 그 외 → "라이브"\n' +
+    '  ※ 별 개수로 절대 판단하지 말 것!\n' +
     '■ 임팩트 종류(이름 왼쪽 텍스트): 2025TOP3,5툴선수,FA선수,WAR상위,가을사나이,거포,교타자,구조대,구종마스터,끝내기,난세의영웅,느림의미학,대체외인,대표타자,도루왕,돌격대장,라이징스타,마당쇠,마무리,마성의주자,백전노장,베스트포지션,베테랑,분위기메이커,비FA계약,빅게임헌터,신인왕,안경에이스,안방마님,얼리스타터,여름사나이,외국인,우완에이스,원클럽맨,원투펀치,이벤트,저니맨,전천후,좌완에이스,좌타해결사,주력선수,중간계투,철완,최강야구,추억의선수,캡틴,키플레이어,키스톤,파이어볼러,프랜차이즈,필승계투,해외파,호타준족,홈런타자 중 하나\n' +
     '■ 임팩트 카드는 연도 없음 → year:""\n' +
     '■ 팀 로고→팀명: T(호랑이)=기아, H(해태)=기아, E=한화, D=두산, LG=LG, SL=삼성, NC=NC, SSG=SSG, R(쌍방울)=SSG, G=롯데, KT=KT, K/Nexen=키움\n' +
@@ -2645,12 +2647,27 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
 // SEED_PLAYERS에서 매칭
 function matchSeedPlayer(scanned) {
   var ct = scanned.cardType; var nm = scanned.name; var yr = expandYr(scanned.year); var it = scanned.impactType||'';
-  return SEED_PLAYERS.find(function(sp) {
+  if (ct === '임팩트') {
+    /* 임팩트는 이름만으로 후보 검색 */
+    var candidates = SEED_PLAYERS.filter(function(sp) {
+      return sp.cardType === '임팩트' && (sp.name||'') === nm;
+    });
+    if (candidates.length === 0) return { seed: null, candidates: [] };
+    if (candidates.length === 1) return { seed: candidates[0], candidates: [] };
+    /* 여러 개면 impactType 매칭 시도 */
+    if (it) {
+      var exact = candidates.find(function(sp) { return (sp.impactType||'') === it; });
+      if (exact) return { seed: exact, candidates: [] };
+    }
+    /* 매칭 안 되면 사용자 선택 필요 */
+    return { seed: null, candidates: candidates };
+  }
+  var found = SEED_PLAYERS.find(function(sp) {
     if ((sp.cardType||'') !== ct) return false;
     if ((sp.name||'') !== nm) return false;
-    if (ct === '임팩트') return (sp.impactType||'') === it;
     return (sp.year||'') === yr || (sp.year||'').replace(/'\d+/,'') === yr;
   }) || null;
+  return { seed: found, candidates: [] };
 }
 
 
@@ -2742,8 +2759,8 @@ function BulkScanModal(p) {
       }
       // 도감 매칭
       var withMatch = allPlayers.map(function(sc) {
-        var seed = matchSeedPlayer(sc);
-        return { scanned: sc, seed: seed, matched: !!seed };
+        var res = matchSeedPlayer(sc);
+        return { scanned: sc, seed: res.seed, candidates: res.candidates, matched: !!res.seed, needSelect: res.candidates.length > 0 };
       });
       setExtracted(withMatch);
       setStep('review');
@@ -2782,6 +2799,7 @@ function BulkScanModal(p) {
       return { s1: s1, s2: s2, s3: s3, missing: missingNames };
     };
     extracted.forEach(function(item) {
+      if (item.needSelect) { skip.push(item.scanned.name + ': 임팩트 종류 선택 필요'); return; }
       if (!item.matched) { skip.push(item.scanned.name + ': 선수도감 미등록'); return; }
       var sc = item.scanned; var seed = item.seed;
       // 스킬 퍼지 매칭
@@ -2915,7 +2933,7 @@ function BulkScanModal(p) {
                 var isDH = sc.slot==='DH' && item.seed && item.seed.subPosition && item.seed.subPosition!=='DH';
                 var CARD_CLR = {골든글러브:{bg:'#78350f',brd:'#fbbf24',txt:'#fde68a'},시그니처:{bg:'#701a75',brd:'#e879f9',txt:'#f5d0fe'},임팩트:{bg:'#14532d',brd:'#4ade80',txt:'#bbf7d0'},국가대표:{bg:'#1e3a8a',brd:'#60a5fa',txt:'#bfdbfe'},라이브:{bg:'#7c2d12',brd:'#fb923c',txt:'#fed7aa'},시즌:{bg:'#1e293b',brd:'#64748b',txt:'#cbd5e1'},올스타:{bg:'#4a1d96',brd:'#a78bfa',txt:'#ede9fe'}};
                 var cs = CARD_CLR[sc.cardType]||CARD_CLR['시즌'];
-                return React.createElement('div', {key:i, style:{background:'#0d1117',borderRadius:8,padding:'8px 12px',border:'1px solid '+(matched?'#1e3a5f':'rgba(239,68,68,0.3)'),opacity:matched?1:0.65}},
+                return React.createElement('div', {key:i, style:{background:'#0d1117',borderRadius:8,padding:'8px 12px',border:'1px solid '+(matched?'#1e3a5f':item.needSelect?'rgba(251,191,36,0.4)':'rgba(239,68,68,0.3)'),opacity:(matched||item.needSelect)?1:0.65}},
                   React.createElement('div', {style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
                     React.createElement('span', {style:{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:3,background:cs.bg,color:cs.txt,border:'1px solid '+cs.brd,whiteSpace:'nowrap'}}, sc.cardType||'?'),
                     React.createElement('span', {style:{fontWeight:900,fontSize:13,color:'#e2e8f0'}}, sc.name),
@@ -2923,8 +2941,32 @@ function BulkScanModal(p) {
                     sc.slot&&React.createElement('span', {style:{fontSize:11,fontWeight:700,color:'#00d4ff',background:'rgba(0,212,255,0.1)',padding:'1px 6px',borderRadius:4}}, sc.slot),
                     matched
                       ? React.createElement('span', {style:{fontSize:10,color:'#22c55e'}}, '✓ 매칭됨')
-                      : React.createElement('span', {style:{fontSize:10,color:'#ef4444'}}, '✗ 도감 미등록'),
+                      : item.needSelect
+                        ? React.createElement('span', {style:{fontSize:10,color:'#fbbf24'}}, '⚠️ 임팩트 종류 선택 필요')
+                        : React.createElement('span', {style:{fontSize:10,color:'#ef4444'}}, '✗ 도감 미등록'),
                     isDH&&React.createElement('span', {style:{fontSize:9,color:'#fbbf24'}}, '⚠️ DH(포지션 상이)')
+                  ),
+                  item.needSelect && React.createElement('div', {style:{marginTop:6}},
+                    React.createElement('select', {
+                      style:{width:'100%',padding:'4px 8px',background:'#1e293b',border:'1px solid #fbbf24',borderRadius:4,color:'#e2e8f0',fontSize:11,outline:'none'},
+                      value: item.selectedImpactIdx !== undefined ? item.selectedImpactIdx : '',
+                      onChange: function(e) {
+                        var idx = parseInt(e.target.value);
+                        var next = extracted.slice();
+                        next[i] = Object.assign({}, next[i], {
+                          selectedImpactIdx: idx,
+                          seed: item.candidates[idx],
+                          matched: true,
+                          needSelect: false
+                        });
+                        setExtracted(next);
+                      }
+                    },
+                      React.createElement('option', {value:''}, '-- 임팩트 종류 선택 --'),
+                      item.candidates.map(function(c, ci) {
+                        return React.createElement('option', {key:ci, value:ci}, c.impactType || ('종류 '+ci));
+                      })
+                    )
                   ),
                   (sc.skill1||sc.skill2||sc.skill3)&&React.createElement('div', {style:{fontSize:10,color:'#a78bfa',marginTop:4}},
                     [sc.skill1&&('S1:'+sc.skill1+'('+sc.s1Lv+')'), sc.skill2&&('S2:'+sc.skill2+'('+sc.s2Lv+')'), sc.skill3&&('S3:'+sc.skill3+'('+sc.s3Lv+')')].filter(Boolean).join(' · ')
@@ -2935,7 +2977,7 @@ function BulkScanModal(p) {
             err&&React.createElement('div', {style:{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'#fca5a5'}}, '⚠️ '+err),
             React.createElement('div', {style:{display:'flex',gap:10,flexWrap:'wrap'}},
               React.createElement('button', {style:BTN_P,onClick:function(){setConfirmOpen(true);}},
-                '💾 저장하기 ('+extracted.filter(function(x){return x.matched;}).length+'명 매칭)'
+                '💾 저장하기 ('+extracted.filter(function(x){return x.matched;}).length+'명 매칭 / 선택필요:'+extracted.filter(function(x){return x.needSelect;}).length+'명)'
               ),
               React.createElement('button', {style:BTN_G,onClick:function(){setStep('upload');setExtracted([]);}}, '처음부터')
             )
