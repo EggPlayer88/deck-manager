@@ -79,8 +79,19 @@ export async function saveGlobalSkills(skillsData) {
 /* ============ Global Players (admin) ============ */
 export async function loadGlobalPlayers() {
   if (!supabase) return [];
-  var r = await supabase.from('global_players').select('*').order('cardType').order('name');
-  return r.data || [];
+  var allData = [];
+  var page = 0;
+  var pageSize = 1000;
+  while (true) {
+    var r = await supabase.from('global_players').select('*')
+      .order('cardType').order('name')
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+    if (r.error || !r.data || r.data.length === 0) break;
+    allData = allData.concat(r.data);
+    if (r.data.length < pageSize) break;
+    page++;
+  }
+  return allData;
 }
 
 export async function saveGlobalPlayer(player) {
