@@ -79,7 +79,7 @@ export async function saveGlobalSkills(skillsData) {
 /* ============ Global Players (admin) ============ */
 export async function loadGlobalPlayers() {
   if (!supabase) return [];
-  var r = await supabase.from('global_players').select('*').order('card_type').order('name');
+  var r = await supabase.from('global_players').select('*').order('cardType').order('name');
   return r.data || [];
 }
 
