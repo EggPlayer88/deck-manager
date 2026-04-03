@@ -754,13 +754,18 @@ function PlayerDBPage(p){
                   var sm = {"골든글러브":5,"시그니처":5,"국가대표":5,"임팩트":4};
                   wb2.SheetNames.forEach(function(sn2) { if (sn2==="안내"||sn2==="임팩트종류") return; var ct2=cm[sn2]; if(!ct2)return; var iB=sn2.indexOf("타자")>=0;
                     XL.utils.sheet_to_json(wb2.Sheets[sn2],{defval:""}).forEach(function(row) {
-                      var nm=String(row["이름"]||"").replace(/[0-9]/g,"").trim(); if(!nm)return;
-                      var yr=String(row["연도"]||""); var ex=null;
-                      for(var i=0;i<np.length;i++){if((np[i].name||"").replace(/[0-9]/g,"").trim()===nm&&np[i].cardType===ct2&&String(np[i].year||"")===yr){ex=i;break;}}
+                      var nm=String(row["이름"]||"").trim(); if(!nm)return;
+                      var yr=String(row["연도"]||""); var it=String(row["임팩트종류"]||""); var ex=null;
+                      for(var i=0;i<np.length;i++){
+                        var sp=np[i];
+                        if((sp.name||"")!==nm||sp.cardType!==ct2)continue;
+                        if(ct2==="임팩트"){if((sp.impactType||"")===it){ex=i;break;}}
+                        else{if(String(sp.year||"")===yr){ex=i;break;}}
+                      }
                       var pl2=ex!==null?Object.assign({},np[ex]):{id:"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(c){var r=Math.random()*16|0;return(c==="x"?r:(r&0x3|0x8)).toString(16);})};
                       pl2.cardType=ct2;pl2.name=nm;pl2.year=yr;pl2.team=row["팀"]||"";pl2.hand=row["손잡이"]||"우";pl2.role=iB?"타자":"투수";pl2.stars=row["별"]?parseInt(row["별"]):(sm[ct2]||5);
                       if(iB){pl2.subPosition=row["세부포지션"]||"DH";pl2.power=parseInt(row["파워"])||0;pl2.accuracy=parseInt(row["정확"])||0;pl2.eye=parseInt(row["선구"])||0;}
-                      else{pl2.position=row["역할"]||"선발";pl2.subPosition=pl2.subPosition||"SP1";pl2.speed=parseInt(row["구속"])||0;pl2.change=parseInt(row["변화"])||0;pl2.stuff=parseInt(row["구위"])||0;}
+                      else{var pos=row["역할"]||"선발";if(pos==="중간계투")pos="중계";pl2.position=pos;pl2.subPosition=pl2.subPosition||"SP1";pl2.speed=parseInt(row["구속"])||0;pl2.change=parseInt(row["변화"])||0;pl2.stuff=parseInt(row["구위"])||0;}
                       if(ct2==="임팩트")pl2.impactType=row["임팩트종류"]||"";
                       if(ct2==="라이브"){pl2.setScore=parseInt(row["세트덱스코어"])||0;pl2.liveType=row["라이브종류"]||"";}
                       if(ex!==null){np[ex]=pl2;updated2++;}else{np.push(pl2);added2++;}
