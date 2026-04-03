@@ -89,6 +89,12 @@ export async function saveGlobalPlayer(player) {
   return !r.error;
 }
 
+export async function saveGlobalPlayers(players) {
+  if (!supabase || !players || !players.length) return false;
+  var r = await supabase.from('global_players').upsert(players, { onConflict: 'id' });
+  return !r.error;
+}
+
 export async function deleteGlobalPlayer(id) {
   if (!supabase) return false;
   var r = await supabase.from('global_players').delete().eq('id', id);
