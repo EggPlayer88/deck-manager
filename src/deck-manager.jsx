@@ -14,6 +14,7 @@ var loadGlobalSkills = _SB.loadGlobalSkills || function(){ return Promise.resolv
 var saveGlobalSkills = _SB.saveGlobalSkills || function(){ return Promise.resolve(); };
 var loadGlobalPlayers = _SB.loadGlobalPlayers || function(){ return Promise.resolve([]); };
 var saveGlobalPlayer = _SB.saveGlobalPlayer || function(){ return Promise.resolve(false); };
+var saveGlobalPlayers = _SB.saveGlobalPlayers || function(){ return Promise.resolve(false); };
 var deleteGlobalPlayer = _SB.deleteGlobalPlayer || function(){ return Promise.resolve(false); };
 
 /* ================================================================
@@ -771,7 +772,16 @@ function PlayerDBPage(p){
                       if(ex!==null){np[ex]=pl2;updated2++;}else{np.push(pl2);added2++;}
                     });
                   });
-                  SEED_PLAYERS.length=0;np.forEach(function(pp){SEED_PLAYERS.push(pp);});np.forEach(function(pp){saveGlobalPlayer(pp);}); alert("완료! 추가:"+added2+"명 업데이트:"+updated2+"명");
+                  SEED_PLAYERS.length=0;np.forEach(function(pp){SEED_PLAYERS.push(pp);});
+                  /* 배치 저장: 100명씩 묶어서 순차 저장 */
+                  (async function() {
+                    var batchSize = 100;
+                    for (var i = 0; i < np.length; i += batchSize) {
+                      var batch = np.slice(i, i + batchSize);
+                      await saveGlobalPlayers(batch);
+                    }
+                    alert("완료! 추가:"+added2+"명 업데이트:"+updated2+"명");
+                  })();
                 } catch(err) { alert("오류: "+err.message); }
               }; rd.readAsArrayBuffer(f2); e.target.value="";
             }} />
