@@ -321,7 +321,7 @@ function useData(userId, sdState, setSdState){
     setPlayers(d);
     if(supabase&&uidRef.current){await saveUserData(uidRef.current,{players:d,lineupMap:lineupMap,sdConfig:sdState});}
     else{await sSet(SK.players,d);}
-  },[lineupMap,sdState]);
+  },[lineupMap,sdState,supabase]);
 
   var saveLM=useCallback(async function(d){
     setLineupMap(d);
@@ -3292,7 +3292,8 @@ function MyPlayersPage(p) {
             specPower: 0, specAccuracy: 0, specEye: 0, specChange: 0, specStuff: 0,
             skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
             enhance: "", pot1: "", pot2: "", isFa: false };
-          save(players.concat([np]));
+          var newList = players.concat([np]);
+          save(newList);
           setAddOpen(false);
           setSelId(id2);
         };
