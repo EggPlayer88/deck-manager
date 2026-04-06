@@ -2461,11 +2461,11 @@ async function scanLineupScreen(base64, mediaType, role) {
     '■ 카드 종류 판별 규칙 (우선순위 순서대로 적용):\n' +
     '  1순위: 카드에 [LIVE V1] [LIVE V2] [LIVE V3] 뱃지가 있으면 → "라이브"\n' +
     '  2순위: 카드에 [ALL STAR] 텍스트가 있으면 → "올스타"\n' +
-    '  3순위: 선수 이름 왼쪽/위에 종류 텍스트(중견수/유격수/안방마님/우완에이스 등)가 있으면 → "임팩트"\n' +
-    '  4순위: 카드 배경이 파란색/남색/군청색 계열 → "국가대표"\n' +
-    '  5순위: 카드 배경이 황금색/금색/황토색 계열 → "골든글러브"\n' +
-    '  6순위: 카드 배경이 진분홍/마젠타/자주 계열 → "시그니처"\n' +
-    '  7순위: 그 외 → "라이브"\n' +
+    '  3순위: 카드 배경이 파란색/남색/군청색 계열 → "국가대표"\n' +
+    '  4순위: 카드 배경이 황금색/금색/황토색 계열 → "골든글러브"\n' +
+    '  5순위: 카드 배경이 진분홍/마젠타/자주 계열 → "시그니처"\n' +
+    '  6순위: 이름에 연도(예: 이름\'18, 이름\'22처럼 이름 뒤에 \'숫자 형태)가 없으면 → "임팩트"\n' +
+    '  7순위: 위 어디에도 해당 안되면 → cardType:"인식실패"\n' +
     '  ※ 별 개수로 절대 판단하지 말 것!\n' +
     '■ 임팩트 종류(이름 왼쪽 텍스트): 2025TOP3,5툴선수,FA선수,WAR상위,가을사나이,거포,교타자,구조대,구종마스터,끝내기,난세의영웅,느림의미학,대체외인,대표타자,도루왕,돌격대장,라이징스타,마당쇠,마무리,마성의주자,백전노장,베스트포지션,베테랑,분위기메이커,비FA계약,빅게임헌터,신인왕,안경에이스,안방마님,얼리스타터,여름사나이,외국인,우완에이스,원클럽맨,원투펀치,이벤트,저니맨,전천후,좌완에이스,좌타해결사,주력선수,중간계투,철완,최강야구,추억의선수,캡틴,키플레이어,키스톤,파이어볼러,프랜차이즈,필승계투,해외파,호타준족,홈런타자 중 하나\n' +
     '■ 임팩트 카드는 연도 없음 → year:""\n' +
@@ -2647,6 +2647,8 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
 // SEED_PLAYERS에서 매칭
 function matchSeedPlayer(scanned) {
   var ct = scanned.cardType; var nm = scanned.name; var yr = expandYr(scanned.year); var it = scanned.impactType||'';
+  /* 인식실패 카드는 매칭 불가 */
+  if (!ct || ct === '인식실패') return { seed: null, candidates: [], failed: true };
   if (ct === '임팩트') {
     /* 임팩트는 이름만으로 후보 검색 */
     var candidates = SEED_PLAYERS.filter(function(sp) {
@@ -2760,7 +2762,7 @@ function BulkScanModal(p) {
       // 도감 매칭
       var withMatch = allPlayers.map(function(sc) {
         var res = matchSeedPlayer(sc);
-        return { scanned: sc, seed: res.seed, candidates: res.candidates, matched: !!res.seed, needSelect: res.candidates.length > 0 };
+        return { scanned: sc, seed: res.seed, candidates: res.candidates, matched: !!res.seed, needSelect: res.candidates.length > 0, failed: !!res.failed };
       });
       setExtracted(withMatch);
       setStep('review');
@@ -2799,6 +2801,7 @@ function BulkScanModal(p) {
       return { s1: s1, s2: s2, s3: s3, missing: missingNames };
     };
     extracted.forEach(function(item) {
+      if (item.failed) { skip.push(item.scanned.name + ': 카드 종류 인식 실패'); return; }
       if (item.needSelect) { skip.push(item.scanned.name + ': 임팩트 종류 선택 필요'); return; }
       if (!item.matched) { skip.push(item.scanned.name + ': 선수도감 미등록'); return; }
       var sc = item.scanned; var seed = item.seed;
@@ -2933,7 +2936,7 @@ function BulkScanModal(p) {
                 var isDH = sc.slot==='DH' && item.seed && item.seed.subPosition && item.seed.subPosition!=='DH';
                 var CARD_CLR = {골든글러브:{bg:'#78350f',brd:'#fbbf24',txt:'#fde68a'},시그니처:{bg:'#701a75',brd:'#e879f9',txt:'#f5d0fe'},임팩트:{bg:'#14532d',brd:'#4ade80',txt:'#bbf7d0'},국가대표:{bg:'#1e3a8a',brd:'#60a5fa',txt:'#bfdbfe'},라이브:{bg:'#7c2d12',brd:'#fb923c',txt:'#fed7aa'},시즌:{bg:'#1e293b',brd:'#64748b',txt:'#cbd5e1'},올스타:{bg:'#4a1d96',brd:'#a78bfa',txt:'#ede9fe'}};
                 var cs = CARD_CLR[sc.cardType]||CARD_CLR['시즌'];
-                return React.createElement('div', {key:i, style:{background:'#0d1117',borderRadius:8,padding:'8px 12px',border:'1px solid '+(matched?'#1e3a5f':item.needSelect?'rgba(251,191,36,0.4)':'rgba(239,68,68,0.3)'),opacity:(matched||item.needSelect)?1:0.65}},
+                return React.createElement('div', {key:i, style:{background:'#0d1117',borderRadius:8,padding:'8px 12px',border:'1px solid '+(matched?'#1e3a5f':item.needSelect?'rgba(251,191,36,0.4)':item.failed?'rgba(156,163,175,0.4)':'rgba(239,68,68,0.3)'),opacity:(matched||item.needSelect)?1:0.65}},
                   React.createElement('div', {style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
                     React.createElement('span', {style:{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:3,background:cs.bg,color:cs.txt,border:'1px solid '+cs.brd,whiteSpace:'nowrap'}}, sc.cardType||'?'),
                     React.createElement('span', {style:{fontWeight:900,fontSize:13,color:'#e2e8f0'}}, sc.name),
@@ -2941,9 +2944,11 @@ function BulkScanModal(p) {
                     sc.slot&&React.createElement('span', {style:{fontSize:11,fontWeight:700,color:'#00d4ff',background:'rgba(0,212,255,0.1)',padding:'1px 6px',borderRadius:4}}, sc.slot),
                     matched
                       ? React.createElement('span', {style:{fontSize:10,color:'#22c55e'}}, '✓ 매칭됨')
-                      : item.needSelect
-                        ? React.createElement('span', {style:{fontSize:10,color:'#fbbf24'}}, '⚠️ 임팩트 종류 선택 필요')
-                        : React.createElement('span', {style:{fontSize:10,color:'#ef4444'}}, '✗ 도감 미등록'),
+                      : item.failed
+                        ? React.createElement('span', {style:{fontSize:10,color:'#9ca3af'}}, '? 카드 종류 인식 실패')
+                        : item.needSelect
+                          ? React.createElement('span', {style:{fontSize:10,color:'#fbbf24'}}, '⚠️ 임팩트 종류 선택 필요')
+                          : React.createElement('span', {style:{fontSize:10,color:'#ef4444'}}, '✗ 도감 미등록'),
                     isDH&&React.createElement('span', {style:{fontSize:9,color:'#fbbf24'}}, '⚠️ DH(포지션 상이)')
                   ),
                   item.needSelect && React.createElement('div', {style:{marginTop:6}},
