@@ -3120,10 +3120,11 @@ function MyPlayersPage(p) {
     save(players.map(function(x) { if (x.id !== id) return x; var c = Object.assign({}, x); c[key] = val; return c; }));
   };
 
-  var bats = players.filter(function(x) { return x.role === "타자"; });
-  var sps = players.filter(function(x) { return x.position === "선발"; });
-  var rps = players.filter(function(x) { return x.position === "중계"; });
-  var cps = players.filter(function(x) { return x.position === "마무리"; });
+  var mergedPlayers = players.map(function(x) { return mergePl(x) || x; });
+  var bats = mergedPlayers.filter(function(x) { return x.role === "타자"; });
+  var sps = mergedPlayers.filter(function(x) { return x.position === "선발"; });
+  var rps = mergedPlayers.filter(function(x) { return x.position === "중계"; });
+  var cps = mergedPlayers.filter(function(x) { return x.position === "마무리"; });
   var filtered = filter === "타자" ? bats : filter === "선발" ? sps : filter === "중계" ? rps : cps;
 
   var miniIn = function(id, field, val, color, max) {
