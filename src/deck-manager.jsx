@@ -34,6 +34,7 @@ function mergePl(userPl) {
   if (!userPl.dbId) return userPl;
   var seed = null;
   for (var i = 0; i < SEED_PLAYERS.length; i++) { if (SEED_PLAYERS[i].id === userPl.dbId) { seed = SEED_PLAYERS[i]; break; } }
+  /* seed 못 찾으면 userPl 자체 반환 (name/cardType 등이 직접 저장돼 있으면 그대로 표시) */
   if (!seed) return userPl;
   return Object.assign({}, seed, {
     id: userPl.id, dbId: userPl.dbId,
@@ -2862,6 +2863,9 @@ function BulkScanModal(p) {
       if (!already) {
         var np = {
           id: id2, dbId: seed.id,
+          name: seed.name, cardType: seed.cardType,
+          role: seed.role, position: seed.position || '',
+          year: seed.year || '', team: seed.team || '',
           liveType: seed.liveType || "",
           trainP:0, trainA:0, trainE:0, trainC:0, trainS:0,
           specPower:0, specAccuracy:0, specEye:0, specChange:0, specStuff:0,
@@ -3330,8 +3334,11 @@ function MyPlayersPage(p) {
         }
         var addPl = function(src) {
           var id2 = "p" + Date.now() + "_" + Math.random().toString(36).slice(2,5);
-          var np = { id: id2, dbId: src.id, liveType: src.liveType || "",
+          var np = { id: id2, dbId: src.id,
+            name: src.name, cardType: src.cardType,
             role: src.role || "", position: src.position || "",
+            year: src.year || "", team: src.team || "",
+            liveType: src.liveType || "",
             trainP: 0, trainA: 0, trainE: 0, trainC: 0, trainS: 0,
             specPower: 0, specAccuracy: 0, specEye: 0, specChange: 0, specStuff: 0,
             skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
