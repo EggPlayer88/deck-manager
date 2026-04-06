@@ -24,6 +24,22 @@ var KBO_TEAMS = ["키움","삼성","LG","두산","KT","SSG","롯데","한화","N
 var SEED_PLAYERS = [];
 var POT_GRADES = ["C","C+","B","B+","A","A+","S","S+","SS","SS+","SR","SR+"];
 var DEFAULT_POT_SCORES = {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6,"S+":7,"SS":8,"SS+":9,"SR":10,"SR+":12};
+/* 잠재력 종류별 기본 점수 */
+var DEFAULT_POT_SCORES_BY_TYPE = {
+  "풀스윙": {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6,"S+":7,"SS":8,"SS+":9,"SR":10,"SR+":12},
+  "클러치": {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6,"S+":7,"SS":8,"SS+":9,"SR":10,"SR+":12},
+  "장타억제": {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6,"S+":7,"SS":8,"SS+":9,"SR":10,"SR+":12},
+  "침착": {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6,"S+":7,"SS":8,"SS+":9,"SR":10,"SR+":12},
+};
+var POT_TYPES_BAT = ["풀스윙","클러치"];
+var POT_TYPES_PIT = ["장타억제","침착"];
+function getPotScoreByType(grade, type, skills) {
+  if (!grade || !type) return 0;
+  var byType = (skills && skills.potScoresByType) ? skills.potScoresByType : DEFAULT_POT_SCORES_BY_TYPE;
+  var sc = byType[type] || DEFAULT_POT_SCORES;
+  return sc[grade] !== undefined ? sc[grade] : (DEFAULT_POT_SCORES[grade] || 0);
+}
+/* 하위 호환: pot1/pot2 + potType1/potType2 */
 function getPotScore(grade, skills) {
   if (!grade) return 0;
   var sc = (skills && skills.potScores) ? skills.potScores : DEFAULT_POT_SCORES;
@@ -118,7 +134,7 @@ function calcBat(pl,lu,sdB){
   /* 국대에이스(타자): 종합점수에만 반영 */
   if(sdB&&sdB._sdState){var nb2=sdB._sdState.natBat||sdB._sdState._autoNatBat||"없음";if(nb2==="5렙"){t+=1*w.p+1*w.a;}if(nb2==="6렙"){t+=2*w.p+2*w.a;}}
   /* 잠재력 점수 */
-  t += getPotScore(pl.pot1, SKILL_DATA) + getPotScore(pl.pot2, SKILL_DATA);
+  t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
   return{power:fP,accuracy:fA,eye:fE,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
 }
 
@@ -137,7 +153,7 @@ function calcPit(pl,lu,sdB){
     if(cl2==="5렙"){t+=1*w.c;}if(cl2==="6렙"){t+=1*w.c+1*w.s;}if(cl2==="7렙"){t+=1*w.c+1*w.s;}if(cl2==="8렙"){t+=2*w.c+1*w.s;}if(cl2==="9렙"){t+=2*w.c+1*w.s;}if(cl2==="10렙"){t+=2*w.c+2*w.s;}
   }
   /* 잠재력 점수 */
-  t += getPotScore(pl.pot1, SKILL_DATA) + getPotScore(pl.pot2, SKILL_DATA);
+  t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
   return{change:fC,stuff:fS,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
 }
 
@@ -1571,7 +1587,7 @@ function LineupPage(p) {
             {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 13, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "trainP", pl.trainP, "#EF5350")}<span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "trainA", pl.trainA, "#42A5F5")}<span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "trainE", pl.trainE, "#66BB6A")}</div></div>
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "specPower", pl.specPower, "#EF5350", 15)}<span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "specAccuracy", pl.specAccuracy, "#42A5F5", 15)}<span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "specEye", pl.specEye, "#66BB6A", 15)}</div></div>
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3, alignItems: "center" }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span style={{fontSize:8,color:"var(--td)"}}>풀스윙</span><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:46}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span style={{fontSize:8,color:"var(--td)"}}>클러치</span><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:46}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
+            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3, alignItems: "center" }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"풀스윙"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--acc)",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"클러치"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--acc)",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
             <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
           </div>
         </div>)}
@@ -1634,7 +1650,7 @@ function LineupPage(p) {
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}</div></div>
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}<span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}</div></div>
             
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span style={{fontSize:8,color:"var(--td)"}}>장타억제</span><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:46}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span style={{fontSize:8,color:"var(--td)"}}>침착</span><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:46}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
+            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"장타억제"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--acc)",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"침착"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--acc)",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
             <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
           </div>
         </div>)}
@@ -3552,23 +3568,32 @@ function SkillManagePage(p) {
           })}
         </div>
       </div>
-      {/* Potential Scores */}
+      {/* Potential Scores - 종류별 */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 6 }}>{"잠재력 등급별 점수"}</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {POT_GRADES.map(function(g) {
-            var ps = (skills.potScores || DEFAULT_POT_SCORES)[g] !== undefined ? (skills.potScores || DEFAULT_POT_SCORES)[g] : DEFAULT_POT_SCORES[g];
-            return (<div key={g} style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--acc)", marginBottom: 2 }}>{g}</div>
-              <input type="number" step="1" value={ps} onChange={function(e) {
-                var copy = JSON.parse(JSON.stringify(skills));
-                if (!copy.potScores) copy.potScores = Object.assign({}, DEFAULT_POT_SCORES);
-                copy.potScores[g] = parseFloat(e.target.value) || 0;
-                saveSK(copy);
-              }} style={{ width: 40, padding: "4px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--t1)", fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
-            </div>);
-          })}
-        </div>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{"잠재력 등급별 점수 (종류별)"}</div>
+        {["풀스윙","클러치","장타억제","침착"].map(function(potType) {
+          var byType = skills.potScoresByType || DEFAULT_POT_SCORES_BY_TYPE;
+          var typeScores = byType[potType] || DEFAULT_POT_SCORES_BY_TYPE[potType] || DEFAULT_POT_SCORES;
+          var typeColor = potType==="풀스윙"?"#EF5350":potType==="클러치"?"#42A5F5":potType==="장타억제"?"#AB47BC":"#66BB6A";
+          return (<div key={potType} style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: typeColor, marginBottom: 4 }}>{potType + (potType==="풀스윙"||potType==="클러치" ? " (타자)" : " (투수)")}</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {POT_GRADES.map(function(g) {
+                var ps = typeScores[g] !== undefined ? typeScores[g] : (DEFAULT_POT_SCORES[g] || 0);
+                return (<div key={g} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--td)", marginBottom: 2 }}>{g}</div>
+                  <input type="number" step="1" value={ps} onChange={function(e) {
+                    var copy = JSON.parse(JSON.stringify(skills));
+                    if (!copy.potScoresByType) copy.potScoresByType = JSON.parse(JSON.stringify(DEFAULT_POT_SCORES_BY_TYPE));
+                    if (!copy.potScoresByType[potType]) copy.potScoresByType[potType] = Object.assign({}, DEFAULT_POT_SCORES);
+                    copy.potScoresByType[potType][g] = parseFloat(e.target.value) || 0;
+                    saveSK(copy);
+                  }} style={{ width: 36, padding: "3px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+typeColor+"44", borderRadius: 4, color: typeColor, fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
+                </div>);
+              })}
+            </div>
+          </div>);
+        })}
       </div>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
