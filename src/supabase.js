@@ -48,8 +48,9 @@ export async function saveUserData(userId, data) {
     user_id: userId,
     sd_state: data,
     updated_at: new Date().toISOString()
-  });
-  return !r.error;
+  }, { onConflict: 'user_id' });
+  if (r.error) { console.error('saveUserData error:', r.error); return false; }
+  return true;
 }
 
 /* ============ Global Skills (admin) ============ */
