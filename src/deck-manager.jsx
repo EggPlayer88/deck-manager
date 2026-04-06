@@ -2562,7 +2562,20 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
       return b.indexOf(baseName) >= 0 || baseName.indexOf(b) >= 0;
     });
   }
-  if (candidates.length === 0) return { name: null, missing: true };
+  if (candidates.length === 0) {
+    /* rawName을 포함하거나, rawName이 스킬명에 포함되는 후보 탐색 */
+    var fuzzyMatches = allNames.filter(function(n) {
+      var b = base(n);
+      return b.indexOf(rawName) >= 0 || rawName.indexOf(b) >= 0 ||
+             baseName.length >= 2 && (b.indexOf(baseName) >= 0 || baseName.indexOf(b) >= 0);
+    });
+    if (fuzzyMatches.length === 0) return { name: null, missing: true };
+    /* 여러 개면 점수 높은 것 선택 */
+    var bestFuzzy = fuzzyMatches.reduce(function(acc, n) {
+      return skillScore10(n) > skillScore10(acc) ? n : acc;
+    }, fuzzyMatches[0]);
+    return { name: bestFuzzy, missing: false };
+  }
   if (candidates.length === 1) return { name: candidates[0], missing: false };
 
   // ── 2. 특수 규칙 ──────────────────────────────────────────────
@@ -2645,32 +2658,62 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
   return { name: bestOther, missing: false };
 }
 
+/* 이름 유사도 체크 - 한 글자 차이 허용 */
+function nameSimilar(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  var diff = 0;
+  var longer = a.length >= b.length ? a : b;
+  var shorter = a.length < b.length ? a : b;
+  for (var i = 0, j = 0; i < longer.length; i++) {
+    if (longer[i] !== shorter[j]) { diff++; j--; }
+    j++;
+    if (diff > 1) return false;
+  }
+  return true;
+}
+
 // SEED_PLAYERS에서 매칭
 function matchSeedPlayer(scanned) {
   var ct = scanned.cardType; var nm = scanned.name; var yr = expandYr(scanned.year); var it = scanned.impactType||'';
   /* 인식실패 카드는 매칭 불가 */
   if (!ct || ct === '인식실패') return { seed: null, candidates: [], failed: true };
   if (ct === '임팩트') {
-    /* 임팩트는 이름만으로 후보 검색 */
+    /* 임팩트는 이름(퍼지)으로 후보 검색 */
     var candidates = SEED_PLAYERS.filter(function(sp) {
-      return sp.cardType === '임팩트' && (sp.name||'') === nm;
+      return sp.cardType === '임팩트' && nameSimilar(sp.name||'', nm);
     });
     if (candidates.length === 0) return { seed: null, candidates: [] };
     if (candidates.length === 1) return { seed: candidates[0], candidates: [] };
-    /* 여러 개면 impactType 매칭 시도 */
+    /* impactType 매칭 시도 */
     if (it) {
       var exact = candidates.find(function(sp) { return (sp.impactType||'') === it; });
       if (exact) return { seed: exact, candidates: [] };
     }
-    /* 매칭 안 되면 사용자 선택 필요 */
     return { seed: null, candidates: candidates };
   }
+  /* 1차: 정확한 이름+카드종류+연도 매칭 */
   var found = SEED_PLAYERS.find(function(sp) {
     if ((sp.cardType||'') !== ct) return false;
     if ((sp.name||'') !== nm) return false;
     return (sp.year||'') === yr || (sp.year||'').replace(/'\d+/,'') === yr;
-  }) || null;
-  return { seed: found, candidates: [] };
+  });
+  if (found) return { seed: found, candidates: [] };
+  /* 2차: 이름 오독 보정 - 퍼지 이름으로 같은 카드종류+연도 재탐색 */
+  var fuzzy = SEED_PLAYERS.find(function(sp) {
+    if ((sp.cardType||'') !== ct) return false;
+    if (!nameSimilar(sp.name||'', nm)) return false;
+    return (sp.year||'') === yr || (sp.year||'').replace(/'\d+/,'') === yr;
+  });
+  if (fuzzy) return { seed: fuzzy, candidates: [] };
+  /* 3차: 카드종류 오인식 보정 - 이름+연도로 다른 카드종류 탐색 */
+  var otherCt = SEED_PLAYERS.find(function(sp) {
+    if (!nameSimilar(sp.name||'', nm)) return false;
+    return (sp.year||'') === yr || (sp.year||'').replace(/'\d+/,'') === yr;
+  });
+  if (otherCt) return { seed: otherCt, candidates: [] };
+  return { seed: null, candidates: [] };
 }
 
 
@@ -3288,6 +3331,7 @@ function MyPlayersPage(p) {
         var addPl = function(src) {
           var id2 = "p" + Date.now() + "_" + Math.random().toString(36).slice(2,5);
           var np = { id: id2, dbId: src.id, liveType: src.liveType || "",
+            role: src.role || "", position: src.position || "",
             trainP: 0, trainA: 0, trainE: 0, trainC: 0, trainS: 0,
             specPower: 0, specAccuracy: 0, specEye: 0, specChange: 0, specStuff: 0,
             skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
