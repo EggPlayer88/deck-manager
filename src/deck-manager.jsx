@@ -1752,7 +1752,7 @@ function LineupPage(p) {
 
       {/* Player Selector Popup */}
       {pickerSlot && (
-        <PlayerSelector slot={pickerSlot} players={players} onSelect={function(pid) { assignSlot(pickerSlot, pid); }} onClose={function() { setPickerSlot(null); }} />
+        <PlayerSelector slot={pickerSlot} players={players.map(function(pl){return mergePl(pl)||pl;})} onSelect={function(pid) { assignSlot(pickerSlot, pid); }} onClose={function() { setPickerSlot(null); }} />
       )}
     </div>
   );
@@ -2217,7 +2217,7 @@ function LockerRoomPage(p) {
           </div>
           <select value={batCapId} onChange={function(e) { upd("capBatId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 12, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
-            {lineupBats.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + " (" + pl.subPosition + ")"}</option>); })}
+            {lineupBats.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "")}</option>); })}
           </select>
           {batCap && (<div style={{ padding: "6px 8px", background: "var(--ta)", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={batCap.cardType} /><span style={{ fontWeight: 700, fontSize: 12, color: "var(--t1)" }}>{batCap.name}</span><span style={{ fontSize: 14, marginLeft: "auto" }}>{"👑"}</span></div>
@@ -2238,7 +2238,7 @@ function LockerRoomPage(p) {
           </div>
           <select value={pitCapId} onChange={function(e) { upd("capPitId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 12, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
-            {lineupPits.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + " (" + pl.subPosition + ")"}</option>); })}
+            {lineupPits.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "")}</option>); })}
           </select>
           {pitCap && (<div style={{ padding: "6px 8px", background: "rgba(206,147,216,0.06)", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pitCap.cardType} /><span style={{ fontWeight: 700, fontSize: 12, color: "var(--t1)" }}>{pitCap.name}</span><span style={{ fontSize: 14, marginLeft: "auto" }}>{"👑"}</span></div>
@@ -2460,15 +2460,16 @@ async function scanLineupScreen(base64, mediaType, role) {
   var prompt = '당신은 컴투스 프로야구 FOR 매니저 라인업 화면 분석 전문가입니다.\n이미지는 ' + role + ' 라인업 화면입니다.\n' +
     (isBat ? '다이아몬드 배치 【주전 타자 9명만】 분석. 하단 후보 무시.' : '투수 카드들을 모두 분석.') + '\n\n' +
     '■ 카드 종류 판별 규칙 (우선순위 순서대로 적용):\n' +
-    '  1순위: 이름 바로 위에 V1/V2/V3 표시가 보이면 → "라이브"\n' +
-    '  2순위: 이름 위 왼쪽에 별 모양(글씨에 살짝 가려질 수 있음)이 보이면 → "올스타"\n' +
-    '  3순위: 우측 상단 팀 로고 근방에 흰색 배경이 넓게 보이면 → "국가대표"\n' +
-    '  4순위: 이름 근방 하단에 노란색/황금색이 보이면 → "골든글러브"\n' +
-    '  5순위: 이름 위 왼쪽에 빨간 필기체 Sign 글자(시그니처의 영어 일부)가 보이면 → "시그니처"\n' +
-    '  6순위: 이름에 연도 숫자가 없으면(예: 이름\'18처럼 이름 뒤 숫자가 없음) → "임팩트"\n' +
-    '  7순위: 위 어디에도 해당 안되면 → "인식실패"\n' +
-    '  ※ 라이브/올스타 카드는 반드시 연도가 있고, 임팩트만 연도가 없음\n' +
-    '  ※ 배경색으로 판단하지 말 것! 위 텍스트/아이콘 특징으로만 판단할 것!\n' +
+    '  1순위: 이름 바로 위에 LIVE V1 / LIVE V2 / LIVE V3 텍스트가 보이면 → "라이브"\n' +
+    '  2순위: 카드 하단에 ALL STAR 라고 크게 적힌 영문 텍스트 로고가 있으면 → "올스타" (별점★★★★★과 혼동 금지! 영문 글자여야 함)\n' +
+    '  3순위: 카드 배경이 파란색/남색 계열이고 Korea 텍스트 또는 국가대표 유니폼이 보이면 → "국가대표"\n' +
+    '  4순위: 이름 근방 하단에 노란색/황금색 장식이 보이면 → "골든글러브"\n' +
+    '  5순위: 이름 위 왼쪽에 빨간 필기체 Sign 글자가 보이면 → "시그니처"\n' +
+    '  6순위: 이름 뒤에 연도 숫자가 없으면 → "임팩트"\n' +
+    '  7순위: 위 어디에도 해당 없으면 → "인식실패"\n' +
+    '  ※ 별점(★★★★★)으로 카드 종류 판단 절대 금지!\n' +
+    '  ※ 올스타는 ALL STAR 영문 텍스트가 반드시 있어야 함\n' +
+    '  ※ 임팩트만 연도 없음, 라이브/올스타는 반드시 연도 있음\n' +
     '■ 임팩트 종류(이름 왼쪽 텍스트): 2025TOP3,5툴선수,FA선수,WAR상위,가을사나이,거포,교타자,구조대,구종마스터,끝내기,난세의영웅,느림의미학,대체외인,대표타자,도루왕,돌격대장,라이징스타,마당쇠,마무리,마성의주자,백전노장,베스트포지션,베테랑,분위기메이커,비FA계약,빅게임헌터,신인왕,안경에이스,안방마님,얼리스타터,여름사나이,외국인,우완에이스,원클럽맨,원투펀치,이벤트,저니맨,전천후,좌완에이스,좌타해결사,주력선수,중간계투,철완,최강야구,추억의선수,캡틴,키플레이어,키스톤,파이어볼러,프랜차이즈,필승계투,해외파,호타준족,홈런타자 중 하나\n' +
     '■ 임팩트 카드는 연도 없음 → year:""\n' +
     '■ 팀 로고→팀명: T(호랑이)=기아, H(해태)=기아, E=한화, D=두산, LG=LG, SL=삼성, NC=NC, SSG=SSG, R(쌍방울)=SSG, G=롯데, KT=KT, K/Nexen=키움\n' +
@@ -3168,7 +3169,7 @@ function MyPlayersPage(p) {
                 {pl.isFa && (<span style={{ fontSize: 8, color: "#FF9800", fontFamily: "var(--m)", fontWeight: 800, background: "rgba(255,152,0,0.1)", padding: "1px 4px", borderRadius: 3, border: "1px solid rgba(255,152,0,0.2)" }}>{"FA"}</span>)}
                 {slot && (<span style={{ fontSize: 9, color: accentC, fontFamily: "var(--m)", fontWeight: 700, background: "rgba(255,213,79,0.08)", padding: "1px 5px", borderRadius: 3 }}>{slot}</span>)}
               </div>
-              <div style={{ fontSize: 11, color: "var(--td)" }}>{(pl.team ? pl.team+" " : "") + pl.subPosition + " · " + (pl.hand || "") + (isBat ? "타" : "투") + " · " + (pl.enhance || "") + (pl.cardType==="임팩트"&&pl.impactType?" · "+pl.impactType:pl.year?" · "+pl.year:"") + " · ★" + (pl.stars || 5)}</div>
+              <div style={{ fontSize: 11, color: "var(--td)" }}>{(pl.team ? pl.team+" " : "") + (pl.subPosition || "") + " · " + (pl.hand || "") + (isBat ? "타" : "투") + " · " + (pl.enhance || "") + (pl.cardType==="임팩트"&&pl.impactType?" · "+pl.impactType:pl.year?" · "+pl.year:"") + " · ★" + (pl.stars || 5)}</div>
             </div>
           </div>
           {/* Score */}
