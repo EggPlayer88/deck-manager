@@ -190,26 +190,26 @@ function calcSDBonus(pl, slot, sdState, totalSP) {
   if (act(55)) { var y55=v(55); if (y55 && !isBat) { if (ct==="임팩트") pc+=2; else if (String(yr)===y55) pc+=2; } }
   if (act(60)) { if (v(60)==="L" && isBat) { bp++; ba++; be++; } if (v(60)==="R" && !isBat) { pc++; ps++; } }
   if (act(65)) { if (v(65)==="L" && stars===3) { bp+=2; ba+=2; be+=2; pc+=2; ps+=2; } if (v(65)==="R" && stars===4 && isBat) ba+=2; }
-  if (act(70)) { if (v(70)==="L" && !isBat) { pc++; ps++; } if (v(70)==="R" && isRP) { pc+=2; ps+=2; } }
+  if (act(70)) { if (v(70)==="L" && !isBat) { pc++; ps++; } if (v(70)==="R" && (isRP||isCP)) { pc+=2; ps+=2; } }
   if (act(75)) {
     var v75=v(75); var side75=v75&&v75[0]; var yr75=v75&&v75.indexOf(":")>0?v75.split(":")[1]:"";
     if (side75==="L" && isBat) { var m75=(ct==="임팩트"||String(yr)===yr75); if(m75){bp+=3;ba+=3;} }
     if (side75==="R" && !isBat) { var m75b=(ct==="임팩트"||String(yr)===yr75); if(m75b) ps+=3; }
   }
   if (act(80)) { if (v(80)==="L" && isBat) { bp++; ba++; be++; } if (v(80)==="R" && !isBat) { pc++; ps++; } }
-  if (act(85)) { if (v(85)==="L" && stars===4) { bp+=2; ba+=2; be+=2; pc+=2; ps+=2; } if (v(85)==="R" && stars===5) { ba++; ps++; } }
+  if (act(85)) { if (v(85)==="L" && stars===4) { bp+=2; ba+=2; be+=2; pc+=2; ps+=2; } if (v(85)==="R" && stars===5) { bp++; ps++; } }
   if (act(95)) { if (isBat && isOF) be+=2; }
   if (act(100)) { if (v(100)==="L" && isBat) { bp++; ba++; be++; } if (v(100)==="R" && !isBat) { pc++; ps++; } }
   if (act(105)) { if (v(105)==="L" && stars===3) { bp+=2; ba+=2; be+=2; pc+=2; ps+=2; } if (v(105)==="R" && stars===4) { if(isBat){bp+=2;be+=2;} if(!isBat){pc+=2;ps+=2;} } }
-  if (act(115)) { if (v(115)==="L" && isBat && is69) ba+=2; if (v(115)==="R" && isRP) ps+=2; }
+  if (act(115)) { if (v(115)==="L" && isBat && is69) ba+=2; if (v(115)==="R" && (isRP||isCP)) ps+=2; }
   if (act(120)) { if (v(120)==="L" && isBat && is35) { bp+=2; ba+=2; be+=2; } if (v(120)==="R" && !isBat) { pc++; ps++; } }
-  if (act(125)) { if (stars===4) { if(isBat){ba++;be++;} pc+=2; } }
+  if (act(125)) { if (stars===4) { if(isBat){bp++;be++;} pc+=2; } }
   if (act(130)) { if (v(130)==="L" && isLive) { bp++; ba++; be++; pc++; ps++; } if (v(130)==="R" && isGold) { bp++; ba++; be++; pc++; ps++; } }
   if (act(135)) { if (v(135)==="L" && isBat && is35) ba+=2; if (v(135)==="R" && isSP) ps++; }
-  if (act(140)) { if (v(140)==="L" && isBat && is69) { bp++; ba++; be++; } if (v(140)==="R" && isRP) { pc++; ps++; } }
+  if (act(140)) { if (v(140)==="L" && isBat && is69) { bp++; ba++; be++; } if (v(140)==="R" && (isRP||isCP)) { pc++; ps++; } }
   if (act(145)) { if (v(145)==="L" && isBat && is12) { ba+=2; be+=2; } if (v(145)==="R" && isSP) ps++; }
   if (act(150)) { bp+=2; ba+=2; be+=2; pc+=2; ps+=2; }
-  if (act(155)) { if (v(155)==="L" && isBat && is12) { bp+=2; be+=2; } if (v(155)==="R" && !isBat) pc++; }
+  if (act(155)) { if (v(155)==="L" && isBat && is12) { bp+=2; be+=2; } if (v(155)==="R" && isSP) pc++; }
   if (act(160)) { if (v(160)==="L" && isBat) { bp++; ba++; be++; } if (v(160)==="R" && !isBat) { pc++; ps++; } }
   if (act(165)) { if (v(165)==="L" && isBat) ba++; if (v(165)==="R" && !isBat) pc++; }
   if (act(170)) { bp++; ba++; be++; pc++; ps++; }
@@ -217,7 +217,7 @@ function calcSDBonus(pl, slot, sdState, totalSP) {
   if (act(180)) {
     var v180=v(180);
     if (v180==="L" && ct==="라이브") { bp+=2; ba+=2; be+=2; pc+=2; ps+=2; }
-    if (typeof v180==="string"&&v180.startsWith("R:")) { var yr180=v180.split(":")[1]; if(!isBat){if(ct==="임팩트"){pc++;ps++;}else if(String(yr)===yr180){pc++;ps++;}} }
+    if (typeof v180==="string"&&v180.startsWith("R:")) { var yr180=v180.split(":")[1]; if(isBat){if(ct==="임팩트"){bp++;ba++;be++;}else if(String(yr)===yr180){bp++;ba++;be++;}} else{if(ct==="임팩트"){pc++;ps++;}else if(String(yr)===yr180){pc++;ps++;}} }
   }
   if (act(185)) {
     var v185=v(185);
@@ -1006,29 +1006,29 @@ var SD_ROWS = [
   {sp:55,type:"yearR",rDesc:"투수 변화: 임팩트+2, 연도매치+2"},
   {sp:60,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
   {sp:65,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 정확 +2"},
-  {sp:70,type:"lr",lDesc:"투수 +1",rDesc:"불펜 +2"},
+  {sp:70,type:"lr",lDesc:"투수 +1",rDesc:"불펜+마무리 +2"},
   {sp:75,type:"yearLR",lDesc:"타자 파정 +3 (연도선택)",rDesc:"투수 구위 +3 (연도선택)"},
   {sp:80,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:85,type:"lr",lDesc:"4성 +2",rDesc:"5성 정구 +1"},
+  {sp:85,type:"lr",lDesc:"4성 +2",rDesc:"5성 파구 +1"},
   {sp:90,type:"auto",desc:"모두 +2"},
   {sp:95,type:"auto",desc:"RF/CF/LF/DH 선구 +2"},
   {sp:100,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
   {sp:105,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 파선 +2 & 투수 변구 +2"},
   {sp:110,type:"auto",desc:"모두 +1"},
-  {sp:115,type:"lr",lDesc:"6~9번 정확 +2",rDesc:"불펜 구위 +2"},
+  {sp:115,type:"lr",lDesc:"6~9번 정확 +2",rDesc:"불펜+마무리 구위 +2"},
   {sp:120,type:"lr",lDesc:"3~5번 +2",rDesc:"투수 +1"},
   {sp:125,type:"auto",desc:"4성 정선 +1 & 변화 +2"},
   {sp:130,type:"lr",lDesc:"시즌/라이브 +1",rDesc:"골든/시그/임팩/국대 +1"},
   {sp:135,type:"lr",lDesc:"3~5번 정확 +2",rDesc:"선발 구위 +1"},
-  {sp:140,type:"lr",lDesc:"6~9번 +1",rDesc:"불펜 +1"},
+  {sp:140,type:"lr",lDesc:"6~9번 +1",rDesc:"불펜+마무리 +1"},
   {sp:145,type:"lr",lDesc:"1~2번 정선 +2",rDesc:"선발 구위 +1"},
   {sp:150,type:"auto",desc:"모두 +2"},
-  {sp:155,type:"lr",lDesc:"1~2번 파선 +2",rDesc:"투수 변화 +1"},
+  {sp:155,type:"lr",lDesc:"1~2번 파선 +2",rDesc:"선발 변화 +1"},
   {sp:160,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
   {sp:165,type:"lr",lDesc:"타자 정확 +1",rDesc:"투수 변화 +1"},
   {sp:170,type:"auto",desc:"모두 +1"},
   {sp:175,type:"lr",lDesc:"타자 파선 +1",rDesc:"구위 +1"},
-  {sp:180,type:"lrYear",lDesc:"라이브 +2",rDesc:"투수 연도 +1"},
+  {sp:180,type:"lrYear",lDesc:"라이브 +2",rDesc:"전체 연도 +1"},
   {sp:185,type:"lrYear",lDesc:"1~2번 파워 +2",rDesc:"타자 연도 +1"},
   {sp:190,type:"lrYear",lDesc:"선발 구위 +1",rDesc:"투수 연도 +1"},
   {sp:195,type:"lr",lDesc:"라이브/국대 +1",rDesc:"시그니처 +1"},
@@ -3336,7 +3336,8 @@ function MyPlayersPage(p) {
         players: players,
         savePlayers: save,
         lineupMap: lm,
-        saveLineupMap: saveLM
+        saveLineupMap: saveLM,
+        skills: skillsDB
       })}
 
       {/* Add Player Popup */}
