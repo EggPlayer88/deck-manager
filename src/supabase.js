@@ -103,7 +103,7 @@ export async function saveGlobalPlayer(player) {
 
 export async function saveGlobalPlayers(players) {
   if (!supabase || !players || !players.length) return false;
-  var r = await supabase.from('global_players').upsert(players, { onConflict: 'name,cardType,year,impactType' });
+  var r = await supabase.from('global_players').upsert(players, { onConflict: 'name,cardType,year,impactType,team' });
   return !r.error;
 }
 
