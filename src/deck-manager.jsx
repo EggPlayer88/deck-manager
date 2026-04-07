@@ -63,9 +63,13 @@ function mergePl(userPl) {
     skill3: userPl.skill3||"", s3Lv: userPl.s3Lv||0,
     enhance: userPl.enhance||"",
     pot1: userPl.pot1||"", pot2: userPl.pot2||"",
+    potType1: userPl.potType1||"", potType2: userPl.potType2||"",
     isFa: userPl.isFa||false,
     liveType: userPl.liveType||seed.liveType||"",
     photoUrl: userPl.photoUrl||seed.photoUrl||"",
+    /* subPosition/position: userPl 우선, 없으면 seed, 그래도 없으면 position으로 추론 */
+    subPosition: userPl.subPosition || seed.subPosition || (seed.position === "마무리" ? "CP" : seed.position === "중계" ? "RP1" : "SP1"),
+    position: userPl.position || seed.position || "선발",
   });
 }
 
@@ -3152,11 +3156,25 @@ function MyPlayersPage(p) {
     return Object.keys(t);
   };
 
-  var upd = function(id, key, val) {
-    save(players.map(function(x) { if (x.id !== id) return x; var c = Object.assign({}, x); c[key] = val; return c; }));
+  var upd = function(id, key, val, key2, val2) {
+    save(players.map(function(x) {
+      if (x.id !== id) return x;
+      var c = Object.assign({}, x);
+      c[key] = val;
+      if (key2 !== undefined) c[key2] = val2;
+      return c;
+    }));
   };
 
-  var mergedPlayers = players.map(function(x) { return mergePl(x) || x; });
+  var mergedPlayers = players.map(function(x) {
+    var m = mergePl(x) || x;
+    /* subPosition이 없거나 SP1인데 중계/마무리인 경우 보정 */
+    if (m.role === "투수" && (!m.subPosition || m.subPosition === "SP1")) {
+      var fixedSub = m.position === "마무리" ? "CP" : m.position === "중계" ? "RP1" : "SP1";
+      if (m.subPosition !== fixedSub) m = Object.assign({}, m, { subPosition: fixedSub });
+    }
+    return m;
+  });
   var bats = mergedPlayers.filter(function(x) { return x.role === "타자"; });
   var sps = mergedPlayers.filter(function(x) { return x.position === "선발"; });
   var rps = mergedPlayers.filter(function(x) { return x.position === "중계"; });
@@ -3253,8 +3271,7 @@ function MyPlayersPage(p) {
               {!isBat && (<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"세부포지션"}</div><select value={pl.subPosition||""} onChange={function(e){
                 var sp = e.target.value;
                 var newPos = sp.startsWith("SP") ? "선발" : sp === "CP" ? "마무리" : "중계";
-                upd(pl.id, "subPosition", sp);
-                upd(pl.id, "position", newPos);
+                upd(pl.id, "subPosition", sp, "position", newPos);
               }} style={{ width: 56, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--acp)", borderRadius: 3, color: "var(--acp)", fontWeight: 700, outline: "none" }}>
                 {["SP1","SP2","SP3","SP4","SP5","RP1","RP2","RP3","RP4","RP5","RP6","CP"].map(function(s){return(<option key={s} value={s}>{s}</option>);})}
               </select></div>)}
