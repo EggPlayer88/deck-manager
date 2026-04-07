@@ -603,12 +603,12 @@ function Inp(p){
     <div style={{marginBottom:p.mb||10}}>
       <label style={{display:"block",fontSize:10,color:"var(--td)",marginBottom:3,fontWeight:600}}>{p.label}</label>
       {p.type==="select"?(
-        <select value={p.value} onChange={function(e){p.onChange(e.target.value);}} style={{width:"100%",padding:"8px 10px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--t1)",outline:"none",boxSizing:"border-box"}}>
+        <select value={p.value} onChange={function(e){p.onChange(e.target.value);}} style={{width:"100%",padding:"8px 10px",fontSize:13,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",outline:"none",boxSizing:"border-box"}}>
           {p.options.map(function(o){return(<option key={o} value={o}>{o}</option>);})}
         </select>
       ):(
         <input type={p.type||"text"} value={p.value} onChange={function(e){p.onChange(e.target.value);}} placeholder={p.ph||""}
-          style={{width:"100%",padding:"8px 10px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--t1)",outline:"none",boxSizing:"border-box"}} />
+          style={{width:"100%",padding:"8px 10px",fontSize:13,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",outline:"none",boxSizing:"border-box"}} />
       )}
     </div>
   );
@@ -1003,7 +1003,7 @@ function BullpenLayout(p) {
 /* ================================================================
    SET DECK SYSTEM
    ================================================================ */
-var SET_POINTS = {"골든글러브":6,"시그니처":8,"임팩트":7,"국가대표":8,"시즌":0,"라이브":0,"올스타":0};
+var SET_POINTS = {"골든글러브":6,"시그니처":8,"임팩트":7,"국가대표":8,"시즌":0,"라이브":0,"올스타":4};
 var CARD_STARS = {"골든글러브":5,"시그니처":5,"임팩트":4,"국가대표":5};
 var CARD_STARS_SELECTABLE = {"골든글러브":true,"라이브":true};
 
@@ -1137,7 +1137,7 @@ function SetDeckPanel(p) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 10, color: "var(--t2)", flex: 1 }}>{r.rDesc}</span>
-            <select value={val} onChange={active ? function(e) { upd(k, e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 10, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: val ? "var(--acp)" : "var(--t1)", outline: "none" }}>
+            <select value={val} onChange={active ? function(e) { upd(k, e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: val ? "var(--acp)" : "var(--t1)", outline: "none" }}>
               <option value="">{"X"}</option>
               {[1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(function(y) { return (<option key={y} value={String(y)}>{y}</option>); })}
             </select>
@@ -1164,7 +1164,7 @@ function SetDeckPanel(p) {
               <span>{r.rDesc + " ▶"}</span>
             </button>
           </div>
-          {side && (<select value={yearV} onChange={active ? function(e) { upd(k, side + ":" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 10, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--t1)", outline: "none" }}>
+          {side && (<select value={yearV} onChange={active ? function(e) { upd(k, side + ":" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>
             <option value="">{"X"}</option>
             {[1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(function(y) { return (<option key={y} value={String(y)}>{y}</option>); })}
           </select>)}
@@ -1189,7 +1189,7 @@ function SetDeckPanel(p) {
               <span>{r.rDesc + " ▶"}</span>
             </button>
           </div>
-          {isR && (<select value={yrVal} onChange={active ? function(e) { upd(k, "R:" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 10, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--acp)", outline: "none" }}>
+          {isR && (<select value={yrVal} onChange={active ? function(e) { upd(k, "R:" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#FFD54F", outline: "none" }}>
             <option value="">{"X"}</option>
             {[1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(function(y) { return (<option key={y} value={String(y)}>{y}</option>); })}
           </select>)}
@@ -1336,7 +1336,7 @@ function SetDeckPanel(p) {
               return (
                 <div key={sp.key} style={{ padding: "4px 14px", display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 10, color: "var(--t2)", flex: 1 }}>{sp.label}</span>
-                  <select value={cur} onChange={function(e) { upd(sp.key, e.target.value); }} style={{ width: 65, padding: "3px", fontSize: 10, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: cur!=="없음"?"#2E86C1":"var(--t1)", fontWeight: cur!=="없음"?700:400, outline: "none" }}>
+                  <select value={cur} onChange={function(e) { upd(sp.key, e.target.value); }} style={{ width: 65, padding: "3px", fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: cur!=="없음"?"#2E86C1":"var(--t1)", fontWeight: cur!=="없음"?700:400, outline: "none" }}>
                     {sp.opts.map(function(o) { return (<option key={o} value={o}>{o}</option>); })}
                   </select>
                   {sp.auto!=="없음" && !sdState[sp.key] && (<span style={{ fontSize: 7, color: "#4CAF50", background: "rgba(76,175,80,0.1)", padding: "1px 4px", borderRadius: 3 }}>{"AUTO"}</span>)}
@@ -1607,7 +1607,7 @@ function LineupPage(p) {
             {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 13, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "trainP", pl.trainP, "#EF5350")}<span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "trainA", pl.trainA, "#42A5F5")}<span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "trainE", pl.trainE, "#66BB6A")}</div></div>
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "specPower", pl.specPower, "#EF5350", 15)}<span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "specAccuracy", pl.specAccuracy, "#42A5F5", 15)}<span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "specEye", pl.specEye, "#66BB6A", 15)}</div></div>
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3, alignItems: "center" }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"풀스윙"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--acc)",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"클러치"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--acc)",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
+            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3, alignItems: "center" }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"풀스윙"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"클러치"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
             <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
           </div>
         </div>)}
@@ -1670,7 +1670,7 @@ function LineupPage(p) {
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}</div></div>
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}<span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}</div></div>
             
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"장타억제"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--acc)",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"침착"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--acc)",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:3,color:"var(--t1)",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
+            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"장타억제"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"침착"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
             <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
           </div>
         </div>)}
@@ -1831,7 +1831,7 @@ function PosTrainRow(rp) {
     <div style={{ display: "grid", gridTemplateColumns: colTpl, gap: 6, padding: "6px 14px", alignItems: "center", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)" }}>
       <div style={{ fontWeight: 700, color: "var(--t1)", fontSize: 11 }}>{pos}</div>
       <div style={{ textAlign: "center" }}>
-        <select value={String(lv)} onChange={function(e) { upd(pos, "level", parseInt(e.target.value)); }} style={{ width: 50, padding: "4px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--t1)", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
+        <select value={String(lv)} onChange={function(e) { upd(pos, "level", parseInt(e.target.value)); }} style={{ width: 50, padding: "4px 2px", textAlign: "center", background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
           {lvOpts.map(function(v) { return (<option key={v} value={v}>{v}</option>); })}
         </select>
         <div style={{ fontSize: 7, color: "var(--td)", marginTop: 1 }}>{"/" + mx}</div>
@@ -1844,7 +1844,7 @@ function PosTrainRow(rp) {
           <div key={stat} style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "center" }}>
             <span style={{ fontSize: 10, color: colors[i], fontFamily: "var(--m)", fontWeight: 800 }}>{base}</span>
             <span style={{ fontSize: 9, color: "var(--td)" }}>{"+"}</span>
-            <select value={String(reset)} onChange={function(e) { upd(pos, "r" + i, parseInt(e.target.value)); }} style={{ width: 34, padding: "4px 1px", textAlign: "center", background: "var(--inner)", border: "1px solid " + colors[i] + "33", borderRadius: 4, color: colors[i], fontSize: 11, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
+            <select value={String(reset)} onChange={function(e) { upd(pos, "r" + i, parseInt(e.target.value)); }} style={{ width: 34, padding: "4px 1px", textAlign: "center", background: "#1e293b", border: "1px solid " + colors[i] + "88", borderRadius: 4, color: colors[i], fontSize: 11, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
               {RS_OPTS.map(function(v) { return (<option key={v} value={v}>{v}</option>); })}
             </select>
             <span style={{ fontSize: 9, color: "var(--td)" }}>{"="}</span>
@@ -2259,7 +2259,7 @@ function LockerRoomPage(p) {
             <span style={{ fontSize: 14 }}>{"👑"}</span>
             <span style={{ fontSize: 13, fontWeight: 800, color: "var(--acc)", fontFamily: "var(--h)" }}>{"타자 주장"}</span>
           </div>
-          <select value={batCapId} onChange={function(e) { upd("capBatId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 12, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
+          <select value={batCapId} onChange={function(e) { upd("capBatId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
             {lineupBats.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "")}</option>); })}
           </select>
@@ -2280,7 +2280,7 @@ function LockerRoomPage(p) {
             <span style={{ fontSize: 14 }}>{"👑"}</span>
             <span style={{ fontSize: 13, fontWeight: 800, color: "var(--acp)", fontFamily: "var(--h)" }}>{"투수 주장"}</span>
           </div>
-          <select value={pitCapId} onChange={function(e) { upd("capPitId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 12, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
+          <select value={pitCapId} onChange={function(e) { upd("capPitId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
             {lineupPits.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "")}</option>); })}
           </select>
@@ -3196,7 +3196,7 @@ function MyPlayersPage(p) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
         <select value={pl[nf] || ""} onChange={function(e) { upd(pl.id, nf, e.target.value); }}
-          style={{ width: 88, padding: "2px", fontSize: 9, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", outline: "none" }}>
+          style={{ width: 88, padding: "2px", fontSize: 9, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>
           <option value="">{"없음"}</option>
           {opts.map(function(s) { return (<option key={s} value={s}>{s}</option>); })}
         </select>
@@ -3266,9 +3266,9 @@ function MyPlayersPage(p) {
               <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"카드"}</div><Badge type={pl.cardType} /></div>
               {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><span style={{ fontSize: 12, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
               {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"세트덱"}</div><input type="number" value={pl.setScore||0} onChange={function(e){upd(pl.id,"setScore",parseInt(e.target.value)||0);}} style={{ width: 36, padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--acc)", borderRadius: 3, color: "var(--acc)", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} /></div>)}
-              {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><select value={pl.liveType||""} onChange={function(e){upd(pl.id,"liveType",e.target.value);}} style={{ width: 44, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", outline: "none" }}><option value="">-</option><option value="V1">V1</option><option value="V2">V2</option><option value="V3">V3</option></select></div>)}
-              {CARD_STARS_SELECTABLE[pl.cardType]&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><select value={pl.stars||(CARD_STARS[pl.cardType]||5)} onChange={function(e){upd(pl.id,"stars",parseInt(e.target.value));}} style={{ width: 38, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", outline: "none" }}>{(pl.cardType==="골든글러브"?[4,5]:[1,2,3,4,5]).map(function(s){return(<option key={s} value={s}>{s}</option>);})}</select></div>)}
-              <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"강화"}</div><select value={pl.enhance || ""} onChange={function(e) { upd(pl.id, "enhance", e.target.value); }} style={{ width: 64, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", outline: "none" }}>
+              {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><select value={pl.liveType||""} onChange={function(e){upd(pl.id,"liveType",e.target.value);}} style={{ width: 44, padding: "3px 2px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}><option value="">-</option><option value="V1">V1</option><option value="V2">V2</option><option value="V3">V3</option></select></div>)}
+              {CARD_STARS_SELECTABLE[pl.cardType]&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><select value={pl.stars||(CARD_STARS[pl.cardType]||5)} onChange={function(e){upd(pl.id,"stars",parseInt(e.target.value));}} style={{ width: 38, padding: "3px 2px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>{(pl.cardType==="골든글러브"?[4,5]:[1,2,3,4,5]).map(function(s){return(<option key={s} value={s}>{s}</option>);})}</select></div>)}
+              <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"강화"}</div><select value={pl.enhance || ""} onChange={function(e) { upd(pl.id, "enhance", e.target.value); }} style={{ width: 64, padding: "3px 2px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>
                 {["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e) { return (<option key={e} value={e}>{e}</option>); })}
               </select></div>
               {!CARD_STARS_SELECTABLE[pl.cardType]&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><span style={{ fontSize: 13, color: "var(--acc)" }}>{"★" + (pl.stars || CARD_STARS[pl.cardType] || 5)}</span></div>)}
@@ -3335,13 +3335,13 @@ function MyPlayersPage(p) {
                 <div style={{ display: "flex", gap: 4 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontSize: 9, color: "var(--td)" }}>{pl.role === "타자" ? "풀스윙" : "장타억제"}</span>
-                    <select value={pl.pot1||""} onChange={function(e){upd(pl.id,"pot1",e.target.value);}} style={{ padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 12, outline: "none", width: 52 }}>
+                    <select value={pl.pot1||""} onChange={function(e){upd(pl.id,"pot1",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 12, outline: "none", width: 52 }}>
                       <option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
                     </select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontSize: 9, color: "var(--td)" }}>{pl.role === "타자" ? "클러치" : "침착"}</span>
-                    <select value={pl.pot2||""} onChange={function(e){upd(pl.id,"pot2",e.target.value);}} style={{ padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 3, color: "var(--t1)", fontSize: 12, outline: "none", width: 52 }}>
+                    <select value={pl.pot2||""} onChange={function(e){upd(pl.id,"pot2",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 12, outline: "none", width: 52 }}>
                       <option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
                     </select>
                   </div>
@@ -3603,11 +3603,11 @@ function SkillManagePage(p) {
       </div>
       {showCSV && (<div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 10, color: "var(--td)" }}>{"CSV (복사→엑셀)"}</span><button onClick={function(){setShowCSV(false);}} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer" }}>{"✕"}</button></div>
-        <textarea value={csvText} readOnly rows={8} onClick={function(e){e.target.select();}} style={{ width: "100%", padding: 8, fontSize: 10, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
+        <textarea value={csvText} readOnly rows={8} onClick={function(e){e.target.select();}} style={{ width: "100%", padding: 8, fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
       </div>)}
       {impMode && (<div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 12 }}>
         <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 6 }}>{"CSV 붙여넣기 (카테고리,스킬명,레벨,능력치...)"}</div>
-        <textarea value={impText} onChange={function(e){setImpText(e.target.value);}} rows={6} style={{ width: "100%", padding: 8, fontSize: 10, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
+        <textarea value={impText} onChange={function(e){setImpText(e.target.value);}} rows={6} style={{ width: "100%", padding: 8, fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
         <button onClick={doImport} style={{ marginTop: 6, padding: "6px 16px", fontSize: 11, fontWeight: 700, background: "linear-gradient(135deg,#66BB6A,#43A047)", border: "none", borderRadius: 6, color: "#fff", cursor: "pointer" }}>{"적용"}</button>
       </div>)}
       {/* Weights */}
@@ -3653,7 +3653,7 @@ function SkillManagePage(p) {
       </div>
       {/* Add */}
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        <input type="text" value={newName} onChange={function(e){setNewName(e.target.value);}} placeholder="새 스킬 이름" onKeyDown={function(e){if(e.key==="Enter")addSkill();}} style={{ flex: 1, padding: "7px 10px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", outline: "none" }} />
+        <input type="text" value={newName} onChange={function(e){setNewName(e.target.value);}} placeholder="새 스킬 이름" onKeyDown={function(e){if(e.key==="Enter")addSkill();}} style={{ flex: 1, padding: "7px 10px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none" }} />
         <button onClick={addSkill} style={{ padding: "7px 14px", fontSize: 11, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6, color: "#1a1100", cursor: "pointer" }}>{"+ 추가"}</button>
       </div>
       {/* List */}
