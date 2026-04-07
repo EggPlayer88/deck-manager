@@ -3859,7 +3859,8 @@ function SkillCalculator(p) {
 
         /* 나머지 스킬 뽑기: 기본명 기준으로 중복 없이 선택 */
         for (var slot = startIdx; slot < 3; slot++) {
-          var isMajor = Math.random() < 0.14;
+          /* 스킬1은 무조건 메이저, 스킬2/3는 14% 확률 */
+          var isMajor = (slot === 0) ? true : Math.random() < 0.14;
           /* 이미 선택된 기본명 제외 */
           var chosenBases = chosen.map(function(n){return baseName(n);});
           var basePool = (isMajor ? majorBaseNames : minorBaseNames).filter(function(b){return chosenBases.indexOf(b)<0;});
