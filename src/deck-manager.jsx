@@ -158,7 +158,7 @@ function calcPit(pl,lu,sdB){
 }
 
 /* Set deck bonus calculator for a single player */
-function calcSDBonus(pl, slot, sdState, totalSP) {
+function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!pl) return pl.role === "투수" ? {c:0,s:0} : {p:0,a:0,e:0};
   var isBat = pl.role === "타자";
   var ct = pl.cardType;
@@ -169,7 +169,8 @@ function calcSDBonus(pl, slot, sdState, totalSP) {
   var isRP = (pl.position === "중계");
   var isCP = (pl.position === "마무리");
   var batSlots = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
-  var batIdx = batSlots.indexOf(slot); /* 0-8 = 1~9번타자 */
+  /* 타순 인덱스: batOrderIdx가 있으면 사용, 없으면 포지션 기준 (하위 호환) */
+  var batIdx = (batOrderIdx !== undefined) ? batOrderIdx : batSlots.indexOf(slot);
   var is12 = (batIdx === 0 || batIdx === 1);
   var is35 = (batIdx >= 2 && batIdx <= 4);
   var is69 = (batIdx >= 5 && batIdx <= 8);
@@ -1395,24 +1396,34 @@ function LineupPage(p) {
     }
     setPickerSlot(null);
   };
-  var swapSlots = function(fromSlot, toSlot) {
-    if (fromSlot === toSlot) return;
-    var next = Object.assign({}, lm);
-    var tmp = next[fromSlot];
-    next[fromSlot] = next[toSlot];
-    next[toSlot] = tmp;
-    saveLM(next);
-    setDragSlot(null);
-    setDragOverSlot(null);
-  };
   var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
   var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
   var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
 
-  var lBats = BAT_SLOTS.map(function(s) { return { slot: s, pl: pick(s) }; });
+  /* batOrder: 타순 배열 (포지션 슬롯 순서). 기본값은 BAT_SLOTS 순서 */
+  var batOrder = (sdState.batOrder && sdState.batOrder.length === 9) ? sdState.batOrder : BAT_SLOTS.slice();
+  var saveBatOrder = function(newOrder) {
+    setSdState(function(prev) { return Object.assign({}, prev, { batOrder: newOrder }); });
+  };
+
+  /* 타순 드래그: batOrder만 변경 (lineupMap/다이아몬드 위치는 불변) */
+  var swapOrder = function(fromIdx, toIdx) {
+    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+    var next = batOrder.slice();
+    var tmp = next[fromIdx];
+    next[fromIdx] = next[toIdx];
+    next[toIdx] = tmp;
+    saveBatOrder(next);
+    setDragSlot(null);
+    setDragOverSlot(null);
+  };
+
+  /* lBats: 타순 기준으로 정렬 (다이아몬드는 lineupMap 기준 그대로) */
+  var lBats = batOrder.map(function(s) { return { slot: s, pl: pick(s) }; });
   var lSP = SP_SLOTS.map(function(s) { return { slot: s, pl: pick(s) }; });
   var lRP = RP_SLOTS.map(function(s) { return { slot: s, pl: pick(s) }; });
   var lCP = { slot: "CP", pl: pick("CP") };
+
 
   /* Build slot -> player map for diamond */
   var batSlotMap = {};
@@ -1472,7 +1483,7 @@ function LineupPage(p) {
 
   /* Helper: build lu + calc with SD bonus */
   var mkLuB = function(pl) { return { enhance: pl.enhance || "9각성", trainP: pl.trainP || 0, trainA: pl.trainA || 0, trainE: pl.trainE || 0, trainC: pl.trainC || 0, trainS: pl.trainS || 0, skill1: pl.skill1 || "", s1Lv: pl.s1Lv || 0, skill2: pl.skill2 || "", s2Lv: pl.s2Lv || 0, skill3: pl.skill3 || "", s3Lv: pl.s3Lv || 0 }; };
-  var calcBatSD = function(pl, slot) { return calcBat(pl, mkLuB(pl), calcSDBonus(pl, slot, sdState, totalSP)); };
+  var calcBatSD = function(pl, slot) { var orderIdx = batOrder.indexOf(slot); return calcBat(pl, mkLuB(pl), calcSDBonus(pl, slot, sdState, totalSP, orderIdx >= 0 ? orderIdx : undefined)); };
   var calcPitSD = function(pl, slot) { return calcPit(pl, mkLuB(pl), calcSDBonus(pl, slot, sdState, totalSP)); };
 
   /* Calculate total score */
@@ -1536,17 +1547,17 @@ function LineupPage(p) {
     return (
       <React.Fragment key={pl.id}>
         <div draggable={true}
-          onDragStart={function(e) { setDragSlot(slot); e.dataTransfer.effectAllowed = "move"; }}
-          onDragOver={function(e) { e.preventDefault(); setDragOverSlot(slot); }}
-          onDragLeave={function() { if (dragOverSlot === slot) setDragOverSlot(null); }}
-          onDrop={function(e) { e.preventDefault(); if (dragSlot && dragSlot !== slot) swapSlots(dragSlot, slot); }}
+          onDragStart={function(e) { setDragSlot(idx); e.dataTransfer.effectAllowed = "move"; }}
+          onDragOver={function(e) { e.preventDefault(); setDragOverSlot(idx); }}
+          onDragLeave={function() { if (dragOverSlot === idx) setDragOverSlot(null); }}
+          onDrop={function(e) { e.preventDefault(); if (dragSlot !== null && dragSlot !== idx) swapOrder(dragSlot, idx); }}
           onDragEnd={function() { setDragSlot(null); setDragOverSlot(null); }}
           onClick={function() { setSelId(isSel ? null : pl.id); }}
-          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "32px 68px minmax(100px,1fr) 80px 120px 75px 46px 110px 40px 46px", alignItems: "center", gap: 28, padding: "8px 10px", background: dragOverSlot === slot ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === slot ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
+          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "32px 68px minmax(100px,1fr) 80px 120px 75px 46px 110px 40px 46px", alignItems: "center", gap: 28, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acc)", fontFamily: "var(--h)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-            {idx > 0 && (<span onClick={function(e) { e.stopPropagation(); swapSlots(BAT_SLOTS[idx], BAT_SLOTS[idx-1]); }} style={{ fontSize: 10, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
+            {idx > 0 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx-1); }} style={{ fontSize: 10, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
             <span>{idx + 1}</span>
-            {idx < 8 && (<span onClick={function(e) { e.stopPropagation(); swapSlots(BAT_SLOTS[idx], BAT_SLOTS[idx+1]); }} style={{ fontSize: 10, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▼"}</span>)}
+            {idx < 8 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx+1); }} style={{ fontSize: 10, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▼"}</span>)}
           </div>
           <PlayerCard player={pl} size={mob?"sm":"md"} score={Math.round(calc.total)} />
           <div style={{ minWidth: 0 }}>
