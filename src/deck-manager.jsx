@@ -3789,6 +3789,26 @@ function SkillCalculator(p) {
   var catSkills = skills[cat] || {};
   var allSkillNames = Object.keys(catSkills);
   var majorMap = (skills._major && skills._major[cat]) || {};
+
+  /* 괄호 제거 기본명 */
+  var baseName = function(n) { return n.replace(/\(.*?\)/g, '').trim(); };
+
+  /* 기본명 기준으로 그룹화 (예: "5툴플레이어" → ["5툴플레이어(주수235-242)", ...]) */
+  var groupByBase = function(nameList) {
+    var groups = {};
+    nameList.forEach(function(n) {
+      var b = baseName(n);
+      if (!groups[b]) groups[b] = [];
+      groups[b].push(n);
+    });
+    return groups;
+  };
+
+  /* 메이저/비메이저를 기본명 기준 그룹으로 변환 */
+  var majorGroups = groupByBase(allSkillNames.filter(function(n){return majorMap[n];}));
+  var minorGroups = groupByBase(allSkillNames.filter(function(n){return !majorMap[n];}));
+  var majorBaseNames = Object.keys(majorGroups);
+  var minorBaseNames = Object.keys(minorGroups);
   var majorSkills = allSkillNames.filter(function(n){return majorMap[n];});
   var minorSkills = allSkillNames.filter(function(n){return !majorMap[n];});
 
@@ -3837,13 +3857,21 @@ function SkillCalculator(p) {
           startIdx = 1;
         }
 
-        /* 나머지 스킬 뽑기 */
+        /* 나머지 스킬 뽑기: 기본명 기준으로 중복 없이 선택 */
         for (var slot = startIdx; slot < 3; slot++) {
           var isMajor = Math.random() < 0.14;
-          var pool = (isMajor ? majorSkills : minorSkills).filter(function(n){return chosen.indexOf(n)<0;});
-          if (pool.length === 0) { pool = allSkillNames.filter(function(n){return chosen.indexOf(n)<0;}); }
-          if (pool.length === 0) break;
-          var pick = pool[Math.floor(Math.random()*pool.length)];
+          /* 이미 선택된 기본명 제외 */
+          var chosenBases = chosen.map(function(n){return baseName(n);});
+          var basePool = (isMajor ? majorBaseNames : minorBaseNames).filter(function(b){return chosenBases.indexOf(b)<0;});
+          if (basePool.length === 0) {
+            /* fallback: 반대 풀에서 선택 */
+            basePool = (isMajor ? minorBaseNames : majorBaseNames).filter(function(b){return chosenBases.indexOf(b)<0;});
+          }
+          if (basePool.length === 0) break;
+          /* 기본명 선택 후 해당 변형들 중 랜덤 선택 */
+          var pickedBase = basePool[Math.floor(Math.random()*basePool.length)];
+          var variants = (majorGroups[pickedBase] || minorGroups[pickedBase] || [pickedBase]);
+          var pick = variants[Math.floor(Math.random()*variants.length)];
           chosen.push(pick);
           totalScore += skillScore(pick, lvs[slot]);
         }
