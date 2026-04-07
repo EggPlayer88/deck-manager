@@ -2174,7 +2174,15 @@ function LockerRoomPage(p) {
   var isAdmin = p.isAdmin;
 
   var byId = function(id) { if (!id) return null; for (var i = 0; i < players.length; i++) { if (players[i].id === id) return players[i]; } return null; };
-  var upd = function(key, val) { setSdState(function(prev) { var c = Object.assign({}, prev); c[key] = val; return c; }); };
+  var upd = function(key, val) {
+    setSdState(function(prev) {
+      var c = Object.assign({}, prev);
+      c[key] = val;
+      /* 즉시 Supabase 저장 */
+      if (p.saveSdState) p.saveSdState(c);
+      return c;
+    });
+  };
   var _newPotm = useState(""); var newPotm = _newPotm[0]; var setNewPotm = _newPotm[1];
 
   var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
@@ -3813,7 +3821,7 @@ export default function App(){
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdState} setSdState={setSdState}/>);
-  else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills} saveSkills={store.saveSkills} isAdmin={isAdmin}/>);
+  else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
   else if(tab==="skills"&&isAdmin)pg=(<SkillManagePage mobile={mob} skills={store.skills} saveSkills={store.saveSkills}/>);
   else if(tab==="enhance"&&isAdmin)pg=(<EnhancePage mobile={mob}/>);
