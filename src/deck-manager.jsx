@@ -2498,7 +2498,7 @@ function LockerRoomPage(p) {
                   {potmSearchResults.map(function(sp) {
                     var already = potmList.some(function(x) { return x.id === sp.id; });
                     return (
-                      <div key={sp.id} onClick={function() { if (!already) addPotmPlayer(sp); }}
+                      <div key={sp.id} onMouseDown={function(e) { e.preventDefault(); if (!already) addPotmPlayer(sp); }}
                         style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--bd)", cursor: already ? "not-allowed" : "pointer", opacity: already ? 0.4 : 1, background: already ? "transparent" : undefined }}>
                         <Badge type={sp.cardType} />
                         <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>{sp.name}</span>
