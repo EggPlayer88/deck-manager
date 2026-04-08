@@ -294,65 +294,100 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
    ================================================================ */
 function useMedia(q){var _s=useState(false);var m=_s[0];var setM=_s[1];useEffect(function(){var mq=window.matchMedia(q);var fn=function(e){setM(e.matches);};setM(mq.matches);if(mq.addEventListener){mq.addEventListener("change",fn);}else{mq.addListener(fn);}return function(){if(mq.removeEventListener){mq.removeEventListener("change",fn);}else{mq.removeListener(fn);}};}, [q]);return m;}
 
-function useData(userId, sdState, setSdState){
+function useData(userId, sdState, setSdState, curDeckId){
   var _p=useState([]);var players=_p[0];var setPlayers=_p[1];
   var _lm=useState({});var lineupMap=_lm[0];var setLineupMap=_lm[1];
   var _sk=useState(DEFAULT_SKILLS);var skills=_sk[0];var setSkills=_sk[1];
   var _lo=useState(true);var loading=_lo[0];var setLoading=_lo[1];
   var uidRef=React.useRef(userId);uidRef.current=userId;
+  var deckIdRef=React.useRef(curDeckId);deckIdRef.current=curDeckId;
 
+  /* ── 덱별 데이터 로드/저장 헬퍼 ── */
+  /* sd_state 전체 구조: { decks: { dk_1: {players,lineupMap,sdConfig}, ... }, globalSkills } */
+  var loadDeckData = async function(uid, deckId) {
+    var all = await loadUserData(uid);
+    if (!all) return null;
+    /* 기존 구조 하위 호환: decks 없으면 루트가 첫 번째 덱 데이터 */
+    if (!all.decks) {
+      return { players: all.players||[], lineupMap: all.lineupMap||{}, sdConfig: all.sdConfig||{liveSetPo:0} };
+    }
+    return all.decks[deckId] || null;
+  };
+
+  var saveAllData = async function(uid, deckId, deckData) {
+    if (!supabase || !uid || !deckId) return;
+    var all = await loadUserData(uid) || {};
+    if (!all.decks) {
+      /* 기존 구조 마이그레이션: 루트 데이터 전체를 현재 덱으로 이동하고 decks 구조로 전환 */
+      var migrated = {
+        players: all.players || [],
+        lineupMap: all.lineupMap || {},
+        sdConfig: all.sdConfig || {liveSetPo:0}
+      };
+      all = { decks: {} };
+      all.decks[deckId] = migrated;
+    }
+    /* 현재 덱 데이터만 업데이트 (다른 덱은 건드리지 않음) */
+    all.decks[deckId] = deckData;
+    await saveUserData(uid, all);
+  };
+
+  /* ── 덱 전환 시 데이터 로드 ── */
   useEffect(function(){
-    if(!userId)return;
+    if(!userId || !curDeckId) return;
+    setLoading(true);
     (async function(){
       if(supabase){
-        /* Load user data from Supabase */
-        var ud=await loadUserData(userId);
-        if(ud && ud.players && ud.players.length>0){
-          setPlayers(ud.players);
-          if(ud.lineupMap)setLineupMap(ud.lineupMap);
-          if(ud.sdConfig)setSdState(ud.sdConfig);
-        }else{
-          setPlayers([]);setLineupMap({});
-          await saveUserData(userId,{players:[],lineupMap:{},sdConfig:{liveSetPo:0}});
+        var dd = await loadDeckData(userId, curDeckId);
+        if(dd && dd.players && dd.players.length > 0){
+          setPlayers(dd.players);
+          setLineupMap(dd.lineupMap || {});
+          setSdState(dd.sdConfig || {liveSetPo:0});
+        } else {
+          setPlayers([]); setLineupMap({});
+          setSdState({liveSetPo:0});
         }
-        /* Load global skills from Supabase */
+        /* 글로벌 스킬/선수도감은 덱 무관하게 1회만 로드 */
         var gsk=await loadGlobalSkills();
         if(gsk && gsk["타자"]){setSkills(gsk);SKILL_DATA=gsk;if(gsk.weights)LIVE_WEIGHTS=gsk.weights;}
         else{setSkills(DEFAULT_SKILLS);SKILL_DATA=DEFAULT_SKILLS;}
-        /* Load global players from Supabase */
         var gpl=await loadGlobalPlayers();
         if(gpl && gpl.length>0){SEED_PLAYERS.length=0;gpl.forEach(function(p){SEED_PLAYERS.push(p);});}
-      }else{
-        /* Fallback: localStorage */
+      } else {
+        /* localStorage fallback: 덱별 키 사용 */
         var ver=await sGet(SK.version);var needReset=(!ver||ver<DATA_VERSION);
         if(needReset){await sSet(SK.version,DATA_VERSION);}
-        var p2=await sGet(SK.players);
-        if(!needReset&&p2&&p2.length>0){setPlayers(p2);}else{setPlayers([]);await sSet(SK.players,[]);}
-        var lm2=await sGet(SK.lineupMap);
-        if(!needReset&&lm2&&Object.keys(lm2).length>0){setLineupMap(lm2);}else{setLineupMap({});await sSet(SK.lineupMap,{});}
+        var pk = "deck-players-"+curDeckId;
+        var lk = "deck-lineup-"+curDeckId;
+        var p2=await sGet(pk);
+        if(!needReset&&p2&&p2.length>0){setPlayers(p2);}else{setPlayers([]);await sSet(pk,[]);}
+        var lm2=await sGet(lk);
+        if(!needReset&&lm2&&Object.keys(lm2).length>0){setLineupMap(lm2);}else{setLineupMap({});await sSet(lk,{});}
         var sk2=await sGet(SK.skills);
-        if(!needReset&&sk2&&sk2["타자"]){setSkills(sk2);SKILL_DATA=sk2;if(sk2.weights)LIVE_WEIGHTS=sk2.weights;}else{setSkills(DEFAULT_SKILLS);SKILL_DATA=DEFAULT_SKILLS;await sSet(SK.skills,DEFAULT_SKILLS);}
+        if(!needReset&&sk2&&sk2["타자"]){setSkills(sk2);SKILL_DATA=sk2;if(sk2.weights)LIVE_WEIGHTS=sk2.weights;}
+        else{setSkills(DEFAULT_SKILLS);SKILL_DATA=DEFAULT_SKILLS;await sSet(SK.skills,DEFAULT_SKILLS);}
+        /* sdConfig 덱별 로드 */
+        var sdc=await sGet("deck-sdconfig-"+curDeckId);
+        if(!needReset&&sdc){setSdState(sdc);}else{setSdState({liveSetPo:0});}
       }
       setLoading(false);
     })();
-  },[userId]);
+  },[userId, curDeckId]);
 
   SKILL_DATA=skills;if(skills.weights)LIVE_WEIGHTS=skills.weights;
 
-  var dbSave=useCallback(async function(np,nlm,nsd){
-    if(supabase&&uidRef.current){await saveUserData(uidRef.current,{players:np,lineupMap:nlm,sdConfig:nsd});}
-  },[]);
-
   var saveP=useCallback(async function(d){
     setPlayers(d);
-    if(supabase&&uidRef.current){await saveUserData(uidRef.current,{players:d,lineupMap:lineupMap,sdConfig:sdState});}
-    else{await sSet(SK.players,d);}
-  },[lineupMap,sdState,supabase]);
+    var did=deckIdRef.current; var uid=uidRef.current;
+    if(supabase&&uid&&did){await saveAllData(uid,did,{players:d,lineupMap:lineupMap,sdConfig:sdState});}
+    else if(did){await sSet("deck-players-"+did,d);}
+  },[lineupMap,sdState]);
 
   var saveLM=useCallback(async function(d){
     setLineupMap(d);
-    if(supabase&&uidRef.current){await saveUserData(uidRef.current,{players:players,lineupMap:d,sdConfig:sdState});}
-    else{await sSet(SK.lineupMap,d);}
+    var did=deckIdRef.current; var uid=uidRef.current;
+    if(supabase&&uid&&did){await saveAllData(uid,did,{players:players,lineupMap:d,sdConfig:sdState});}
+    else if(did){await sSet("deck-lineup-"+did,d);}
   },[players,sdState]);
 
   var saveSK=useCallback(async function(d){
@@ -362,7 +397,9 @@ function useData(userId, sdState, setSdState){
   },[]);
 
   var saveSdState=useCallback(async function(nsd){
-    if(supabase&&uidRef.current){await saveUserData(uidRef.current,{players:players,lineupMap:lineupMap,sdConfig:nsd});}
+    var did=deckIdRef.current; var uid=uidRef.current;
+    if(supabase&&uid&&did){await saveAllData(uid,did,{players:players,lineupMap:lineupMap,sdConfig:nsd});}
+    else if(did){await sSet("deck-sdconfig-"+did,nsd);}
   },[players,lineupMap]);
 
   return{players:players,lineupMap:lineupMap,skills:skills,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState};
@@ -4197,7 +4234,7 @@ export default function App(){
   /* showTeamSelect: "first"(첫 덱 추가), "add"(추가 덱), false(숨김) */
   var _sts=useState(false);var showTeamSelect=_sts[0];var setShowTeamSelect=_sts[1];
 
-  var store=useData(userId,sdState,setSdState);
+  var store=useData(userId,sdState,setSdState,curDeckId);
 
   /* ── localStorage 덱 목록 로드/저장 헬퍼 ── */
   var loadDecks=React.useCallback(async function(){
