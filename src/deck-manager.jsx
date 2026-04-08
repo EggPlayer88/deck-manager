@@ -4239,22 +4239,30 @@ export default function App(){
   var store=useData(userId,sdState,setSdState,curDeckId);
 
   /* ── localStorage 덱 목록 로드/저장 헬퍼 ── */
-  var loadDecks=React.useCallback(async function(){
+  var loadDecks=React.useCallback(async function(uid){
     /* Supabase 우선, fallback localStorage */
-    if(supabase&&userId){
-      var all=await loadUserData(userId);
-      if(all&&all.deckList&&all.deckList.length>0)return{list:all.deckList,curId:all.deckCurrent||null};
+    var targetUid = uid || userId;
+    if(supabase && targetUid){
+      var all=await loadUserData(targetUid);
+      if(all&&all.deckList&&all.deckList.length>0)
+        return{list:all.deckList, curId:all.deckCurrent||null, fromSupabase:true};
     }
     var list=await sGet("deck-list");var curId=await sGet("deck-current");
-    return{list:list||[],curId:curId||null};
+    return{list:list||[], curId:curId||null, fromSupabase:false};
   },[userId]);
   var saveDecks=React.useCallback(async function(list,curId){
-    /* Supabase와 localStorage 모두 저장 */
+    /* localStorage 항상 저장 */
     await sSet("deck-list",list);await sSet("deck-current",curId);
+    /* Supabase: 전체 구조 유지하면서 deckList/deckCurrent만 업데이트 */
     if(supabase&&userId){
-      var all=await loadUserData(userId)||{};
-      all.deckList=list;all.deckCurrent=curId;
-      await saveUserData(userId,all);
+      try{
+        var all=await loadUserData(userId)||{};
+        /* 기존 decks 구조 보존 */
+        if(!all.decks) all.decks={};
+        all.deckList=list;
+        all.deckCurrent=curId;
+        await saveUserData(userId,all);
+      }catch(e){console.warn('saveDecks 오류:',e);}
     }
   },[userId]);
 
@@ -4262,14 +4270,41 @@ export default function App(){
   useEffect(function(){
     if(!userId)return;
     (async function(){
-      var result=await loadDecks();
+      var result=await loadDecks(userId);
       var list=result.list; var savedCurId=result.curId;
+      var fromSupabase=result.fromSupabase;
+
+      /* localStorage에서 가져왔으면 Supabase에 즉시 동기화 */
+      if(!fromSupabase && list && list.length>0 && supabase){
+        try{
+          var all=await loadUserData(userId)||{};
+          if(!all.decks)all.decks={};
+          all.deckList=list;
+          all.deckCurrent=savedCurId;
+          await saveUserData(userId,all);
+        }catch(e){console.warn('덱 목록 동기화 오류:',e);}
+      }
+
+      /* 기존 유저: deckList 없어도 Supabase에 players 데이터가 있으면 임시 덱 생성 */
+      if((!list||list.length===0) && supabase){
+        var ud=await loadUserData(userId);
+        if(ud && ud.players && ud.players.length>0){
+          /* 기존 데이터가 있는 유저 → 기본 덱 1개 자동 생성 */
+          var fallbackId="dk_legacy_"+userId.slice(0,8);
+          var fallbackDeck={deckId:fallbackId,teamName:"내 덱"};
+          list=[fallbackDeck]; savedCurId=fallbackId;
+          /* Supabase에 덱 목록 저장 */
+          ud.deckList=list; ud.deckCurrent=fallbackId;
+          await saveUserData(userId,ud);
+          await sSet("deck-list",list); await sSet("deck-current",fallbackId);
+        }
+      }
+
       if(list&&list.length>0){
         setDecks(list);
         var found=list.find(function(d){return d.deckId===savedCurId;});
         setCurDeckId(found?savedCurId:list[0].deckId);
       }else{
-        /* 덱이 없으면 팀 선택 화면 */
         setShowTeamSelect("first");
       }
     })();
