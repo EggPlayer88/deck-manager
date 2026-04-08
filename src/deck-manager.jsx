@@ -87,6 +87,7 @@ var ENHANCE = {
   "시그니처":{"파워":[0,0,0,0,10,14,16,18,20,24,24,24,25,25,25,27,27,27,29],"정확":[0,0,0,0,10,12,16,18,22,24,25,25,25,27,27,27,29,29,29],"선구":[0,0,0,0,10,12,14,18,20,22,22,23,23,23,25,25,25,27,27],"변화":[0,0,0,0,10,12,14,16,18,20,21,21,21,23,23,23,25,25,25],"구위":[0,0,0,0,10,12,14,18,20,22,22,22,23,23,23,25,25,25,27]},
   "골든글러브":{"파워":[0,0,0,0,10,14,16,18,20,25,25,25,27,27,27,29,29,29,31],"정확":[0,0,0,0,10,12,16,18,22,25,27,27,27,29,29,29,31,31,31],"선구":[0,0,0,0,10,12,14,18,20,23,23,25,25,25,27,27,27,29,29],"변화":[0,0,0,0,10,12,14,16,18,21,23,23,23,25,25,25,27,27,27],"구위":[0,0,0,0,10,12,14,18,20,23,23,23,25,25,25,27,27,27,29]},
   "국가대표":{"파워":[0,0,0,0,10,14,16,18,20,24,24,24,25,25,25,26,26,26,28],"정확":[0,0,0,0,10,12,16,18,22,24,25,25,25,26,26,26,28,28,28],"선구":[0,0,0,0,10,12,14,18,20,22,22,23,23,23,24,24,24,26,26],"변화":[0,0,0,0,10,12,14,16,18,20,21,21,21,22,22,22,24,24,24],"구위":[0,0,0,0,10,12,14,18,20,22,22,22,23,23,23,24,24,24,26]},
+  "올스타":{"파워":[0,0,0,0,10,14,16,18,20,24],"정확":[0,0,0,0,10,12,16,18,22,24],"선구":[0,0,0,0,10,12,14,18,20,22],"변화":[0,0,0,0,10,12,14,16,18,20],"구위":[0,0,0,0,10,12,14,18,20,22]},
 };
 var ENHANCE_LEVELS = ["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"];
 function getEnhVal(ct, stat, enh) { var t = ENHANCE[ct]; if (!t||!t[stat]) return 0; var i = ENHANCE_LEVELS.indexOf(enh); if (i<0) return 0; var ai=i+4; var a=t[stat]; return ai>=a.length?(a[a.length-1]||0):(a[ai]||0); }
@@ -134,9 +135,10 @@ async function sSet(k,d){try{await window.storage.set(k,JSON.stringify(d));retur
 function calcBat(pl,lu,sdB){
   if(!pl||!lu)return{power:0,accuracy:0,eye:0,total:0,skillScore:0};
   var w=getW();var sb=sdB||{p:0,a:0,e:0};
-  var fP=(pl.power||0)+getEnhVal(pl.cardType,"파워",lu.enhance||"")+(lu.trainP||0)+(pl.specPower||0)+sb.p;
-  var fA=(pl.accuracy||0)+getEnhVal(pl.cardType,"정확",lu.enhance||"")+(lu.trainA||0)+(pl.specAccuracy||0)+sb.a;
-  var fE=(pl.eye||0)+getEnhVal(pl.cardType,"선구",lu.enhance||"")+(lu.trainE||0)+(pl.specEye||0)+sb.e;
+  var faAdj=(pl.isFa&&(pl.cardType==="임팩트"||pl.cardType==="시그니처"))?-3:0;
+  var fP=(pl.power||0)+getEnhVal(pl.cardType,"파워",lu.enhance||"")+(lu.trainP||0)+(pl.specPower||0)+sb.p+faAdj;
+  var fA=(pl.accuracy||0)+getEnhVal(pl.cardType,"정확",lu.enhance||"")+(lu.trainA||0)+(pl.specAccuracy||0)+sb.a+faAdj;
+  var fE=(pl.eye||0)+getEnhVal(pl.cardType,"선구",lu.enhance||"")+(lu.trainE||0)+(pl.specEye||0)+sb.e+faAdj;
   var ss=getSkillScore(lu.skill1,lu.s1Lv||0,"타자")+getSkillScore(lu.skill2,lu.s2Lv||0,"타자")+getSkillScore(lu.skill3,lu.s3Lv||0,"타자");
   var t=fP*w.p+fA*w.a+fE*w.e+ss;
   /* 국대에이스(타자): 종합점수에만 반영 */
@@ -149,8 +151,9 @@ function calcBat(pl,lu,sdB){
 function calcPit(pl,lu,sdB){
   if(!pl||!lu)return{change:0,stuff:0,total:0,skillScore:0};
   var w=getW();var sb=sdB||{c:0,s:0};
-  var fC=(pl.change||0)+getEnhVal(pl.cardType,"변화",lu.enhance||"")+(lu.trainC||0)+(pl.specChange||0)+sb.c;
-  var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s;
+  var faAdjP=(pl.isFa&&(pl.cardType==="임팩트"||pl.cardType==="시그니처"))?-3:0;
+  var fC=(pl.change||0)+getEnhVal(pl.cardType,"변화",lu.enhance||"")+(lu.trainC||0)+(pl.specChange||0)+sb.c+faAdjP;
+  var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s+faAdjP;
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
   var ss=getSkillScore(lu.skill1,lu.s1Lv||0,pt)+getSkillScore(lu.skill2,lu.s2Lv||0,pt)+getSkillScore(lu.skill3,lu.s3Lv||0,pt);
   var t=fC*w.c+fS*w.s+ss;
@@ -212,7 +215,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (act(105)) { if (v(105)==="L" && stars===3) { bp+=2; ba+=2; be+=2; pc+=2; ps+=2; } if (v(105)==="R" && stars===4) { if(isBat){bp+=2;be+=2;} if(!isBat){pc+=2;ps+=2;} } }
   if (act(115)) { if (v(115)==="L" && isBat && is69) ba+=2; if (v(115)==="R" && (isRP||isCP)) ps+=2; }
   if (act(120)) { if (v(120)==="L" && isBat && is35) { bp+=2; ba+=2; be+=2; } if (v(120)==="R" && !isBat) { pc++; ps++; } }
-  if (act(125)) { if (stars===4) { if(isBat){bp++;be++;} pc+=2; } }
+  if (act(125)) { if (stars===4) { if(isBat){ba+=2;be+=2;} else{pc+=2;} } }
   if (act(130)) { if (v(130)==="L" && isLive) { bp++; ba++; be++; pc++; ps++; } if (v(130)==="R" && isGold) { bp++; ba++; be++; pc++; ps++; } }
   if (act(135)) { if (v(135)==="L" && isBat && is35) ba+=2; if (v(135)==="R" && isSP) ps++; }
   if (act(140)) { if (v(140)==="L" && isBat && is69) { bp++; ba++; be++; } if (v(140)==="R" && (isRP||isCP)) { pc++; ps++; } }
@@ -1024,17 +1027,18 @@ function getPotmBonus(pl, sdState) {
   return {"임팩트":2,"시그니처":2,"국가대표":2,"골든글러브":1}[ct] || 0;
 }
 
-var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0}];
+var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0}];
 var RP_WEIGHTS = [
-  {w:[1.30],          l:[1.10],             r:[0.40,0.10,0.08,0.02]},
-  {w:[1.20],          l:[0.80,0.60],        r:[0.20,0.12,0.08]},
-  {w:[1.20],          l:[0.80,0.50,0.10],   r:[0.30,0.10]},
-  {w:[0.90,0.60],     l:[1.00],             r:[0.30,0.12,0.08]},
-  {w:[0.90,0.60],     l:[0.70,0.40],        r:[0.30,0.10]},
-  {w:[0.90,0.60],     l:[0.70,0.30,0.10],   r:[0.40]},
+  {w:[1.30],          l:[1.10],                   r:[0.40,0.10,0.08,0.02]},
+  {w:[1.20],          l:[0.80,0.60],              r:[0.20,0.12,0.08]},
+  {w:[1.20],          l:[0.80,0.50,0.10],         r:[0.30,0.10]},
+  {w:[0.90,0.60],     l:[1.00],                   r:[0.30,0.12,0.08]},
+  {w:[0.90,0.60],     l:[0.70,0.40],              r:[0.30,0.10]},
+  {w:[0.90,0.60],     l:[0.70,0.30,0.10],         r:[0.40]},
   {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[1.00],          r:[0.30,0.10]},
   {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[0.60,0.40],     r:[0.40]},
   {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[0.70,0.50,0.20],r:[]},
+  {w:[0.90,0.60],     l:[0.80,0.50,0.15,0.05],   r:[]},
 ];
 function getRPWeight(bpcIdx, slot, isWinSplit) {
   var cfg = BPC[bpcIdx]; var wts = RP_WEIGHTS[bpcIdx];
@@ -1133,7 +1137,7 @@ var SD_ROWS = [
   {sp:110,type:"auto",desc:"모두 +1"},
   {sp:115,type:"lr",lDesc:"6~9번 정확 +2",rDesc:"불펜+마무리 구위 +2"},
   {sp:120,type:"lr",lDesc:"3~5번 +2",rDesc:"투수 +1"},
-  {sp:125,type:"auto",desc:"4성 정선 +1 & 변화 +2"},
+  {sp:125,type:"auto",desc:"4성 정선 +2 & 변화 +2"},
   {sp:130,type:"lr",lDesc:"시즌/라이브 +1",rDesc:"골든/시그/임팩/국대 +1"},
   {sp:135,type:"lr",lDesc:"3~5번 정확 +2",rDesc:"선발 구위 +1"},
   {sp:140,type:"lr",lDesc:"6~9번 +1",rDesc:"불펜+마무리 +1"},
@@ -1560,7 +1564,8 @@ function LineupPage(p) {
       var isLive = ct === "라이브";
       var isOlstar = ct === "올스타";
       var baseScore = isLive ? (pl.setScore || 0) : (SET_POINTS[ct] || 0);
-      if (pl.isFa) baseScore = Math.max(0, baseScore - 1);
+      if (pl.isFa && ct==="시그니처") baseScore = Math.max(0, baseScore - 1);
+      if (pl.isFa && ct==="임팩트") baseScore = Math.max(0, baseScore - 2);
       if (isLive || isOlstar) {
         return baseScore >= 10 ? 1 : (10 - baseScore);
       }
@@ -1571,7 +1576,8 @@ function LineupPage(p) {
       var pl = pick(slot);
       if (!pl) return;
       var sc = pl.cardType === "라이브" ? (pl.setScore || 0) : (SET_POINTS[pl.cardType] || 0);
-      if (pl.isFa) sc = Math.max(0, sc - 1);
+      if (pl.isFa && pl.cardType==="시그니처") sc = Math.max(0, sc - 1);
+      if (pl.isFa && pl.cardType==="임팩트") sc = Math.max(0, sc - 2);
       sc += getPotmSetDelta(pl);
       total += sc;
     });
@@ -1579,7 +1585,8 @@ function LineupPage(p) {
       var bnPl = pick("BN" + bn);
       if (!bnPl) continue;
       var bnSc = bnPl.cardType === "라이브" ? (bnPl.setScore || 0) : (SET_POINTS[bnPl.cardType] || 0);
-      if (bnPl.isFa) bnSc = Math.max(0, bnSc - 1);
+      if (bnPl.isFa && bnPl.cardType==="시그니처") bnSc = Math.max(0, bnSc - 1);
+      if (bnPl.isFa && bnPl.cardType==="임팩트") bnSc = Math.max(0, bnSc - 2);
       bnSc += getPotmSetDelta(bnPl);
       total += bnSc;
     }
@@ -3067,7 +3074,7 @@ function BulkScanModal(p) {
           skill1: skRes.s1.name, s1Lv: skRes.s1.lv,
           skill2: skRes.s2.name, s2Lv: skRes.s2.lv,
           skill3: skRes.s3.name, s3Lv: skRes.s3.lv,
-          pot1:'', pot2:'', isFa:false, enhance:''
+          pot1:'', pot2:'', isFa:false, enhance:'9각성'
         };
         newPlayers.push(np);
         ok.push(sc.name);
@@ -3429,18 +3436,20 @@ function MyPlayersPage(p) {
               }} style={{ width: 56, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--acp)", borderRadius: 3, color: "var(--acp)", fontWeight: 700, outline: "none" }}>
                 {["SP1","SP2","SP3","SP4","SP5","RP1","RP2","RP3","RP4","RP5","RP6","CP"].map(function(s){return(<option key={s} value={s}>{s}</option>);})}
               </select></div>)}
-              {/* FA toggle */}
+              {/* FA toggle - 임팩트/시그니처만 */}
+              {(pl.cardType==="임팩트"||pl.cardType==="시그니처") && (
               <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"FA"}</div>
                 <div onClick={function(){upd(pl.id,"isFa",!pl.isFa);}} style={{ width: 36, height: 20, borderRadius: 10, background: pl.isFa ? "#FF9800" : "var(--inner)", border: "1px solid " + (pl.isFa ? "#FF9800" : "var(--bd)"), position: "relative", cursor: "pointer" }}>
                   <div style={{ width: 16, height: 16, borderRadius: "50%", background: pl.isFa ? "#fff" : "var(--td)", position: "absolute", top: 1, left: pl.isFa ? 18 : 1, transition: "left 0.2s" }} />
                 </div>
               </div>
+              )}
               <button onClick={function() { if (confirm("'" + pl.name + "' 삭제?")) { save(players.filter(function(x) { return x.id !== pl.id; })); setSelId(null); } }} style={{ padding: "3px 8px", fontSize: 9, background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)", borderRadius: 3, color: "#EF5350", cursor: "pointer", marginLeft: "auto" }}>{"삭제"}</button>
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 6, padding: "4px 8px", background: "var(--inner)", borderRadius: 4, fontSize: 11 }}>
               <span style={{ color: "var(--td)" }}>{"세트덱 스코어:"}</span>
               <span style={{ color: "var(--acc)", fontWeight: 800, fontFamily: "var(--m)" }}>{(function(){var sc=pl.cardType==="라이브"?(pl.setScore||0):(SET_POINTS[pl.cardType]||0);if(pl.isFa)sc=Math.max(0,sc-1);return sc;})()}</span>
-              {pl.isFa && (<span style={{ color: "#FF9800", fontSize: 9 }}>{"(FA -1)"}</span>)}
+              {pl.isFa && pl.cardType==="시그니처" && (<span style={{ color: "#FF9800", fontSize: 9 }}>{"(FA -1)"}</span>)}{pl.isFa && pl.cardType==="임팩트" && (<span style={{ color: "#FF9800", fontSize: 9 }}>{"(FA -2)"}</span>)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: 10 }}>
               {/* Training */}
@@ -3563,7 +3572,7 @@ function MyPlayersPage(p) {
             trainP: 0, trainA: 0, trainE: 0, trainC: 0, trainS: 0,
             specPower: 0, specAccuracy: 0, specEye: 0, specChange: 0, specStuff: 0,
             skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
-            enhance: "", pot1: "", pot2: "", isFa: false };
+            enhance: "9각성", pot1: "", pot2: "", isFa: false };
           var newList = players.concat([np]);
           save(newList);
           setAddOpen(false);
