@@ -2562,11 +2562,11 @@ function LockerRoomPage(p) {
 
 // Gemini API 호출 — Vercel 서버리스 함수(/api/scan) 경유
 // GEMINI_API_KEY는 Vercel 환경변수에만 저장, 클라이언트에 노출 안 됨
-async function callClaudeVision(base64, mediaType, prompt) {
+async function callClaudeVision(base64, mediaType, prompt, userId) {
   var res = await fetch('/api/scan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ base64: base64, mediaType: mediaType, prompt: prompt }),
+    body: JSON.stringify({ base64: base64, mediaType: mediaType, prompt: prompt, userId: userId || '' }),
   });
   if (!res.ok) {
     var e = await res.json().catch(function(){return{};});
@@ -2578,7 +2578,7 @@ async function callClaudeVision(base64, mediaType, prompt) {
 }
 
 // 라인업 화면 분석
-async function scanLineupScreen(base64, mediaType, role) {
+async function scanLineupScreen(base64, mediaType, role, userId) {
   var isBat = role === '타자';
   var prompt = '당신은 컴투스 프로야구 FOR 매니저 라인업 화면 분석 전문가입니다.\n이미지는 ' + role + ' 라인업 화면입니다.\n' +
     (isBat ? '다이아몬드 배치 【주전 타자 9명만】 분석. 하단 후보 무시.' : '투수 카드들을 모두 분석.') + '\n\n' +
@@ -2603,16 +2603,16 @@ async function scanLineupScreen(base64, mediaType, role) {
       : '■ 투수 슬롯: 1선발→SP1, 2선발→SP2, 3선발→SP3, 4선발→SP4, 5선발→SP5, 승리조1번→승리조1, 추격조1번→추격조1, 추격조2번→추격조2, 추격조3번→추격조3, 롱릴리프1번→롱릴리프1, 롱릴리프2번→롱릴리프2, 마무리→CP\n') +
     '\nJSON 배열만 출력(마크다운 없이):\n' +
     '[{"name":"","year":"","team":"","slot":"","cardType":"","impactType":"","role":"' + role + '","hand":"우","stars":5,"ovr":0}]';
-  return await callClaudeVision(base64, mediaType, prompt);
+  return await callClaudeVision(base64, mediaType, prompt, userId);
 }
 
 // 스킬 화면 분석
-async function scanSkillScreen(base64, mediaType, nameList) {
+async function scanSkillScreen(base64, mediaType, nameList, userId) {
   var names = nameList.map(function(n,i){return (i+1)+'. '+n;}).join('\n');
   var prompt = '컴투스 프로야구 "한 눈에 보기" 화면. 아래 선수들의 스킬만 추출(후보 무시):\n' + names + '\n\n' +
     '규칙: 각 선수 행 오른쪽 스킬 아이콘 3개 → 이름+레벨. "어드밴티지"→"홈어드밴티지". 없으면 ""와 0.\n' +
     'JSON 배열만:\n[{"name":"","skill1":"","s1Lv":0,"skill2":"","s2Lv":0,"skill3":"","s3Lv":0}]';
-  return await callClaudeVision(base64, mediaType, prompt);
+  return await callClaudeVision(base64, mediaType, prompt, userId);
 }
 
 // 스킬 매칭
@@ -2857,6 +2857,7 @@ function BulkScanModal(p) {
   var savePlayers = p.savePlayers;
   var lineupMap = p.lineupMap;
   var saveLineupMap = p.saveLineupMap;
+  var userId = p.userId || '';
 
   // API 키는 서버(/api/scan)에서 관리 - 클라이언트 불필요
 
@@ -2902,13 +2903,13 @@ function BulkScanModal(p) {
       var allPlayers = [];
       // 타자 분석
       setMsg('⚾ 타자 라인업 분석 중…');
-      var batRaw = await scanLineupScreen(imgs[0].base64, imgs[0].mediaType, '타자');
+      var batRaw = await scanLineupScreen(imgs[0].base64, imgs[0].mediaType, '타자', userId);
       var batParsed = typeof batRaw === 'string' ? JSON.parse(batRaw) : batRaw;
       if (!Array.isArray(batParsed)) throw new Error('타자 분석 결과 형식 오류');
       var bats = batParsed.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
       if (imgs[1]) {
         setMsg('⚡ 타자 스킬 분석 중…');
-        var bSkillRaw = await scanSkillScreen(imgs[1].base64, imgs[1].mediaType, bats.map(function(b){return b.name;}));
+        var bSkillRaw = await scanSkillScreen(imgs[1].base64, imgs[1].mediaType, bats.map(function(b){return b.name;}), userId);
         var bSkill = typeof bSkillRaw === 'string' ? JSON.parse(bSkillRaw) : bSkillRaw;
         bats = mergeSkillsInto(bats, Array.isArray(bSkill) ? bSkill : []);
       }
@@ -2916,13 +2917,13 @@ function BulkScanModal(p) {
       // 투수 분석
       if (imgs[2]) {
         setMsg('🎯 투수 라인업 분석 중…');
-        var pitRaw = await scanLineupScreen(imgs[2].base64, imgs[2].mediaType, '투수');
+        var pitRaw = await scanLineupScreen(imgs[2].base64, imgs[2].mediaType, '투수', userId);
         var pitParsed = typeof pitRaw === 'string' ? JSON.parse(pitRaw) : pitRaw;
         if (!Array.isArray(pitParsed)) throw new Error('투수 분석 결과 형식 오류');
         var pits = pitParsed.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
         if (imgs[3]) {
           setMsg('⚡ 투수 스킬 분석 중…');
-          var pSkillRaw = await scanSkillScreen(imgs[3].base64, imgs[3].mediaType, pits.map(function(b){return b.name;}));
+          var pSkillRaw = await scanSkillScreen(imgs[3].base64, imgs[3].mediaType, pits.map(function(b){return b.name;}), userId);
           var pSkill = typeof pSkillRaw === 'string' ? JSON.parse(pSkillRaw) : pSkillRaw;
           pits = mergeSkillsInto(pits, Array.isArray(pSkill) ? pSkill : []);
         }
@@ -3462,7 +3463,8 @@ function MyPlayersPage(p) {
         savePlayers: save,
         lineupMap: lm,
         saveLineupMap: saveLM,
-        skills: skillsDB
+        skills: skillsDB,
+        userId: p.userId || ''
       })}
 
       {/* Add Player Popup */}
@@ -4388,8 +4390,8 @@ export default function App(){
   if(store.loading||!curDeckId)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0d1117",color:"#e6edf3"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
 
   var pg=null;
-  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck}/>);
-  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills}/>);
+  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} userId={userId}/>);
+  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdState} setSdState={setSdState}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
