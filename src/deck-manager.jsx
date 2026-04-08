@@ -4238,22 +4238,34 @@ export default function App(){
 
   /* ── localStorage 덱 목록 로드/저장 헬퍼 ── */
   var loadDecks=React.useCallback(async function(){
-    var list=await sGet("deck-list");return list||[];
-  },[]);
+    /* Supabase 우선, fallback localStorage */
+    if(supabase&&userId){
+      var all=await loadUserData(userId);
+      if(all&&all.deckList&&all.deckList.length>0)return{list:all.deckList,curId:all.deckCurrent||null};
+    }
+    var list=await sGet("deck-list");var curId=await sGet("deck-current");
+    return{list:list||[],curId:curId||null};
+  },[userId]);
   var saveDecks=React.useCallback(async function(list,curId){
+    /* Supabase와 localStorage 모두 저장 */
     await sSet("deck-list",list);await sSet("deck-current",curId);
-  },[]);
+    if(supabase&&userId){
+      var all=await loadUserData(userId)||{};
+      all.deckList=list;all.deckCurrent=curId;
+      await saveUserData(userId,all);
+    }
+  },[userId]);
 
   /* ── 로그인 성공 후 덱 목록 로드 ── */
   useEffect(function(){
     if(!userId)return;
     (async function(){
-      var list=await loadDecks();
+      var result=await loadDecks();
+      var list=result.list; var savedCurId=result.curId;
       if(list&&list.length>0){
         setDecks(list);
-        var saved=await sGet("deck-current");
-        var found=list.find(function(d){return d.deckId===saved;});
-        setCurDeckId(found?saved:list[0].deckId);
+        var found=list.find(function(d){return d.deckId===savedCurId;});
+        setCurDeckId(found?savedCurId:list[0].deckId);
       }else{
         /* 덱이 없으면 팀 선택 화면 */
         setShowTeamSelect("first");
@@ -4319,12 +4331,12 @@ export default function App(){
     var nextId=(curDeckId===deckId)?newList[0].deckId:curDeckId;
     setDecks(newList);
     setCurDeckId(nextId);
-    await sSet("deck-list",newList);await sSet("deck-current",nextId);
+    await saveDecks(newList,nextId);
   };
   var handleSwitchDeck=async function(deckId){
     if(deckId===curDeckId)return;
     setCurDeckId(deckId);
-    await sSet("deck-current",deckId);
+    await saveDecks(decks,deckId);
   };
 
   /* ── 로그아웃 ── */
