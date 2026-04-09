@@ -221,7 +221,8 @@ export async function listAllPhotos() {
     var decoded = decodeName(base);
     var baseName = decoded.replace(/\d+$/, '');
     return {
-      name: f.name,
+      storageName: f.name,          /* Supabase Storage 실제 파일명 (삭제 시 사용) */
+      name: decoded + f.name.match(/\.[^.]+$/)[0], /* 표시용 원본 한글 파일명 */
       baseName: baseName,
       url: supabase.storage.from(PHOTO_BUCKET).getPublicUrl(f.name).data.publicUrl
     };
