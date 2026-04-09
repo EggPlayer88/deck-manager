@@ -775,16 +775,29 @@ function PlayerDBPage(p){
     if(!files||!files.length)return;
     setUploading(true);
     var ok=0;var fail=0;
+    var newPhotos=[];
     for(var i=0;i<files.length;i++){
       var file=files[i];
       var ext=file.name.split(".").pop().toLowerCase();
       var baseName=file.name.replace(/\.[^.]+$/,"");
       var fileName=baseName+"."+ext;
       var url=await uploadPlayerPhoto(file,fileName);
-      if(url)ok++;else fail++;
+      if(url){
+        ok++;
+        /* 즉시 목록에 추가 (Supabase 반영 대기 없이) */
+        newPhotos.push({
+          name: fileName,
+          baseName: baseName.replace(/\d+$/,""),
+          url: url
+        });
+      }else fail++;
+    }
+    if(newPhotos.length>0){
+      setAllPhotos(function(prev){ return prev.concat(newPhotos); });
     }
     setUploadMsg("완료: "+ok+"장 업로드"+( fail>0?" (실패 "+fail+"장)":""));
-    await loadPhotos();
+    /* 1초 후 서버 목록으로 재동기화 */
+    setTimeout(function(){ loadPhotos(); }, 1000);
     setUploading(false);
   };
 
