@@ -16,6 +16,10 @@ var loadGlobalPlayers = _SB.loadGlobalPlayers || function(){ return Promise.reso
 var saveGlobalPlayer = _SB.saveGlobalPlayer || function(){ return Promise.resolve(false); };
 var saveGlobalPlayers = _SB.saveGlobalPlayers || function(){ return Promise.resolve(false); };
 var deleteGlobalPlayer = _SB.deleteGlobalPlayer || function(){ return Promise.resolve(false); };
+var uploadPlayerPhoto = _SB.uploadPlayerPhoto || function(){ return Promise.resolve(null); };
+var listPlayerPhotos = _SB.listPlayerPhotos || function(){ return Promise.resolve([]); };
+var deletePlayerPhoto = _SB.deletePlayerPhoto || function(){ return Promise.resolve(false); };
+var listAllPhotos = _SB.listAllPhotos || function(){ return Promise.resolve([]); };
 
 /* ================================================================
    SEED DATA - 48 players from Excel + random fills
@@ -454,7 +458,7 @@ function PlayerCard(p) {
   var stars = pl.stars || CARD_STARS[ct] || 5;
   var starStr = "";
   for (var si = 0; si < stars; si++) starStr += "★";
-  var photoUrl = pl.photoUrl;
+  var photoUrl = p.showPhoto ? (pl.photoUrl || "") : "";
 
   /* 카드종류별 테두리 두께 */
   var borderW = ct === "골든글러브" || ct === "시그니처" ? "2px" : "1.5px";
@@ -733,12 +737,58 @@ var PIT_POS_MAP={"선발":["SP1","SP2","SP3","SP4","SP5"],"중계":["RP1","RP2",
 
 function PlayerDBPage(p){
   var mob=p.mobile;
+  var _dbTab=useState("선수");var dbTab=_dbTab[0];var setDbTab=_dbTab[1];
   var _t=useState("골든글러브");var at=_t[0];var setAt=_t[1];
   var _e=useState(null);var editing=_e[0];var setEditing=_e[1];
   var _f=useState(null);var form=_f[0];var setForm=_f[1];
   var _sv=useState(false);var saving=_sv[0];var setSaving=_sv[1];
   var _reload=useState(0);var reload=_reload[0];var setReload=_reload[1];
+  /* 사진 관리 */
+  var _photos=useState([]);var allPhotos=_photos[0];var setAllPhotos=_photos[1];
+  var _photoLoading=useState(false);var photoLoading=_photoLoading[0];var setPhotoLoading=_photoLoading[1];
+  var _uploading=useState(false);var uploading=_uploading[0];var setUploading=_uploading[1];
+  var _uploadMsg=useState("");var uploadMsg=_uploadMsg[0];var setUploadMsg=_uploadMsg[1];
 
+  /* 사진 목록 로드 */
+  var loadPhotos=async function(){
+    setPhotoLoading(true);
+    var list=await listAllPhotos();
+    setAllPhotos(list);
+    setPhotoLoading(false);
+  };
+  useEffect(function(){ if(dbTab==="사진") loadPhotos(); },[dbTab]);
+
+  /* 사진 업로드 핸들러 */
+  var handlePhotoUpload=async function(files){
+    if(!files||!files.length)return;
+    setUploading(true);
+    var ok=0;var fail=0;
+    for(var i=0;i<files.length;i++){
+      var file=files[i];
+      var ext=file.name.split(".").pop().toLowerCase();
+      var baseName=file.name.replace(/\.[^.]+$/,"");
+      var fileName=baseName+"."+ext;
+      var url=await uploadPlayerPhoto(file,fileName);
+      if(url)ok++;else fail++;
+    }
+    setUploadMsg("완료: "+ok+"장 업로드"+( fail>0?" (실패 "+fail+"장)":""));
+    await loadPhotos();
+    setUploading(false);
+  };
+
+  /* 사진 삭제 */
+  var handlePhotoDelete=async function(name){
+    if(!confirm("\""+name+"\" 삭제?"))return;
+    await deletePlayerPhoto(name);
+    await loadPhotos();
+  };
+
+  /* 사진을 이름 기준으로 그룹화 */
+  var photoGroups=allPhotos.reduce(function(acc,ph){
+    if(!acc[ph.baseName])acc[ph.baseName]=[];
+    acc[ph.baseName].push(ph);
+    return acc;
+  },{});
   var players=SEED_PLAYERS;
   var filtered=players.filter(function(x){return x.cardType===at;});
 
@@ -776,6 +826,67 @@ function PlayerDBPage(p){
       <h2 style={{fontSize:mob?16:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 4px"}}>{"선수 도감"}</h2>
       <p style={{fontSize:10,color:"var(--td)",margin:"0 0 12px"}}>{"관리자 전용 - 선수 기본 데이터를 등록/수정합니다"}</p>
 
+      {/* 탭 선택 */}
+      <div style={{display:"flex",gap:6,marginBottom:16}}>
+        {["선수","사진 관리"].map(function(t){var a=t===dbTab;return(
+          <button key={t} onClick={function(){setDbTab(t);}} style={{padding:"8px 20px",borderRadius:8,fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",color:a?"var(--acc)":"var(--t2)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{t}</button>
+        );})}
+      </div>
+
+      {/* ── 사진 관리 탭 ── */}
+      {dbTab==="사진 관리" && (
+        <div>
+          {/* 업로드 영역 */}
+          <div style={{background:"var(--card)",borderRadius:12,border:"2px dashed var(--bd)",padding:24,textAlign:"center",marginBottom:16,cursor:"pointer"}}
+            onDragOver={function(e){e.preventDefault();}}
+            onDrop={function(e){e.preventDefault();handlePhotoUpload(e.dataTransfer.files);}}>
+            <div style={{fontSize:28,marginBottom:8}}>{"📸"}</div>
+            <div style={{fontSize:13,fontWeight:700,color:"var(--t1)",marginBottom:4}}>{"사진 파일을 드래그하거나 클릭해서 업로드"}</div>
+            <div style={{fontSize:11,color:"var(--td)",marginBottom:12}}>{"파일명: 이승엽1.jpg, 이승엽2.jpg 형식 | 200×280px 권장 | JPG/PNG/WebP"}</div>
+            <label style={{display:"inline-block",padding:"8px 20px",background:"var(--ta)",border:"1px solid var(--acc)",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,color:"var(--acc)"}}>
+              {"파일 선택 (여러 장 가능)"}
+              <input type="file" multiple accept="image/*" style={{display:"none"}} onChange={function(e){handlePhotoUpload(e.target.files);e.target.value="";}} />
+            </label>
+            {uploading && <div style={{marginTop:10,fontSize:11,color:"var(--acc)"}}>{"업로드 중..."}</div>}
+            {uploadMsg && <div style={{marginTop:10,fontSize:11,color:"#66BB6A",fontWeight:700}}>{uploadMsg}</div>}
+          </div>
+
+          {/* 등록된 사진 목록 */}
+          <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+              <span style={{fontSize:13,fontWeight:800,color:"var(--t1)"}}>{"등록된 사진 ("+allPhotos.length+"장)"}</span>
+              <button onClick={loadPhotos} style={{padding:"4px 10px",fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--t2)",cursor:"pointer"}}>{"새로고침"}</button>
+            </div>
+            {photoLoading && <div style={{fontSize:11,color:"var(--td)",padding:20,textAlign:"center"}}>{"로딩 중..."}</div>}
+            {!photoLoading && Object.keys(photoGroups).length===0 && (
+              <div style={{fontSize:11,color:"var(--td)",padding:20,textAlign:"center"}}>{"등록된 사진이 없습니다"}</div>
+            )}
+            {!photoLoading && Object.keys(photoGroups).sort().map(function(name){
+              var photos=photoGroups[name];
+              return(
+                <div key={name} style={{marginBottom:16}}>
+                  <div style={{fontSize:12,fontWeight:800,color:"var(--t1)",marginBottom:8,paddingBottom:4,borderBottom:"1px solid var(--bd)"}}>{name+" ("+photos.length+"장)"}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
+                    {photos.map(function(ph){return(
+                      <div key={ph.name} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                        <div style={{position:"relative"}}>
+                          <img src={ph.url} alt={ph.name} style={{width:60,height:84,objectFit:"cover",borderRadius:6,border:"1px solid var(--bd)"}} />
+                          <button onClick={function(){handlePhotoDelete(ph.name);}}
+                            style={{position:"absolute",top:-4,right:-4,width:18,height:18,borderRadius:"50%",background:"#EF5350",border:"none",cursor:"pointer",fontSize:10,color:"#fff",fontWeight:900,lineHeight:"18px",textAlign:"center",padding:0}}>{"×"}</button>
+                        </div>
+                        <span style={{fontSize:9,color:"var(--td)",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph.name}</span>
+                      </div>
+                    );})}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── 선수 탭 ── */}
+      {dbTab==="선수" && (<div>
       <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
         {CARD_TYPES.map(function(ct){var a=ct===at;return(
           <button key={ct} onClick={function(){setAt(ct);setEditing(null);setForm(null);}} style={{padding:"7px 14px",borderRadius:6,fontSize:12,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",color:a?"var(--acc)":"var(--t2)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{ct}</button>
@@ -945,6 +1056,7 @@ function PlayerDBPage(p){
           </button>
         </div>
       </div>
+      </div>)}{/* 선수 탭 끝 */}
     </div>
   );
 }
@@ -1474,6 +1586,17 @@ function LineupPage(p) {
   var _sel = useState(null); var selId = _sel[0]; var setSelId = _sel[1];
   var _picker = useState(null); var pickerSlot = _picker[0]; var setPickerSlot = _picker[1];
   var _dragSlot = useState(null); var dragSlot = _dragSlot[0]; var setDragSlot = _dragSlot[1];
+  /* 사진 캐시: {선수이름: [url, ...]} */
+  var _photoCache = React.useRef({});
+  var _photoForce = useState(0); var setPhotoForce = _photoForce[1];
+  var loadPhotosForPlayer = async function(name) {
+    if (!name || _photoCache.current[name] !== undefined) return;
+    _photoCache.current[name] = [];
+    var urls = await listPlayerPhotos(name);
+    _photoCache.current[name] = urls;
+    setPhotoForce(function(n){return n+1;});
+  };
+  var getPhotos = function(name) { return _photoCache.current[name] || null; };
   var _dragOver = useState(null); var dragOverSlot = _dragOver[0]; var setDragOverSlot = _dragOver[1];
   var _sdOpen = useState(false); var sdOpen = _sdOpen[0]; var setSdOpen = _sdOpen[1];
   var sdState = p.sdState; var setSdState = p.setSdState;
@@ -1723,7 +1846,7 @@ function LineupPage(p) {
             <span>{idx + 1}</span>
             {idx < 8 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx+1); }} style={{ fontSize: 10, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▼"}</span>)}
           </div>
-          <PlayerCard player={pl} size={mob?"sm":"md"} score={Math.round(calc.total)} />
+          <PlayerCard player={pl} size={mob?"sm":"md"} score={Math.round(calc.total)} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span></div>
             <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
@@ -1760,6 +1883,27 @@ function LineupPage(p) {
           </React.Fragment>)}
         </div>
         {isSel && (<div style={{ padding: "8px 14px", background: "rgba(255,213,79,0.02)", borderBottom: "1px solid var(--bd)" }}>
+          {/* 사진 선택 UI */}
+          {(function(){
+            var photos = getPhotos(pl.name);
+            if (photos === null) { loadPhotosForPlayer(pl.name); return null; }
+            if (photos.length === 0) return null;
+            return (
+              <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
+                {photos.map(function(url, i){
+                  var isCur = pl.photoUrl === url;
+                  return (
+                    <div key={i} onClick={function(){updatePl(pl.id,"photoUrl",isCur?"":url);}}
+                      style={{cursor:"pointer",borderRadius:5,border:"2px solid "+(isCur?"var(--acc)":"transparent"),overflow:"hidden",opacity:isCur?1:0.6,transition:"all 0.15s"}}>
+                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",display:"block"}} />
+                    </div>
+                  );
+                })}
+                {pl.photoUrl && (<button onClick={function(){updatePl(pl.id,"photoUrl","");}} style={{padding:"3px 8px",fontSize:10,background:"rgba(239,83,80,0.08)",border:"1px solid rgba(239,83,80,0.2)",borderRadius:4,color:"#EF5350",cursor:"pointer",flexShrink:0}}>{"사진 제거"}</button>)}
+              </div>
+            );
+          })()}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"강화"}</div><select value={pl.enhance||""} onChange={function(e){updatePl(pl.id,"enhance",e.target.value);}} style={{ padding: "3px 4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>{["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e){return(<option key={e} value={e} style={{background:"#1e293b",color:"#e2e8f0"}}>{e}</option>);})}</select></div>
             {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 13, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
@@ -1788,7 +1932,7 @@ function LineupPage(p) {
       <React.Fragment key={pl.id}>
         <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "32px 68px minmax(100px,1fr) 80px 96px 68px 46px 110px 40px 46px", alignItems: "center", gap: 28, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
-          <PlayerCard player={pl} size={mob?"sm":"md"} score={Math.round(calc.total)} />
+          <PlayerCard player={pl} size={mob?"sm":"md"} score={Math.round(calc.total)} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span></div>
             <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
@@ -1826,6 +1970,27 @@ function LineupPage(p) {
           </React.Fragment>)}
         </div>
         {isSel && (<div style={{ padding: "8px 14px", background: "rgba(206,147,216,0.03)", borderBottom: "1px solid var(--bd)" }}>
+          {/* 사진 선택 UI */}
+          {(function(){
+            var photos = getPhotos(pl.name);
+            if (photos === null) { loadPhotosForPlayer(pl.name); return null; }
+            if (photos.length === 0) return null;
+            return (
+              <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
+                {photos.map(function(url, i){
+                  var isCur = pl.photoUrl === url;
+                  return (
+                    <div key={i} onClick={function(){updatePl(pl.id,"photoUrl",isCur?"":url);}}
+                      style={{cursor:"pointer",borderRadius:5,border:"2px solid "+(isCur?"var(--acc)":"transparent"),overflow:"hidden",opacity:isCur?1:0.6,transition:"all 0.15s"}}>
+                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",display:"block"}} />
+                    </div>
+                  );
+                })}
+                {pl.photoUrl && (<button onClick={function(){updatePl(pl.id,"photoUrl","");}} style={{padding:"3px 8px",fontSize:10,background:"rgba(239,83,80,0.08)",border:"1px solid rgba(239,83,80,0.2)",borderRadius:4,color:"#EF5350",cursor:"pointer",flexShrink:0}}>{"사진 제거"}</button>)}
+              </div>
+            );
+          })()}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"강화"}</div><select value={pl.enhance||""} onChange={function(e){updatePl(pl.id,"enhance",e.target.value);}} style={{ padding: "3px 4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>{["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e){return(<option key={e} value={e} style={{background:"#1e293b",color:"#e2e8f0"}}>{e}</option>);})}</select></div>
             {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 13, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
