@@ -26,6 +26,13 @@ var listAllPhotos = _SB.listAllPhotos || function(){ return Promise.resolve([]);
    ================================================================ */
 var KBO_TEAMS = ["키움","삼성","LG","두산","KT","SSG","롯데","한화","NC","KIA"];
 var SEED_PLAYERS = [];
+var PHOTO_CACHE = {}; /* 전역 사진 캐시: {선수이름: [url, ...]} */
+function getPhotoUrl(name) {
+  /* 해당 이름의 첫 번째 사진 URL 반환 (없으면 "") */
+  var urls = PHOTO_CACHE[name];
+  return (urls && urls.length > 0) ? urls[0] : "";
+}
+function getPhotoUrls(name) { return PHOTO_CACHE[name] || null; }
 var POT_GRADES = ["C","C+","B","B+","A","A+","S","S+","SS","SS+","SR","SR+"];
 var DEFAULT_POT_SCORES = {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6,"S+":7,"SS":8,"SS+":9,"SR":10,"SR+":12};
 /* 잠재력 종류별 기본 점수 */
@@ -1101,7 +1108,7 @@ function DiamondView(p) {
         var b = slotMap[pos] || null;
         return (
           <div key={pos} onClick={onClick ? function() { onClick(pos); } : undefined} style={{ position: "absolute", left: co.x + "%", top: co.y + "%", transform: "translate(-50%,-50%)", textAlign: "center", cursor: onClick ? "pointer" : "default" }}>
-            {b ? (<PlayerCard player={b} size={mob?"sm":"sm"} />) : (
+            {b ? (<PlayerCard player={Object.assign({},b,{photoUrl:b.photoUrl||getPhotoUrl(b.name)})} size={mob?"sm":"sm"} showPhoto={true} />) : (
               <div style={{ width: mob?46:52, height: mob?64:72, borderRadius: 5, background: "var(--inner)", border: "1px dashed var(--bd)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                 <span style={{ fontSize: mob?12:14, opacity: 0.2 }}>{"+"}</span>
                 <span style={{ fontSize: mob?7:8, color: "var(--td)", fontWeight: 700 }}>{pos}</span>
@@ -1121,7 +1128,7 @@ function PCard(p) {
   var d = p.p;
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <PlayerCard player={d} size="md" />
+      <PlayerCard player={Object.assign({},d,{photoUrl:d.photoUrl||getPhotoUrl(d.name)})} size="md" showPhoto={true} />
     </div>
   );
 }
@@ -1608,6 +1615,7 @@ function LineupPage(p) {
     photoCacheRef.current[name] = null;
     var urls = await listPlayerPhotos(name);
     photoCacheRef.current[name] = urls || [];
+    PHOTO_CACHE[name] = urls || []; /* 전역 캐시 업데이트 */
     setPhotoCache(function(prev){
       var next = Object.assign({}, prev); next[name] = urls || []; return next;
     });
