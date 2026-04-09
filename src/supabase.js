@@ -78,13 +78,25 @@ export async function saveGlobalSkills(skillsData) {
 }
 
 /* ============ Global Players (admin) ============ */
+/* 선수도감 캐시 (세션 동안 재사용) */
+var _globalPlayersCache = null;
+var _globalPlayersCacheTime = 0;
+var CACHE_TTL = 10 * 60 * 1000; /* 10분 */
+
 export async function loadGlobalPlayers() {
   if (!supabase) return [];
+  /* 캐시 유효하면 재사용 */
+  var now = Date.now();
+  if (_globalPlayersCache && (now - _globalPlayersCacheTime) < CACHE_TTL) {
+    return _globalPlayersCache;
+  }
+  /* 필요한 컬럼만 선택 (select * 대신) */
+  var cols = 'id,name,cardType,year,team,role,position,subPosition,hand,stars,power,accuracy,eye,patience,running,defense,speed,change,stuff,control,stamina,impactType,liveType,setScore';
   var allData = [];
   var page = 0;
   var pageSize = 1000;
   while (true) {
-    var r = await supabase.from('global_players').select('*')
+    var r = await supabase.from('global_players').select(cols)
       .order('cardType').order('name')
       .range(page * pageSize, (page + 1) * pageSize - 1);
     if (r.error || !r.data || r.data.length === 0) break;
@@ -92,7 +104,14 @@ export async function loadGlobalPlayers() {
     if (r.data.length < pageSize) break;
     page++;
   }
+  _globalPlayersCache = allData;
+  _globalPlayersCacheTime = Date.now();
   return allData;
+}
+
+export function clearGlobalPlayersCache() {
+  _globalPlayersCache = null;
+  _globalPlayersCacheTime = 0;
 }
 
 export async function saveGlobalPlayer(player) {
@@ -111,4 +130,53 @@ export async function deleteGlobalPlayer(id) {
   if (!supabase) return false;
   var r = await supabase.from('global_players').delete().eq('id', id);
   return !r.error;
+}
+
+/* ── 선수 사진 (player-photos 버킷) ── */
+const PHOTO_BUCKET = 'player-photos';
+
+export async function uploadPlayerPhoto(file, fileName) {
+  if (!supabase) return null;
+  var { data, error } = await supabase.storage
+    .from(PHOTO_BUCKET)
+    .upload(fileName, file, { upsert: true, contentType: file.type });
+  if (error) { console.error('uploadPlayerPhoto error:', error); return null; }
+  var { data: urlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(fileName);
+  return urlData?.publicUrl || null;
+}
+
+export async function listPlayerPhotos(playerName) {
+  if (!supabase || !playerName) return [];
+  var { data, error } = await supabase.storage.from(PHOTO_BUCKET).list('', {
+    search: playerName
+  });
+  if (error || !data) return [];
+  /* 이름 기준 필터: "이승엽", "이승엽1", "이승엽2" 등 */
+  var filtered = data.filter(function(f) {
+    var base = f.name.replace(/\.[^.]+$/, '').replace(/\d+$/, '');
+    return base === playerName;
+  });
+  filtered.sort(function(a, b) { return a.name.localeCompare(b.name); });
+  return filtered.map(function(f) {
+    return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(f.name).data.publicUrl;
+  });
+}
+
+export async function deletePlayerPhoto(fileName) {
+  if (!supabase) return false;
+  var { error } = await supabase.storage.from(PHOTO_BUCKET).remove([fileName]);
+  return !error;
+}
+
+export async function listAllPhotos() {
+  if (!supabase) return [];
+  var { data, error } = await supabase.storage.from(PHOTO_BUCKET).list('');
+  if (error || !data) return [];
+  return data.map(function(f) {
+    return {
+      name: f.name,
+      baseName: f.name.replace(/\.[^.]+$/, '').replace(/\d+$/, ''),
+      url: supabase.storage.from(PHOTO_BUCKET).getPublicUrl(f.name).data.publicUrl
+    };
+  });
 }
