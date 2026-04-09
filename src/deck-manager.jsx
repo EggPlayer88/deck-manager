@@ -788,8 +788,6 @@ function PlayerDBPage(p){
     await loadPhotos();
     setUploading(false);
   };
-    setUploading(false);
-  };
 
   /* 사진 삭제 */
   var handlePhotoDelete=async function(name){
