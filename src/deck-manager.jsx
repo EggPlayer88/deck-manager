@@ -501,9 +501,9 @@ function PlayerCard(p) {
       )}
 
       {/* Position badge */}
-      <div style={{ position:"absolute", top:1, right:2,
+      <div style={{ position:"absolute", top:0, right:2,
         background:"rgba(0,0,0,0.6)", borderRadius:3, padding:"0px 3px", zIndex:5 }}>
-        <span style={{ fontSize:fs, fontWeight:700, color:"#fff", lineHeight:1.2 }}>{pl.subPosition||""}</span>
+        <span style={{ fontSize:fs, fontWeight:700, color:"#fff", lineHeight:1, display:"block" }}>{pl.subPosition||""}</span>
       </div>
 
       {/* Team badge */}
