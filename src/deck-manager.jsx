@@ -901,7 +901,7 @@ function PlayerDBPage(p){
       )}
 
       {/* ── 선수 탭 ── */}
-      {dbTab==="선수" && (<div>
+      {dbTab==="선수" && (<React.Fragment>
       <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
         {CARD_TYPES.map(function(ct){var a=ct===at;return(
           <button key={ct} onClick={function(){setAt(ct);setEditing(null);setForm(null);}} style={{padding:"7px 14px",borderRadius:6,fontSize:12,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",color:a?"var(--acc)":"var(--t2)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{ct}</button>
@@ -1071,7 +1071,7 @@ function PlayerDBPage(p){
           </button>
         </div>
       </div>
-      </div>)}{/* 선수 탭 끝 */}
+      </React.Fragment>)}{/* 선수 탭 끝 */}
     </div>
   );
 }
