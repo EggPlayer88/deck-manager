@@ -513,12 +513,7 @@ function PlayerCard(p) {
         <span style={{ fontSize:fs, fontWeight:700, color:"#fff", lineHeight:1, display:"block" }}>{pl.subPosition||""}</span>
       </div>
 
-      {/* Team badge */}
-      {pl.team && (<div style={{ position:"absolute", top:size==="lg"?16:12,
-        left:"50%", transform:"translateX(-50%)", zIndex:4 }}>
-        <span style={{ fontSize:size==="sm"?5:6, fontWeight:700,
-          color:"rgba(255,255,255,0.75)", textShadow:"0 1px 3px rgba(0,0,0,0.8)" }}>{pl.team}</span>
-      </div>)}
+      {/* Team badge - 팀 로고로 교체 예정 */}
 
       {/* Photo area */}
       <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center",
@@ -791,6 +786,11 @@ function PlayerDBPage(p){
       if(url){ok++;}else{fail++;}
     }
     setUploadMsg("완료: "+ok+"장 업로드"+( fail>0?" (실패 "+fail+"장)":""));
+    /* 업로드된 선수 이름들 전역 캐시 초기화 (새 사진 즉시 반영) */
+    for(var j=0;j<files.length;j++){
+      var uploadedBase=files[j].name.replace(/\.[^.]+$/,"").replace(/\d+$/,"");
+      if(uploadedBase){ delete PHOTO_CACHE[uploadedBase]; }
+    }
     /* Supabase 인덱싱 대기 후 목록 갱신 */
     await new Promise(function(r){ setTimeout(r, 1500); });
     await loadPhotos();
@@ -798,9 +798,12 @@ function PlayerDBPage(p){
   };
 
   /* 사진 삭제 */
-  var handlePhotoDelete=async function(name){
-    if(!confirm("\""+name+"\" 삭제?"))return;
-    await deletePlayerPhoto(name);
+  var handlePhotoDelete=async function(ph){
+    if(!confirm("\""+ph.name+"\" 삭제?"))return;
+    /* storageName(인코딩된 실제 파일명)으로 삭제 */
+    await deletePlayerPhoto(ph.storageName||ph.name);
+    /* 해당 선수 전역 캐시 초기화 */
+    if(ph.baseName) { delete PHOTO_CACHE[ph.baseName]; }
     await loadPhotos();
   };
 
@@ -892,7 +895,7 @@ function PlayerDBPage(p){
                       <div key={ph.name} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                         <div style={{position:"relative"}}>
                           <img src={ph.url} alt={ph.name} style={{width:60,height:84,objectFit:"cover",borderRadius:6,border:"1px solid var(--bd)"}} />
-                          <button onClick={function(){handlePhotoDelete(ph.name);}}
+                          <button onClick={function(){handlePhotoDelete(ph);}}
                             style={{position:"absolute",top:-4,right:-4,width:18,height:18,borderRadius:"50%",background:"#EF5350",border:"none",cursor:"pointer",fontSize:10,color:"#fff",fontWeight:900,lineHeight:"18px",textAlign:"center",padding:0}}>{"×"}</button>
                         </div>
                         <span style={{fontSize:9,color:"var(--td)",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph.name}</span>
