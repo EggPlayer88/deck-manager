@@ -15,6 +15,10 @@ import {
   saveGlobalPlayer,
   saveGlobalPlayers,
   deleteGlobalPlayer,
+  uploadPlayerPhoto,
+  listPlayerPhotos,
+  deletePlayerPhoto,
+  listAllPhotos,
 } from './supabase.js';
 
 window._SUPABASE = {
@@ -31,6 +35,10 @@ window._SUPABASE = {
   saveGlobalPlayer,
   saveGlobalPlayers,
   deleteGlobalPlayer,
+  uploadPlayerPhoto,
+  listPlayerPhotos,
+  deletePlayerPhoto,
+  listAllPhotos,
 };
 
 import('./deck-manager.jsx').then(function(module) {
