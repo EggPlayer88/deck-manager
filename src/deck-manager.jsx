@@ -768,7 +768,7 @@ function PlayerDBPage(p){
     setAllPhotos(list);
     setPhotoLoading(false);
   };
-  useEffect(function(){ if(dbTab==="사진") loadPhotos(); },[dbTab]);
+  useEffect(function(){ if(dbTab==="사진 관리") loadPhotos(); },[dbTab]);
 
   /* 사진 업로드 핸들러 */
   var handlePhotoUpload=async function(files){
@@ -784,7 +784,8 @@ function PlayerDBPage(p){
       if(url){ok++;}else{fail++;}
     }
     setUploadMsg("완료: "+ok+"장 업로드"+( fail>0?" (실패 "+fail+"장)":""));
-    /* 업로드 완료 후 서버에서 새로 불러오기 */
+    /* Supabase 인덱싱 대기 후 목록 갱신 */
+    await new Promise(function(r){ setTimeout(r, 1500); });
     await loadPhotos();
     setUploading(false);
   };
@@ -1598,6 +1599,12 @@ function LineupPage(p) {
   var saveLM = p.saveLineupMap;
   var _sel = useState(null); var selId = _sel[0]; var setSelId = _sel[1];
   var _picker = useState(null); var pickerSlot = _picker[0]; var setPickerSlot = _picker[1];
+  /* selId 변경 시 해당 선수 사진 미리 로드 */
+  useEffect(function(){
+    if(!selId) return;
+    var pl = players.map(function(x){ return mergePl(x)||x; }).find(function(x){ return x.id===selId; });
+    if(pl && pl.name) loadPhotosForPlayer(pl.name);
+  },[selId]);
   var _dragSlot = useState(null); var dragSlot = _dragSlot[0]; var setDragSlot = _dragSlot[1];
   /* 사진 캐시: {선수이름: [url, ...]} - useState로 re-render 보장 */
   var _photoCache = useState({});var photoCache=_photoCache[0];var setPhotoCache=_photoCache[1];
