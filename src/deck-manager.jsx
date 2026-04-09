@@ -1599,28 +1599,40 @@ function LineupPage(p) {
   var saveLM = p.saveLineupMap;
   var _sel = useState(null); var selId = _sel[0]; var setSelId = _sel[1];
   var _picker = useState(null); var pickerSlot = _picker[0]; var setPickerSlot = _picker[1];
-  /* selId 변경 시 해당 선수 사진 미리 로드 */
-  useEffect(function(){
-    if(!selId) return;
-    var pl = players.map(function(x){ return mergePl(x)||x; }).find(function(x){ return x.id===selId; });
-    if(pl && pl.name) loadPhotosForPlayer(pl.name);
-  },[selId]);
   var _dragSlot = useState(null); var dragSlot = _dragSlot[0]; var setDragSlot = _dragSlot[1];
   /* 사진 캐시: {선수이름: [url, ...]} - useState로 re-render 보장 */
   var _photoCache = useState({});var photoCache=_photoCache[0];var setPhotoCache=_photoCache[1];
-  var loadPhotosForPlayer = async function(name) {
-    if (!name || photoCache[name] !== undefined) return;
-    /* 먼저 빈 배열로 표시 (로딩 시작) */
-    setPhotoCache(function(prev){
-      if(prev[name] !== undefined) return prev;
-      var next = Object.assign({}, prev); next[name] = null; return next;
-    });
+  var photoCacheRef = React.useRef({});
+  var loadPhotosForPlayer = React.useCallback(async function(name) {
+    if (!name || photoCacheRef.current[name] !== undefined) return;
+    photoCacheRef.current[name] = null;
     var urls = await listPlayerPhotos(name);
+    photoCacheRef.current[name] = urls || [];
     setPhotoCache(function(prev){
-      var next = Object.assign({}, prev); next[name] = urls; return next;
+      var next = Object.assign({}, prev); next[name] = urls || []; return next;
     });
-  };
-  var getPhotos = function(name) { return photoCache[name] !== undefined ? photoCache[name] : undefined; };
+  }, []);
+  var getPhotos = function(name) { return photoCache[name]; };
+
+  /* 라인업 내 모든 선수 사진 자동 로드 */
+  var lm = p.lineupMap || {};
+  useEffect(function(){
+    var names = [];
+    Object.values(lm).forEach(function(pid){
+      var raw = (p.players||[]).find(function(x){ return x.id===pid; });
+      var pl = raw ? (mergePl(raw)||raw) : null;
+      if(pl && pl.name && names.indexOf(pl.name)<0) names.push(pl.name);
+    });
+    names.forEach(function(name){ loadPhotosForPlayer(name); });
+  },[JSON.stringify(Object.keys(lm).sort())]);
+
+  /* selId 변경 시 해당 선수 사진도 로드 */
+  useEffect(function(){
+    if(!selId) return;
+    var raw = (p.players||[]).find(function(x){ return x.id===selId; });
+    var pl = raw ? (mergePl(raw)||raw) : null;
+    if(pl && pl.name) loadPhotosForPlayer(pl.name);
+  },[selId]);
   var _dragOver = useState(null); var dragOverSlot = _dragOver[0]; var setDragOverSlot = _dragOver[1];
   var _sdOpen = useState(false); var sdOpen = _sdOpen[0]; var setSdOpen = _sdOpen[1];
   var sdState = p.sdState; var setSdState = p.setSdState;
@@ -1870,7 +1882,7 @@ function LineupPage(p) {
             <span>{idx + 1}</span>
             {idx < 8 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx+1); }} style={{ fontSize: 10, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▼"}</span>)}
           </div>
-          <PlayerCard player={pl} size={mob?"sm":"md"} score={Math.round(calc.total)} showPhoto={true} />
+          <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} score={Math.round(calc.total)} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span></div>
             <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
@@ -1956,7 +1968,7 @@ function LineupPage(p) {
       <React.Fragment key={pl.id}>
         <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "32px 68px minmax(100px,1fr) 80px 96px 68px 46px 110px 40px 46px", alignItems: "center", gap: 28, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
-          <PlayerCard player={pl} size={mob?"sm":"md"} score={Math.round(calc.total)} showPhoto={true} />
+          <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} score={Math.round(calc.total)} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span></div>
             <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
