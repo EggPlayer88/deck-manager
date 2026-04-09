@@ -135,26 +135,74 @@ export async function deleteGlobalPlayer(id) {
 /* ── 선수 사진 (player-photos 버킷) ── */
 const PHOTO_BUCKET = 'player-photos';
 
-export async function uploadPlayerPhoto(file, fileName) {
+/* 한글 파일명 → ASCII 안전 파일명 변환 (encodeURIComponent base) */
+function encodePhotoName(korName) {
+  /* "김도영1.jpg" → "EAB980EB8F8493C138.jpg" 형식 */
+  var parts = korName.split('.');
+  var ext = parts.length > 1 ? parts.pop() : '';
+  var base = parts.join('.');
+  var encoded = '';
+  for (var i = 0; i < base.length; i++) {
+    var code = base.charCodeAt(i);
+    if (code < 128) {
+      encoded += base[i];
+    } else {
+      var bytes = encodeURIComponent(base[i]).replace(/%/g, '');
+      encoded += bytes;
+    }
+  }
+  return ext ? encoded + '.' + ext : encoded;
+}
+
+function decodePhotoName(encodedName) {
+  /* 저장된 원래 한글 이름은 메타데이터로 추적하므로
+     여기서는 파일명에서 baseName 추출만 함 */
+  return encodedName;
+}
+
+/* 선수 이름 → 저장 시 사용할 prefix */
+function nameToPrefix(korName) {
+  var encoded = '';
+  for (var i = 0; i < korName.length; i++) {
+    var code = korName.charCodeAt(i);
+    if (code < 128) {
+      encoded += korName[i];
+    } else {
+      var bytes = encodeURIComponent(korName[i]).replace(/%/g, '');
+      encoded += bytes;
+    }
+  }
+  return encoded;
+}
+
+export async function uploadPlayerPhoto(file, originalFileName) {
   if (!supabase) return null;
+  var ext = originalFileName.split('.').pop().toLowerCase();
+  /* baseName: "김도영1" → 번호 포함 그대로 인코딩 */
+  var baseName = originalFileName.replace(/\.[^.]+$/, '');
+  var safeFileName = nameToPrefix(baseName) + '.' + ext;
   var { data, error } = await supabase.storage
     .from(PHOTO_BUCKET)
-    .upload(fileName, file, { upsert: true, contentType: file.type });
+    .upload(safeFileName, file, {
+      upsert: true,
+      contentType: file.type,
+      metadata: { originalName: originalFileName }
+    });
   if (error) { console.error('uploadPlayerPhoto error:', error); return null; }
-  var { data: urlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(fileName);
+  var { data: urlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(safeFileName);
   return urlData?.publicUrl || null;
 }
 
 export async function listPlayerPhotos(playerName) {
   if (!supabase || !playerName) return [];
-  var { data, error } = await supabase.storage.from(PHOTO_BUCKET).list('', {
-    search: playerName
-  });
+  var prefix = nameToPrefix(playerName);
+  var { data, error } = await supabase.storage.from(PHOTO_BUCKET).list('');
   if (error || !data) return [];
-  /* 이름 기준 필터: "이승엽", "이승엽1", "이승엽2" 등 */
+  /* prefix로 시작하는 파일만 필터 (숫자 붙은 것 포함) */
   var filtered = data.filter(function(f) {
-    var base = f.name.replace(/\.[^.]+$/, '').replace(/\d+$/, '');
-    return base === playerName;
+    var base = f.name.replace(/\.[^.]+$/, '');
+    /* prefix 뒤에 숫자만 오거나 아무것도 없는 경우 */
+    return base === prefix || new RegExp('^' + prefix + '\\d+$').test(base);
   });
   filtered.sort(function(a, b) { return a.name.localeCompare(b.name); });
   return filtered.map(function(f) {
@@ -173,9 +221,14 @@ export async function listAllPhotos() {
   var { data, error } = await supabase.storage.from(PHOTO_BUCKET).list('');
   if (error || !data) return [];
   return data.map(function(f) {
+    /* 인코딩된 파일명에서 원래 선수이름 복원 */
+    var base = f.name.replace(/\.[^.]+$/, '').replace(/\d+$/, '');
+    /* percent-decode 시도 */
+    var decodedBase = base;
+    try { decodedBase = decodeURIComponent(base.replace(/([0-9A-F]{2})/ig, '%$1')); } catch(e) {}
     return {
       name: f.name,
-      baseName: f.name.replace(/\.[^.]+$/, '').replace(/\d+$/, ''),
+      baseName: decodedBase,
       url: supabase.storage.from(PHOTO_BUCKET).getPublicUrl(f.name).data.publicUrl
     };
   });
