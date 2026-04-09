@@ -190,12 +190,14 @@ export async function uploadPlayerPhoto(file, originalFileName) {
 
 export async function listPlayerPhotos(playerName) {
   if (!supabase || !playerName) return [];
-  var prefix = encodeName(playerName);
   var { data, error } = await supabase.storage.from(PHOTO_BUCKET).list('');
   if (error || !data) return [];
   var filtered = data.filter(function(f) {
+    /* 확장자 제거 후 디코딩 → 끝 숫자 제거 → 선수이름 비교 */
     var base = f.name.replace(/\.[^.]+$/, '');
-    return base === prefix || new RegExp('^' + prefix + '\\d+$').test(base);
+    var decoded = decodeName(base);
+    var baseName = decoded.replace(/\d+$/, '');
+    return baseName === playerName;
   });
   filtered.sort(function(a, b) { return a.name.localeCompare(b.name); });
   return filtered.map(function(f) {
@@ -214,10 +216,13 @@ export async function listAllPhotos() {
   var { data, error } = await supabase.storage.from(PHOTO_BUCKET).list('');
   if (error || !data) return [];
   return data.map(function(f) {
-    var base = f.name.replace(/\.[^.]+$/, '').replace(/\d+$/, '');
+    var base = f.name.replace(/\.[^.]+$/, '');
+    /* 디코딩 먼저, 그 다음 끝 숫자 제거 */
+    var decoded = decodeName(base);
+    var baseName = decoded.replace(/\d+$/, '');
     return {
       name: f.name,
-      baseName: decodeName(base), /* 인코딩된 이름 → 원래 한글 이름 복원 */
+      baseName: baseName,
       url: supabase.storage.from(PHOTO_BUCKET).getPublicUrl(f.name).data.publicUrl
     };
   });
