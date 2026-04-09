@@ -775,29 +775,19 @@ function PlayerDBPage(p){
     if(!files||!files.length)return;
     setUploading(true);
     var ok=0;var fail=0;
-    var newPhotos=[];
     for(var i=0;i<files.length;i++){
       var file=files[i];
       var ext=file.name.split(".").pop().toLowerCase();
       var baseName=file.name.replace(/\.[^.]+$/,"");
       var fileName=baseName+"."+ext;
       var url=await uploadPlayerPhoto(file,fileName);
-      if(url){
-        ok++;
-        /* 즉시 목록에 추가 (Supabase 반영 대기 없이) */
-        newPhotos.push({
-          name: fileName,
-          baseName: baseName.replace(/\d+$/,""),
-          url: url
-        });
-      }else fail++;
-    }
-    if(newPhotos.length>0){
-      setAllPhotos(function(prev){ return prev.concat(newPhotos); });
+      if(url){ok++;}else{fail++;}
     }
     setUploadMsg("완료: "+ok+"장 업로드"+( fail>0?" (실패 "+fail+"장)":""));
-    /* 1초 후 서버 목록으로 재동기화 */
-    setTimeout(function(){ loadPhotos(); }, 1000);
+    /* 업로드 완료 후 서버에서 새로 불러오기 */
+    await loadPhotos();
+    setUploading(false);
+  };
     setUploading(false);
   };
 
@@ -1611,17 +1601,21 @@ function LineupPage(p) {
   var _sel = useState(null); var selId = _sel[0]; var setSelId = _sel[1];
   var _picker = useState(null); var pickerSlot = _picker[0]; var setPickerSlot = _picker[1];
   var _dragSlot = useState(null); var dragSlot = _dragSlot[0]; var setDragSlot = _dragSlot[1];
-  /* 사진 캐시: {선수이름: [url, ...]} */
-  var _photoCache = React.useRef({});
-  var _photoForce = useState(0); var setPhotoForce = _photoForce[1];
+  /* 사진 캐시: {선수이름: [url, ...]} - useState로 re-render 보장 */
+  var _photoCache = useState({});var photoCache=_photoCache[0];var setPhotoCache=_photoCache[1];
   var loadPhotosForPlayer = async function(name) {
-    if (!name || _photoCache.current[name] !== undefined) return;
-    _photoCache.current[name] = [];
+    if (!name || photoCache[name] !== undefined) return;
+    /* 먼저 빈 배열로 표시 (로딩 시작) */
+    setPhotoCache(function(prev){
+      if(prev[name] !== undefined) return prev;
+      var next = Object.assign({}, prev); next[name] = null; return next;
+    });
     var urls = await listPlayerPhotos(name);
-    _photoCache.current[name] = urls;
-    setPhotoForce(function(n){return n+1;});
+    setPhotoCache(function(prev){
+      var next = Object.assign({}, prev); next[name] = urls; return next;
+    });
   };
-  var getPhotos = function(name) { return _photoCache.current[name] || null; };
+  var getPhotos = function(name) { return photoCache[name] !== undefined ? photoCache[name] : undefined; };
   var _dragOver = useState(null); var dragOverSlot = _dragOver[0]; var setDragOverSlot = _dragOver[1];
   var _sdOpen = useState(false); var sdOpen = _sdOpen[0]; var setSdOpen = _sdOpen[1];
   var sdState = p.sdState; var setSdState = p.setSdState;
@@ -1911,8 +1905,8 @@ function LineupPage(p) {
           {/* 사진 선택 UI */}
           {(function(){
             var photos = getPhotos(pl.name);
-            if (photos === null) { loadPhotosForPlayer(pl.name); return null; }
-            if (photos.length === 0) return null;
+            if (photos === undefined) { loadPhotosForPlayer(pl.name); return null; }
+            if (!photos || photos.length === 0) return null;
             return (
               <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <span style={{fontSize:11,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
@@ -1998,8 +1992,8 @@ function LineupPage(p) {
           {/* 사진 선택 UI */}
           {(function(){
             var photos = getPhotos(pl.name);
-            if (photos === null) { loadPhotosForPlayer(pl.name); return null; }
-            if (photos.length === 0) return null;
+            if (photos === undefined) { loadPhotosForPlayer(pl.name); return null; }
+            if (!photos || photos.length === 0) return null;
             return (
               <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <span style={{fontSize:11,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
