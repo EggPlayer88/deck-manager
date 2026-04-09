@@ -206,7 +206,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (act(55)) { var y55=v(55); if (y55 && !isBat) { if (ct==="임팩트") pc+=2; else if (String(yr)===y55) pc+=2; } }
   if (act(60)) { if (v(60)==="L" && isBat) { bp++; ba++; be++; } if (v(60)==="R" && !isBat) { pc++; ps++; } }
   if (act(65)) { if (v(65)==="L" && stars===3) { bp+=2; ba+=2; be+=2; pc+=2; ps+=2; } if (v(65)==="R" && stars===4 && isBat) ba+=2; }
-  if (act(70)) { if (v(70)==="L" && !isBat) { pc++; ps++; } if (v(70)==="R" && (isRP||isCP)) { pc+=2; ps+=2; } }
+  if (act(70)) { if (v(70)==="L" && !isBat && !isRP && !isCP) { pc++; ps++; } if (v(70)==="R" && (isRP||isCP)) { pc+=2; ps+=2; } }
   if (act(75)) {
     var v75=v(75); var side75=v75&&v75[0]; var yr75=v75&&v75.indexOf(":")>0?v75.split(":")[1]:"";
     if (side75==="L" && isBat) { var m75=(ct==="임팩트"||String(yr)===yr75); if(m75){bp+=3;ba+=3;} }
@@ -501,9 +501,9 @@ function PlayerCard(p) {
       )}
 
       {/* Position badge */}
-      <div style={{ position:"absolute", top:2, right:2,
-        background:"rgba(0,0,0,0.6)", borderRadius:3, padding:"1px 3px", zIndex:5 }}>
-        <span style={{ fontSize:fs, fontWeight:700, color:"#fff" }}>{pl.subPosition||""}</span>
+      <div style={{ position:"absolute", top:1, right:2,
+        background:"rgba(0,0,0,0.6)", borderRadius:3, padding:"0px 3px", zIndex:5 }}>
+        <span style={{ fontSize:fs, fontWeight:700, color:"#fff", lineHeight:1.2 }}>{pl.subPosition||""}</span>
       </div>
 
       {/* Team badge */}
@@ -525,14 +525,26 @@ function PlayerCard(p) {
       </div>
 
       {/* Enhance badge */}
-      {pl.enhance && (
-        <div style={{ position:"absolute", bottom:size==="lg"?28:22, left:2, zIndex:5 }}>
-          <span style={{ fontSize:fs, fontWeight:800, color:"#fff",
-            background:"#E53935", borderRadius:3, padding:"1px 3px" }}>
-            {"+" + (pl.enhance||"").replace(/[^0-9]/g,"")}
-          </span>
-        </div>
-      )}
+      {pl.enhance && (function(){
+        var isGak = (pl.enhance||"").indexOf("각성") >= 0;
+        var num = (pl.enhance||"").replace(/[^0-9]/g,"");
+        return (
+          <div style={{ position:"absolute", bottom:size==="lg"?28:22, left:2, zIndex:5 }}>
+            {isGak ? (
+              <span style={{ fontSize:fs, fontWeight:800, color:"#fff",
+                background:"linear-gradient(135deg,#7B1FA2,#AB47BC)",
+                borderRadius:3, padding:"1px 3px", letterSpacing:0.5 }}>
+                {"◆"+num}
+              </span>
+            ) : (
+              <span style={{ fontSize:fs, fontWeight:800, color:"#fff",
+                background:"#E53935", borderRadius:3, padding:"1px 3px" }}>
+                {"+"+num}
+              </span>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Bottom info */}
       <div style={{ background:"rgba(0,0,0,0.65)", padding:"2px 3px 3px", textAlign:"center",
@@ -1241,7 +1253,7 @@ var SD_ROWS = [
   {sp:55,type:"yearR",rDesc:"투수 변화: 임팩트+2, 연도매치+2"},
   {sp:60,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
   {sp:65,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 정확 +2"},
-  {sp:70,type:"lr",lDesc:"투수 +1",rDesc:"불펜+마무리 +2"},
+  {sp:70,type:"lr",lDesc:"선발 +1",rDesc:"불펜+마무리 +2"},
   {sp:75,type:"yearLR",lDesc:"타자 파정 +3 (연도선택)",rDesc:"투수 구위 +3 (연도선택)"},
   {sp:80,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
   {sp:85,type:"lr",lDesc:"4성 +2",rDesc:"5성 파구 +1"},
