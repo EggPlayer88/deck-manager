@@ -4140,34 +4140,38 @@ function buildDist(skills, N) {
     var majorBases = Object.keys(majorGroups);
     var minorBases = Object.keys(minorGroups);
 
-    var skillScore = function(name, lv) {
-      if (!name || !catSkills[name]) return 0;
-      var sc = catSkills[name]; var lvIdx = [5,6,7,8,9,10].indexOf(lv);
-      if (lvIdx < 0) return 0;
-      return sc[lvIdx] !== undefined ? sc[lvIdx] : (sc[sc.length-1]||0);
+    /* 카드 종류별 기본 스킬 레벨
+       골든글러브: 6,6,6 / 라이브: 7,7,7 / 올스타: 8,7,7 / 나머지: 6,5,5 */
+    var CARD_LVS = {
+      "골든글러브": [6,6,6],
+      "라이브":     [7,7,7],
+      "올스타":     [8,7,7],
+      "기본":       [6,5,5]
     };
+    var SKILL_CARD_TYPES = ["골든글러브","라이브","올스타","기본"];
 
-    var scores = [];
-    for (var i = 0; i < N; i++) {
-      var total = 0;
-      var chosenBases = [];
-      /* 스킬1 무조건 메이저 */
-      for (var slot = 0; slot < 3; slot++) {
-        var isMajor = slot === 0 ? true : Math.random() < 0.14;
-        var pool = (isMajor ? majorBases : minorBases).filter(function(b){ return chosenBases.indexOf(b)<0; });
-        if (!pool.length) pool = (isMajor ? minorBases : majorBases).filter(function(b){ return chosenBases.indexOf(b)<0; });
-        if (!pool.length) break;
-        var pb = pool[Math.floor(Math.random()*pool.length)];
-        chosenBases.push(pb);
-        var variants = (majorGroups[pb]||minorGroups[pb]||[pb]);
-        var pick = variants[Math.floor(Math.random()*variants.length)];
-        var lv = [5,6,7,8,9,10][Math.floor(Math.random()*6)];
-        total += skillScore(pick, lv);
+    SKILL_CARD_TYPES.forEach(function(ctKey) {
+      var lvs = CARD_LVS[ctKey];
+      var scores = [];
+      for (var i = 0; i < N; i++) {
+        var total = 0;
+        var chosenBases = [];
+        for (var slot = 0; slot < 3; slot++) {
+          var isMajor = slot === 0 ? true : Math.random() < 0.14;
+          var pool = (isMajor ? majorBases : minorBases).filter(function(b){ return chosenBases.indexOf(b)<0; });
+          if (!pool.length) pool = (isMajor ? minorBases : majorBases).filter(function(b){ return chosenBases.indexOf(b)<0; });
+          if (!pool.length) break;
+          var pb = pool[Math.floor(Math.random()*pool.length)];
+          chosenBases.push(pb);
+          var variants = (majorGroups[pb]||minorGroups[pb]||[pb]);
+          var pick = variants[Math.floor(Math.random()*variants.length)];
+          total += getSkillScore(pick, lvs[slot], cat);
+        }
+        scores.push(Math.round(total * 100) / 100);
       }
-      scores.push(Math.round(total * 100) / 100);
-    }
-    scores.sort(function(a,b){return a-b;});
-    result[cat] = scores;
+      scores.sort(function(a,b){return a-b;});
+      result["skill_"+cat+"_"+ctKey] = scores;
+    });
   });
 
   /* 카드종류별 훈련 분포 추가 */
@@ -4379,7 +4383,16 @@ function LineupAnalysis(p) {
     var skSc = Math.round(skillSc(pl, cat)*100)/100;
     var trSc = isBat ? Math.round(trainBat(pl)*100)/100 : Math.round(trainPit(pl)*100)/100;
     var spSc = isBat ? Math.round(specBat(pl)*100)/100 : Math.round(specPit(pl)*100)/100;
-    var skPct = dist ? getPercentile(dist[cat], skSc) : null;
+    var skPct = (function(){
+      if (!dist) return null;
+      /* 카드종류에 맞는 분포 키 선택 */
+      var ctKey = (pl.cardType==="골든글러브") ? "골든글러브"
+                : (pl.cardType==="라이브")     ? "라이브"
+                : (pl.cardType==="올스타")     ? "올스타"
+                : "기본"; /* 임팩트/시그니처/국가대표/시즌 */
+      var skDist = dist["skill_"+cat+"_"+ctKey];
+      return skDist ? getPercentile(skDist, skSc) : null;
+    })();
     /* 훈련: 훈재분 계산기와 동일한 분포 사용 (카드종류별 다름) */
     var trainDist = dist ? dist["train_"+(isBat?"bat":"pit")+"_"+(pl.cardType||"")] : null;
     var trPct = trainDist ? getPercentile(trainDist, trSc) : null;
