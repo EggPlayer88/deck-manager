@@ -530,14 +530,13 @@ function PlayerCard(p) {
       {pl.team && (function(){
         var logoUrl = getLogoForCard(pl.team, pl.year||"");
         if (!logoUrl) return null;
-        var logoSize = size==="lg" ? 22 : size==="sm" ? 14 : 18;
+        var logoSize = size==="lg" ? 28 : size==="sm" ? 18 : 22;
         return (
-          <div style={{ position:"absolute", top:2, left:2, zIndex:5,
-            width:logoSize, height:logoSize,
-            background:"rgba(0,0,0,0.4)", borderRadius:3,
-            display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+          <div style={{ position:"absolute", top:1, left:1, zIndex:5,
+            width:logoSize, height:logoSize }}>
             <img src={logoUrl} alt={pl.team}
-              style={{ width:"100%", height:"100%", objectFit:"contain" }}
+              style={{ width:"100%", height:"100%", objectFit:"contain",
+                filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.8))" }}
               onError={function(e){ e.target.style.display="none"; }} />
           </div>
         );
