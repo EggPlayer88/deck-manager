@@ -4081,17 +4081,20 @@ function ClubLoungePage(p) {
 function DataCenterPage(p) {
   var mob = p.mobile;
   var skills = p.skills || {};
-  var _tab = React.useState("skill"); var dcTab = _tab[0]; var setDcTab = _tab[1];
+  var players = p.players || [];
+  var lineupMap = p.lineupMap || {};
+  var _tab = React.useState("analysis"); var dcTab = _tab[0]; var setDcTab = _tab[1];
 
   return (
     <div style={{padding:mob?12:18,maxWidth:800,paddingBottom:mob?80:18}}>
       <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"📊 데이터 센터"}</h2>
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
-        {[{id:"skill",label:"🎯 스킬 계산기"},{id:"train",label:"🏋️ 훈재분 시뮬레이터"},{id:"top",label:"👑 고점덱 정보"}].map(function(t){
+        {[{id:"analysis",label:"📈 라인업 분석"},{id:"skill",label:"🎯 스킬 계산기"},{id:"train",label:"🏋️ 훈재분 계산기"},{id:"top",label:"👑 고점덱 정보"}].map(function(t){
           var a = dcTab===t.id;
           return (<button key={t.id} onClick={function(){setDcTab(t.id);}} style={{padding:"8px 16px",fontSize:11,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
         })}
       </div>
+      {dcTab==="analysis" && <LineupAnalysis mobile={mob} players={players} lineupMap={lineupMap} skills={skills} />}
       {dcTab==="skill" && <SkillCalculator mobile={mob} skills={skills} />}
       {dcTab==="train" && <TrainSimulator mobile={mob} skills={skills} />}
       {dcTab==="top" && (
@@ -4101,6 +4104,368 @@ function DataCenterPage(p) {
           <p style={{fontSize:12,color:"var(--td)",margin:0}}>{"고점덱 정보가 준비되면 안내드리겠습니다."}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── 라인업 분석 ─── */
+/* 분포 테이블: 스킬변경 시 자동 갱신되는 캐시 방식 사용
+   각 항목별 상위 퍼센타일 계산 (10만 시뮬레이션 결과 기반)
+   - 스킬점수 분포 (타자/선발/중계/마무리)
+   - 훈련 분포 (파+정+선, 변+구)
+   - 특훈 분포 (파+정+선, 변+구) */
+
+var DIST_CACHE = null; /* {batSkill:[],pitSkill:{SP:[],RP:[],CP:[]}, batTrain:[], pitTrain:[], batSpec:[], pitSpec:[]} */
+
+function buildDist(skills, N) {
+  N = N || 100000;
+  var w = getW();
+  var cats = ["타자","선발","중계","마무리"];
+  var result = {};
+
+  cats.forEach(function(cat) {
+    var isBat = cat === "타자";
+    var catSkills = skills[cat] || {};
+    var allNames = Object.keys(catSkills);
+    var majorMap = (skills._major && skills._major[cat]) || {};
+
+    var baseName = function(n) { return n.replace(/\(.*?\)/g, '').trim(); };
+    var groupByBase = function(arr) {
+      var g = {};
+      arr.forEach(function(n){ var b=baseName(n); if(!g[b])g[b]=[]; g[b].push(n); });
+      return g;
+    };
+    var majorGroups = groupByBase(allNames.filter(function(n){return majorMap[n];}));
+    var minorGroups = groupByBase(allNames.filter(function(n){return !majorMap[n];}));
+    var majorBases = Object.keys(majorGroups);
+    var minorBases = Object.keys(minorGroups);
+
+    var skillScore = function(name, lv) {
+      if (!name || !catSkills[name]) return 0;
+      var sc = catSkills[name]; var lvIdx = [5,6,7,8,9,10].indexOf(lv);
+      if (lvIdx < 0) return 0;
+      return sc[lvIdx] !== undefined ? sc[lvIdx] : (sc[sc.length-1]||0);
+    };
+
+    var scores = [];
+    for (var i = 0; i < N; i++) {
+      var total = 0;
+      var chosenBases = [];
+      /* 스킬1 무조건 메이저 */
+      for (var slot = 0; slot < 3; slot++) {
+        var isMajor = slot === 0 ? true : Math.random() < 0.14;
+        var pool = (isMajor ? majorBases : minorBases).filter(function(b){ return chosenBases.indexOf(b)<0; });
+        if (!pool.length) pool = (isMajor ? minorBases : majorBases).filter(function(b){ return chosenBases.indexOf(b)<0; });
+        if (!pool.length) break;
+        var pb = pool[Math.floor(Math.random()*pool.length)];
+        chosenBases.push(pb);
+        var variants = (majorGroups[pb]||minorGroups[pb]||[pb]);
+        var pick = variants[Math.floor(Math.random()*variants.length)];
+        var lv = [5,6,7,8,9,10][Math.floor(Math.random()*6)];
+        total += skillScore(pick, lv);
+      }
+      scores.push(Math.round(total * 100) / 100);
+    }
+    scores.sort(function(a,b){return a-b;});
+    result[cat] = scores;
+  });
+
+  /* 카드종류별 훈련 분포 추가 */
+  var TRAIN_PTS = {"골든글러브":75,"시그니처":75,"라이브":75,"올스타":75,"국가대표":60,"임팩트":54};
+  var BAT_STATS_TR = ["파워","정확","선구","인내","주루","수비"];
+  var PIT_STATS_TR = ["구속","변화","구위","제구","지구력","수비"];
+  var w2 = getW();
+  ["bat","pit"].forEach(function(role) {
+    var isBatR = role === "bat";
+    var statList = isBatR ? BAT_STATS_TR : PIT_STATS_TR;
+    Object.keys(TRAIN_PTS).forEach(function(ct) {
+      var total = TRAIN_PTS[ct];
+      var fixList = ct === "시그니처" ? (isBatR ? ["주루","수비"] : ["구속","수비"]) : ["수비"];
+      var freeList = statList.filter(function(s){ return fixList.indexOf(s)<0; });
+      var scores = [];
+      for (var i = 0; i < N; i++) {
+        var dist = {};
+        statList.forEach(function(s){dist[s]=0;});
+        for (var t2=0;t2<total;t2++) dist[statList[Math.floor(Math.random()*statList.length)]]++;
+        var sortedS = statList.slice().sort(function(a,b){return dist[a]-dist[b];});
+        var toFix = sortedS.slice(0,fixList.length);
+        var fixedTot = toFix.reduce(function(a,s){return a+dist[s];},0);
+        var rem = total - fixedTot;
+        var newDist = {}; statList.forEach(function(s){newDist[s]=0;});
+        toFix.forEach(function(s){newDist[s]=dist[s];});
+        var reFree2 = freeList; /* 재분배 풀 = 고정 스탯 제외 전체 */
+        for(var r2=0;r2<rem;r2++) newDist[reFree2[Math.floor(Math.random()*reFree2.length)]]++;
+        var sc = isBatR
+          ? (newDist["파워"]||0)*w2.p+(newDist["정확"]||0)*w2.a+(newDist["선구"]||0)*w2.e
+          : (newDist["변화"]||0)*w2.c+(newDist["구위"]||0)*w2.s;
+        scores.push(Math.round(sc*100)/100);
+      }
+      scores.sort(function(a,b){return a-b;});
+      result["train_"+role+"_"+ct] = scores;
+    });
+  });
+
+  /* 특훈 분포 추가
+     가능 카드: 골든글러브/시그니처/임팩트/국가대표
+     시행횟수: 골든글러브/시그니처/임팩트=3, 국가대표=4, FA(임팩트/시그니처)=5
+     임팩트: perfect 없음 (good/great 각 1/2)
+     others: good/great/perfect 각 1/3
+     기본값: 타자 파워+3(FA:+5), 투수 구위+3(FA:+5)
+     각 시행: good=1점, great=2점, perfect=3점 → 각 점수를 1씩 랜덤 스탯에 배정 */
+  var SPEC_CARDS = ["골든글러브","시그니처","임팩트","국가대표"];
+  var SPEC_TRIALS = {"골든글러브":3,"시그니처":3,"임팩트":3,"국가대표":4};
+  var BAT_SPEC_STATS = ["파워","정확","선구","인내","주루","수비"];
+  var PIT_SPEC_STATS = ["구속","변화","구위","제구","지구력","수비"];
+  var w3 = getW();
+
+  SPEC_CARDS.forEach(function(ct) {
+    ["bat","pit","bat_fa","pit_fa"].forEach(function(roleKey) {
+      var isFa = roleKey.indexOf("fa") >= 0;
+      var isBatR = roleKey.indexOf("bat") >= 0;
+      /* FA는 임팩트/시그니처만 */
+      if (isFa && ct !== "임팩트" && ct !== "시그니처") return;
+      var trials = isFa ? 5 : SPEC_TRIALS[ct];
+      var hasPerfect = ct !== "임팩트";
+      var statList = isBatR ? BAT_SPEC_STATS : PIT_SPEC_STATS;
+      /* 기본값: 타자 파워, 투수 구위 */
+      var baseStatIdx = isBatR ? 0 : 2; /* 파워=0, 구위=2 */
+      var baseVal = isFa ? 5 : 3;
+
+      var scores = [];
+      for (var i = 0; i < N; i++) {
+        var pts = {}; statList.forEach(function(s){pts[s]=0;});
+        /* 기본값 고정 */
+        pts[statList[baseStatIdx]] += baseVal;
+
+        for (var t3 = 0; t3 < trials; t3++) {
+          var roll = Math.random();
+          var points;
+          if (hasPerfect) {
+            points = roll < 1/3 ? 1 : roll < 2/3 ? 2 : 3; /* good/great/perfect */
+          } else {
+            points = roll < 0.5 ? 1 : 2; /* good/great only (임팩트) */
+          }
+          /* 각 포인트를 개별적으로 랜덤 스탯에 배정 */
+          for (var pp = 0; pp < points; pp++) {
+            pts[statList[Math.floor(Math.random()*statList.length)]]++;
+          }
+        }
+        var sc = isBatR
+          ? (pts["파워"]||0)*w3.p+(pts["정확"]||0)*w3.a+(pts["선구"]||0)*w3.e
+          : (pts["변화"]||0)*w3.c+(pts["구위"]||0)*w3.s;
+        scores.push(Math.round(sc*100)/100);
+      }
+      scores.sort(function(a,b){return a-b;});
+      result["spec_"+roleKey+"_"+ct] = scores;
+    });
+  });
+
+  return result;
+}
+
+function getPercentile(dist, value) {
+  if (!dist || !dist.length) return null;
+  /* 상위 몇 % = 내 값보다 낮은 비율 */
+  var lo = 0; var hi = dist.length - 1;
+  while (lo < hi) { var mid = (lo+hi+1)>>1; if (dist[mid] <= value) lo=mid; else hi=mid-1; }
+  var rank = lo / dist.length * 100;
+  var top = 100 - rank;
+  return Math.max(0.1, Math.round(top * 10) / 10);
+}
+
+function LineupAnalysis(p) {
+  var mob = p.mobile;
+  var players = p.players || [];
+  var lineupMap = p.lineupMap || {};
+  var skills = p.skills || {};
+  var w = getW();
+
+  var _dist = React.useState(null); var dist = _dist[0]; var setDist = _dist[1];
+  var _building = React.useState(false); var building = _building[0]; var setBuilding = _building[1];
+  var _role = React.useState("타자"); var role = _role[0]; var setRole = _role[1];
+
+  /* 분포 빌드 (처음 열거나 스킬 변경 시) */
+  var buildAndSet = React.useCallback(async function() {
+    setBuilding(true);
+    /* setTimeout으로 UI 블로킹 방지 */
+    await new Promise(function(r){ setTimeout(r, 50); });
+    var d = buildDist(skills, 50000);
+    DIST_CACHE = d;
+    setDist(d);
+    setBuilding(false);
+  }, [skills]);
+
+  React.useEffect(function(){
+    if (!DIST_CACHE) { buildAndSet(); }
+    else { setDist(DIST_CACHE); }
+  }, []);
+
+  /* 라인업 선수 추출 */
+  var allSlots = Object.keys(lineupMap);
+  var batSlots = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
+  var pitSlots = ["SP1","SP2","SP3","SP4","SP5","RP1","RP2","RP3","RP4","RP5","RP6","CP"];
+
+  var getpl = function(slot) {
+    var pid = lineupMap[slot]; if (!pid) return null;
+    var raw = players.find(function(x){ return x.id===pid; });
+    return raw ? (mergePl(raw)||raw) : null;
+  };
+
+  var batPlayers = batSlots.map(function(s){ return {slot:s, pl:getpl(s)}; }).filter(function(x){ return x.pl; });
+  var pitPlayers = pitSlots.map(function(s){ return {slot:s, pl:getpl(s)}; }).filter(function(x){ return x.pl; });
+
+  var getPitCat = function(pl) {
+    var pos = pl.position || pl.subPosition || "";
+    if (pos==="마무리"||pos==="CP") return "마무리";
+    if (pos==="선발"||pos.indexOf("SP")>=0) return "선발";
+    return "중계";
+  };
+
+  var skillSc = function(pl, cat) {
+    return (getSkillScore(pl.skill1,pl.s1Lv||0,cat)+getSkillScore(pl.skill2,pl.s2Lv||0,cat)+getSkillScore(pl.skill3,pl.s3Lv||0,cat));
+  };
+  var trainBat = function(pl) { return (pl.trainP||0)*w.p+(pl.trainA||0)*w.a+(pl.trainE||0)*w.e; };
+  var trainPit = function(pl) { return (pl.trainC||0)*w.c+(pl.trainS||0)*w.s; };
+  var specBat = function(pl) { return (pl.specPower||0)*w.p+(pl.specAccuracy||0)*w.a+(pl.specEye||0)*w.e; };
+  var specPit = function(pl) { return (pl.specChange||0)*w.c+(pl.specStuff||0)*w.s; };
+
+  /* 훈련 포인트: 카드 종류별 상이 */
+  var TRAIN_POINTS = {"골든글러브":75,"시그니처":75,"라이브":75,"올스타":75,"국가대표":60,"임팩트":54};
+  /* 시그니처는 주루+수비 고정(유효 훈련 = 총점 - 주루 - 수비 기대값)
+     나머지는 수비 고정 (유효 훈련 = 총점 - 수비 기대값)
+     기대값: 시그니처 타자 - 2/6 * 총점이 비유효, 나머지 - 1/6 * 총점이 비유효 */
+  var getExpTrain = function(pl, isBat) {
+    var ct = pl.cardType || "";
+    var total = TRAIN_POINTS[ct] || 75;
+    var stats = 6; /* 6개 능력치 */
+    var fixCount = ct === "시그니처" ? 2 : 1;
+    /* 유효 능력치에 배분되는 기대값 */
+    var usefulStats = stats - fixCount;
+    var usefulPts = total * (usefulStats / stats);
+    return isBat
+      ? Math.round((usefulPts / usefulStats * 3) * 100) / 100  /* 파/정/선 3개 */
+      : Math.round((usefulPts / usefulStats * 2) * 100) / 100; /* 변/구 2개 */
+  };
+  /* 실제 획득 가능한 최대 유효 훈련 (모두 유효 스탯에 몰빵 시) */
+  var getMaxTrain = function(pl, isBat) {
+    var ct = pl.cardType || "";
+    var total = TRAIN_POINTS[ct] || 75;
+    var fixCount = ct === "시그니처" ? 2 : 1;
+    var fixPts = Math.floor(total / 6) * fixCount;
+    return isBat
+      ? Math.round((total - fixPts) * w.p) /* 최대 파워 집중 */
+      : Math.round((total - fixPts) * w.c);
+  };
+  var MAX_SPEC_BAT = 15*w.p + 15*w.a + 15*w.e;
+  var MAX_SPEC_PIT = 15*w.c + 15*w.s;
+
+  var pctBar = function(top, color) {
+    var w2 = Math.min(top, 100);
+    var barColor = top <= 5 ? "#FFD700" : top <= 20 ? "#66BB6A" : top <= 50 ? "#42A5F5" : "var(--td)";
+    return (
+      <div style={{display:"flex",alignItems:"center",gap:6,flex:1}}>
+        <div style={{flex:1,height:5,background:"var(--inner)",borderRadius:3,overflow:"hidden"}}>
+          <div style={{width:(100-w2)+"%",height:"100%",background:barColor,borderRadius:3,transition:"width 0.4s"}} />
+        </div>
+        <span style={{fontSize:11,fontWeight:800,color:barColor,minWidth:50,textAlign:"right"}}>
+          {top===null?"계산중":("상위 "+top+"%")}
+        </span>
+      </div>
+    );
+  };
+
+  var renderRow = function(slot, pl, isBat) {
+    var cat = isBat ? "타자" : getPitCat(pl);
+    var skSc = Math.round(skillSc(pl, cat)*100)/100;
+    var trSc = isBat ? Math.round(trainBat(pl)*100)/100 : Math.round(trainPit(pl)*100)/100;
+    var spSc = isBat ? Math.round(specBat(pl)*100)/100 : Math.round(specPit(pl)*100)/100;
+    var skPct = dist ? getPercentile(dist[cat], skSc) : null;
+    /* 훈련: 훈재분 계산기와 동일한 분포 사용 (카드종류별 다름) */
+    var trainDist = dist ? dist["train_"+(isBat?"bat":"pit")+"_"+(pl.cardType||"")] : null;
+    var trPct = trainDist ? getPercentile(trainDist, trSc) : null;
+    /* 특훈: 카드종류별 분포 기반 */
+    var SPEC_CARDS_LIST = ["골든글러브","시그니처","임팩트","국가대표"];
+    var spPct = null;
+    if (dist && SPEC_CARDS_LIST.indexOf(pl.cardType) >= 0) {
+      var isFaCard = pl.isFa && (pl.cardType==="임팩트"||pl.cardType==="시그니처");
+      var specKey = "spec_"+(isBat?"bat":"pit")+(isFaCard?"_fa":"")+"_"+pl.cardType;
+      var specDist = dist[specKey];
+      if (specDist) {
+        /* 기본값보다 낮으면 상위 100% */
+        var baseVal = isFaCard ? 5 : 3;
+        var baseStat = isBat ? "파워" : "구위";
+        var baseScore = isBat ? baseVal*w.p : baseVal*w.s;
+        if (spSc < baseScore - 0.01) {
+          spPct = 100;
+        } else {
+          spPct = getPercentile(specDist, spSc);
+        }
+      }
+    }
+
+    return (
+      <div key={pl.id} style={{padding:"10px 12px",borderBottom:"1px solid var(--bd)",display:"flex",flexDirection:mob?"column":"row",gap:mob?6:12,alignItems:mob?"flex-start":"center"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:140}}>
+          <Badge type={pl.cardType} />
+          <div>
+            <span style={{fontSize:12,fontWeight:800,color:"var(--t1)"}}>{pl.name}</span>
+            <span style={{fontSize:9,color:"var(--td)",marginLeft:4}}>{slot}</span>
+          </div>
+        </div>
+        <div style={{flex:1,display:"flex",flexDirection:"column",gap:4}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:10,color:"var(--td)",width:36,flexShrink:0}}>스킬</span>
+            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36}}>{skSc}</span>
+            {pctBar(skPct, "#CE93D8")}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:10,color:"var(--td)",width:36,flexShrink:0}}>훈련</span>
+            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36}}>{trSc.toFixed(1)}</span>
+            {pctBar(trPct, "#42A5F5")}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:10,color:"var(--td)",width:36,flexShrink:0}}>특훈</span>
+            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36}}>{spSc.toFixed(1)}</span>
+            {spPct !== null ? pctBar(spPct) : <span style={{fontSize:10,color:"var(--td)"}}>{"해당없음"}</span>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (building) return (
+    <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:40,textAlign:"center"}}>
+      <div style={{fontSize:13,color:"var(--td)",marginBottom:8}}>{"분포 계산 중..."}</div>
+      <div style={{fontSize:11,color:"var(--td)"}}>{"5만 회 시뮬레이션 (최초 1회)"}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:6,marginBottom:12,alignItems:"center"}}>
+        {["타자","투수"].map(function(r){ var a=r===role; return (
+          <button key={r} onClick={function(){setRole(r);}} style={{padding:"6px 16px",fontSize:11,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{r}</button>
+        );})}
+        <button onClick={buildAndSet} style={{marginLeft:"auto",padding:"5px 10px",fontSize:10,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--td)",cursor:"pointer"}}>{"🔄 분포 갱신"}</button>
+        <span style={{fontSize:9,color:"var(--td)"}}>{"(스킬 변경 시)"}</span>
+      </div>
+
+      <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",overflow:"hidden",marginBottom:6}}>
+        <div style={{padding:"8px 12px",background:"var(--inner)",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:12,fontWeight:800,color:"var(--t1)"}}>{role==="타자"?"⚾ 타자 라인업":"⚾ 투수 라인업"}</span>
+          <span style={{fontSize:10,color:"var(--td)"}}>{"("+( role==="타자"?batPlayers.length:pitPlayers.length)+"명)"}</span>
+        </div>
+        {(role==="타자"?batPlayers:pitPlayers).length === 0 ? (
+          <div style={{padding:24,textAlign:"center",fontSize:11,color:"var(--td)"}}>{"라인업에 등록된 선수가 없습니다"}</div>
+        ) : (role==="타자"?batPlayers:pitPlayers).map(function(x){ return renderRow(x.slot, x.pl, role==="타자"); })}
+      </div>
+
+      <div style={{padding:"8px 12px",background:"var(--inner)",borderRadius:8,fontSize:10,color:"var(--td)"}}>
+        {"💡 스킬 분포는 5만 회 시뮬레이션 기반. 훈련/특훈은 최대치 대비 비율. "}
+        <span style={{color:"#FFD700"}}>{"금색: 상위 5%"}</span>{" "}
+        <span style={{color:"#66BB6A"}}>{"초록: 상위 20%"}</span>{" "}
+        <span style={{color:"#42A5F5"}}>{"파랑: 상위 50%"}</span>
+      </div>
     </div>
   );
 }
@@ -4326,7 +4691,7 @@ function SkillCalculator(p) {
   );
 }
 
-/* ─── 훈재분 시뮬레이터 ─── */
+/* ─── 훈재분 계산기 ─── */
 function TrainSimulator(p) {
   var mob = p.mobile;
   var skills = p.skills || {};
@@ -4346,8 +4711,9 @@ function TrainSimulator(p) {
   var w = getW();
   var isBat = pos === "타자";
   var stats = isBat ? BAT_STATS : PIT_STATS;
-  var fixStats = cardType==="시그니처" ? (isBat?SIG_FIX_BAT:SIG_FIX_PIT) : ["수비"];
-  var freeStats = stats.filter(function(s){return fixStats.indexOf(s)<0;});
+  var fixStats = cardType==="시그니처" ? (isBat?SIG_FIX_BAT:SIG_FIX_PIT) : (isBat?["수비"]:["수비"]);
+  /* 재분배 풀: 고정 스탯(수비/주루+수비) 제외한 나머지 전체 */
+  var freeStats = stats.filter(function(s){ return fixStats.indexOf(s)<0; });
   var totalPts = TRAIN_POINTS[cardType]||75;
 
   var statScore = function(dist) {
@@ -4377,14 +4743,13 @@ function TrainSimulator(p) {
         /* 3단계: 고정 능력치 수비/주루등에 배치, 나머지 재분배 */
         var fixedTotal = toFix.reduce(function(acc,s){return acc+dist[s];},0);
         var remaining = totalPts - fixedTotal;
-        var reFree = freeStats.filter(function(s){return toFix.indexOf(s)<0;});
-        if (reFree.length === 0) reFree = freeStats;
-
+        /* 재분배 풀 = freeStats 전체 (수비/주루+수비 제외)
+           toFix는 "어떤 값이 수비/주루에 배정되는가"만 결정, 재분배 풀과 무관 */
         var newDist = {};
         stats.forEach(function(s){newDist[s]=0;});
         toFix.forEach(function(s){newDist[s]=dist[s];});
         for (var r = 0; r < remaining; r++) {
-          newDist[reFree[Math.floor(Math.random()*reFree.length)]]++;
+          newDist[freeStats[Math.floor(Math.random()*freeStats.length)]]++;
         }
 
         scores.push(statScore(newDist));
@@ -4461,7 +4826,7 @@ function TrainSimulator(p) {
           </div>
         </div>
         <button onClick={runSim} disabled={running} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,#66BB6A,#43A047)",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",opacity:running?0.6:1}}>
-          {running?"시뮬레이션 중... (10만회)":"🏋️ 훈재분 시뮬레이션"}
+          {running?"시뮬레이션 중... (10만회)":"🏋️ 훈재분 계산"}
         </button>
       </div>
 
@@ -4734,9 +5099,9 @@ export default function App(){
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
   else if(tab==="skills"&&isAdmin)pg=(<SkillManagePage mobile={mob} skills={store.skills} saveSkills={store.saveSkills}/>);
   else if(tab==="enhance"&&isAdmin)pg=(<EnhancePage mobile={mob}/>);
-  else if(tab==="datacenter")pg=(<DataCenterPage mobile={mob} skills={store.skills}/>);
+  else if(tab==="datacenter")pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap}/>);
   else if(tab==="clublounge")pg=(<ClubLoungePage mobile={mob}/>);
-  else pg=(<DataCenterPage mobile={mob} skills={store.skills}/>);
+  else pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap}/>);
 
   return(
     <div style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
