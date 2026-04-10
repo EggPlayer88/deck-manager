@@ -4396,11 +4396,11 @@ function LineupAnalysis(p) {
     var w2 = Math.min(top, 100);
     var barColor = top <= 5 ? "#FFD700" : top <= 20 ? "#66BB6A" : top <= 50 ? "#42A5F5" : "var(--td)";
     return (
-      <div style={{display:"flex",alignItems:"center",gap:6,flex:1}}>
-        <div style={{flex:1,height:5,background:"var(--inner)",borderRadius:3,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0,width:"100%"}}>
+        <div style={{flex:1,minWidth:40,height:5,background:"var(--inner)",borderRadius:3,overflow:"hidden"}}>
           <div style={{width:(100-w2)+"%",height:"100%",background:barColor,borderRadius:3,transition:"width 0.4s"}} />
         </div>
-        <span style={{fontSize:11,fontWeight:800,color:barColor,minWidth:50,textAlign:"right"}}>
+        <span style={{fontSize:11,fontWeight:800,color:barColor,minWidth:50,flexShrink:0,textAlign:"right"}}>
           {top===null?"계산중":("상위 "+top+"%")}
         </span>
       </div>
@@ -4454,20 +4454,20 @@ function LineupAnalysis(p) {
             <span style={{fontSize:9,color:"var(--td)",marginLeft:4}}>{slot}</span>
           </div>
         </div>
-        <div style={{flex:1,display:"flex",flexDirection:"column",gap:4}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{flex:1,display:"flex",flexDirection:"column",gap:4,width:"100%",minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
             <span style={{fontSize:10,color:"var(--td)",width:36,flexShrink:0}}>스킬</span>
-            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36}}>{skSc}</span>
+            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{skSc}</span>
             {pctBar(skPct, "#CE93D8")}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
             <span style={{fontSize:10,color:"var(--td)",width:36,flexShrink:0}}>훈련</span>
-            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36}}>{trSc.toFixed(1)}</span>
+            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{trSc.toFixed(1)}</span>
             {pctBar(trPct, "#42A5F5")}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
             <span style={{fontSize:10,color:"var(--td)",width:36,flexShrink:0}}>특훈</span>
-            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36}}>{spSc.toFixed(1)}</span>
+            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{spSc.toFixed(1)}</span>
             {spPct !== null ? pctBar(spPct) : <span style={{fontSize:10,color:"var(--td)"}}>{"해당없음"}</span>}
           </div>
         </div>
