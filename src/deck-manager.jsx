@@ -536,7 +536,8 @@ function PlayerCard(p) {
             width:logoSize, height:logoSize }}>
             <img src={logoUrl} alt={pl.team}
               style={{ width:"100%", height:"100%", objectFit:"contain",
-                filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.8))" }}
+                mixBlendMode:"screen",
+                filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.6))" }}
               onError={function(e){ e.target.style.display="none"; }} />
           </div>
         );
