@@ -4196,9 +4196,10 @@ function buildDist(skills, N) {
         var fixedTot = toFix.reduce(function(a,s){return a+dist[s];},0);
         var rem = total - fixedTot;
         var newDist = {}; statList.forEach(function(s){newDist[s]=0;});
-        toFix.forEach(function(s){newDist[s]=dist[s];});
-        var reFree2 = freeList; /* 재분배 풀 = 고정 스탯 제외 전체 */
-        for(var r2=0;r2<rem;r2++) newDist[reFree2[Math.floor(Math.random()*reFree2.length)]]++;
+        /* 가장 낮은 값 → 수비/주루+수비로 이동 */
+        fixList.forEach(function(dest,idx){ newDist[dest]=dist[toFix[idx]]||0; });
+        /* 나머지 재분배 */
+        for(var r2=0;r2<rem;r2++) newDist[freeList[Math.floor(Math.random()*freeList.length)]]++;
         var sc = isBatR
           ? (newDist["파워"]||0)*w2.p+(newDist["정확"]||0)*w2.a+(newDist["선구"]||0)*w2.e
           : (newDist["변화"]||0)*w2.c+(newDist["구위"]||0)*w2.s;
@@ -4753,14 +4754,15 @@ function TrainSimulator(p) {
         var sortedStats = stats.slice().sort(function(a,b){return dist[a]-dist[b];});
         var toFix = sortedStats.slice(0,fixCount);
 
-        /* 3단계: 고정 능력치 수비/주루등에 배치, 나머지 재분배 */
+        /* 3단계: 가장 낮은 값을 수비(시그니처는 주루+수비)로 이동, 나머지 재분배
+           toFix[i] (가장 낮은 스탯)의 값이 fixStats[i] (수비/주루)로 이동 */
         var fixedTotal = toFix.reduce(function(acc,s){return acc+dist[s];},0);
         var remaining = totalPts - fixedTotal;
-        /* 재분배 풀 = freeStats 전체 (수비/주루+수비 제외)
-           toFix는 "어떤 값이 수비/주루에 배정되는가"만 결정, 재분배 풀과 무관 */
         var newDist = {};
         stats.forEach(function(s){newDist[s]=0;});
-        toFix.forEach(function(s){newDist[s]=dist[s];});
+        /* 이동: 가장 낮은 스탯의 값 → 수비/주루+수비 */
+        fixStats.forEach(function(dest,idx){ newDist[dest]=dist[toFix[idx]]||0; });
+        /* 나머지 포인트를 freeStats에 랜덤 재분배 */
         for (var r = 0; r < remaining; r++) {
           newDist[freeStats[Math.floor(Math.random()*freeStats.length)]]++;
         }
