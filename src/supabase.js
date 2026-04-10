@@ -228,3 +228,50 @@ export async function listAllPhotos() {
     };
   });
 }
+
+/* ── 팀 로고 (team-logos 버킷) ── */
+const LOGO_BUCKET = 'team-logos';
+
+/* 팀명 → 인코딩된 파일명 (한글 → 16진수) */
+function encodeTeamName(name) {
+  /* 영문은 대문자로 통일 (LG/Lg/lg 모두 'LG_1.png'로 매핑) */
+  var result = '';
+  for (var i = 0; i < name.length; i++) {
+    var code = name.charCodeAt(i);
+    if (code < 128) { result += name[i].toUpperCase(); }
+    else { result += code.toString(16).toUpperCase().padStart(4,'0'); }
+  }
+  return result;
+}
+
+/* 팀 로고 URL 반환
+   index: 1=기본, 2=레트로/과거, 3=대체
+   나중에 연도 조건에 따라 index를 다르게 전달하면 됨 */
+export function getTeamLogoUrl(team, index) {
+  if (!team) return '';
+  var idx = index || 1;
+  var supabaseUrl = typeof import_meta_env !== 'undefined'
+    ? import_meta_env.VITE_SUPABASE_URL
+    : (typeof window !== 'undefined' && window._SUPABASE_URL) || '';
+  /* 환경변수 접근 방법 통일 */
+  try {
+    var url = import.meta.env.VITE_SUPABASE_URL;
+    if (url) supabaseUrl = url;
+  } catch(e) {}
+  if (!supabaseUrl) return '';
+  /* 팀명 인코딩 + '_' 구분자 + 인덱스 (예: AE30C544_1.png) */
+  var encoded = encodeTeamName(team) + '_' + idx + '.png';
+  return supabaseUrl + '/storage/v1/object/public/' + LOGO_BUCKET + '/' + encoded;
+}
+
+export async function uploadTeamLogo(file, teamName, index) {
+  if (!supabase) return null;
+  var idx = index || 1;
+  var encoded = encodeTeamName(teamName) + '_' + idx + '.png';
+  var { data, error } = await supabase.storage
+    .from(LOGO_BUCKET)
+    .upload(encoded, file, { upsert: true, contentType: 'image/png' });
+  if (error) { console.error('uploadTeamLogo error:', error); return null; }
+  var { data: urlData } = supabase.storage.from(LOGO_BUCKET).getPublicUrl(encoded);
+  return urlData?.publicUrl || null;
+}
