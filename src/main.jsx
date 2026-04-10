@@ -19,6 +19,8 @@ import {
   listPlayerPhotos,
   deletePlayerPhoto,
   listAllPhotos,
+  getTeamLogoUrl,
+  uploadTeamLogo,
 } from './supabase.js';
 
 window._SUPABASE = {
@@ -39,6 +41,8 @@ window._SUPABASE = {
   listPlayerPhotos,
   deletePlayerPhoto,
   listAllPhotos,
+  getTeamLogoUrl,
+  uploadTeamLogo,
 };
 
 import('./deck-manager.jsx').then(function(module) {
