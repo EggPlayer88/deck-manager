@@ -20,13 +20,26 @@ var uploadPlayerPhoto = _SB.uploadPlayerPhoto || function(){ return Promise.reso
 var listPlayerPhotos = _SB.listPlayerPhotos || function(){ return Promise.resolve([]); };
 var deletePlayerPhoto = _SB.deletePlayerPhoto || function(){ return Promise.resolve(false); };
 var listAllPhotos = _SB.listAllPhotos || function(){ return Promise.resolve([]); };
+var getTeamLogoUrl = _SB.getTeamLogoUrl || function(){ return ""; };
+var uploadTeamLogo = _SB.uploadTeamLogo || function(){ return Promise.resolve(null); };
 
 /* ================================================================
    SEED DATA - 48 players from Excel + random fills
    ================================================================ */
 var KBO_TEAMS = ["키움","삼성","LG","두산","KT","SSG","롯데","한화","NC","KIA"];
 var SEED_PLAYERS = [];
-var PHOTO_CACHE = {}; /* 전역 사진 캐시: {선수이름: [url, ...]} */
+var PHOTO_CACHE = {};
+
+/* ── 팀 로고 결정 함수 ──
+   나중에 연도별 조건을 여기에 추가:
+   예) if (team==="SSG" && year <= "03") return getTeamLogoUrl(team, 2);
+   지금은 기본값(1) 사용 */
+function getLogoForCard(team, year) {
+  if (!team) return "";
+  /* TODO: 연도별 조건 추가 예정 */
+  return getTeamLogoUrl(team, 1);
+}
+ /* 전역 사진 캐시: {선수이름: [url, ...]} */
 function getPhotoUrl(name) {
   /* 해당 이름의 첫 번째 사진 URL 반환 (없으면 "") */
   var urls = PHOTO_CACHE[name];
@@ -426,24 +439,24 @@ function useData(userId, sdState, setSdState, curDeckId){
 /* ================================================================
    PLAYER CARD COMPONENT - 카드 스타일 선수 표시
    ================================================================ */
-var CARD_COLORS = {"골든글러브":"#FFD700","시그니처":"#FF2D6B","국가대표":"#1E90FF","임팩트":"#AA44FF","라이브":"#FF7700","시즌":"#4CAF50","올스타":"#00E5CC"};
+var CARD_COLORS = {"골든글러브":"#FFD700","시그니처":"#FF2D6B","국가대표":"#1E90FF","임팩트":"#22C55E","라이브":"#FF7700","시즌":"#4CAF50","올스타":"#AA44FF"};
 var CARD_BG = {
   "골든글러브":"linear-gradient(160deg,#7a5c00 0%,#D4AF37 30%,#FFF1A8 50%,#D4AF37 70%,#7a5c00 100%)",
   "시그니처":"linear-gradient(160deg,#6b0022 0%,#C2003A 35%,#FF6B9D 55%,#C2003A 75%,#6b0022 100%)",
   "국가대표":"linear-gradient(160deg,#003580 0%,#1565C0 35%,#64B5F6 55%,#1565C0 75%,#003580 100%)",
-  "임팩트":"linear-gradient(160deg,#2d0060 0%,#7B1FA2 35%,#CE93D8 55%,#7B1FA2 75%,#2d0060 100%)",
+  "임팩트":"linear-gradient(160deg,#052e16 0%,#16a34a 35%,#86efac 55%,#16a34a 75%,#052e16 100%)",
   "라이브":"linear-gradient(160deg,#7a2e00 0%,#E65100 35%,#FFB74D 55%,#E65100 75%,#7a2e00 100%)",
   "시즌":"linear-gradient(160deg,#1b3a1b 0%,#2E7D32 35%,#81C784 55%,#2E7D32 75%,#1b3a1b 100%)",
-  "올스타":"linear-gradient(160deg,#00474f 0%,#00838F 35%,#80DEEA 55%,#00838F 75%,#00474f 100%)",
+  "올스타":"linear-gradient(160deg,#2d0060 0%,#7B1FA2 35%,#CE93D8 55%,#7B1FA2 75%,#2d0060 100%)",
 };
 var CARD_GLOW = {
   "골든글러브":"0 0 10px #FFD70088, 0 0 20px #FFD70044",
   "시그니처":"0 0 10px #FF2D6B88, 0 0 20px #FF2D6B44",
   "국가대표":"0 0 10px #1E90FF88, 0 0 20px #1E90FF44",
-  "임팩트":"0 0 10px #AA44FF88, 0 0 20px #AA44FF44",
+  "임팩트":"0 0 10px #22C55E88, 0 0 20px #22C55E44",
   "라이브":"0 0 10px #FF770088, 0 0 20px #FF770044",
   "시즌":"0 0 8px #4CAF5066",
-  "올스타":"0 0 10px #00E5CC88, 0 0 20px #00E5CC44",
+  "올스타":"0 0 10px #AA44FF88, 0 0 20px #AA44FF44",
 };
 var CARD_CORNER = {
   "골든글러브":"◈","시그니처":"✦","국가대표":"★",
@@ -474,9 +487,9 @@ function PlayerCard(p) {
     "골든글러브":"rgba(255,241,168,0.5)",
     "시그니처":"rgba(255,150,180,0.4)",
     "국가대표":"rgba(100,181,246,0.4)",
-    "임팩트":"rgba(206,147,216,0.4)",
+    "임팩트":"rgba(134,239,172,0.4)",
     "라이브":"rgba(255,183,77,0.4)",
-    "올스타":"rgba(128,222,234,0.4)",
+    "올스타":"rgba(206,147,216,0.4)",
   }[ct] || "rgba(255,255,255,0.15)";
 
   return (
@@ -513,7 +526,22 @@ function PlayerCard(p) {
         <span style={{ fontSize:fs, fontWeight:700, color:"#fff", lineHeight:1, display:"block" }}>{pl.subPosition||""}</span>
       </div>
 
-      {/* Team badge - 팀 로고로 교체 예정 */}
+      {/* Team logo - 좌상단 */}
+      {pl.team && (function(){
+        var logoUrl = getLogoForCard(pl.team, pl.year||"");
+        if (!logoUrl) return null;
+        var logoSize = size==="lg" ? 22 : size==="sm" ? 14 : 18;
+        return (
+          <div style={{ position:"absolute", top:2, left:2, zIndex:5,
+            width:logoSize, height:logoSize,
+            background:"rgba(0,0,0,0.4)", borderRadius:3,
+            display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+            <img src={logoUrl} alt={pl.team}
+              style={{ width:"100%", height:"100%", objectFit:"contain" }}
+              onError={function(e){ e.target.style.display="none"; }} />
+          </div>
+        );
+      })()}
 
       {/* Photo area */}
       <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center",
@@ -1893,7 +1921,7 @@ function LineupPage(p) {
             <span>{idx + 1}</span>
             {idx < 8 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx+1); }} style={{ fontSize: 10, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▼"}</span>)}
           </div>
-          <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} score={Math.round(calc.total)} showPhoto={true} />
+          <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span></div>
             <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
@@ -1979,7 +2007,7 @@ function LineupPage(p) {
       <React.Fragment key={pl.id}>
         <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "32px 68px minmax(100px,1fr) 80px 96px 68px 46px 110px 40px 46px", alignItems: "center", gap: 28, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
-          <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} score={Math.round(calc.total)} showPhoto={true} />
+          <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span></div>
             <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
