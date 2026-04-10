@@ -248,20 +248,11 @@ function encodeTeamName(name) {
    index: 1=기본, 2=레트로/과거, 3=대체
    나중에 연도 조건에 따라 index를 다르게 전달하면 됨 */
 export function getTeamLogoUrl(team, index) {
-  if (!team) return '';
+  if (!team || !SUPABASE_URL) return '';
   var idx = index || 1;
-  var supabaseUrl = typeof import_meta_env !== 'undefined'
-    ? import_meta_env.VITE_SUPABASE_URL
-    : (typeof window !== 'undefined' && window._SUPABASE_URL) || '';
-  /* 환경변수 접근 방법 통일 */
-  try {
-    var url = import.meta.env.VITE_SUPABASE_URL;
-    if (url) supabaseUrl = url;
-  } catch(e) {}
-  if (!supabaseUrl) return '';
   /* 팀명 인코딩 + '_' 구분자 + 인덱스 (예: AE30C544_1.png) */
   var encoded = encodeTeamName(team) + '_' + idx + '.png';
-  return supabaseUrl + '/storage/v1/object/public/' + LOGO_BUCKET + '/' + encoded;
+  return SUPABASE_URL + '/storage/v1/object/public/' + LOGO_BUCKET + '/' + encoded;
 }
 
 export async function uploadTeamLogo(file, teamName, index) {
