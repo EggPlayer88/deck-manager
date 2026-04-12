@@ -548,7 +548,7 @@ function PlayerCard(p) {
         overflow:"hidden",
         background: photoUrl ? "none" : "rgba(0,0,0,0.25)" }}>
         {photoUrl ? (
-          <img src={photoUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+          <img src={photoUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"top" }} />
         ) : (
           <span style={{ fontSize:size==="lg"?28:20, opacity:0.35 }}>{"⚾"}</span>
         )}
@@ -1971,7 +1971,7 @@ function LineupPage(p) {
                   return (
                     <div key={i} onClick={function(){updatePl(pl.id,"photoUrl",isCur?"":url);}}
                       style={{cursor:"pointer",borderRadius:5,border:"2px solid "+(isCur?"var(--acc)":"transparent"),overflow:"hidden",opacity:isCur?1:0.6,transition:"all 0.15s"}}>
-                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",display:"block"}} />
+                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",objectPosition:"top",display:"block"}} />
                     </div>
                   );
                 })}
@@ -2058,7 +2058,7 @@ function LineupPage(p) {
                   return (
                     <div key={i} onClick={function(){updatePl(pl.id,"photoUrl",isCur?"":url);}}
                       style={{cursor:"pointer",borderRadius:5,border:"2px solid "+(isCur?"var(--acc)":"transparent"),overflow:"hidden",opacity:isCur?1:0.6,transition:"all 0.15s"}}>
-                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",display:"block"}} />
+                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",objectPosition:"top",display:"block"}} />
                     </div>
                   );
                 })}
