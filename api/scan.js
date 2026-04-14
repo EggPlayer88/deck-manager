@@ -87,7 +87,10 @@ export default async function handler(req, res) {
     try {
       const results = await Promise.all(EXAMPLES.map(async (ex) => {
         try {
-          const r = await fetch(`${supabaseUrl}/storage/v1/object/public/card-examples/${ex.file}`);
+          const controller = new AbortController();
+          const tid = setTimeout(() => controller.abort(), 3000);
+          const r = await fetch(`${supabaseUrl}/storage/v1/object/public/card-examples/${ex.file}`, { signal: controller.signal });
+          clearTimeout(tid);
           if (!r.ok) return null;
           const buf = await r.arrayBuffer();
           const b64 = Buffer.from(buf).toString('base64');
