@@ -1,12 +1,10 @@
 /**
  * /api/scan.js — Vercel 서버리스 함수
  * Google Gemini API 사용
- * 503 발생 시 자동 재시도 + 폴백 모델
  */
 
 const MODELS = [
   'gemini-2.5-flash',
-  'gemini-2.5-flash-lite-preview-06-17',
   'gemini-3-flash-preview',
 ];
 
@@ -35,7 +33,7 @@ export default async function handler(req, res) {
   const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
   if (!GEMINI_API_KEY) {
-    return res.status(500).json({ error: 'gemini_api_key 환경변수가 설정되지 않았습니다.' });
+    return res.status(500).json({ error: 'GEMINI_API_KEY 환경변수가 설정되지 않았습니다.' });
   }
 
   const DAILY_LIMIT = 500;
@@ -55,7 +53,6 @@ export default async function handler(req, res) {
       if (globalCount >= DAILY_LIMIT) {
         return res.status(429).json({ error: `오늘 서비스 전체 한도(${DAILY_LIMIT}회)를 초과했습니다.` });
       }
-
       if (userId) {
         const userRes = await fetch(
           `${supabaseUrl}/rest/v1/scan_usage_user?date=eq.${today}&user_id=eq.${userId}`,
@@ -89,7 +86,10 @@ export default async function handler(req, res) {
         try {
           const controller = new AbortController();
           const tid = setTimeout(() => controller.abort(), 3000);
-          const r = await fetch(`${supabaseUrl}/storage/v1/object/public/card-examples/${ex.file}`, { signal: controller.signal });
+          const r = await fetch(
+            `${supabaseUrl}/storage/v1/object/public/card-examples/${ex.file}`,
+            { signal: controller.signal }
+          );
           clearTimeout(tid);
           if (!r.ok) return null;
           const buf = await r.arrayBuffer();
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
 카드 종류 판별 기준 (순서대로 확인):
 1. 이름 바로 위에 V1/V2/V3 표시 → 라이브
 2. ALL STAR 텍스트 (NANUM/DREAM 로고도 함께) → 올스타
-   ※ 주의: 별점(★★★★★)은 ALL STAR가 아님
+   ※ 주의: 별점(★★★★★)은 ALL STAR가 아님. 반드시 영문 텍스트여야 함
 3. 이름 위 왼쪽에 빨간 필기체 Sign 텍스트 → 시그니처
 4. 우측 상단 팀 로고 근방 흰색 배경 → 국가대표
 5. 이름 하단 노란/황금색 장식 → 골든글러브
@@ -136,48 +136,33 @@ export default async function handler(req, res) {
     }
   ];
 
-  /* ── 모델 순서대로 시도 (503/429면 다음 모델로) ── */
+  /* ── 모델 순서대로 시도 ── */
   let lastError = '';
   for (const model of MODELS) {
-    /* 503 대비 같은 모델 최대 2회 재시도 */
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const geminiRes = await callGemini(GEMINI_API_KEY, model, contents);
 
         if (geminiRes.status === 503) {
-          const errText = await geminiRes.text();
-          lastError = `${model} 503: ${errText.slice(0, 100)}`;
-          console.warn(`${model} 503, attempt ${attempt + 1}`);
-          if (attempt === 0) {
-            await new Promise(r => setTimeout(r, 1500)); /* 1.5초 대기 후 재시도 */
-            continue;
-          }
-          break; /* 2번 모두 503이면 다음 모델로 */
+          lastError = `${model} 503`;
+          if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
+          break;
         }
-
-        if (geminiRes.status === 429) {
-          const errText = await geminiRes.text();
-          lastError = `${model} 429: 한도 초과`;
-          console.warn(`${model} 429`);
-          break; /* 다음 모델로 */
-        }
-
-        if (geminiRes.status === 404) {
-          lastError = `${model} 404: 모델 없음`;
-          console.warn(`${model} 404`);
-          break; /* 다음 모델로 */
-        }
+        if (geminiRes.status === 429) { lastError = `${model} 429`; break; }
+        if (geminiRes.status === 404) { lastError = `${model} 404`; break; }
 
         if (!geminiRes.ok) {
           const errText = await geminiRes.text();
           lastError = `${model} ${geminiRes.status}: ${errText.slice(0, 200)}`;
-          console.error(`${model} error:`, lastError);
           break;
         }
 
-        /* 성공 */
+        /* ── 성공: 응답 파싱 ── */
         const geminiData = await geminiRes.json();
-        const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        let text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        /* 마크다운 코드블록 제거 (```json ... ``` 형태로 올 경우) */
+        text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
         /* 사용량 업데이트 */
         if (supabaseUrl && supabaseKey) {
@@ -216,17 +201,15 @@ export default async function handler(req, res) {
         }
 
         console.log(`성공: ${model}`);
-        return res.status(200).json({ text, model });
+        return res.status(200).json({ text });
 
       } catch (err) {
         lastError = `${model} 예외: ${err.message}`;
-        console.error(lastError);
         break;
       }
     }
   }
 
-  /* 모든 모델 실패 */
   return res.status(503).json({
     error: `모든 모델 응답 실패. 잠시 후 다시 시도해주세요. (${lastError})`
   });
