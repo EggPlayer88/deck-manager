@@ -1,15 +1,6 @@
 /**
  * /api/scan.js — Vercel 서버리스 함수
  * Google Gemini API 사용 (gemini-2.0-flash)
- *
- * Vercel 환경변수:
- *   GEMINI_API_KEY=AIzaSy...
- *   VITE_SUPABASE_URL=https://xxxx.supabase.co
- *   VITE_SUPABASE_ANON_KEY=eyJ...
- *
- * 제한:
- *   전체 일일 500회 (scan_usage 테이블)
- *   유저 1인 일일 10회 (scan_usage_user 테이블)
  */
 
 export default async function handler(req, res) {
@@ -28,11 +19,10 @@ export default async function handler(req, res) {
   const DAILY_LIMIT = 500;
   const USER_DAILY_LIMIT = 10;
 
-  /* ── 사용량 체크 ── */
   const today = new Date().toISOString().slice(0, 10);
   const { base64, mediaType, prompt, userId } = req.body || {};
 
-  /* 전체 일일 한도 체크 */
+  /* ── 전체/유저 일일 한도 체크 ── */
   if (supabaseUrl && supabaseKey) {
     try {
       const globalRes = await fetch(
@@ -42,10 +32,9 @@ export default async function handler(req, res) {
       const globalData = await globalRes.json();
       const globalCount = (Array.isArray(globalData) && globalData[0]) ? globalData[0].count : 0;
       if (globalCount >= DAILY_LIMIT) {
-        return res.status(429).json({ error: `오늘 서비스 전체 한도(${DAILY_LIMIT}회)를 초과했습니다. 내일 다시 시도해주세요.` });
+        return res.status(429).json({ error: `오늘 서비스 전체 한도(${DAILY_LIMIT}회)를 초과했습니다.` });
       }
 
-      /* 유저별 일일 한도 체크 */
       if (userId) {
         const userRes = await fetch(
           `${supabaseUrl}/rest/v1/scan_usage_user?date=eq.${today}&user_id=eq.${userId}`,
@@ -54,7 +43,7 @@ export default async function handler(req, res) {
         const userData = await userRes.json();
         const userCount = (Array.isArray(userData) && userData[0]) ? userData[0].count : 0;
         if (userCount >= USER_DAILY_LIMIT) {
-          return res.status(429).json({ error: `오늘 사용 한도(${USER_DAILY_LIMIT}회)를 초과했습니다. 내일 다시 시도해주세요.` });
+          return res.status(429).json({ error: `오늘 사용 한도(${USER_DAILY_LIMIT}회)를 초과했습니다.` });
         }
       }
     } catch (e) {
@@ -62,7 +51,7 @@ export default async function handler(req, res) {
     }
   }
 
-  /* ── 예시 이미지 로드 (Few-shot) ── */
+  /* ── Few-shot 예시 이미지 로드 (실패해도 계속 진행) ── */
   const EXAMPLES = [
     { file: 'impact.jpg',    label: '임팩트',    desc: '청록/민트 배경, 이름 위에 역할 텍스트(예: 중견수), 이름에 연도 숫자 없음' },
     { file: 'live.jpg',      label: '라이브',    desc: '이름 바로 위에 V1/V2/V3 뱃지와 연도 표시' },
@@ -74,46 +63,44 @@ export default async function handler(req, res) {
 
   let exampleParts = [];
   if (supabaseUrl) {
-    const fetchPromises = EXAMPLES.map(async (ex) => {
-      try {
-        const url = `${supabaseUrl}/storage/v1/object/public/card-examples/${ex.file}`;
-        const r = await fetch(url);
-        if (!r.ok) return null;
-        const buf = await r.arrayBuffer();
-        const b64 = Buffer.from(buf).toString('base64');
-        const mime = ex.file.endsWith('.png') ? 'image/png' : 'image/jpeg';
-        return { ex, b64, mime };
-      } catch (e) {
-        return null;
+    try {
+      const fetchPromises = EXAMPLES.map(async (ex) => {
+        try {
+          const url = `${supabaseUrl}/storage/v1/object/public/card-examples/${ex.file}`;
+          const r = await fetch(url);
+          if (!r.ok) return null;
+          const buf = await r.arrayBuffer();
+          const b64 = Buffer.from(buf).toString('base64');
+          const mime = ex.file.endsWith('.png') ? 'image/png' : 'image/jpeg';
+          return { ex, b64, mime };
+        } catch (e) { return null; }
+      });
+      const results = await Promise.all(fetchPromises);
+      for (const r of results) {
+        if (!r) continue;
+        exampleParts.push({ text: `[예시] 아래 이미지는 "${r.ex.label}" 카드입니다. 특징: ${r.ex.desc}` });
+        exampleParts.push({ inlineData: { mimeType: r.mime, data: r.b64 } });
       }
-    });
-    const results = await Promise.all(fetchPromises);
-    for (const r of results) {
-      if (!r) continue;
-      exampleParts.push({ text: `[예시] 아래 이미지는 "${r.ex.label}" 카드입니다. 특징: ${r.ex.desc}` });
-      exampleParts.push({ inlineData: { mimeType: r.mime, data: r.b64 } });
+    } catch (e) {
+      console.error('예시 이미지 로드 실패 (무시하고 계속):', e);
     }
   }
 
-  /* ── 카드 판별 프롬프트 ── */
+  if (!base64 || !prompt) {
+    return res.status(400).json({ error: 'base64와 prompt가 필요합니다.' });
+  }
+
   const CARD_TYPE_GUIDE = `
 카드 종류 판별 기준 (순서대로 확인):
 1. 이름 바로 위에 V1/V2/V3 표시 → 라이브
 2. ALL STAR 텍스트 (NANUM/DREAM 로고도 함께) → 올스타
-   ※ 주의: 별점(★★★★★)은 ALL STAR가 아님. 반드시 "ALL STAR" 영문 텍스트가 있어야 함
+   ※ 주의: 별점(★★★★★)은 ALL STAR가 아님
 3. 이름 위 왼쪽에 빨간 필기체 Sign 텍스트 → 시그니처
 4. 우측 상단 팀 로고 근방 흰색 배경 → 국가대표
 5. 이름 하단 노란/황금색 장식 → 골든글러브
 6. 이름에 연도 숫자('18, '24 등)가 없음 → 임팩트
 7. 위 모두 해당 없음 → 인식실패
 `;
-
-  /* ── 실제 분석 ── */
-  if (!base64 || !prompt) {
-    return res.status(400).json({ error: 'base64와 prompt가 필요합니다.' });
-  }
-
-  const imgMime = mediaType || 'image/jpeg';
 
   const contents = [
     {
@@ -122,7 +109,7 @@ export default async function handler(req, res) {
         ...exampleParts,
         { text: CARD_TYPE_GUIDE },
         { text: prompt },
-        { inlineData: { mimeType: imgMime, data: base64 } },
+        { inlineData: { mimeType: mediaType || 'image/jpeg', data: base64 } },
       ]
     }
   ];
@@ -135,22 +122,26 @@ export default async function handler(req, res) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents,
-          generationConfig: {
-            maxOutputTokens: 4096,
-            temperature: 0.1,
-          }
+          generationConfig: { maxOutputTokens: 4096, temperature: 0.1 }
         })
       }
     );
 
-    if (geminiRes.status === 429) {
-      return res.status(429).json({ error: '요청이 너무 많습니다. 1~2분 후 다시 시도해주세요. (분당 한도 초과)' });
-    }
-
+    /* 실제 Gemini 오류 메시지를 그대로 반환 */
     if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error('Gemini API 오류:', errText);
-      return res.status(500).json({ error: `Gemini API 오류: ${geminiRes.status}` });
+      let errBody = '';
+      try { errBody = await geminiRes.text(); } catch(e) {}
+      console.error(`Gemini API 오류 ${geminiRes.status}:`, errBody);
+
+      if (geminiRes.status === 429) {
+        /* 실제 오류 내용 포함해서 반환 */
+        return res.status(429).json({
+          error: `Gemini 한도 초과 (${geminiRes.status}). 상세: ${errBody.slice(0, 200)}`
+        });
+      }
+      return res.status(500).json({
+        error: `Gemini API 오류 ${geminiRes.status}: ${errBody.slice(0, 300)}`
+      });
     }
 
     const geminiData = await geminiRes.json();
@@ -159,7 +150,6 @@ export default async function handler(req, res) {
     /* ── 사용량 업데이트 ── */
     if (supabaseUrl && supabaseKey) {
       try {
-        /* 전체 카운트 */
         await fetch(`${supabaseUrl}/rest/v1/scan_usage`, {
           method: 'POST',
           headers: {
@@ -171,7 +161,6 @@ export default async function handler(req, res) {
           body: JSON.stringify({ date: today, count: 1 }),
         });
 
-        /* 유저별 카운트 */
         if (userId) {
           const uRes = await fetch(
             `${supabaseUrl}/rest/v1/scan_usage_user?date=eq.${today}&user_id=eq.${userId}`,
@@ -179,7 +168,6 @@ export default async function handler(req, res) {
           );
           const uData = await uRes.json();
           const prev = (Array.isArray(uData) && uData[0]) ? uData[0].count : 0;
-
           await fetch(`${supabaseUrl}/rest/v1/scan_usage_user`, {
             method: 'POST',
             headers: {
@@ -200,6 +188,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Gemini 요청 오류:', err);
-    return res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    return res.status(500).json({ error: `서버 오류: ${err.message}` });
   }
 }
