@@ -266,3 +266,32 @@ export async function uploadTeamLogo(file, teamName, index) {
   var { data: urlData } = supabase.storage.from(LOGO_BUCKET).getPublicUrl(encoded);
   return urlData?.publicUrl || null;
 }
+
+/* ── 선수 사진 위치 전역 관리 ──
+   Supabase user_settings 의 admin 계정에 photo_positions JSON으로 저장
+   key: "photo_positions", value: {"이승엽": 30, "김도영": 15, ...} */
+const PHOTO_POS_KEY = 'photo_positions';
+const ADMIN_UID = '35f45af0-2817-4157-9e41-90b3349a21d4';
+
+export async function loadPhotoPosMap() {
+  if (!supabase) return {};
+  var { data, error } = await supabase
+    .from('user_settings')
+    .select('value')
+    .eq('user_id', ADMIN_UID)
+    .eq('key', PHOTO_POS_KEY)
+    .single();
+  if (error || !data) return {};
+  try { return JSON.parse(data.value) || {}; } catch(e) { return {}; }
+}
+
+export async function savePhotoPosMap(posMap) {
+  if (!supabase) return false;
+  var { error } = await supabase.from('user_settings').upsert({
+    user_id: ADMIN_UID,
+    key: PHOTO_POS_KEY,
+    value: JSON.stringify(posMap),
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'user_id,key' });
+  return !error;
+}
