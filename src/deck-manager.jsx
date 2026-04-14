@@ -360,7 +360,14 @@ function useData(userId, sdState, setSdState, curDeckId){
       all.decks[deckId] = migrated;
       allDataRef.current = all;
     }
+    /* deckList/deckCurrent는 localStorage(saveDecks가 항상 최신으로 유지)에서 읽어 보존
+       이렇게 해야 saveDecks와의 race condition 방지 */
+    var latestList = await sGet("deck-list");
+    var latestCur  = await sGet("deck-current");
+    if (latestList && latestList.length > 0) all.deckList = latestList;
+    if (latestCur) all.deckCurrent = latestCur;
     all.decks[deckId] = deckData;
+    allDataRef.current = all;
     await saveUserData(uid, all);
   };
 
@@ -432,7 +439,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     else if(did){await sSet("deck-sdconfig-"+did,nsd);}
   },[players,lineupMap]);
 
-  return{players:players,lineupMap:lineupMap,skills:skills,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState};
+  return{players:players,lineupMap:lineupMap,skills:skills,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,allDataRef:allDataRef};
 }
 
 /* ================================================================
@@ -5010,15 +5017,17 @@ export default function App(){
     /* Supabase: 전체 구조 유지하면서 deckList/deckCurrent만 업데이트 */
     if(supabase&&userId){
       try{
-        var all=await loadUserData(userId)||{};
-        /* 기존 decks 구조 보존 */
+        var all=store.allDataRef ? store.allDataRef.current : null;
+        if(!all) all=await loadUserData(userId)||{};
         if(!all.decks) all.decks={};
         all.deckList=list;
         all.deckCurrent=curId;
+        /* allDataRef 캐시도 동기화 */
+        if(store.allDataRef) store.allDataRef.current=all;
         await saveUserData(userId,all);
       }catch(e){console.warn('saveDecks 오류:',e);}
     }
-  },[userId]);
+  },[userId,store]);
 
   /* ── 로그인 성공 후 덱 목록 로드 ── */
   useEffect(function(){
