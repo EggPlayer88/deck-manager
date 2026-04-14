@@ -2949,11 +2949,12 @@ async function callClaudeVision(base64, mediaType, prompt, userId) {
   });
   if (!res.ok) {
     var e = await res.json().catch(function(){return{};});
-    throw new Error(e.error || 'API 오류 ' + res.status);
+    var msg = typeof e.error === 'string' ? e.error : (e.error && e.error.message) ? e.error.message : 'API 오류 ' + res.status;
+    throw new Error(msg);
   }
   var data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data.result;
+  if (data.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+  return data.text;
 }
 
 // 라인업 화면 분석
