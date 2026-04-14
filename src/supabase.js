@@ -37,18 +37,20 @@ export async function getProfile(userId) {
 /* ============ User Data (per-user) ============ */
 export async function loadUserData(userId) {
   if (!supabase || !userId) return null;
-  var r = await supabase.from('user_settings').select('sd_state').eq('user_id', userId);
-  if (r.error || !r.data || r.data.length === 0) return null;
-  return r.data[0].sd_state || null;
+  var r = await supabase.from('user_settings').select('sd_state')
+    .eq('user_id', userId).eq('key', 'settings').single();
+  if (r.error || !r.data) return null;
+  return r.data.sd_state || null;
 }
 
 export async function saveUserData(userId, data) {
   if (!supabase || !userId) return false;
   var r = await supabase.from('user_settings').upsert({
     user_id: userId,
+    key: 'settings',
     sd_state: data,
     updated_at: new Date().toISOString()
-  }, { onConflict: 'user_id' });
+  }, { onConflict: 'user_id,key' });
   if (r.error) { console.error('saveUserData error:', r.error); return false; }
   return true;
 }
