@@ -22,6 +22,8 @@ var deletePlayerPhoto = _SB.deletePlayerPhoto || function(){ return Promise.reso
 var listAllPhotos = _SB.listAllPhotos || function(){ return Promise.resolve([]); };
 var getTeamLogoUrl = _SB.getTeamLogoUrl || function(){ return ""; };
 var uploadTeamLogo = _SB.uploadTeamLogo || function(){ return Promise.resolve(null); };
+var loadPhotoPosMap = _SB.loadPhotoPosMap || function(){ return Promise.resolve({}); };
+var savePhotoPosMap = _SB.savePhotoPosMap || function(){ return Promise.resolve(false); };
 
 /* ================================================================
    SEED DATA - 48 players from Excel + random fills
@@ -29,6 +31,7 @@ var uploadTeamLogo = _SB.uploadTeamLogo || function(){ return Promise.resolve(nu
 var KBO_TEAMS = ["키움","삼성","LG","두산","KT","SSG","롯데","한화","NC","KIA"];
 var SEED_PLAYERS = [];
 var PHOTO_CACHE = {};
+var PHOTO_POS_MAP = {}; /* {선수이름: 위치(0~100)} - 관리자 설정, 전역 적용 */
 
 /* ── 팀 로고 결정 함수 ──
    나중에 연도별 조건을 여기에 추가:
@@ -548,7 +551,7 @@ function PlayerCard(p) {
         overflow:"hidden",
         background: photoUrl ? "none" : "rgba(0,0,0,0.25)" }}>
         {photoUrl ? (
-          <img src={photoUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"top" }} />
+          <img src={photoUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center "+(PHOTO_POS_MAP[pl.name]!==undefined?PHOTO_POS_MAP[pl.name]:20)+"%" }} />
         ) : (
           <span style={{ fontSize:size==="lg"?28:20, opacity:0.35 }}>{"⚾"}</span>
         )}
@@ -790,6 +793,24 @@ function PlayerDBPage(p){
   var _photoLoading=useState(false);var photoLoading=_photoLoading[0];var setPhotoLoading=_photoLoading[1];
   var _uploading=useState(false);var uploading=_uploading[0];var setUploading=_uploading[1];
   var _uploadMsg=useState("");var uploadMsg=_uploadMsg[0];var setUploadMsg=_uploadMsg[1];
+  /* 사진 위치 맵 */
+  var _posMap=useState({});var posMap=_posMap[0];var setPosMap=_posMap[1];
+  var _posSaving=useState(false);var posSaving=_posSaving[0];var setPosSaving=_posSaving[1];
+
+  /* posMap 로드 + 전역 반영 */
+  useEffect(function(){
+    loadPhotoPosMap().then(function(m){
+      setPosMap(m||{});
+      Object.assign(PHOTO_POS_MAP, m||{});
+    });
+  },[]);
+
+  var savePosMap = async function(newMap) {
+    setPosSaving(true);
+    Object.assign(PHOTO_POS_MAP, newMap);
+    await savePhotoPosMap(newMap);
+    setPosSaving(false);
+  };
 
   /* 사진 목록 로드 */
   var loadPhotos=async function(){
@@ -915,20 +936,41 @@ function PlayerDBPage(p){
             )}
             {!photoLoading && Object.keys(photoGroups).sort().map(function(name){
               var photos=photoGroups[name];
+              var curPos = posMap[name]!==undefined ? posMap[name] : 20;
               return(
                 <div key={name} style={{marginBottom:16}}>
                   <div style={{fontSize:12,fontWeight:800,color:"var(--t1)",marginBottom:8,paddingBottom:4,borderBottom:"1px solid var(--bd)"}}>{name+" ("+photos.length+"장)"}</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:10,marginBottom:8}}>
                     {photos.map(function(ph){return(
                       <div key={ph.name} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                         <div style={{position:"relative"}}>
-                          <img src={ph.url} alt={ph.name} style={{width:60,height:84,objectFit:"cover",borderRadius:6,border:"1px solid var(--bd)"}} />
+                          <img src={ph.url} alt={ph.name} style={{width:60,height:84,objectFit:"cover",objectPosition:"center "+curPos+"%",borderRadius:6,border:"1px solid var(--bd)"}} />
                           <button onClick={function(){handlePhotoDelete(ph);}}
                             style={{position:"absolute",top:-4,right:-4,width:18,height:18,borderRadius:"50%",background:"#EF5350",border:"none",cursor:"pointer",fontSize:10,color:"#fff",fontWeight:900,lineHeight:"18px",textAlign:"center",padding:0}}>{"×"}</button>
                         </div>
                         <span style={{fontSize:9,color:"var(--td)",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph.name}</span>
                       </div>
                     );})}
+                  </div>
+                  {/* 위치 슬라이더 */}
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:10,color:"var(--td)",flexShrink:0,width:28}}>{"위치"}</span>
+                    <input type="range" min={0} max={100} value={curPos}
+                      onChange={function(e){
+                        var v=parseInt(e.target.value);
+                        var nm=Object.assign({},posMap); nm[name]=v; setPosMap(nm);
+                      }}
+                      onMouseUp={function(e){
+                        var v=parseInt(e.target.value);
+                        var nm=Object.assign({},posMap); nm[name]=v; savePosMap(nm);
+                      }}
+                      onTouchEnd={function(e){
+                        var v=parseInt(e.target.value);
+                        var nm=Object.assign({},posMap); nm[name]=v; savePosMap(nm);
+                      }}
+                      style={{flex:1,accentColor:"var(--acc)",cursor:"pointer"}} />
+                    <span style={{fontSize:10,color:"var(--acc)",fontFamily:"var(--m)",width:32,flexShrink:0,textAlign:"right"}}>{curPos+"%"}</span>
+                    {posSaving&&<span style={{fontSize:9,color:"var(--td)"}}>{"저장중"}</span>}
                   </div>
                 </div>
               );
@@ -1968,10 +2010,11 @@ function LineupPage(p) {
                 <span style={{fontSize:11,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
                 {photos.map(function(url, i){
                   var isCur = pl.photoUrl === url;
+                  var pos = (PHOTO_POS_MAP[pl.name]!==undefined?PHOTO_POS_MAP[pl.name]:20)+"%";
                   return (
                     <div key={i} onClick={function(){updatePl(pl.id,"photoUrl",isCur?"":url);}}
                       style={{cursor:"pointer",borderRadius:5,border:"2px solid "+(isCur?"var(--acc)":"transparent"),overflow:"hidden",opacity:isCur?1:0.6,transition:"all 0.15s"}}>
-                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",objectPosition:"top",display:"block"}} />
+                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",objectPosition:"center "+pos,display:"block"}} />
                     </div>
                   );
                 })}
@@ -2055,10 +2098,11 @@ function LineupPage(p) {
                 <span style={{fontSize:11,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
                 {photos.map(function(url, i){
                   var isCur = pl.photoUrl === url;
+                  var pos = (PHOTO_POS_MAP[pl.name]!==undefined?PHOTO_POS_MAP[pl.name]:20)+"%";
                   return (
                     <div key={i} onClick={function(){updatePl(pl.id,"photoUrl",isCur?"":url);}}
                       style={{cursor:"pointer",borderRadius:5,border:"2px solid "+(isCur?"var(--acc)":"transparent"),overflow:"hidden",opacity:isCur?1:0.6,transition:"all 0.15s"}}>
-                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",objectPosition:"top",display:"block"}} />
+                      <img src={url} alt="" style={{width:40,height:56,objectFit:"cover",objectPosition:"center "+pos,display:"block"}} />
                     </div>
                   );
                 })}
