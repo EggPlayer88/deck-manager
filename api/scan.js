@@ -1,7 +1,29 @@
 /**
  * /api/scan.js — Vercel 서버리스 함수
- * Google Gemini API 사용 (gemini-2.0-flash)
+ * Google Gemini API 사용
+ * 503 발생 시 자동 재시도 + 폴백 모델
  */
+
+const MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite-preview-06-17',
+  'gemini-3-flash-preview',
+];
+
+async function callGemini(apiKey, model, contents) {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        generationConfig: { maxOutputTokens: 4096, temperature: 0.1 }
+      })
+    }
+  );
+  return res;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -18,11 +40,10 @@ export default async function handler(req, res) {
 
   const DAILY_LIMIT = 500;
   const USER_DAILY_LIMIT = 10;
-
   const today = new Date().toISOString().slice(0, 10);
   const { base64, mediaType, prompt, userId } = req.body || {};
 
-  /* ── 전체/유저 일일 한도 체크 ── */
+  /* ── 일일 한도 체크 ── */
   if (supabaseUrl && supabaseKey) {
     try {
       const globalRes = await fetch(
@@ -51,7 +72,7 @@ export default async function handler(req, res) {
     }
   }
 
-  /* ── Few-shot 예시 이미지 로드 (실패해도 계속 진행) ── */
+  /* ── Few-shot 예시 이미지 로드 ── */
   const EXAMPLES = [
     { file: 'impact.jpg',    label: '임팩트',    desc: '청록/민트 배경, 이름 위에 역할 텍스트(예: 중견수), 이름에 연도 숫자 없음' },
     { file: 'live.jpg',      label: '라이브',    desc: '이름 바로 위에 V1/V2/V3 뱃지와 연도 표시' },
@@ -64,25 +85,23 @@ export default async function handler(req, res) {
   let exampleParts = [];
   if (supabaseUrl) {
     try {
-      const fetchPromises = EXAMPLES.map(async (ex) => {
+      const results = await Promise.all(EXAMPLES.map(async (ex) => {
         try {
-          const url = `${supabaseUrl}/storage/v1/object/public/card-examples/${ex.file}`;
-          const r = await fetch(url);
+          const r = await fetch(`${supabaseUrl}/storage/v1/object/public/card-examples/${ex.file}`);
           if (!r.ok) return null;
           const buf = await r.arrayBuffer();
           const b64 = Buffer.from(buf).toString('base64');
           const mime = ex.file.endsWith('.png') ? 'image/png' : 'image/jpeg';
           return { ex, b64, mime };
         } catch (e) { return null; }
-      });
-      const results = await Promise.all(fetchPromises);
+      }));
       for (const r of results) {
         if (!r) continue;
         exampleParts.push({ text: `[예시] 아래 이미지는 "${r.ex.label}" 카드입니다. 특징: ${r.ex.desc}` });
         exampleParts.push({ inlineData: { mimeType: r.mime, data: r.b64 } });
       }
     } catch (e) {
-      console.error('예시 이미지 로드 실패 (무시하고 계속):', e);
+      console.error('예시 이미지 로드 실패 (무시):', e);
     }
   }
 
@@ -114,80 +133,98 @@ export default async function handler(req, res) {
     }
   ];
 
-  try {
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents,
-          generationConfig: { maxOutputTokens: 4096, temperature: 0.1 }
-        })
-      }
-    );
-
-    /* 실제 Gemini 오류 메시지를 그대로 반환 */
-    if (!geminiRes.ok) {
-      let errBody = '';
-      try { errBody = await geminiRes.text(); } catch(e) {}
-      console.error(`Gemini API 오류 ${geminiRes.status}:`, errBody);
-
-      if (geminiRes.status === 429) {
-        /* 실제 오류 내용 포함해서 반환 */
-        return res.status(429).json({
-          error: `Gemini 한도 초과 (${geminiRes.status}). 상세: ${errBody.slice(0, 200)}`
-        });
-      }
-      return res.status(500).json({
-        error: `Gemini API 오류 ${geminiRes.status}: ${errBody.slice(0, 300)}`
-      });
-    }
-
-    const geminiData = await geminiRes.json();
-    const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    /* ── 사용량 업데이트 ── */
-    if (supabaseUrl && supabaseKey) {
+  /* ── 모델 순서대로 시도 (503/429면 다음 모델로) ── */
+  let lastError = '';
+  for (const model of MODELS) {
+    /* 503 대비 같은 모델 최대 2회 재시도 */
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        await fetch(`${supabaseUrl}/rest/v1/scan_usage`, {
-          method: 'POST',
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-            'Content-Type': 'application/json',
-            Prefer: 'resolution=merge-duplicates',
-          },
-          body: JSON.stringify({ date: today, count: 1 }),
-        });
+        const geminiRes = await callGemini(GEMINI_API_KEY, model, contents);
 
-        if (userId) {
-          const uRes = await fetch(
-            `${supabaseUrl}/rest/v1/scan_usage_user?date=eq.${today}&user_id=eq.${userId}`,
-            { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
-          );
-          const uData = await uRes.json();
-          const prev = (Array.isArray(uData) && uData[0]) ? uData[0].count : 0;
-          await fetch(`${supabaseUrl}/rest/v1/scan_usage_user`, {
-            method: 'POST',
-            headers: {
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
-              'Content-Type': 'application/json',
-              Prefer: 'resolution=merge-duplicates',
-            },
-            body: JSON.stringify({ user_id: userId, date: today, count: prev + 1 }),
-          });
+        if (geminiRes.status === 503) {
+          const errText = await geminiRes.text();
+          lastError = `${model} 503: ${errText.slice(0, 100)}`;
+          console.warn(`${model} 503, attempt ${attempt + 1}`);
+          if (attempt === 0) {
+            await new Promise(r => setTimeout(r, 1500)); /* 1.5초 대기 후 재시도 */
+            continue;
+          }
+          break; /* 2번 모두 503이면 다음 모델로 */
         }
-      } catch (e) {
-        console.error('사용량 업데이트 오류:', e);
+
+        if (geminiRes.status === 429) {
+          const errText = await geminiRes.text();
+          lastError = `${model} 429: 한도 초과`;
+          console.warn(`${model} 429`);
+          break; /* 다음 모델로 */
+        }
+
+        if (geminiRes.status === 404) {
+          lastError = `${model} 404: 모델 없음`;
+          console.warn(`${model} 404`);
+          break; /* 다음 모델로 */
+        }
+
+        if (!geminiRes.ok) {
+          const errText = await geminiRes.text();
+          lastError = `${model} ${geminiRes.status}: ${errText.slice(0, 200)}`;
+          console.error(`${model} error:`, lastError);
+          break;
+        }
+
+        /* 성공 */
+        const geminiData = await geminiRes.json();
+        const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        /* 사용량 업데이트 */
+        if (supabaseUrl && supabaseKey) {
+          try {
+            await fetch(`${supabaseUrl}/rest/v1/scan_usage`, {
+              method: 'POST',
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json',
+                Prefer: 'resolution=merge-duplicates',
+              },
+              body: JSON.stringify({ date: today, count: 1 }),
+            });
+            if (userId) {
+              const uRes = await fetch(
+                `${supabaseUrl}/rest/v1/scan_usage_user?date=eq.${today}&user_id=eq.${userId}`,
+                { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
+              );
+              const uData = await uRes.json();
+              const prev = (Array.isArray(uData) && uData[0]) ? uData[0].count : 0;
+              await fetch(`${supabaseUrl}/rest/v1/scan_usage_user`, {
+                method: 'POST',
+                headers: {
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                  'Content-Type': 'application/json',
+                  Prefer: 'resolution=merge-duplicates',
+                },
+                body: JSON.stringify({ user_id: userId, date: today, count: prev + 1 }),
+              });
+            }
+          } catch (e) {
+            console.error('사용량 업데이트 오류:', e);
+          }
+        }
+
+        console.log(`성공: ${model}`);
+        return res.status(200).json({ text, model });
+
+      } catch (err) {
+        lastError = `${model} 예외: ${err.message}`;
+        console.error(lastError);
+        break;
       }
     }
-
-    return res.status(200).json({ text });
-
-  } catch (err) {
-    console.error('Gemini 요청 오류:', err);
-    return res.status(500).json({ error: `서버 오류: ${err.message}` });
   }
+
+  /* 모든 모델 실패 */
+  return res.status(503).json({
+    error: `모든 모델 응답 실패. 잠시 후 다시 시도해주세요. (${lastError})`
+  });
 }
