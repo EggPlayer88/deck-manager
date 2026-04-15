@@ -2683,13 +2683,17 @@ function LockerRoomPage(p) {
   };
   var rmPotm = function(idx) { upd("potmList", potmList.filter(function(_, i) { return i !== idx; })); };
 
-  /* 선수도감 검색 결과 - 이름 기준 중복 제거 (이름만 저장하므로) */
+  /* 선수도감 검색 결과 - 라이브 카드 우선, 이름 기준 중복 제거 */
   var potmSearchResults = (function() {
     if (potmSearch.trim().length < 1) return [];
     var q = potmSearch.trim();
+    /* 라이브 카드 먼저, 나머지 뒤 */
+    var live = SEED_PLAYERS.filter(function(sp) { return sp.cardType === '라이브'; });
+    var others = SEED_PLAYERS.filter(function(sp) { return sp.cardType !== '라이브'; });
+    var ordered = live.concat(others);
     var seen = {};
     var results = [];
-    SEED_PLAYERS.forEach(function(sp) {
+    ordered.forEach(function(sp) {
       if (!sp.name) return;
       if (seen[sp.name]) return;
       if (sp.name.indexOf(q) >= 0 || (sp.team && sp.team.indexOf(q) >= 0)) {
