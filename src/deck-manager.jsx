@@ -3108,7 +3108,7 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
 
   // ── 헬퍼 ──────────────────────────────────────────────────────
   // 괄호 제거 기본명
-  var base = function(n) { return n.replace(/\(.*?\)/g, '').trim(); };
+  var base = function(n) { return n.replace(/\(.*?\)/g, '').replace(/\s+/g, '').trim(); };
   // 슬롯 → 중계 역할 분류
   var slotRole = function(s) {
     if (!s) return '';
@@ -3131,7 +3131,12 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
   };
 
   // ── 1. 정확 일치 ───────────────────────────────────────────────
+  /* 공백 제거 후 정확 일치 체크 */
+  var rawNameNoSpace = rawName.replace(/\s+/g, '');
   if (catSkills[rawName]) return { name: rawName, missing: false, candidates: [] };
+  /* 공백 제거 버전으로 DB에서 찾기 */
+  var spaceMatch = Object.keys(catSkills).find(function(k) { return k.replace(/\s+/g,'') === rawNameNoSpace; });
+  if (spaceMatch) return { name: spaceMatch, missing: false, candidates: [] };
 
   var baseName = base(rawName);
 
@@ -3426,17 +3431,20 @@ function BulkScanModal(p) {
     setMsg('');
   };
 
+  /* 컴포넌트 레벨 getSkillCat (리뷰 UI 렌더링에서도 사용) */
+  var getSkillCat = function(seed) {
+    if (!seed) return '타자';
+    if (seed.role === '타자') return '타자';
+    if (seed.position === '선발') return '선발';
+    if (seed.position === '마무리') return '마무리';
+    return '중계';
+  };
+
   var runSave = function() {
     var newPlayers = players.slice();
     var newLm = Object.assign({}, lineupMap);
     var ok = []; var warn = []; var skip = [];
-    // 스킬 카테고리 결정
-    var getSkillCat = function(seed) {
-      if (seed.role === '타자') return '타자';
-      if (seed.position === '선발') return '선발';
-      if (seed.position === '마무리') return '마무리';
-      return '중계';
-    };
+    // 스킬 카테고리 결정 (컴포넌트 레벨 함수 재사용)
     // 스킬 이름 퍼지 매칭 + 저장값 결정
     var resolveSkills = function(sc, seed) {
       var cat = getSkillCat(seed);
@@ -4743,7 +4751,7 @@ function SkillPhotoScan(p) {
   var cat = catMap[localPos] || "타자";
   var catSkills = skills[cat] || {};
   var allSkillNames = Object.keys(catSkills);
-  var baseName = function(n) { return n.replace(/\(.*?\)/g, "").trim(); };
+  var baseName = function(n) { return n.replace(/\(.*?\)/g, "").replace(/\s+/g, "").trim(); };
 
   var _img = React.useState(null); var img = _img[0]; var setImg = _img[1];
   var _scanning = React.useState(false); var scanning = _scanning[0]; var setScanning = _scanning[1];
