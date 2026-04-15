@@ -3346,14 +3346,18 @@ function matchSeedPlayer(scanned) {
       return sp.cardType === '임팩트' && nameSimilar(sp.name||'', nm);
     });
     if (candidates.length === 0) return { seed: null, candidates: [] };
-    if (candidates.length === 1) return { seed: candidates[0], candidates: [] };
-    /* impactType 매칭 시도 */
+    /* impactType 매칭 시도: AI가 인식한 종류로 먼저 exact 매칭 */
     if (it) {
       var exact = candidates.find(function(sp) { return (sp.impactType||'') === it; });
       if (exact) return { seed: exact, candidates: [] };
     }
-    /* 내 팀 임팩트 후보 우선 정렬 */
-    if (typeof sdState !== 'undefined' && sdState && sdState.teamName && candidates.length > 1) {
+    /* impactType 없거나 exact 실패: 후보가 1개라도 impactType이 다르면 선택 요구 */
+    if (candidates.length === 1) {
+      /* 도감에 딱 1개 → impactType 불일치여도 자동 매칭 (유일한 선택지) */
+      return { seed: candidates[0], candidates: [] };
+    }
+    /* 후보 여러 개: 내 팀 우선 정렬 후 선택 요구 */
+    if (typeof sdState !== 'undefined' && sdState && sdState.teamName) {
       var myTeam = sdState.teamName;
       candidates = candidates.slice().sort(function(a, b) {
         var aM = (a.team||'') === myTeam ? 0 : 1;
@@ -3524,6 +3528,9 @@ function BulkScanModal(p) {
   };
 
   var runSave = function() {
+    /* setExtracted 함수형 업데이트로 최신 상태 보장 */
+    setExtracted(function(latestExtracted) {
+    var extractedToSave = latestExtracted;
     var newPlayers = players.slice();
     var newLm = Object.assign({}, lineupMap);
     var ok = []; var warn = []; var skip = [];
@@ -3549,7 +3556,7 @@ function BulkScanModal(p) {
       if (s3.candidates.length > 1) needSelect.push({ slot: 3, raw: sc.skill3, candidates: s3.candidates, selected: s3.name });
       return { s1: s1, s2: s2, s3: s3, missing: missingNames, needSelect: needSelect };
     };
-    extracted.forEach(function(item) {
+    extractedToSave.forEach(function(item) {
       if (item.failed) { skip.push(item.scanned.name + ': 카드 종류 인식 실패'); return; }
       if (item.needSelect) { skip.push(item.scanned.name + ': 임팩트 종류 선택 필요'); return; }
       if (!item.matched) { skip.push(item.scanned.name + ': 선수도감 미등록'); return; }
@@ -3609,6 +3616,8 @@ function BulkScanModal(p) {
     setResult({ ok: ok, warn: warn, skip: skip });
     setStep('done');
     setConfirmOpen(false);
+    return latestExtracted; /* 상태 변경 없이 최신값만 읽기 */
+    }); /* setExtracted 함수형 끝 */
   };
 
   var OVERLAY = { position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 };
