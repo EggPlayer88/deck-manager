@@ -1,12 +1,14 @@
 /**
- * /api/scan.js — Vercel 서버리스 함수
- * Google Gemini API 사용
- * 모델: gemini-2.5-flash (폴백: gemini-2.0-flash)
+ * /api/scan.js — 최적화 버전
+ * - Few-shot 이미지 제거 (속도/비용 개선)
+ * - responseMimeType: 'application/json' (마크다운 제거 불필요)
+ * - gemini-2.0-flash 우선 (안정적), 2.5-flash 폴백
+ * - thinking 비활성화
  */
 
 const MODELS = [
-  'gemini-2.5-flash',
   'gemini-2.0-flash',
+  'gemini-2.5-flash',
 ];
 
 async function callGemini(apiKey, model, contents) {
@@ -20,7 +22,7 @@ async function callGemini(apiKey, model, contents) {
         generationConfig: {
           maxOutputTokens: 8192,
           temperature: 0.1,
-          responseMimeType: 'text/plain',
+          responseMimeType: 'application/json',
           thinkingConfig: { thinkingBudget: 0 },
         }
       })
@@ -75,69 +77,14 @@ export default async function handler(req, res) {
     }
   }
 
-  /* ── Few-shot 예시 이미지 로드 ── */
-  const EXAMPLES = [
-    { file: 'impact.jpg',    label: '임팩트',    desc: '청록/민트 배경, 이름 위에 역할 텍스트(예: 중견수), 이름에 연도 숫자 없음' },
-    { file: 'live.jpg',      label: '라이브',    desc: '이름 바로 위에 V1/V2/V3 뱃지와 연도 표시' },
-    { file: 'allstar.jpg',   label: '올스타',    desc: 'ALL STAR 텍스트, NANUM 또는 DREAM 로고' },
-    { file: 'golden.jpg',    label: '골든글러브', desc: '이름 하단 노란/황금색 장식, 황금 배경' },
-    { file: 'signature.jpg', label: '시그니처',  desc: '이름 위 왼쪽에 빨간 필기체 Sign 텍스트, 분홍/마젠타 배경' },
-    { file: 'national.jpg',  label: '국가대표',  desc: '파란/남색 배경, 우측 상단 팀 로고 근방 흰색' },
-  ];
-
-  let exampleParts = [];
-  if (supabaseUrl) {
-    try {
-      const results = await Promise.all(EXAMPLES.map(async (ex) => {
-        try {
-          const controller = new AbortController();
-          const tid = setTimeout(() => controller.abort(), 3000);
-          const r = await fetch(
-            `${supabaseUrl}/storage/v1/object/public/card-examples/${ex.file}`,
-            { signal: controller.signal }
-          );
-          clearTimeout(tid);
-          if (!r.ok) return null;
-          const buf = await r.arrayBuffer();
-          const b64 = Buffer.from(buf).toString('base64');
-          const mime = ex.file.endsWith('.png') ? 'image/png' : 'image/jpeg';
-          return { ex, b64, mime };
-        } catch (e) { return null; }
-      }));
-      for (const r of results) {
-        if (!r) continue;
-        exampleParts.push({ text: `[예시] 아래 이미지는 "${r.ex.label}" 카드입니다. 특징: ${r.ex.desc}` });
-        exampleParts.push({ inlineData: { mimeType: r.mime, data: r.b64 } });
-      }
-    } catch (e) {
-      console.error('예시 이미지 로드 실패 (무시):', e);
-    }
-  }
-
   if (!base64 || !prompt) {
     return res.status(400).json({ error: 'base64와 prompt가 필요합니다.' });
   }
-
-  const CARD_TYPE_GUIDE = `
-카드 종류 판별 기준 (순서대로 확인):
-1. 이름 바로 위에 V1/V2/V3 표시 → 라이브
-2. ALL STAR 텍스트 (NANUM/DREAM 로고도 함께) → 올스타
-   ※ 주의: 별점(★★★★★)은 ALL STAR가 아님. 반드시 영문 텍스트여야 함
-3. 이름 위 왼쪽에 빨간 필기체 Sign 텍스트 → 시그니처
-4. 우측 상단 팀 로고 근방 흰색 배경 → 국가대표
-5. 이름 하단 노란/황금색 장식 → 골든글러브
-6. 이름에 연도 숫자('18, '24 등)가 없음 → 임팩트
-7. 위 모두 해당 없음 → 인식실패
-
-반드시 JSON 배열만 출력하세요. 마크다운 코드블록(` + '```' + `) 없이 순수 JSON만 출력.
-`;
 
   const contents = [
     {
       role: 'user',
       parts: [
-        ...exampleParts,
-        { text: CARD_TYPE_GUIDE },
         { text: prompt },
         { inlineData: { mimeType: mediaType || 'image/jpeg', data: base64 } },
       ]
@@ -152,12 +99,12 @@ export default async function handler(req, res) {
         const geminiRes = await callGemini(GEMINI_API_KEY, model, contents);
 
         if (geminiRes.status === 503) {
-          lastError = `${model} 503 (과부하)`;
+          lastError = `${model} 503`;
           if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
           break;
         }
-        if (geminiRes.status === 429) { lastError = `${model} 429 (한도초과)`; break; }
-        if (geminiRes.status === 404) { lastError = `${model} 404 (모델없음)`; break; }
+        if (geminiRes.status === 429) { lastError = `${model} 429`; break; }
+        if (geminiRes.status === 404) { lastError = `${model} 404`; break; }
 
         if (!geminiRes.ok) {
           const errText = await geminiRes.text();
@@ -167,22 +114,14 @@ export default async function handler(req, res) {
 
         /* ── 성공 ── */
         const geminiData = await geminiRes.json();
-        /* thinking 모델 대응: parts 중 text 타입만 추출 */
+
+        /* thinking 모델 대응: thought가 아닌 part만 추출 */
         const parts = geminiData?.candidates?.[0]?.content?.parts || [];
         let text = '';
         for (const part of parts) {
           if (part.text && !part.thought) { text = part.text; break; }
         }
         if (!text) text = parts[parts.length - 1]?.text || '';
-
-        /* JSON 추출: 배열 [ ] 또는 객체 { } 부분만 잘라냄 */
-        text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-        /* [ 로 시작하는 JSON 배열 찾기 */
-        const arrStart = text.indexOf('[');
-        const arrEnd = text.lastIndexOf(']');
-        if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
-          text = text.slice(arrStart, arrEnd + 1);
-        }
 
         /* 사용량 업데이트 */
         if (supabaseUrl && supabaseKey) {
@@ -220,7 +159,7 @@ export default async function handler(req, res) {
           }
         }
 
-        console.log(`성공: ${model} (attempt ${attempt + 1})`);
+        console.log(`성공: ${model}`);
         return res.status(200).json({ text });
 
       } catch (err) {
