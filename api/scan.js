@@ -18,9 +18,10 @@ async function callGemini(apiKey, model, contents) {
       body: JSON.stringify({
         contents,
         generationConfig: {
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
           temperature: 0.1,
           responseMimeType: 'text/plain',
+          thinkingConfig: { thinkingBudget: 0 },
         }
       })
     }
