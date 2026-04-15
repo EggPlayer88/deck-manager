@@ -4777,24 +4777,17 @@ function SkillPhotoScan(p) {
     return slotList.reduce(function(acc,s){ return acc + skillScore(s.selected, s.lv); }, 0);
   };
 
-  /* AI 인식 결과에서 스킬 매칭 */
+  /* AI 인식 결과에서 스킬 매칭 - resolveSkillName 재사용 */
   var matchSkills = function(rawList) {
     return rawList.map(function(item) {
       var raw = (item.name||"").trim();
       var lv = parseInt(item.level||item.lv||5) || 5;
-      var rawBase = raw.replace(/\(.*?\)/g,"").trim();
-      /* 기본명이 일치하는 스킬 전체 목록 */
-      var candidates = allSkillNames.filter(function(n) {
-        return baseName(n) === rawBase;
-      });
-      if (candidates.length === 0) {
-        /* 부분 포함으로 재탐색 */
-        candidates = allSkillNames.filter(function(n) {
-          return baseName(n).indexOf(rawBase) >= 0 || rawBase.indexOf(baseName(n)) >= 0;
-        });
-      }
-      var selected = candidates.length === 1 ? candidates[0] : (candidates.length > 1 ? candidates[0] : "");
-      return { rawName: raw, lv: lv, candidates: candidates, selected: selected };
+      /* resolveSkillName 사용: 띄어쓰기 정규화 + 괄호 조건부 + 특수규칙 모두 적용 */
+      var res = resolveSkillName(raw, cat, null, skills, null);
+      var candidates = (res.candidates && res.candidates.length > 1) ? res.candidates
+                     : res.name ? [res.name] : [];
+      var selected = res.name || "";
+      return { rawName: raw, lv: lv, candidates: candidates, selected: selected, missing: res.missing };
     });
   };
 
