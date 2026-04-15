@@ -2962,6 +2962,7 @@ async function callClaudeVision(base64, mediaType, prompt, userId) {
 
 /* AI 인식 결과 보정: 연도/카드종류 불일치 교정 */
 function correctCardType(players) {
+  var VALID_TYPES = ['임팩트','라이브','올스타','시그니처','국가대표','골든글러브','인식실패'];
   return players.map(function(p) {
     var year = (p.year || '').trim();
     var ct = p.cardType || '';
@@ -2971,6 +2972,10 @@ function correctCardType(players) {
     }
     /* 연도가 있는데 임팩트로 왔으면 인식실패로 변환 */
     if (year && ct === '임팩트') {
+      return Object.assign({}, p, { cardType: '인식실패' });
+    }
+    /* 유효하지 않은 카드종류(기타, OTHER 등) → 인식실패 */
+    if (VALID_TYPES.indexOf(ct) === -1) {
       return Object.assign({}, p, { cardType: '인식실패' });
     }
     return p;
@@ -3037,6 +3042,7 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '',
     '=== 출력 형식 ===',
     '반드시 아래 형식의 JSON 배열만 출력하세요. 설명 텍스트, 마크다운 없이 순수 JSON만.',
+    'cardType 허용값: 임팩트, 라이브, 올스타, 시그니처, 국가대표, 골든글러브, 인식실패 (이 7가지 외 다른 값 절대 사용 금지)',
     '[{"name":"","year":"","team":"","slot":"","cardType":"","impactType":"","role":"' + role + '","hand":"우","stars":5,"ovr":0}]',
   ].join('\n');
   return await callClaudeVision(base64, mediaType, prompt, userId);
