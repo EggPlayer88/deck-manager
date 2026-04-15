@@ -11,7 +11,7 @@ const MODELS = [
   'gemini-2.5-flash',
 ];
 
-async function callGemini(apiKey, model, contents) {
+async function callGemini(apiKey, model, contents, maxTokens) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
@@ -20,7 +20,7 @@ async function callGemini(apiKey, model, contents) {
       body: JSON.stringify({
         contents,
         generationConfig: {
-          maxOutputTokens: 8192,
+          maxOutputTokens: maxTokens || 8192,
           temperature: 0.1,
           responseMimeType: 'application/json',
         }
@@ -101,7 +101,9 @@ export default async function handler(req, res) {
   for (const model of MODELS_TO_USE) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const geminiRes = await callGemini(GEMINI_API_KEY, model, contents);
+        /* 사진일괄: 9명+투수 JSON이 길어서 충분한 토큰 필요 */
+        const maxTok = isSkill ? 4096 : 16384;
+        const geminiRes = await callGemini(GEMINI_API_KEY, model, contents, maxTok);
 
         if (geminiRes.status === 503) {
           lastError = `${model} 503`;
