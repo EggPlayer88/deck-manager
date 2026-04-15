@@ -2958,6 +2958,24 @@ async function callClaudeVision(base64, mediaType, prompt, userId) {
 }
 
 // 라인업 화면 분석
+
+/* AI 인식 결과 보정: 연도/카드종류 불일치 교정 */
+function correctCardType(players) {
+  return players.map(function(p) {
+    var year = (p.year || '').trim();
+    var ct = p.cardType || '';
+    /* 연도가 없으면 무조건 임팩트 */
+    if (!year) {
+      return Object.assign({}, p, { cardType: '임팩트' });
+    }
+    /* 연도가 있는데 임팩트로 왔으면 인식실패로 변환 */
+    if (year && ct === '임팩트') {
+      return Object.assign({}, p, { cardType: '인식실패' });
+    }
+    return p;
+  });
+}
+
 async function scanLineupScreen(base64, mediaType, role, userId) {
   var isBat = role === '타자';
   var prompt = [
@@ -2965,29 +2983,36 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '이미지는 ' + role + ' 라인업 화면입니다.',
     isBat ? '다이아몬드 배치의 주전 타자 9명만 분석하세요. 하단 후보 선수는 무시하세요.' : '화면에 보이는 투수 카드를 모두 분석하세요.',
     '',
-    '=== 카드 종류 판별 절대 원칙 (위에서 아래 순서로 검사, 확정 시 아래 단계 무시) ===',
+    '너는 지금부터 색상보다 데이터 규칙을 우선하는 데이터 추출 엔진이다.',
+    '배경이 금색이라고 무조건 골든글러브로 판단하는 것은 오답이다. 아래 순서를 절대 준수하라.',
     '',
-    '▶ 1단계: 연도 유무 확인 (최우선)',
-    '   - 선수 이름 옆에 연도 숫자(\'17, \'24 등)가 아예 없는가?',
-    '   - 배경이 아무리 화려하거나 금색이더라도, 연도가 없으면 무조건 임팩트로 확정.',
-    '   - 연도가 있으면 2단계로 넘어간다.',
+    '[1단계: 임팩트 즉시 판정]',
+    '- 선수 이름 옆에 연도 숫자(17, 24 등)가 있는가?',
+    '- NO (숫자가 없다) → 배경이 아무리 금색이고 화려해도 무조건 임팩트 확정. 다른 단계로 넘어가지 마라.',
+    '- YES (숫자가 있다) → 2단계로 이동.',
     '',
-    '▶ 2단계: 시그니처 로고 확인',
-    '   - 이름표 바로 위 왼쪽에 빨간색 필기체 Sign 로고가 있는가?',
-    '   - Sign 로고 확인 시 배경색도 함께 확인: 분홍/마젠타/자주 계열이면 확실한 시그니처.',
-    '   - Sign 로고가 있으면 무조건 시그니처 확정.',
-    '   - Sign 로고는 이름표와 매우 가깝게 붙어 있으므로 정밀하게 스캔할 것.',
+    '[2단계: 시그니처 판정]',
+    '- 이름표 바로 위 왼쪽 지점에 빨간색 필기체 Sign 로고가 있는가?',
+    '- YES → 배경이 금색이든 아니든 무조건 시그니처 확정.',
+    '- NO → 3단계로 이동.',
+    '- Sign 로고는 이름표 바로 위에 매우 작게 붙어 있으므로 정밀하게 스캔하라.',
     '',
-    '▶ 3단계: 골든글러브 장식 확인',
-    '   - 1,2단계 해당 없을 때: 이름표 하단 테두리가 진한 황금색/노란색 장식으로 감싸져 있는가?',
-    '   - 골든글러브 확정 조건: Sign 로고 없음 + 이름표 하단 황금색 테두리 + 배경 황금/황토 계열.',
-    '   - 배경의 빛나는 효과보다 이름표 하단 테두리 색상을 우선 확인.',
+    '[3단계: 골든글러브 판정]',
+    '- 1단계(연도 있음), 2단계(Sign 로고 없음)를 모두 통과한 상태에서:',
+    '- 이름표 사각형의 하단 테두리에만 진한 황금색 장식이 붙어 있는가?',
+    '- YES → 골든글러브 확정.',
+    '- 배경의 금색 빛줄기는 무시하고, 이름표 하단 테두리만 확인하라.',
     '',
-    '▶ 4단계: 기타 종류 확인',
-    '   - 이름 바로 위에 V1/V2/V3 뱃지 있음 → 라이브 (연도 반드시 있음)',
-    '   - ALL STAR 영문 텍스트 있음 → 올스타 (별점★★★★★과 혼동 금지)',
-    '   - 배경이 파란색/남색 계열 → 국가대표',
-    '   - 모두 해당 없음 → 인식실패',
+    '[4단계: 기타]',
+    '- 이름표 위에 V1/V2/V3 있으면 → 라이브 (연도 반드시 있음)',
+    '- ALL STAR 영문 텍스트 있으면 → 올스타 (별점★★★★★과 혼동 금지)',
+    '- 배경이 파란색/남색 계열 → 국가대표',
+    '- 모두 해당 없음 → 인식실패',
+    '',
+    '[핵심 요약]',
+    '- 연도가 없으면 100% 임팩트 (가장 중요)',
+    '- Sign 로고가 있으면 100% 시그니처',
+    '- 배경의 금색 빛줄기는 무시하고 이름표 주변 텍스트와 테두리만 보고 판단하라.',
     '',
     '=== 임팩트 종류 (이름 왼쪽에 보이는 텍스트) ===',
     '2025TOP3,5툴선수,FA선수,WAR상위,가을사나이,거포,교타자,구조대,구종마스터,끝내기,난세의영웅,느림의미학,대체외인,대표타자,도루왕,돌격대장,라이징스타,마당쇠,마무리,마성의주자,백전노장,베스트포지션,베테랑,분위기메이커,비FA계약,빅게임헌터,신인왕,안경에이스,안방마님,얼리스타터,여름사나이,외국인,우완에이스,원클럽맨,원투펀치,이벤트,저니맨,전천후,좌완에이스,좌타해결사,주력선수,중간계투,철완,최강야구,추억의선수,캡틴,키플레이어,키스톤,파이어볼러,프랜차이즈,필승계투,해외파,호타준족,홈런타자',
@@ -3326,7 +3351,7 @@ function BulkScanModal(p) {
       var batRaw = await scanLineupScreen(imgs[0].base64, imgs[0].mediaType, '타자', userId);
       var batParsed = typeof batRaw === 'string' ? JSON.parse(batRaw) : batRaw;
       if (!Array.isArray(batParsed)) throw new Error('타자 분석 결과 형식 오류');
-      var bats = batParsed.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
+      var bats = correctCardType(batParsed).map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
       if (imgs[1]) {
         setMsg('⚡ 타자 스킬 분석 중…');
         var bSkillRaw = await scanSkillScreen(imgs[1].base64, imgs[1].mediaType, bats.map(function(b){return b.name;}), userId);
@@ -3340,7 +3365,7 @@ function BulkScanModal(p) {
         var pitRaw = await scanLineupScreen(imgs[2].base64, imgs[2].mediaType, '투수', userId);
         var pitParsed = typeof pitRaw === 'string' ? JSON.parse(pitRaw) : pitRaw;
         if (!Array.isArray(pitParsed)) throw new Error('투수 분석 결과 형식 오류');
-        var pits = pitParsed.map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
+        var pits = correctCardType(pitParsed).map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
         if (imgs[3]) {
           setMsg('⚡ 투수 스킬 분석 중…');
           var pSkillRaw = await scanSkillScreen(imgs[3].base64, imgs[3].mediaType, pits.map(function(b){return b.name;}), userId);
