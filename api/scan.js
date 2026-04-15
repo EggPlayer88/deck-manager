@@ -1,11 +1,12 @@
 /**
  * /api/scan.js — Vercel 서버리스 함수
  * Google Gemini API 사용
+ * 모델: gemini-2.5-flash (폴백: gemini-2.0-flash)
  */
 
 const MODELS = [
   'gemini-2.5-flash',
-  'gemini-3-flash-preview',
+  'gemini-2.0-flash',
 ];
 
 async function callGemini(apiKey, model, contents) {
@@ -16,7 +17,11 @@ async function callGemini(apiKey, model, contents) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        generationConfig: { maxOutputTokens: 4096, temperature: 0.1 }
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: 0.1,
+          responseMimeType: 'text/plain',
+        }
       })
     }
   );
@@ -122,6 +127,8 @@ export default async function handler(req, res) {
 5. 이름 하단 노란/황금색 장식 → 골든글러브
 6. 이름에 연도 숫자('18, '24 등)가 없음 → 임팩트
 7. 위 모두 해당 없음 → 인식실패
+
+반드시 JSON 배열만 출력하세요. 마크다운 코드블록(` + '```' + `) 없이 순수 JSON만 출력.
 `;
 
   const contents = [
@@ -144,12 +151,12 @@ export default async function handler(req, res) {
         const geminiRes = await callGemini(GEMINI_API_KEY, model, contents);
 
         if (geminiRes.status === 503) {
-          lastError = `${model} 503`;
+          lastError = `${model} 503 (과부하)`;
           if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
           break;
         }
-        if (geminiRes.status === 429) { lastError = `${model} 429`; break; }
-        if (geminiRes.status === 404) { lastError = `${model} 404`; break; }
+        if (geminiRes.status === 429) { lastError = `${model} 429 (한도초과)`; break; }
+        if (geminiRes.status === 404) { lastError = `${model} 404 (모델없음)`; break; }
 
         if (!geminiRes.ok) {
           const errText = await geminiRes.text();
@@ -157,12 +164,12 @@ export default async function handler(req, res) {
           break;
         }
 
-        /* ── 성공: 응답 파싱 ── */
+        /* ── 성공 ── */
         const geminiData = await geminiRes.json();
         let text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-        /* 마크다운 코드블록 제거 (```json ... ``` 형태로 올 경우) */
-        text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+        /* 마크다운 코드블록 제거 */
+        text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 
         /* 사용량 업데이트 */
         if (supabaseUrl && supabaseKey) {
@@ -200,7 +207,7 @@ export default async function handler(req, res) {
           }
         }
 
-        console.log(`성공: ${model}`);
+        console.log(`성공: ${model} (attempt ${attempt + 1})`);
         return res.status(200).json({ text });
 
       } catch (err) {
