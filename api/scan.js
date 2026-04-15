@@ -50,8 +50,8 @@ export default async function handler(req, res) {
   const DAILY_LIMIT      = isSkill ? 10000 : 1000;
   const USER_DAILY_LIMIT = isSkill ? 50    : 10;
   const MODELS_TO_USE    = isSkill
-    ? ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.0-flash']  /* 스킬판독: lite 우선 */
-    : ['gemini-2.0-flash', 'gemini-2.5-flash'];                                /* 사진일괄: flash 우선 */
+    ? ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']  /* 스킬판독 */
+    : ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-3-flash-preview'];                          /* 사진일괄 */
   const today = new Date().toISOString().slice(0, 10);
 
   /* ── 일일 한도 체크 ── */
@@ -105,7 +105,7 @@ export default async function handler(req, res) {
 
         if (geminiRes.status === 503) {
           lastError = `${model} 503`;
-          if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
+          if (attempt === 0) { await new Promise(r => setTimeout(r, 2000)); continue; }
           break;
         }
         if (geminiRes.status === 429) { lastError = `${model} 429`; break; }
