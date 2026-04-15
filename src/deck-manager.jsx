@@ -1110,6 +1110,7 @@ function PlayerDBPage(p){
                         var sp=np[i];
                         if((sp.name||"")!==nm||sp.cardType!==ct2)continue;
                         if(ct2==="임팩트"){if((sp.impactType||"")===it&&(sp.team||"")===tm){ex=i;break;}}
+                        else if(ct2==="라이브"){var lt2=String(row["라이브종류"]||"");if(String(sp.year||"")===yr&&(sp.liveType||"")===lt2&&(sp.team||"")===tm){ex=i;break;}}
                         else{if(String(sp.year||"")===yr&&(sp.team||"")===tm){ex=i;break;}}
                       }
                       var pl2=ex!==null?Object.assign({},np[ex]):{id:"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(c){var r=Math.random()*16|0;return(c==="x"?r:(r&0x3|0x8)).toString(16);})};
@@ -4154,7 +4155,7 @@ function MyPlayersPage(p) {
                 {dbPlayers.length === 0 ? (
                   <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--td)", fontSize: 12 }}>{"도감에 등록된 선수가 없습니다."}</div>
                 ) : dbPlayers.map(function(sp) {
-                  var already = players.some(function(x){ return x.name===sp.name && x.cardType===sp.cardType && (x.year||"")===(sp.year||""); });
+                  var already = players.some(function(x){ return x.name===sp.name && x.cardType===sp.cardType && (x.year||"")===(sp.year||"") && (x.impactType||"")===(sp.impactType||"") && (sp.cardType!=="라이브" || (x.liveType||"")===(sp.liveType||"")); });
                   return (
                     <div key={sp.id} onClick={function(){if(!already)addPl(sp);}} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 18px", borderBottom: "1px solid var(--bd)", cursor: already?"not-allowed":"pointer", opacity: already?0.4:1 }}>
                       <PlayerCard player={sp} size="sm" />
@@ -4163,6 +4164,8 @@ function MyPlayersPage(p) {
                           <Badge type={sp.cardType} />
                           <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 13 }}>{sp.name}</span>
                           {sp.year && (<span style={{ fontSize: 9, color: "var(--td)" }}>{sp.year}</span>)}
+                          {sp.cardType === "임팩트" && sp.impactType && (<span style={{ fontSize: 9, color: "#a78bfa", marginLeft: 2 }}>{'(' + sp.impactType + ')'}</span>)}
+                          {sp.cardType === "라이브" && sp.liveType && (<span style={{ fontSize: 9, color: "#34d399", marginLeft: 2 }}>{'(' + sp.liveType + ')'}</span>)}
                         </div>
                         <div style={{ fontSize: 9, color: "var(--td)", marginTop: 2 }}>
                           {isBat ? (sp.team + " · " + sp.hand + "타 · 파" + (sp.power||0) + " 정" + (sp.accuracy||0) + " 선" + (sp.eye||0)) : (sp.team + " · " + sp.hand + "투 · 변" + (sp.change||0) + " 구" + (sp.stuff||0))}
