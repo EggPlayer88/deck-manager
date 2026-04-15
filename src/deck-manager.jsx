@@ -3362,7 +3362,17 @@ function BulkScanModal(p) {
       // 타자 분석
       setMsg('⚾ 타자 라인업 분석 중…');
       var batRaw = await scanLineupScreen(imgs[0].base64, imgs[0].mediaType, '타자', userId);
-      var batParsed = typeof batRaw === 'string' ? JSON.parse(batRaw) : batRaw;
+      var batParsed = (function(raw) {
+        if (typeof raw !== 'string') return raw;
+        try { return JSON.parse(raw); } catch(e) {
+          /* JSON 잘린 경우 복구 시도: 마지막 완전한 객체까지만 파싱 */
+          var lastClose = raw.lastIndexOf('}');
+          if (lastClose > 0) {
+            try { return JSON.parse(raw.slice(0, lastClose + 1) + ']'); } catch(e2) {}
+          }
+          throw new Error('타자 분석 JSON 파싱 실패: ' + e.message);
+        }
+      })(batRaw);
       if (!Array.isArray(batParsed)) throw new Error('타자 분석 결과 형식 오류');
       var bats = correctCardType(batParsed).map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
       if (imgs[1]) {
@@ -3376,7 +3386,16 @@ function BulkScanModal(p) {
       if (imgs[2]) {
         setMsg('🎯 투수 라인업 분석 중…');
         var pitRaw = await scanLineupScreen(imgs[2].base64, imgs[2].mediaType, '투수', userId);
-        var pitParsed = typeof pitRaw === 'string' ? JSON.parse(pitRaw) : pitRaw;
+        var pitParsed = (function(raw) {
+          if (typeof raw !== 'string') return raw;
+          try { return JSON.parse(raw); } catch(e) {
+            var lastClose = raw.lastIndexOf('}');
+            if (lastClose > 0) {
+              try { return JSON.parse(raw.slice(0, lastClose + 1) + ']'); } catch(e2) {}
+            }
+            throw new Error('투수 분석 JSON 파싱 실패: ' + e.message);
+          }
+        })(pitRaw);
         if (!Array.isArray(pitParsed)) throw new Error('투수 분석 결과 형식 오류');
         var pits = correctCardType(pitParsed).map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
         if (imgs[3]) {
