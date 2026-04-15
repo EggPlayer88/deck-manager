@@ -174,8 +174,14 @@ export default async function handler(req, res) {
         }
         if (!text) text = parts[parts.length - 1]?.text || '';
 
-        /* 마크다운 코드블록 제거 */
+        /* JSON 추출: 배열 [ ] 또는 객체 { } 부분만 잘라냄 */
         text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+        /* [ 로 시작하는 JSON 배열 찾기 */
+        const arrStart = text.indexOf('[');
+        const arrEnd = text.lastIndexOf(']');
+        if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
+          text = text.slice(arrStart, arrEnd + 1);
+        }
 
         /* 사용량 업데이트 */
         if (supabaseUrl && supabaseKey) {
