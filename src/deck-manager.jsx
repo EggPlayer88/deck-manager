@@ -3440,58 +3440,65 @@ function BulkScanModal(p) {
 
 
 
+  var parseLineupJSON = function(raw, label) {
+    if (typeof raw !== 'string') return raw;
+    try { return JSON.parse(raw); } catch(e) {
+      var lastClose = raw.lastIndexOf('}');
+      if (lastClose > 0) {
+        try { return JSON.parse(raw.slice(0, lastClose + 1) + ']'); } catch(e2) {}
+      }
+      throw new Error(label + ' JSON 파싱 실패: ' + e.message);
+    }
+  };
+
   var runScan = async function() {
     if (!imgs[0]) { setErr('타자 라인업 화면(①)은 필수입니다.'); return; }
     setStep('scanning'); setErr('');
     try {
       var allPlayers = [];
-      // 타자 분석
-      setMsg('⚾ 타자 라인업 분석 중…');
-      var batRaw = await scanLineupScreen(imgs[0].base64, imgs[0].mediaType, '타자', userId);
-      var batParsed = (function(raw) {
-        if (typeof raw !== 'string') return raw;
-        try { return JSON.parse(raw); } catch(e) {
-          /* JSON 잘린 경우 복구 시도: 마지막 완전한 객체까지만 파싱 */
-          var lastClose = raw.lastIndexOf('}');
-          if (lastClose > 0) {
-            try { return JSON.parse(raw.slice(0, lastClose + 1) + ']'); } catch(e2) {}
-          }
-          throw new Error('타자 분석 JSON 파싱 실패: ' + e.message);
-        }
-      })(batRaw);
+
+      // ── 라인업 병렬 분석 (타자+투수 동시) ──────────────────────
+      setMsg('⚾ 라인업 분석 중… (타자' + (imgs[2] ? '+투수 동시' : '') + ')');
+      var lineupPromises = [
+        scanLineupScreen(imgs[0].base64, imgs[0].mediaType, '타자', userId),
+        imgs[2] ? scanLineupScreen(imgs[2].base64, imgs[2].mediaType, '투수', userId) : Promise.resolve(null),
+      ];
+      var lineupResults = await Promise.all(lineupPromises);
+      var batRaw = lineupResults[0];
+      var pitRaw = lineupResults[1];
+
+      var batParsed = parseLineupJSON(batRaw, '타자');
       if (!Array.isArray(batParsed)) throw new Error('타자 분석 결과 형식 오류');
       var bats = correctCardType(batParsed).map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
-      if (imgs[1]) {
-        setMsg('⚡ 타자 스킬 분석 중…');
-        var bSkillRaw = await scanSkillScreen(imgs[1].base64, imgs[1].mediaType, bats.map(function(b){return b.name;}), userId);
-        var bSkill = typeof bSkillRaw === 'string' ? JSON.parse(bSkillRaw) : bSkillRaw;
-        bats = mergeSkillsInto(bats, Array.isArray(bSkill) ? bSkill : []);
-      }
-      allPlayers = allPlayers.concat(bats);
-      // 투수 분석
-      if (imgs[2]) {
-        setMsg('🎯 투수 라인업 분석 중…');
-        var pitRaw = await scanLineupScreen(imgs[2].base64, imgs[2].mediaType, '투수', userId);
-        var pitParsed = (function(raw) {
-          if (typeof raw !== 'string') return raw;
-          try { return JSON.parse(raw); } catch(e) {
-            var lastClose = raw.lastIndexOf('}');
-            if (lastClose > 0) {
-              try { return JSON.parse(raw.slice(0, lastClose + 1) + ']'); } catch(e2) {}
-            }
-            throw new Error('투수 분석 JSON 파싱 실패: ' + e.message);
-          }
-        })(pitRaw);
+
+      var pits = [];
+      if (pitRaw) {
+        var pitParsed = parseLineupJSON(pitRaw, '투수');
         if (!Array.isArray(pitParsed)) throw new Error('투수 분석 결과 형식 오류');
-        var pits = correctCardType(pitParsed).map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
-        if (imgs[3]) {
-          setMsg('⚡ 투수 스킬 분석 중…');
-          var pSkillRaw = await scanSkillScreen(imgs[3].base64, imgs[3].mediaType, pits.map(function(b){return b.name;}), userId);
-          var pSkill = typeof pSkillRaw === 'string' ? JSON.parse(pSkillRaw) : pSkillRaw;
+        pits = correctCardType(pitParsed).map(function(p){ return Object.assign({skill1:'',s1Lv:0,skill2:'',s2Lv:0,skill3:'',s3Lv:0}, p); });
+      }
+
+      // ── 스킬 병렬 분석 (타자+투수 동시) ──────────────────────
+      var hasBS = !!(imgs[1]);
+      var hasPS = !!(imgs[3] && pits.length > 0);
+      if (hasBS || hasPS) {
+        setMsg('⚡ 스킬 분석 중… (타자' + (hasPS ? '+투수 동시' : '') + ')');
+        var skillPromises = [
+          hasBS ? scanSkillScreen(imgs[1].base64, imgs[1].mediaType, bats.map(function(b){return b.name;}), userId) : Promise.resolve(null),
+          hasPS ? scanSkillScreen(imgs[3].base64, imgs[3].mediaType, pits.map(function(b){return b.name;}), userId) : Promise.resolve(null),
+        ];
+        var skillResults = await Promise.all(skillPromises);
+        if (skillResults[0]) {
+          var bSkill = typeof skillResults[0] === 'string' ? JSON.parse(skillResults[0]) : skillResults[0];
+          bats = mergeSkillsInto(bats, Array.isArray(bSkill) ? bSkill : []);
+        }
+        if (skillResults[1]) {
+          var pSkill = typeof skillResults[1] === 'string' ? JSON.parse(skillResults[1]) : skillResults[1];
           pits = mergeSkillsInto(pits, Array.isArray(pSkill) ? pSkill : []);
         }
-        allPlayers = allPlayers.concat(pits);
       }
+
+      allPlayers = allPlayers.concat(bats).concat(pits);
       // 도감 매칭
       var withMatch = allPlayers.map(function(sc) {
         var res = matchSeedPlayer(sc);
