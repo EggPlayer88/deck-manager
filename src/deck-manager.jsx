@@ -747,6 +747,7 @@ function PlayerSelector(p) {
                     <Badge type={pl.cardType} />
                     <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span>
                     {pl.year && (<span style={{ fontSize: 9, color: "var(--td)" }}>{pl.year}</span>)}
+                    {pl.cardType === "임팩트" && pl.impactType && (<span style={{ fontSize: 9, color: "#a78bfa", marginLeft: 2 }}>{'(' + pl.impactType + ')'}</span>)}
                   </div>
                   <div style={{ fontSize: 9, color: "var(--td)", marginTop: 2 }}>{statLine}</div>
                 </div>
@@ -2992,10 +2993,13 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '- YES (숫자가 있다) → 2단계로 이동.',
     '',
     '[2단계: 시그니처 판정]',
-    '- 이름표 바로 위 왼쪽 지점에 빨간색 필기체 Sign 로고가 있는가?',
-    '- YES → 배경이 금색이든 아니든 무조건 시그니처 확정.',
+    '- 이름표(선수 이름이 적힌 사각형) 주변 어디서든 빨간색 필기체 로고가 보이는가?',
+    '- 위치: 선수 이름 텍스트의 왼쪽 위 (이름표는 카드 맨 아래에 있고, Sign 로고는 그 이름의 왼쪽 위에 위치).',
+    '- 모양: 흘려쓴 빨간색 S자 또는 Sig 형태의 기울어진 필기체 서명 스타일.',
+    '- 배경색 보조 확인: 분홍/마젠타/자주색 배경이면 시그니처일 가능성 매우 높음.',
+    '- 이 로고는 작고 이름표에 바짝 붙어 있으므로 이름표 주변 전체를 정밀 스캔하라.',
+    '- YES (빨간 필기체 로고 확인) → 배경색 무관하게 무조건 시그니처 확정.',
     '- NO → 3단계로 이동.',
-    '- Sign 로고는 이름표 바로 위에 매우 작게 붙어 있으므로 정밀하게 스캔하라.',
     '',
     '[3단계: 골든글러브 판정]',
     '- 1단계(연도 있음), 2단계(Sign 로고 없음)를 모두 통과한 상태에서:',
@@ -3260,6 +3264,15 @@ function matchSeedPlayer(scanned) {
     if (it) {
       var exact = candidates.find(function(sp) { return (sp.impactType||'') === it; });
       if (exact) return { seed: exact, candidates: [] };
+    }
+    /* 내 팀 임팩트 후보 우선 정렬 */
+    if (typeof sdState !== 'undefined' && sdState && sdState.teamName && candidates.length > 1) {
+      var myTeam = sdState.teamName;
+      candidates = candidates.slice().sort(function(a, b) {
+        var aM = (a.team||'') === myTeam ? 0 : 1;
+        var bM = (b.team||'') === myTeam ? 0 : 1;
+        return aM - bM;
+      });
     }
     return { seed: null, candidates: candidates };
   }
