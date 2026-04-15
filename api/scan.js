@@ -51,7 +51,7 @@ export default async function handler(req, res) {
   const USER_DAILY_LIMIT = isSkill ? 50    : 10;
   const MODELS_TO_USE    = isSkill
     ? ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']  /* 스킬판독: lite 우선 (저렴) */
-    : ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-3-flash-preview'];                          /* 사진일괄: 2.0-flash 우선 */
+    : ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3-flash-preview'];                          /* 사진일괄: 2.5-flash 우선 (65536토큰, 잘림방지) */
   const today = new Date().toISOString().slice(0, 10);
 
   /* ── 일일 한도 체크 ── */
