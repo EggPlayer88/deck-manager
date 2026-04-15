@@ -3640,39 +3640,50 @@ function BulkScanModal(p) {
                   ),
                   (sc.skill1||sc.skill2||sc.skill3)&&React.createElement('div', {style:{marginTop:6}},
                     (function() {
-                      var skillsInfo = [
-                        {raw:sc.skill1, lv:sc.s1Lv, idx:0},
-                        {raw:sc.skill2, lv:sc.s2Lv, idx:1},
-                        {raw:sc.skill3, lv:sc.s3Lv, idx:2},
-                      ].filter(function(s){return s.raw;});
-                      var cat = item.seed ? getSkillCat(item.seed) : '타자';
-                      var sDB = p.skills || {};
-                      return skillsInfo.map(function(sk) {
-                        var res = resolveSkillName(sk.raw, cat, item.seed, sDB, sc.slot);
-                        var hasCandidates = res.candidates && res.candidates.length > 1;
-                        return React.createElement('div', {key:sk.idx, style:{display:'flex',alignItems:'center',gap:4,marginBottom:3}},
-                          React.createElement('span', {style:{fontSize:9,color:'#a78bfa',width:16,flexShrink:0}}, 'S'+(sk.idx+1)),
-                          hasCandidates
-                            ? React.createElement('select', {
-                                defaultValue: res.name,
-                                onChange: function(e) {
-                                  var val = e.target.value;
-                                  var next = extracted.slice();
-                                  var sc2 = Object.assign({}, next[i].scanned);
-                                  if (sk.idx===0) sc2.skill1 = val;
-                                  if (sk.idx===1) sc2.skill2 = val;
-                                  if (sk.idx===2) sc2.skill3 = val;
-                                  next[i] = Object.assign({}, next[i], {scanned: sc2});
-                                  setExtracted(next);
+                      try {
+                        var skillsInfo = [
+                          {raw:sc.skill1, lv:sc.s1Lv, idx:0},
+                          {raw:sc.skill2, lv:sc.s2Lv, idx:1},
+                          {raw:sc.skill3, lv:sc.s3Lv, idx:2},
+                        ].filter(function(s){return s.raw;});
+                        var cat = item.seed ? getSkillCat(item.seed) : '타자';
+                        var sDB = p.skills || {};
+                        var rowIdx = i; /* 클로저 캡처 */
+                        return skillsInfo.map(function(sk) {
+                          var res = resolveSkillName(sk.raw, cat, item.seed, sDB, sc.slot);
+                          var cands = (res && res.candidates && res.candidates.length > 1) ? res.candidates : [];
+                          var hasCandidates = cands.length > 0;
+                          var skIdx = sk.idx; /* 클로저 캡처 */
+                          return React.createElement('div', {key:sk.idx, style:{display:'flex',alignItems:'center',gap:4,marginBottom:3}},
+                            React.createElement('span', {style:{fontSize:9,color:'#a78bfa',width:16,flexShrink:0}}, 'S'+(sk.idx+1)),
+                            hasCandidates
+                              ? React.createElement('select', {
+                                  defaultValue: res.name,
+                                  onChange: function(e) {
+                                    var val = e.target.value;
+                                    setExtracted(function(prev) {
+                                      var next = prev.slice();
+                                      var sc2 = Object.assign({}, next[rowIdx].scanned);
+                                      if (skIdx===0) sc2.skill1 = val;
+                                      if (skIdx===1) sc2.skill2 = val;
+                                      if (skIdx===2) sc2.skill3 = val;
+                                      next[rowIdx] = Object.assign({}, next[rowIdx], {scanned: sc2});
+                                      return next;
+                                    });
+                                  },
+                                  style:{flex:1,padding:'2px 4px',fontSize:10,background:'#1e293b',border:'1px solid #FBBF24',borderRadius:4,color:'#e2e8f0'}
                                 },
-                                style:{flex:1,padding:'2px 4px',fontSize:10,background:'#1e293b',border:'1px solid #FBBF24',borderRadius:4,color:'#e2e8f0'}
-                              },
-                              res.candidates.map(function(c){ return React.createElement('option',{key:c,value:c},c); })
-                            )
-                            : React.createElement('span', {style:{fontSize:10,color:res.missing?'#EF4444':'#c4b5fd'}}, res.name||('❌ '+sk.raw)),
-                          React.createElement('span', {style:{fontSize:9,color:'#64748b',flexShrink:0}}, 'Lv'+sk.lv)
+                                cands.map(function(c){ return React.createElement('option',{key:c,value:c},c); })
+                              )
+                              : React.createElement('span', {style:{fontSize:10,color:(res&&res.missing)?'#EF4444':'#c4b5fd'}}, (res&&res.name)||('❌ '+sk.raw)),
+                            React.createElement('span', {style:{fontSize:9,color:'#64748b',flexShrink:0}}, 'Lv'+sk.lv)
+                          );
+                        });
+                      } catch(e) {
+                        return React.createElement('div', {style:{fontSize:10,color:'#94a3b8'}},
+                          [sc.skill1&&('S1:'+sc.skill1), sc.skill2&&('S2:'+sc.skill2), sc.skill3&&('S3:'+sc.skill3)].filter(Boolean).join(' · ')
                         );
-                      });
+                      }
                     })()
                   )
                 );
