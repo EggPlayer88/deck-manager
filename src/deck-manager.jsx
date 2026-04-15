@@ -5138,7 +5138,6 @@ function SkillCalculator(p) {
           </div>
         </div>
       )}
-    </div>
       </> )}
     </div>
   );
