@@ -3096,7 +3096,7 @@ function expandYr(y) {
 // 반환: { name: string|null, missing: bool }
 // ─────────────────────────────────────────────────────────────────
 function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
-  if (!rawName) return { name: '', missing: false };
+  if (!rawName) return { name: '', missing: false, candidates: [] };
   var catSkills = (skillsDB && skillsDB[category]) || {};
   var allNames  = Object.keys(catSkills);
 
@@ -3125,7 +3125,7 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
   };
 
   // ── 1. 정확 일치 ───────────────────────────────────────────────
-  if (catSkills[rawName]) return { name: rawName, missing: false };
+  if (catSkills[rawName]) return { name: rawName, missing: false, candidates: [] };
 
   var baseName = base(rawName);
 
@@ -3145,16 +3145,16 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
       return b.indexOf(rawName) >= 0 || rawName.indexOf(b) >= 0 ||
              baseName.length >= 2 && (b.indexOf(baseName) >= 0 || baseName.indexOf(b) >= 0);
     });
-    if (fuzzyMatches.length === 0) return { name: null, missing: true };
+    if (fuzzyMatches.length === 0) return { name: null, missing: true, candidates: [] };
     /* 여러 개면 점수 높은 것 선택 */
     var bestFuzzy = fuzzyMatches.reduce(function(acc, n) {
       return skillScore10(n) > skillScore10(acc) ? n : acc;
     }, fuzzyMatches[0]);
-    return { name: bestFuzzy, missing: false };
+    return { name: bestFuzzy, missing: false, candidates: [] };
   }
-  if (candidates.length === 1) return { name: candidates[0], missing: false };
+  if (candidates.length === 1) return { name: candidates[0], missing: false, candidates: [] };
 
-  // ── 2. 특수 규칙 ──────────────────────────────────────────────
+  // ── 2. 특수 규칙 (후보 자동 선택 또는 candidates 반환) ─────────
 
   // ── 2-A. 패기: 카드 종류 기반 ──────────────────────────────────
   if (baseName === '패기') {
@@ -3169,12 +3169,12 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
       '시즌':       '시즌',
     }[ct] || '';
     var m = candidates.find(function(n) { return ctHit && n.indexOf(ctHit) >= 0; });
-    if (m) return { name: m, missing: false };
+    if (m) return { name: m, missing: false, candidates: [] };
     // 복합 괄호 (예: 패기(시그/올스타/라이브)) 재탐색
     m = candidates.find(function(n) { return ctHit && n.replace(/\s/g,'').indexOf(ctHit) >= 0; });
-    if (m) return { name: m, missing: false };
-    // 매칭 실패시 후보 중 첫번째
-    return { name: candidates[0], missing: false };
+    if (m) return { name: m, missing: false, candidates: [] };
+    // 카드종류 매칭 실패 → 후보 전체 반환 (유저 선택)
+    return { name: candidates[0], missing: false, candidates: candidates };
   }
 
   // ── 2-B. 철완: 지구력 구간 → 중간값 선택 ─────────────────────
@@ -3185,7 +3185,7 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
       return (bm ? parseInt(bm[1]) : 0) - (am ? parseInt(am[1]) : 0);
     });
     var mid = Math.floor((sorted.length - 1) / 2);
-    return { name: sorted[mid], missing: false };
+    return { name: sorted[mid], missing: false, candidates: candidates };
   }
 
   // ── 2-C. 5툴플레이어: 주루 구간 → 중간값 선택 ───────────────
@@ -3195,14 +3195,14 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
       return (bm ? parseInt(bm[1]) : 0) - (am ? parseInt(am[1]) : 0);
     });
     var mid2 = Math.floor((sorted2.length - 1) / 2);
-    return { name: sorted2[mid2], missing: false };
+    return { name: sorted2[mid2], missing: false, candidates: candidates };
   }
 
   // ── 2-D. 도전정신: 별 수 기반 ────────────────────────────────
   if (baseName === '도전정신') {
     var stars = (seedPlayer && seedPlayer.stars) || 5;
     var m2 = candidates.find(function(n) { return n.indexOf(stars + '성') >= 0; });
-    return { name: m2 || candidates[0], missing: false };
+    return { name: m2 || candidates[0], missing: false, candidates: candidates };
   }
 
   // ── 2-E. 중계 역할 기반 스킬 (긴급투입·전승우승·필승카드·승리의함성) ──
@@ -3217,21 +3217,19 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
         if (role === '롱릴리프') return n.indexOf('롱릴리프') >= 0;
         return false;
       });
-      if (roleMatch) return { name: roleMatch, missing: false };
+      if (roleMatch) return { name: roleMatch, missing: false, candidates: [] };
     }
 
     // ── 2-F. 기타 중계 괄호 스킬 → Lv10 점수 높은 것 ──────────
     var best = candidates.reduce(function(acc, n) {
       return skillScore10(n) > skillScore10(acc) ? n : acc;
     }, candidates[0]);
-    return { name: best, missing: false };
+    return { name: best, missing: false, candidates: candidates };
   }
 
   // ── 3. 그 외: 점수 높은 것 ────────────────────────────────────
-  var bestOther = candidates.reduce(function(acc, n) {
-    return skillScore10(n) > skillScore10(acc) ? n : acc;
-  }, candidates[0]);
-  return { name: bestOther, missing: false };
+  // 후보 여러 개 → 유저가 선택할 수 있도록 candidates 전체 반환
+  return { name: candidates[0], missing: false, candidates: candidates };
 }
 
 /* 이름 유사도 체크 - 한 글자 차이 허용 */
@@ -3420,15 +3418,20 @@ function BulkScanModal(p) {
       var sDB = p.skills || {};
       var missingNames = [];
       var resolve = function(raw, lv) {
-        if (!raw) return { name: '', lv: 0 };
+        if (!raw) return { name: '', lv: 0, candidates: [] };
         var res = resolveSkillName(raw, cat, seed, sDB, sc.slot);
         if (res.missing) missingNames.push(raw);
-        return { name: res.name || raw, lv: lv || 0 };
+        return { name: res.name || raw, lv: lv || 0, candidates: res.candidates || [] };
       };
       var s1 = resolve(sc.skill1, sc.s1Lv);
       var s2 = resolve(sc.skill2, sc.s2Lv);
       var s3 = resolve(sc.skill3, sc.s3Lv);
-      return { s1: s1, s2: s2, s3: s3, missing: missingNames };
+      /* 후보 선택이 필요한 스킬 목록 */
+      var needSelect = [];
+      if (s1.candidates.length > 1) needSelect.push({ slot: 1, raw: sc.skill1, candidates: s1.candidates, selected: s1.name });
+      if (s2.candidates.length > 1) needSelect.push({ slot: 2, raw: sc.skill2, candidates: s2.candidates, selected: s2.name });
+      if (s3.candidates.length > 1) needSelect.push({ slot: 3, raw: sc.skill3, candidates: s3.candidates, selected: s3.name });
+      return { s1: s1, s2: s2, s3: s3, missing: missingNames, needSelect: needSelect };
     };
     extracted.forEach(function(item) {
       if (item.failed) { skip.push(item.scanned.name + ': 카드 종류 인식 실패'); return; }
@@ -3439,6 +3442,16 @@ function BulkScanModal(p) {
       var skRes = resolveSkills(sc, seed);
       if (skRes.missing.length > 0) {
         warn.push(sc.name + ': 인식 불가 스킬 → ' + skRes.missing.join(', '));
+      }
+      /* 스킬 후보 선택 필요한 경우 → extracted 업데이트 후 리뷰에서 표시 */
+      if (skRes.needSelect && skRes.needSelect.length > 0) {
+        var updIdx = newPlayers.length; // placeholder
+        setExtracted(function(prev) {
+          return prev.map(function(it2) {
+            if (it2 === item) return Object.assign({}, it2, { skRes: skRes, needSkillSelect: true });
+            return it2;
+          });
+        });
       }
       // 중복 체크
       var already = newPlayers.some(function(x){ return x.name===seed.name && (x.cardType||'')===(seed.cardType||'') && (x.year||'')===(seed.year||'') && (x.impactType||'')===(seed.impactType||''); });
@@ -3606,8 +3619,42 @@ function BulkScanModal(p) {
                       })
                     )
                   ),
-                  (sc.skill1||sc.skill2||sc.skill3)&&React.createElement('div', {style:{fontSize:10,color:'#a78bfa',marginTop:4}},
-                    [sc.skill1&&('S1:'+sc.skill1+'('+sc.s1Lv+')'), sc.skill2&&('S2:'+sc.skill2+'('+sc.s2Lv+')'), sc.skill3&&('S3:'+sc.skill3+'('+sc.s3Lv+')')].filter(Boolean).join(' · ')
+                  (sc.skill1||sc.skill2||sc.skill3)&&React.createElement('div', {style:{marginTop:6}},
+                    (function() {
+                      var skillsInfo = [
+                        {raw:sc.skill1, lv:sc.s1Lv, idx:0},
+                        {raw:sc.skill2, lv:sc.s2Lv, idx:1},
+                        {raw:sc.skill3, lv:sc.s3Lv, idx:2},
+                      ].filter(function(s){return s.raw;});
+                      var cat = item.seed ? getSkillCat(item.seed) : '타자';
+                      var sDB = p.skills || {};
+                      return skillsInfo.map(function(sk) {
+                        var res = resolveSkillName(sk.raw, cat, item.seed, sDB, sc.slot);
+                        var hasCandidates = res.candidates && res.candidates.length > 1;
+                        return React.createElement('div', {key:sk.idx, style:{display:'flex',alignItems:'center',gap:4,marginBottom:3}},
+                          React.createElement('span', {style:{fontSize:9,color:'#a78bfa',width:16,flexShrink:0}}, 'S'+(sk.idx+1)),
+                          hasCandidates
+                            ? React.createElement('select', {
+                                defaultValue: res.name,
+                                onChange: function(e) {
+                                  var val = e.target.value;
+                                  var next = extracted.slice();
+                                  var sc2 = Object.assign({}, next[i].scanned);
+                                  if (sk.idx===0) sc2.skill1 = val;
+                                  if (sk.idx===1) sc2.skill2 = val;
+                                  if (sk.idx===2) sc2.skill3 = val;
+                                  next[i] = Object.assign({}, next[i], {scanned: sc2});
+                                  setExtracted(next);
+                                },
+                                style:{flex:1,padding:'2px 4px',fontSize:10,background:'#1e293b',border:'1px solid #FBBF24',borderRadius:4,color:'#e2e8f0'}
+                              },
+                              res.candidates.map(function(c){ return React.createElement('option',{key:c,value:c},c); })
+                            )
+                            : React.createElement('span', {style:{fontSize:10,color:res.missing?'#EF4444':'#c4b5fd'}}, res.name||('❌ '+sk.raw)),
+                          React.createElement('span', {style:{fontSize:9,color:'#64748b',flexShrink:0}}, 'Lv'+sk.lv)
+                        );
+                      });
+                    })()
                   )
                 );
               })
@@ -4649,13 +4696,15 @@ function LineupAnalysis(p) {
 /* ─── 스킬 사진판독 ─── */
 function SkillPhotoScan(p) {
   var skills = p.skills || {};
-  var pos = p.pos;
-  var cardType = p.cardType;
   var onApply = p.onApply; /* 스킬 적용 콜백 */
   var mob = p.mobile;
 
+  /* 포지션 자체 관리 */
+  var POS_TYPES_PS = ["타자","선발","중계","마무리"];
+  var _localPos = React.useState(p.pos || "타자"); var localPos = _localPos[0]; var setLocalPos = _localPos[1];
+
   var catMap = {"타자":"타자","선발":"선발","중계":"중계","마무리":"마무리"};
-  var cat = catMap[pos] || "타자";
+  var cat = catMap[localPos] || "타자";
   var catSkills = skills[cat] || {};
   var allSkillNames = Object.keys(catSkills);
   var baseName = function(n) { return n.replace(/\(.*?\)/g, "").trim(); };
@@ -4740,7 +4789,7 @@ function SkillPhotoScan(p) {
       var res = await fetch("/api/scan", {
         method: "POST",
         headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ base64: img.base64, mediaType: img.mediaType, prompt: prompt, userId: "" })
+        body: JSON.stringify({ base64: img.base64, mediaType: img.mediaType, prompt: prompt, userId: "", type: "skill" })
       });
       if (!res.ok) {
         var e = await res.json().catch(function(){return{};});
@@ -4823,6 +4872,23 @@ function SkillPhotoScan(p) {
   };
 
   return React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:10}},
+    /* 포지션 선택 */
+    React.createElement("div", {style:{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}},
+      React.createElement("div", {style:{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}, "포지션 선택"),
+      React.createElement("div", {style:{display:"flex",gap:6,flexWrap:"wrap"}},
+        POS_TYPES_PS.map(function(pt) {
+          var a = localPos === pt;
+          return React.createElement("button", {
+            key: pt,
+            onClick: function() {
+              setLocalPos(pt);
+              setSlots([]); setSlotsB([]); setScanResult(null); setMode(null); setErr("");
+            },
+            style: {padding:"7px 18px",fontSize:12,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}
+          }, pt);
+        })
+      )
+    ),
     /* 이미지 업로드 */
     React.createElement("div", {style:{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}},
       React.createElement("div", {style:{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}, "📸 스킬 화면 사진 업로드"),
@@ -5055,7 +5121,8 @@ function SkillCalculator(p) {
         pos={pos}
         cardType={cardType}
         mobile={mob}
-        onApply={function(applied){
+        onApply={function(applied, appliedPos){
+          if (appliedPos) { setPos(appliedPos); }
           setSks(function(prev){return prev.map(function(s,i){return applied[i]?Object.assign({},s,{name:applied[i].name,lv:applied[i].lv}):s;});});
           setScTab("manual");
           setResult(null);
