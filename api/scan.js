@@ -166,7 +166,13 @@ export default async function handler(req, res) {
 
         /* ── 성공 ── */
         const geminiData = await geminiRes.json();
-        let text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        /* thinking 모델 대응: parts 중 text 타입만 추출 */
+        const parts = geminiData?.candidates?.[0]?.content?.parts || [];
+        let text = '';
+        for (const part of parts) {
+          if (part.text && !part.thought) { text = part.text; break; }
+        }
+        if (!text) text = parts[parts.length - 1]?.text || '';
 
         /* 마크다운 코드블록 제거 */
         text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
