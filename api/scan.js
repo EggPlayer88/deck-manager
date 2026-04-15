@@ -120,13 +120,25 @@ export default async function handler(req, res) {
         /* ── 성공 ── */
         const geminiData = await geminiRes.json();
 
-        /* thinking 모델 대응: thought가 아닌 part만 추출 */
+        /* 응답 텍스트 추출 (thinking 모델 대응) */
         const parts = geminiData?.candidates?.[0]?.content?.parts || [];
         let text = '';
         for (const part of parts) {
           if (part.text && !part.thought) { text = part.text; break; }
         }
         if (!text) text = parts[parts.length - 1]?.text || '';
+
+        /* 마크다운 코드블록 제거 */
+        text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+        /* JSON 배열/객체만 추출 */
+        const arrStart = text.indexOf('[');
+        const objStart = text.indexOf('{');
+        const start = arrStart !== -1 && (objStart === -1 || arrStart < objStart) ? arrStart : objStart;
+        const end = start === arrStart ? text.lastIndexOf(']') : text.lastIndexOf('}');
+        if (start !== -1 && end !== -1 && end > start) {
+          text = text.slice(start, end + 1);
+        }
 
         /* 사용량 업데이트 */
         if (supabaseUrl && supabaseKey) {
