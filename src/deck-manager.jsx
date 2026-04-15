@@ -3108,14 +3108,17 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
   // ── 헬퍼 ──────────────────────────────────────────────────────
   // 괄호 제거 기본명
   var base = function(n) { return n.replace(/\(.*?\)/g, '').replace(/\s+/g, '').trim(); };
-  // 슬롯 → 중계 역할 분류
+  // 슬롯 → 중계 역할 분류 (셋업맨1/2 구분)
   var slotRole = function(s) {
     if (!s) return '';
-    if (s === '승리조1') return '승리조';
+    if (s === '승리조1') return '셋업맨1';
+    if (s === '승리조2') return '셋업맨2';
     if (s.indexOf('추격조') === 0) return '추격조';
     if (s.indexOf('롱릴리프') === 0) return '롱릴리프';
     return '';
   };
+  /* 슬롯 역할이 셋업맨(승리조) 계열인지 확인 */
+  var isSetupRole = function(r) { return r === '셋업맨1' || r === '셋업맨2'; };
   // DB 스킬 Lv10 점수 계산 (DEFAULT_SKILLS 직접 참조)
   var skillScore10 = function(skillName, cat) {
     var w = getW();
@@ -3166,6 +3169,14 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
 
   // ── 2. 특수 규칙 (후보 자동 선택 또는 candidates 반환) ─────────
 
+  // ── 2-A-0. 좌승사자: 투수 손 기반 ─────────────────────────────
+  if (baseName === '좌승사자') {
+    var hand = (seedPlayer && seedPlayer.hand) || '우';
+    var handKey = hand === '좌' ? '좌투' : '우투';
+    var hm = candidates.find(function(n) { return n.indexOf(handKey) >= 0; });
+    return { name: hm || candidates[0], missing: false, candidates: candidates };
+  }
+
   // ── 2-A. 패기: 카드 종류 기반 ──────────────────────────────────
   if (baseName === '패기') {
     var ct = (seedPlayer && seedPlayer.cardType) || '';
@@ -3189,13 +3200,13 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
 
   // ── 2-B. 철완: 지구력 구간 → 중간값 선택 ─────────────────────
   if (baseName === '철완') {
-    // 구간 정렬 (숫자 높은 순)
+    // 구간 정렬 (첫 번째 숫자 높은 순, 공백 포함 처리)
     var sorted = candidates.slice().sort(function(a, b) {
       var am = a.match(/(\d+)/); var bm = b.match(/(\d+)/);
       return (bm ? parseInt(bm[1]) : 0) - (am ? parseInt(am[1]) : 0);
     });
     var mid = Math.floor((sorted.length - 1) / 2);
-    return { name: sorted[mid], missing: false, candidates: candidates };
+    return { name: sorted[mid], missing: false, candidates: sorted };
   }
 
   // ── 2-C. 5툴플레이어: 주루 구간 → 중간값 선택 ───────────────
@@ -3215,22 +3226,87 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
     return { name: m2 || candidates[0], missing: false, candidates: candidates };
   }
 
-  // ── 2-E. 중계 역할 기반 스킬 (긴급투입·전승우승·필승카드·승리의함성) ──
+  // ── 2-E. 중계 역할 기반 스킬 ────────────────────────────────────
   if (category === '중계') {
-    var roleSkills = ['긴급투입', '전승우승', '필승카드', '승리의함성'];
+    var role = slotRole(slot);
+    /* 셋업맨 계열(승리조1/2) vs 비셋업맨(추격조/롱릴리프) */
+    var isSetup = isSetupRole(role);
+
+    // 필승카드: (승리조,셋업맨) / (롱릴리프) / (추격조)
+    if (baseName === '필승카드') {
+      var fm = candidates.find(function(n) {
+        if (role === '추격조') return n.indexOf('추격조') >= 0;
+        if (role === '롱릴리프') return n.indexOf('롱릴리프') >= 0;
+        if (isSetup) return n.indexOf('승리조') >= 0 || n.indexOf('셋업맨') >= 0;
+        return false;
+      });
+      return { name: fm || candidates[0], missing: false, candidates: candidates };
+    }
+
+    // 약속의8회: (셋업맨1) / (셋업맨2) / (추격조,롱릴리프)
+    if (baseName === '약속의8회') {
+      var am = candidates.find(function(n) {
+        if (role === '셋업맨1') return n.indexOf('셋업맨1') >= 0;
+        if (role === '셋업맨2') return n.indexOf('셋업맨2') >= 0;
+        if (role === '추격조' || role === '롱릴리프') return n.indexOf('추격조') >= 0 || n.indexOf('롱릴리프') >= 0;
+        return false;
+      });
+      return { name: am || candidates[0], missing: false, candidates: candidates };
+    }
+
+    // 수호신: (셋업맨1) / (셋업맨2) / (승리조) / (추격조,롱릴리프)
+    if (baseName === '수호신') {
+      var sm = candidates.find(function(n) {
+        if (role === '셋업맨1') return n.indexOf('셋업맨1') >= 0;
+        if (role === '셋업맨2') return n.indexOf('셋업맨2') >= 0;
+        if (isSetup) return n.indexOf('승리조') >= 0;
+        if (role === '추격조' || role === '롱릴리프') return n.indexOf('추격조') >= 0 || n.indexOf('롱릴리프') >= 0;
+        return false;
+      });
+      return { name: sm || candidates[0], missing: false, candidates: candidates };
+    }
+
+    // 원포인트릴리프: (셋업맨) / (셋업맨X)
+    if (baseName === '원포인트릴리프') {
+      var om = candidates.find(function(n) {
+        if (isSetup) return n.indexOf('셋업맨X') < 0 && n.indexOf('셋업맨') >= 0;
+        return n.indexOf('셋업맨X') >= 0;
+      });
+      return { name: om || candidates[0], missing: false, candidates: candidates };
+    }
+
+    // 흐름끊기 / 얼리스타트: (셋업맨) / (셋업맨X)
+    if (baseName === '흐름끊기' || baseName === '얼리스타트') {
+      var hm2 = candidates.find(function(n) {
+        if (isSetup) return n.indexOf('셋업맨X') < 0 && n.indexOf('셋업맨') >= 0;
+        return n.indexOf('셋업맨X') >= 0;
+      });
+      return { name: hm2 || candidates[0], missing: false, candidates: candidates };
+    }
+
+    // 라이징스타: (셋업맨/3,4,5중계) / (셋업맨X/3,4,5중계) / (1,2,6중계)
+    if (baseName === '라이징스타') {
+      var lm = candidates.find(function(n) {
+        if (isSetup) return n.indexOf('셋업맨') >= 0 && n.indexOf('셋업맨X') < 0;
+        if (role === '추격조' || role === '롱릴리프') return n.indexOf('셋업맨X') >= 0;
+        return n.indexOf('1,2,6') >= 0;
+      });
+      return { name: lm || candidates[0], missing: false, candidates: candidates };
+    }
+
+    // 긴급투입·전승우승·승리의함성: (승리조,셋업맨) / (추격조) / (롱릴리프)
+    var roleSkills = ['긴급투입', '전승우승', '승리의함성'];
     if (roleSkills.indexOf(baseName) >= 0) {
-      var role = slotRole(slot);
-      // 역할명이 괄호 안에 포함되는 후보 우선
-      var roleMatch = candidates.find(function(n) {
-        if (role === '승리조') return n.indexOf('승리조') >= 0;
+      var rm = candidates.find(function(n) {
+        if (isSetup) return n.indexOf('승리조') >= 0 || n.indexOf('셋업맨') >= 0;
         if (role === '추격조') return n.indexOf('추격조') >= 0;
         if (role === '롱릴리프') return n.indexOf('롱릴리프') >= 0;
         return false;
       });
-      if (roleMatch) return { name: roleMatch, missing: false, candidates: [] };
+      if (rm) return { name: rm, missing: false, candidates: candidates };
     }
 
-    // ── 2-F. 기타 중계 괄호 스킬 → Lv10 점수 높은 것 ──────────
+    // ── 2-F. 기타 중계 괄호 스킬 → Lv10 점수 높은 것 + 드롭다운 ─
     var best = candidates.reduce(function(acc, n) {
       return skillScore10(n) > skillScore10(acc) ? n : acc;
     }, candidates[0]);
