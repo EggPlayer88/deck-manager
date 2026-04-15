@@ -44,10 +44,16 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'GEMINI_API_KEY 환경변수가 설정되지 않았습니다.' });
   }
 
-  const DAILY_LIMIT = 500;
-  const USER_DAILY_LIMIT = 10;
+  const { base64, mediaType, prompt, userId, type } = req.body || {};
+  const isSkill = type === 'skill';
+
+  /* 타입별 설정 */
+  const DAILY_LIMIT      = isSkill ? 10000 : 1000;
+  const USER_DAILY_LIMIT = isSkill ? 50    : 10;
+  const MODELS_TO_USE    = isSkill
+    ? ['gemini-2.0-flash-lite', 'gemini-2.0-flash']   /* 스킬판독: lite 우선 */
+    : ['gemini-2.0-flash', 'gemini-2.5-flash'];        /* 사진일괄: flash 우선 */
   const today = new Date().toISOString().slice(0, 10);
-  const { base64, mediaType, prompt, userId } = req.body || {};
 
   /* ── 일일 한도 체크 ── */
   if (supabaseUrl && supabaseKey) {
@@ -93,7 +99,7 @@ export default async function handler(req, res) {
 
   /* ── 모델 순서대로 시도 ── */
   let lastError = '';
-  for (const model of MODELS) {
+  for (const model of MODELS_TO_USE) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const geminiRes = await callGemini(GEMINI_API_KEY, model, contents);
