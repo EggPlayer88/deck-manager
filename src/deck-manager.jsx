@@ -2992,14 +2992,15 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '- NO (숫자가 없다) → 배경이 아무리 금색이고 화려해도 무조건 임팩트 확정. 다른 단계로 넘어가지 마라.',
     '- YES (숫자가 있다) → 2단계로 이동.',
     '',
-    '[2단계: 시그니처 판정]',
-    '- 이름표(선수 이름이 적힌 사각형) 주변 어디서든 빨간색 필기체 로고가 보이는가?',
-    '- 위치: 선수 이름 텍스트의 왼쪽 위 (이름표는 카드 맨 아래에 있고, Sign 로고는 그 이름의 왼쪽 위에 위치).',
-    '- 모양: 흘려쓴 빨간색 S자 또는 Sig 형태의 기울어진 필기체 서명 스타일.',
-    '- 배경색 보조 확인: 분홍/마젠타/자주색 배경이면 시그니처일 가능성 매우 높음.',
-    '- 이 로고는 작고 이름표에 바짝 붙어 있으므로 이름표 주변 전체를 정밀 스캔하라.',
-    '- YES (빨간 필기체 로고 확인) → 배경색 무관하게 무조건 시그니처 확정.',
-    '- NO → 3단계로 이동.',
+    '[2단계: 시그니처 판정 - 반드시 골든글러브 판정보다 먼저 실행할 것]',
+    '★★★ 이 단계는 3단계(골든글러브)보다 절대적으로 우선한다. ★★★',
+    '- 카드 하단 이름 텍스트의 왼쪽 위 영역을 반드시 먼저 확인하라.',
+    '- 찾을 것: 빨간색(적색) 필기체로 쓴 기울어진 S자 또는 Sig 모양의 서명 로고.',
+    '- 이 로고는 작지만 뚜렷한 빨간색이며, 마치 손으로 흘려쓴 서명처럼 보인다.',
+    '- 배경이 분홍/마젠타/자주색이면서 이 로고가 보이면 확실한 시그니처다.',
+    '- 배경이 황금색이더라도 이 빨간 필기체 로고가 보이면 골든글러브가 아닌 시그니처다.',
+    '- YES → 무조건 시그니처 확정. 3단계로 넘어가지 말 것.',
+    '- NO (로고가 전혀 안 보임) → 3단계로 이동.',
     '',
     '[3단계: 골든글러브 판정]',
     '- 1단계(연도 있음), 2단계(Sign 로고 없음)를 모두 통과한 상태에서:',
@@ -3015,7 +3016,7 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '',
     '[핵심 요약]',
     '- 연도가 없으면 100% 임팩트 (가장 중요)',
-    '- Sign 로고가 있으면 100% 시그니처',
+    '- 빨간 필기체 S/Sig 로고가 보이면 100% 시그니처 (배경색, 테두리 무관)',
     '- 배경의 금색 빛줄기는 무시하고 이름표 주변 텍스트와 테두리만 보고 판단하라.',
     '',
     '=== 임팩트 종류 (이름 왼쪽에 보이는 텍스트) ===',
@@ -4643,6 +4644,261 @@ function LineupAnalysis(p) {
 }
 
 /* ─── 스킬 계산기 ─── */
+
+/* ─── 스킬 사진판독 ─── */
+function SkillPhotoScan(p) {
+  var skills = p.skills || {};
+  var pos = p.pos;
+  var cardType = p.cardType;
+  var onApply = p.onApply; /* 스킬 적용 콜백 */
+  var mob = p.mobile;
+
+  var catMap = {"타자":"타자","선발":"선발","중계":"중계","마무리":"마무리"};
+  var cat = catMap[pos] || "타자";
+  var catSkills = skills[cat] || {};
+  var allSkillNames = Object.keys(catSkills);
+  var baseName = function(n) { return n.replace(/\(.*?\)/g, "").trim(); };
+
+  var _img = React.useState(null); var img = _img[0]; var setImg = _img[1];
+  var _scanning = React.useState(false); var scanning = _scanning[0]; var setScanning = _scanning[1];
+  var _scanResult = React.useState(null); var scanResult = _scanResult[0]; var setScanResult = _scanResult[1];
+  var _err = React.useState(""); var err = _err[0]; var setErr = _err[1];
+  /* 후보 선택 상태: [{rawName, lv, candidates:[fullName,...], selected:fullName}] */
+  var _slots = React.useState([]); var slots = _slots[0]; var setSlots = _slots[1];
+  /* 비교모드 우측 슬롯 */
+  var _slotsB = React.useState([]); var slotsB = _slotsB[0]; var setSlotsB = _slotsB[1];
+  var _mode = React.useState(null); var mode = _mode[0]; var setMode = _mode[1]; /* "single"|"compare" */
+
+  var w = getW();
+  var skillScore = function(name, lv) {
+    if (!name || !catSkills[name]) return 0;
+    var lvIdx = [5,6,7,8,9,10].indexOf(parseInt(lv));
+    if (lvIdx < 0) lvIdx = 0;
+    var entry = (catSkills[name] || [])[lvIdx];
+    if (!entry) return 0;
+    if (typeof entry === "number") return entry;
+    return (entry.pV||0)*(entry.pF||0)*w.p+(entry.aV||0)*(entry.aF||0)*w.a+(entry.eV||0)*(entry.eF||0)*w.e+(entry.cV||0)*(entry.cF||0)*w.c+(entry.sV||0)*(entry.sF||0)*w.s;
+  };
+  var totalScore = function(slotList) {
+    return slotList.reduce(function(acc,s){ return acc + skillScore(s.selected, s.lv); }, 0);
+  };
+
+  /* AI 인식 결과에서 스킬 매칭 */
+  var matchSkills = function(rawList) {
+    return rawList.map(function(item) {
+      var raw = (item.name||"").trim();
+      var lv = parseInt(item.level||item.lv||5) || 5;
+      var rawBase = raw.replace(/\(.*?\)/g,"").trim();
+      /* 기본명이 일치하는 스킬 전체 목록 */
+      var candidates = allSkillNames.filter(function(n) {
+        return baseName(n) === rawBase;
+      });
+      if (candidates.length === 0) {
+        /* 부분 포함으로 재탐색 */
+        candidates = allSkillNames.filter(function(n) {
+          return baseName(n).indexOf(rawBase) >= 0 || rawBase.indexOf(baseName(n)) >= 0;
+        });
+      }
+      var selected = candidates.length === 1 ? candidates[0] : (candidates.length > 1 ? candidates[0] : "");
+      return { rawName: raw, lv: lv, candidates: candidates, selected: selected };
+    });
+  };
+
+  var onImgChange = function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      setImg({ base64: ev.target.result.split(",")[1], mediaType: file.type, preview: ev.target.result });
+      setScanResult(null); setSlots([]); setSlotsB([]); setMode(null); setErr("");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  var runScan = async function() {
+    if (!img) return;
+    setScanning(true); setErr(""); setScanResult(null); setSlots([]); setSlotsB([]); setMode(null);
+    var prompt = [
+      "이 이미지는 컴투스 프로야구 게임의 스킬 변경 화면입니다.",
+      "",
+      "이미지 형태를 먼저 파악하세요:",
+      "- 스킬 3개만 있는 단일 패널 → 모드: single",
+      "- 왼쪽(기존스킬)과 오른쪽(스킬변경) 두 패널 비교 → 모드: compare",
+      "",
+      "single 모드: 스킬 3개의 이름과 레벨(아이콘 우하단 숫자)을 추출.",
+      "compare 모드: 왼쪽 기존스킬 3개와 오른쪽 변경스킬 3개를 각각 추출.",
+      "",
+      "반드시 아래 JSON 형식으로만 응답하세요:",
+      "single 모드:",
+      '{"mode":"single","skills":[{"name":"스킬명","level":6},{"name":"스킬명","level":5},{"name":"스킬명","level":5}]}',
+      "compare 모드:",
+      '{"mode":"compare","current":[{"name":"스킬명","level":6},...],"next":[{"name":"스킬명","level":6},...]}',
+    ].join("\n");
+
+    try {
+      var res = await fetch("/api/scan", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ base64: img.base64, mediaType: img.mediaType, prompt: prompt, userId: "" })
+      });
+      if (!res.ok) {
+        var e = await res.json().catch(function(){return{};});
+        var msg = typeof e.error === "string" ? e.error : "API 오류 " + res.status;
+        throw new Error(msg);
+      }
+      var data = await res.json();
+      var text = data.text || "";
+      /* JSON 추출 */
+      var arrStart = text.indexOf("{");
+      var arrEnd = text.lastIndexOf("}");
+      if (arrStart !== -1 && arrEnd !== -1) text = text.slice(arrStart, arrEnd + 1);
+      var parsed = JSON.parse(text);
+      setScanResult(parsed);
+      if (parsed.mode === "single") {
+        setMode("single");
+        setSlots(matchSkills(parsed.skills || []));
+      } else if (parsed.mode === "compare") {
+        setMode("compare");
+        setSlots(matchSkills(parsed.current || []));
+        setSlotsB(matchSkills(parsed.next || []));
+      }
+    } catch(e) {
+      setErr("판독 실패: " + e.message);
+    }
+    setScanning(false);
+  };
+
+  var updateSlot = function(slotList, setSlotList, idx, field, val) {
+    setSlotList(function(prev) {
+      var n = prev.slice();
+      n[idx] = Object.assign({}, n[idx], {[field]: val});
+      return n;
+    });
+  };
+
+  var scoreA = totalScore(slots);
+  var scoreB = totalScore(slotsB);
+
+  /* 슬롯 렌더 */
+  var renderSlots = function(slotList, setSlotList, label, color) {
+    return React.createElement("div", {style:{flex:1,minWidth:0}},
+      React.createElement("div", {style:{fontSize:11,fontWeight:700,color:color,marginBottom:8,textAlign:"center"}}, label),
+      slotList.map(function(s, i) {
+        var score = Math.round(skillScore(s.selected, s.lv) * 100) / 100;
+        var hasMulti = s.candidates.length > 1;
+        return React.createElement("div", {key:i, style:{background:"var(--inner)",borderRadius:8,padding:"8px 10px",marginBottom:6,border:"1px solid "+(hasMulti?"rgba(251,191,36,0.4)":"var(--bd)")}},
+          React.createElement("div", {style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
+            React.createElement("span", {style:{fontSize:10,fontWeight:800,color:"#FFD54F",width:16,textAlign:"center"}}, i+1),
+            React.createElement("span", {style:{fontSize:11,color:"var(--td)"}}, s.rawName),
+            hasMulti && React.createElement("span", {style:{fontSize:9,color:"#FBBF24",marginLeft:"auto"}}, "⚠️ 선택 필요")
+          ),
+          s.candidates.length > 1
+            ? React.createElement("select", {
+                value: s.selected,
+                onChange: function(e){ updateSlot(slotList, setSlotList, i, "selected", e.target.value); },
+                style:{width:"100%",padding:"4px 6px",fontSize:11,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",marginBottom:4}
+              },
+              s.candidates.map(function(c){ return React.createElement("option",{key:c,value:c},c); })
+            )
+            : s.selected
+              ? React.createElement("div", {style:{fontSize:12,fontWeight:700,color:"var(--t1)",padding:"2px 0"}}, s.selected)
+              : React.createElement("div", {style:{fontSize:11,color:"#EF4444"}}, "❌ 스킬 미매칭: " + s.rawName),
+          React.createElement("div", {style:{display:"flex",alignItems:"center",gap:6,marginTop:4}},
+            React.createElement("select", {
+              value: s.lv,
+              onChange: function(e){ updateSlot(slotList, setSlotList, i, "lv", parseInt(e.target.value)); },
+              style:{width:60,padding:"3px 4px",fontSize:11,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#4FC3F7",fontWeight:700}
+            },
+              [5,6,7,8,9,10].map(function(v){ return React.createElement("option",{key:v,value:v},"Lv"+v); })
+            ),
+            React.createElement("span", {style:{fontSize:12,fontWeight:800,color:"#FFD54F",marginLeft:"auto",fontFamily:"var(--m)"}}, score)
+          )
+        );
+      }),
+      slotList.length > 0 && React.createElement("div", {
+        style:{textAlign:"center",fontSize:13,fontWeight:900,color:color,fontFamily:"var(--m)",padding:"8px 0",borderTop:"1px solid var(--bd)",marginTop:4}
+      }, "합계 " + Math.round(totalScore(slotList)*100)/100)
+    );
+  };
+
+  return React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:10}},
+    /* 이미지 업로드 */
+    React.createElement("div", {style:{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}},
+      React.createElement("div", {style:{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}, "📸 스킬 화면 사진 업로드"),
+      React.createElement("div", {style:{fontSize:10,color:"var(--td)",marginBottom:10,lineHeight:1.5}},
+        "스킬 변경 화면 스크린샷을 올려주세요.", React.createElement("br",null),
+        "• 스킬 3개만 있는 화면 → 단일 분석", React.createElement("br",null),
+        "• 기존스킬 vs 변경스킬 비교 화면 → 점수 비교"
+      ),
+      React.createElement("label", {style:{display:"block",cursor:"pointer"}},
+        React.createElement("div", {style:{border:"2px dashed var(--bd)",borderRadius:8,padding:"16px",textAlign:"center",background:"var(--inner)",transition:"all 0.2s"}},
+          img
+            ? React.createElement("img", {src:img.preview, style:{maxWidth:"100%",maxHeight:200,borderRadius:6,objectFit:"contain"}})
+            : React.createElement("div", null,
+                React.createElement("div", {style:{fontSize:24,marginBottom:6}}, "📷"),
+                React.createElement("div", {style:{fontSize:12,color:"var(--td)"}}, "사진을 클릭하여 업로드")
+              )
+        ),
+        React.createElement("input", {type:"file",accept:"image/*",onChange:onImgChange,style:{display:"none"}})
+      ),
+      img && React.createElement("div", {style:{display:"flex",gap:8,marginTop:10}},
+        React.createElement("button", {
+          onClick: runScan,
+          disabled: scanning,
+          style:{flex:1,padding:"10px",fontSize:12,fontWeight:800,background:scanning?"var(--inner)":"linear-gradient(135deg,#667eea,#764ba2)",border:"none",borderRadius:8,color:scanning?"var(--td)":"#fff",cursor:scanning?"not-allowed":"pointer"}
+        }, scanning ? "🔍 판독 중..." : "🔍 스킬 판독"),
+        React.createElement("button", {
+          onClick:function(){setImg(null);setScanResult(null);setSlots([]);setSlotsB([]);setMode(null);setErr("");},
+          style:{padding:"10px 14px",fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:8,color:"var(--t2)",cursor:"pointer"}
+        }, "✕")
+      )
+    ),
+
+    /* 에러 */
+    err && React.createElement("div", {style:{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#fca5a5"}}, "⚠️ " + err),
+
+    /* 결과 - single 모드 */
+    mode === "single" && slots.length > 0 && React.createElement("div", {style:{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}},
+      React.createElement("div", {style:{fontSize:12,fontWeight:800,color:"var(--t1)",marginBottom:10}}, "📊 스킬 분석 결과"),
+      renderSlots(slots, setSlots, "스킬 조합", "#FFD54F"),
+      React.createElement("button", {
+        onClick: function(){
+          if (onApply) onApply(slots.map(function(s){return {name:s.selected,lv:s.lv};}));
+        },
+        disabled: slots.some(function(s){return !s.selected;}),
+        style:{width:"100%",marginTop:10,padding:"10px",fontSize:12,fontWeight:800,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",border:"none",borderRadius:8,color:"#1a1100",cursor:"pointer",opacity:slots.some(function(s){return !s.selected;})? 0.5:1}
+      }, "✅ 스킬계산기에 적용")
+    ),
+
+    /* 결과 - compare 모드 */
+    mode === "compare" && slots.length > 0 && React.createElement("div", {style:{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}},
+      React.createElement("div", {style:{fontSize:12,fontWeight:800,color:"var(--t1)",marginBottom:12}}, "⚖️ 스킬 비교 결과"),
+      /* 승패 배너 */
+      React.createElement("div", {style:{
+        textAlign:"center",padding:"10px",borderRadius:8,marginBottom:12,
+        background: scoreA > scoreB ? "rgba(74,222,128,0.1)" : scoreB > scoreA ? "rgba(251,191,36,0.1)" : "rgba(148,163,184,0.1)",
+        border: "1px solid " + (scoreA > scoreB ? "#4ade80" : scoreB > scoreA ? "#FBBF24" : "#94a3b8")
+      }},
+        React.createElement("div", {style:{fontSize:14,fontWeight:900,color: scoreA > scoreB ? "#4ade80" : scoreB > scoreA ? "#FBBF24" : "var(--td)"}},
+          scoreA > scoreB ? "✅ 기존 스킬 유지 추천" : scoreB > scoreA ? "🔄 스킬 변경 추천" : "🤝 동점"
+        ),
+        React.createElement("div", {style:{fontSize:11,color:"var(--td)",marginTop:2}},
+          "기존 " + Math.round(scoreA*100)/100 + " vs 변경 " + Math.round(scoreB*100)/100 +
+          " (차이: " + Math.round(Math.abs(scoreA-scoreB)*100)/100 + ")"
+        )
+      ),
+      /* 좌우 비교 */
+      React.createElement("div", {style:{display:"flex",gap:10,alignItems:"flex-start"}},
+        renderSlots(slots, setSlots, "기존 스킬", scoreA >= scoreB ? "#4ade80" : "#94a3b8"),
+        React.createElement("div", {style:{display:"flex",alignItems:"center",justifyContent:"center",paddingTop:40,flexShrink:0}},
+          React.createElement("span", {style:{fontSize:18,fontWeight:900,color:"var(--td)"}}, "OR")
+        ),
+        renderSlots(slotsB, setSlotsB, "변경 스킬", scoreB > scoreA ? "#FBBF24" : "#94a3b8")
+      )
+    )
+  );
+}
+
 function SkillCalculator(p) {
   var skills = p.skills || {};
   var mob = p.mobile;
@@ -4781,9 +5037,31 @@ function SkillCalculator(p) {
 
   var cardColor = {"골든글러브":"#D4AF37","시그니처":"#E91E63","임팩트":"#4CAF50","국가대표":"#2196F3","라이브":"#FF9800","올스타":"#9C27B0"};
 
+  var _scTab = React.useState("manual"); var scTab = _scTab[0]; var setScTab = _scTab[1];
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {/* 카드종류 + 포지션 선택 */}
+      {/* 탭 선택 */}
+      <div style={{display:"flex",gap:6}}>
+        {[{id:"manual",label:"✏️ 직접 입력"},{id:"photo",label:"📸 사진 판독"}].map(function(t){
+          var a=scTab===t.id;
+          return (<button key={t.id} onClick={function(){setScTab(t.id);}} style={{flex:1,padding:"9px",fontSize:12,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
+        })}
+      </div>
+      {/* 사진판독 탭 */}
+      {scTab==="photo" && <SkillPhotoScan
+        skills={skills}
+        pos={pos}
+        cardType={cardType}
+        mobile={mob}
+        onApply={function(applied){
+          setSks(function(prev){return prev.map(function(s,i){return applied[i]?Object.assign({},s,{name:applied[i].name,lv:applied[i].lv}):s;});});
+          setScTab("manual");
+          setResult(null);
+        }}
+      />}
+      {scTab==="manual" && React.createElement(React.Fragment, null,
+      /* 카드종류 + 포지션 선택 */
       <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}}>
         <div style={{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}>{"카드 종류"}</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
@@ -4858,6 +5136,8 @@ function SkillCalculator(p) {
             <span>{result.hist[result.hist.length-1]&&Math.round(result.hist[result.hist.length-1].hi*10)/10}</span>
           </div>
         </div>
+      )}
+    </div>
       )}
     </div>
   );
