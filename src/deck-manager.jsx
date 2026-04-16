@@ -3004,7 +3004,8 @@ function correctCardType(players) {
   return players.map(function(p) {
     var year = (p.year || '').trim();
     var ct = p.cardType || '';
-    /* 연도가 없으면 → 임팩트. 단, 라이브/올스타가 연도 없이 오면 인식실패 */
+    /* 연도가 없으면 → 임팩트 (인식실패 포함).
+       단, 라이브/올스타가 연도 없이 오면 인식실패. */
     if (!year) {
       if (ct === '라이브' || ct === '올스타') {
         return Object.assign({}, p, { cardType: '인식실패' });
@@ -3384,17 +3385,26 @@ function nameSimilar(a, b) {
 // SEED_PLAYERS에서 매칭
 function matchSeedPlayer(scanned) {
   var ct = scanned.cardType; var nm = scanned.name; var yr = expandYr(scanned.year); var it = scanned.impactType||'';
-  /* 인식실패 카드: 도감 폴백 시도 (시그니처 → 국가대표 → 실패) */
+  /* 인식실패 카드:
+     - 연도 없음 → correctCardType에서 이미 임팩트로 변환됨 (여기 안 옴)
+     - 연도 있음 → 시그니처 → 골든글러브 → 국가대표 순서로 이름+연도 매칭 시도 */
   if (!ct || ct === '인식실패') {
     if (nm && yr) {
-      /* 1순위: 시그니처 도감에서 이름+연도 탐색 */
+      /* 1순위: 시그니처 */
       var sigFallback = SEED_PLAYERS.find(function(sp) {
         if ((sp.cardType||'') !== '시그니처') return false;
         if (!nameSimilar(sp.name||'', nm)) return false;
         return (sp.year||'') === yr || (sp.year||'').replace(/'\\d+/,'') === yr;
       });
       if (sigFallback) return { seed: sigFallback, candidates: [], fallback: '시그니처' };
-      /* 2순위: 국가대표 도감에서 이름+연도 탐색 */
+      /* 2순위: 골든글러브 */
+      var ggFallback = SEED_PLAYERS.find(function(sp) {
+        if ((sp.cardType||'') !== '골든글러브') return false;
+        if (!nameSimilar(sp.name||'', nm)) return false;
+        return (sp.year||'') === yr || (sp.year||'').replace(/'\\d+/,'') === yr;
+      });
+      if (ggFallback) return { seed: ggFallback, candidates: [], fallback: '골든글러브' };
+      /* 3순위: 국가대표 */
       var natFallback = SEED_PLAYERS.find(function(sp) {
         if ((sp.cardType||'') !== '국가대표') return false;
         if (!nameSimilar(sp.name||'', nm)) return false;
