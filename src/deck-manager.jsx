@@ -609,15 +609,15 @@ function findPhotoByName(players, name) {
   }
   return "";
 }
-function Badge(p){var c={"골든글러브":"#D4AF37","시그니처":"#C0392B","국가대표":"#2E86C1","임팩트":"#7D3C98","라이브":"#E67E22"}[p.type]||"#555";return(<span style={{display:"inline-block",padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:700,background:c,color:p.type==="골든글러브"?"#1a1100":"#fff",whiteSpace:"nowrap"}}>{p.type}</span>);}
+function Badge(p){var c={"골든글러브":"#D4AF37","시그니처":"#C0392B","국가대표":"#2E86C1","임팩트":"#7D3C98","라이브":"#E67E22"}[p.type]||"#555";return(<span style={{display:"inline-block",padding:"2px 7px",borderRadius:4,fontSize:12,fontWeight:700,background:c,color:p.type==="골든글러브"?"#1a1100":"#fff",whiteSpace:"nowrap"}}>{p.type}</span>);}
 function GS(p){return(<div style={{fontSize:p.size||16,fontWeight:900,fontFamily:"var(--h)",background:p.grad||"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{p.val}</div>);}
-function SH(p){return(<div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"linear-gradient(90deg,"+p.color+"15,transparent)",borderLeft:"3px solid "+p.color,borderBottom:"1px solid var(--bd)"}}><span style={{fontSize:14}}>{p.icon}</span><span style={{fontSize:13,fontWeight:800,color:"var(--t1)",fontFamily:"var(--h)",letterSpacing:1}}>{p.title}</span><span style={{fontSize:10,color:"var(--td)",fontFamily:"var(--m)"}}>{"("+p.count+")"}</span></div>);}
+function SH(p){return(<div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"linear-gradient(90deg,"+p.color+"15,transparent)",borderLeft:"3px solid "+p.color,borderBottom:"1px solid var(--bd)"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:15,fontWeight:800,color:"var(--t1)",fontFamily:"var(--h)",letterSpacing:1}}>{p.title}</span><span style={{fontSize:12,color:"var(--td)",fontFamily:"var(--m)"}}>{"("+p.count+")"}</span></div>);}
 
 function Bar(p){return(<div style={{width:"100%",height:6,background:"var(--bar)",borderRadius:3,overflow:"hidden"}}><div style={{width:Math.min((p.value/200)*100,100)+"%",height:"100%",borderRadius:3,background:"linear-gradient(90deg,"+p.color+"77,"+p.color+")",transition:"width 0.5s ease"}}/></div>);}
 
 function SkBadge(p){var c={10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[p.lv]||"#aaa";return(
-  <div style={{display:"inline-flex",alignItems:"center",gap:3,background:"var(--inner)",borderRadius:3,padding:"2px 5px",border:"1px solid "+c+"33",fontSize:10,lineHeight:1.3}}>
-    <span style={{background:c,color:"#000",borderRadius:2,padding:"0 3px",fontWeight:800,fontSize:9,fontFamily:"var(--m)",flexShrink:0}}>{"Lv."+p.lv}</span>
+  <div style={{display:"inline-flex",alignItems:"center",gap:3,background:"var(--inner)",borderRadius:3,padding:"2px 5px",border:"1px solid "+c+"33",fontSize:12,lineHeight:1.3}}>
+    <span style={{background:c,color:"#000",borderRadius:2,padding:"0 3px",fontWeight:800,fontSize:11,fontFamily:"var(--m)",flexShrink:0}}>{"Lv."+p.lv}</span>
     <span style={{color:"var(--t2)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:80}}>{p.name}</span>
   </div>
 );}
@@ -687,25 +687,25 @@ function PlayerSelector(p) {
   var teams = ["기아","키움","삼성","LG","KT","한화","SSG","롯데","NC","두산"];
   var sortOpts = (isBatSlot || isBench) ? ["종합","파워","정확"] : ["종합","변화","구위"];
   var filterBtnStyle = function(active) {
-    return { padding: "4px 8px", fontSize: 10, fontWeight: active ? 700 : 400, background: active ? "var(--ta)" : "transparent", border: active ? "1px solid var(--acc)" : "1px solid var(--bd)", borderRadius: 4, color: active ? "var(--acc)" : "var(--td)", cursor: "pointer" };
+    return { padding: "4px 8px", fontSize: 12, fontWeight: active ? 700 : 400, background: active ? "var(--ta)" : "transparent", border: active ? "1px solid var(--acc)" : "1px solid var(--bd)", borderRadius: 4, color: active ? "var(--acc)" : "var(--td)", cursor: "pointer" };
   };
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={function(e) { e.stopPropagation(); }} style={{ background: "#141a24", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 440, width: "100%", maxHeight: "85vh", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+      <div onClick={function(e) { e.stopPropagation(); }} style={{ background: "var(--card)", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 440, width: "100%", maxHeight: "85vh", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
         <div style={{ padding: "14px 18px 10px", borderBottom: "1px solid var(--bd)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{slot + " 선수 선택"}</div>
-              <div style={{ fontSize: 10, color: "var(--td)", marginTop: 2 }}>{isBatSlot ? (slot === "DH" ? "모든 타자" : slot + " 포지션") : (isBench ? "후보 (타자)" : pitRole + " 투수")}{" · " + total + "명"}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{slot + " 선수 선택"}</div>
+              <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{isBatSlot ? (slot === "DH" ? "모든 타자" : slot + " 포지션") : (isBench ? "후보 (타자)" : pitRole + " 투수")}{" · " + total + "명"}</div>
             </div>
             <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18 }}>{"✕"}</button>
           </div>
           {/* Search */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, padding: "6px 10px", marginBottom: 8 }}>
-            <span style={{ fontSize: 14, opacity: 0.4 }}>{"🔍"}</span>
-            <input type="text" value={query} onChange={function(e) { setQuery(e.target.value); setShowLimit(30); }} placeholder="이름, 카드, 팀 검색..." style={{ flex: 1, background: "transparent", border: "none", color: "var(--t1)", fontSize: 12, outline: "none" }} />
-            {query && (<button onClick={function() { setQuery(""); }} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 12 }}>{"✕"}</button>)}
+            <span style={{ fontSize: 16, opacity: 0.4 }}>{"🔍"}</span>
+            <input type="text" value={query} onChange={function(e) { setQuery(e.target.value); setShowLimit(30); }} placeholder="이름, 카드, 팀 검색..." style={{ flex: 1, background: "transparent", border: "none", color: "var(--t1)", fontSize: 14, outline: "none" }} />
+            {query && (<button onClick={function() { setQuery(""); }} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 14 }}>{"✕"}</button>)}
           </div>
           {/* Team filter */}
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
@@ -714,21 +714,21 @@ function PlayerSelector(p) {
           </div>
           {/* Sort */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 9, color: "var(--td)" }}>{"정렬"}</span>
+            <span style={{ fontSize: 11, color: "var(--td)" }}>{"정렬"}</span>
             {sortOpts.map(function(s) { return (<button key={s} onClick={function(){setSortBy(s);}} style={filterBtnStyle(sortBy===s)}>{s + "순"}</button>); })}
-            {teamF && (<span style={{ marginLeft: "auto", fontSize: 9, color: "var(--acc)" }}>{"골든글러브는 항상 표시"}</span>)}
+            {teamF && (<span style={{ marginLeft: "auto", fontSize: 11, color: "var(--acc)" }}>{"골든글러브는 항상 표시"}</span>)}
           </div>
         </div>
         <div style={{ overflowY: "auto", maxHeight: "55vh" }}>
           {/* 비우기 */}
           <div onClick={function() { onSelect(null); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 18px", borderBottom: "1px solid var(--bd)", cursor: "pointer" }}>
             <div style={{ width: 36, height: 48, borderRadius: 4, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 14, opacity: 0.3 }}>{"✕"}</span>
+              <span style={{ fontSize: 16, opacity: 0.3 }}>{"✕"}</span>
             </div>
-            <span style={{ fontSize: 12, color: "var(--td)" }}>{"비우기"}</span>
+            <span style={{ fontSize: 14, color: "var(--td)" }}>{"비우기"}</span>
           </div>
           {visible.length === 0 ? (
-            <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--td)", fontSize: 12 }}>{"해당 조건의 선수가 없습니다."}</div>
+            <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--td)", fontSize: 14 }}>{"해당 조건의 선수가 없습니다."}</div>
           ) : visible.map(function(pl, idx) {
             var statLine;
             if (isBatSlot || isBench) {
@@ -740,23 +740,23 @@ function PlayerSelector(p) {
             }
             return (
               <div key={pl.id} onClick={function() { onSelect(pl.id); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 18px", borderBottom: "1px solid var(--bd)", cursor: "pointer", background: idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
-                <div style={{ fontSize: 10, color: "var(--td)", fontFamily: "var(--m)", width: 18, textAlign: "center", flexShrink: 0 }}>{idx + 1}</div>
+                <div style={{ fontSize: 12, color: "var(--td)", fontFamily: "var(--m)", width: 18, textAlign: "center", flexShrink: 0 }}>{idx + 1}</div>
                 <PlayerCard player={pl} size="sm" />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <Badge type={pl.cardType} />
-                    <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span>
-                    {pl.year && (<span style={{ fontSize: 9, color: "var(--td)" }}>{pl.year}</span>)}
-                    {pl.cardType === "임팩트" && pl.impactType && (<span style={{ fontSize: 9, color: "#a78bfa", marginLeft: 2 }}>{'(' + pl.impactType + ')'}</span>)}
+                    <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span>
+                    {pl.year && (<span style={{ fontSize: 11, color: "var(--td)" }}>{pl.year}</span>)}
+                    {pl.cardType === "임팩트" && pl.impactType && (<span style={{ fontSize: 11, color: "#a78bfa", marginLeft: 2 }}>{'(' + pl.impactType + ')'}</span>)}
                   </div>
-                  <div style={{ fontSize: 9, color: "var(--td)", marginTop: 2 }}>{statLine}</div>
+                  <div style={{ fontSize: 11, color: "var(--td)", marginTop: 2 }}>{statLine}</div>
                 </div>
               </div>
             );
           })}
           {hasMore && (
             <div onClick={function(){setShowLimit(showLimit+30);}} style={{ padding: "12px 18px", textAlign: "center", cursor: "pointer", borderBottom: "1px solid var(--bd)" }}>
-              <span style={{ fontSize: 12, color: "var(--acc)", fontWeight: 700 }}>{"▼ 더보기 (" + (total - showLimit) + "명 남음)"}</span>
+              <span style={{ fontSize: 14, color: "var(--acc)", fontWeight: 700 }}>{"▼ 더보기 (" + (total - showLimit) + "명 남음)"}</span>
             </div>
           )}
         </div>
@@ -768,14 +768,14 @@ function PlayerSelector(p) {
 function Inp(p){
   return(
     <div style={{marginBottom:p.mb||10}}>
-      <label style={{display:"block",fontSize:10,color:"var(--td)",marginBottom:3,fontWeight:600}}>{p.label}</label>
+      <label style={{display:"block",fontSize:12,color:"var(--td)",marginBottom:3,fontWeight:600}}>{p.label}</label>
       {p.type==="select"?(
-        <select value={p.value} onChange={function(e){p.onChange(e.target.value);}} style={{width:"100%",padding:"8px 10px",fontSize:13,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",outline:"none",boxSizing:"border-box"}}>
+        <select value={p.value} onChange={function(e){p.onChange(e.target.value);}} style={{width:"100%",padding:"8px 10px",fontSize:15,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",outline:"none",boxSizing:"border-box"}}>
           {p.options.map(function(o){return(<option key={o} value={o}>{o}</option>);})}
         </select>
       ):(
         <input type={p.type||"text"} value={p.value} onChange={function(e){p.onChange(e.target.value);}} placeholder={p.ph||""}
-          style={{width:"100%",padding:"8px 10px",fontSize:13,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",outline:"none",boxSizing:"border-box"}} />
+          style={{width:"100%",padding:"8px 10px",fontSize:15,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",outline:"none",boxSizing:"border-box"}} />
       )}
     </div>
   );
@@ -935,12 +935,12 @@ function PlayerDBPage(p){
   return(
     <div style={{padding:mob?12:18,maxWidth:1000,paddingBottom:mob?80:18}}>
       <h2 style={{fontSize:mob?16:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 4px"}}>{"선수 도감"}</h2>
-      <p style={{fontSize:10,color:"var(--td)",margin:"0 0 12px"}}>{"관리자 전용 - 선수 기본 데이터를 등록/수정합니다"}</p>
+      <p style={{fontSize:12,color:"var(--td)",margin:"0 0 12px"}}>{"관리자 전용 - 선수 기본 데이터를 등록/수정합니다"}</p>
 
       {/* 탭 선택 */}
       <div style={{display:"flex",gap:6,marginBottom:16}}>
         {["선수","사진 관리"].map(function(t){var a=t===dbTab;return(
-          <button key={t} onClick={function(){setDbTab(t);}} style={{padding:"8px 20px",borderRadius:8,fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",color:a?"var(--acc)":"var(--t2)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{t}</button>
+          <button key={t} onClick={function(){setDbTab(t);}} style={{padding:"8px 20px",borderRadius:8,fontSize:15,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",color:a?"var(--acc)":"var(--t2)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{t}</button>
         );})}
       </div>
 
@@ -952,47 +952,47 @@ function PlayerDBPage(p){
             onDragOver={function(e){e.preventDefault();}}
             onDrop={function(e){e.preventDefault();handlePhotoUpload(e.dataTransfer.files);}}>
             <div style={{fontSize:28,marginBottom:8}}>{"📸"}</div>
-            <div style={{fontSize:13,fontWeight:700,color:"var(--t1)",marginBottom:4}}>{"사진 파일을 드래그하거나 클릭해서 업로드"}</div>
-            <div style={{fontSize:11,color:"var(--td)",marginBottom:12}}>{"파일명: 이승엽1.jpg, 이승엽2.jpg 형식 | 200×280px 권장 | JPG/PNG/WebP"}</div>
-            <label style={{display:"inline-block",padding:"8px 20px",background:"var(--ta)",border:"1px solid var(--acc)",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,color:"var(--acc)"}}>
+            <div style={{fontSize:15,fontWeight:700,color:"var(--t1)",marginBottom:4}}>{"사진 파일을 드래그하거나 클릭해서 업로드"}</div>
+            <div style={{fontSize:13,color:"var(--td)",marginBottom:12}}>{"파일명: 이승엽1.jpg, 이승엽2.jpg 형식 | 200×280px 권장 | JPG/PNG/WebP"}</div>
+            <label style={{display:"inline-block",padding:"8px 20px",background:"var(--ta)",border:"1px solid var(--acc)",borderRadius:8,cursor:"pointer",fontSize:14,fontWeight:700,color:"var(--acc)"}}>
               {"파일 선택 (여러 장 가능)"}
               <input type="file" multiple accept="image/*" style={{display:"none"}} onChange={function(e){handlePhotoUpload(e.target.files);e.target.value="";}} />
             </label>
-            {uploading && <div style={{marginTop:10,fontSize:11,color:"var(--acc)"}}>{"업로드 중..."}</div>}
-            {uploadMsg && <div style={{marginTop:10,fontSize:11,color:"#66BB6A",fontWeight:700}}>{uploadMsg}</div>}
+            {uploading && <div style={{marginTop:10,fontSize:13,color:"var(--acc)"}}>{"업로드 중..."}</div>}
+            {uploadMsg && <div style={{marginTop:10,fontSize:13,color:"#66BB6A",fontWeight:700}}>{uploadMsg}</div>}
           </div>
 
           {/* 등록된 사진 목록 */}
           <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-              <span style={{fontSize:13,fontWeight:800,color:"var(--t1)"}}>{"등록된 사진 ("+allPhotos.length+"장)"}</span>
-              <button onClick={loadPhotos} style={{padding:"4px 10px",fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--t2)",cursor:"pointer"}}>{"새로고침"}</button>
+              <span style={{fontSize:15,fontWeight:800,color:"var(--t1)"}}>{"등록된 사진 ("+allPhotos.length+"장)"}</span>
+              <button onClick={loadPhotos} style={{padding:"4px 10px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--t2)",cursor:"pointer"}}>{"새로고침"}</button>
             </div>
-            {photoLoading && <div style={{fontSize:11,color:"var(--td)",padding:20,textAlign:"center"}}>{"로딩 중..."}</div>}
+            {photoLoading && <div style={{fontSize:13,color:"var(--td)",padding:20,textAlign:"center"}}>{"로딩 중..."}</div>}
             {!photoLoading && Object.keys(photoGroups).length===0 && (
-              <div style={{fontSize:11,color:"var(--td)",padding:20,textAlign:"center"}}>{"등록된 사진이 없습니다"}</div>
+              <div style={{fontSize:13,color:"var(--td)",padding:20,textAlign:"center"}}>{"등록된 사진이 없습니다"}</div>
             )}
             {!photoLoading && Object.keys(photoGroups).sort().map(function(name){
               var photos=photoGroups[name];
               var curPos = posMap[name]!==undefined ? posMap[name] : 20;
               return(
                 <div key={name} style={{marginBottom:16}}>
-                  <div style={{fontSize:12,fontWeight:800,color:"var(--t1)",marginBottom:8,paddingBottom:4,borderBottom:"1px solid var(--bd)"}}>{name+" ("+photos.length+"장)"}</div>
+                  <div style={{fontSize:14,fontWeight:800,color:"var(--t1)",marginBottom:8,paddingBottom:4,borderBottom:"1px solid var(--bd)"}}>{name+" ("+photos.length+"장)"}</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:10,marginBottom:8}}>
                     {photos.map(function(ph){return(
                       <div key={ph.name} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                         <div style={{position:"relative"}}>
                           <img src={ph.url} alt={ph.name} style={{width:60,height:84,objectFit:"cover",objectPosition:"center "+curPos+"%",borderRadius:6,border:"1px solid var(--bd)"}} />
                           <button onClick={function(){handlePhotoDelete(ph);}}
-                            style={{position:"absolute",top:-4,right:-4,width:18,height:18,borderRadius:"50%",background:"#EF5350",border:"none",cursor:"pointer",fontSize:10,color:"#fff",fontWeight:900,lineHeight:"18px",textAlign:"center",padding:0}}>{"×"}</button>
+                            style={{position:"absolute",top:-4,right:-4,width:18,height:18,borderRadius:"50%",background:"#EF5350",border:"none",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:900,lineHeight:"18px",textAlign:"center",padding:0}}>{"×"}</button>
                         </div>
-                        <span style={{fontSize:9,color:"var(--td)",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph.name}</span>
+                        <span style={{fontSize:11,color:"var(--td)",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph.name}</span>
                       </div>
                     );})}
                   </div>
                   {/* 위치 슬라이더 */}
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:10,color:"var(--td)",flexShrink:0,width:28}}>{"위치"}</span>
+                    <span style={{fontSize:12,color:"var(--td)",flexShrink:0,width:28}}>{"위치"}</span>
                     <input type="range" min={0} max={100} value={curPos}
                       onChange={function(e){
                         var v=parseInt(e.target.value);
@@ -1007,8 +1007,8 @@ function PlayerDBPage(p){
                         var nm=Object.assign({},posMap); nm[name]=v; savePosMap(nm);
                       }}
                       style={{flex:1,accentColor:"var(--acc)",cursor:"pointer"}} />
-                    <span style={{fontSize:10,color:"var(--acc)",fontFamily:"var(--m)",width:32,flexShrink:0,textAlign:"right"}}>{curPos+"%"}</span>
-                    {posSaving&&<span style={{fontSize:9,color:"var(--td)"}}>{"저장중"}</span>}
+                    <span style={{fontSize:12,color:"var(--acc)",fontFamily:"var(--m)",width:32,flexShrink:0,textAlign:"right"}}>{curPos+"%"}</span>
+                    {posSaving&&<span style={{fontSize:11,color:"var(--td)"}}>{"저장중"}</span>}
                   </div>
                 </div>
               );
@@ -1021,24 +1021,24 @@ function PlayerDBPage(p){
       {dbTab==="선수" && (<React.Fragment>
       <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
         {CARD_TYPES.map(function(ct){var a=ct===at;return(
-          <button key={ct} onClick={function(){setAt(ct);setEditing(null);setForm(null);}} style={{padding:"7px 14px",borderRadius:6,fontSize:12,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",color:a?"var(--acc)":"var(--t2)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{ct}</button>
+          <button key={ct} onClick={function(){setAt(ct);setEditing(null);setForm(null);}} style={{padding:"7px 14px",borderRadius:6,fontSize:14,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",color:a?"var(--acc)":"var(--t2)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{ct}</button>
         );})}
       </div>
 
       <div style={{display:"flex",gap:8,marginBottom:14}}>
-        <button onClick={function(){newP("타자");}} style={{padding:"8px 16px",borderRadius:6,fontSize:12,fontWeight:700,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",color:"#1a1100",border:"none",cursor:"pointer"}}>{"+ 타자"}</button>
-        <button onClick={function(){newP("투수");}} style={{padding:"8px 16px",borderRadius:6,fontSize:12,fontWeight:700,background:"linear-gradient(135deg,#CE93D8,#7B1FA2)",color:"#fff",border:"none",cursor:"pointer"}}>{"+ 투수"}</button>
+        <button onClick={function(){newP("타자");}} style={{padding:"8px 16px",borderRadius:6,fontSize:14,fontWeight:700,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",color:"#1a1100",border:"none",cursor:"pointer"}}>{"+ 타자"}</button>
+        <button onClick={function(){newP("투수");}} style={{padding:"8px 16px",borderRadius:6,fontSize:14,fontWeight:700,background:"linear-gradient(135deg,#CE93D8,#7B1FA2)",color:"#fff",border:"none",cursor:"pointer"}}>{"+ 투수"}</button>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:editing?(mob?"1fr":"1fr 340px"):"1fr",gap:14}}>
         <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",overflow:"hidden"}}>
           <SH title={at+" ("+filtered.length+"명)"} icon="📋" count={filtered.length} color="#FFD54F" />
-          {filtered.length===0?(<div style={{padding:24,textAlign:"center",color:"var(--td)",fontSize:12}}>{"등록된 선수가 없습니다"}</div>):
+          {filtered.length===0?(<div style={{padding:24,textAlign:"center",color:"var(--td)",fontSize:14}}>{"등록된 선수가 없습니다"}</div>):
           filtered.map(function(pl){var isBat=pl.role==="타자";var isA=editing===pl.id;return(
             <div key={pl.id} onClick={function(){editP(pl);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",background:isA?"var(--ta)":"transparent",borderBottom:"1px solid var(--bd)",cursor:"pointer",borderLeft:isA?"3px solid var(--acc)":"3px solid transparent"}}>
-              <div style={{width:36,height:48,borderRadius:4,background:"var(--inner)",border:"1px solid var(--bd)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:14,opacity:0.4}}>{"⚾"}</span><span style={{fontSize:7,color:"var(--td)",fontWeight:700}}>{pl.subPosition}</span></div>
-              <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:4}}><Badge type={pl.cardType}/><span style={{fontWeight:700,color:"var(--t1)",fontSize:13}}>{pl.name}</span></div><div style={{fontSize:9,color:"var(--td)",marginTop:2}}>{isBat?(pl.hand+"타 · 파"+pl.power+" 정"+pl.accuracy+" 선"+pl.eye):(pl.hand+"투 · 변"+pl.change+" 구"+pl.stuff)}</div></div>
-              <div style={{fontSize:10,color:"var(--td)"}}>{pl.year}</div>
+              <div style={{width:36,height:48,borderRadius:4,background:"var(--inner)",border:"1px solid var(--bd)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:16,opacity:0.4}}>{"⚾"}</span><span style={{fontSize:7,color:"var(--td)",fontWeight:700}}>{pl.subPosition}</span></div>
+              <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:4}}><Badge type={pl.cardType}/><span style={{fontWeight:700,color:"var(--t1)",fontSize:15}}>{pl.name}</span></div><div style={{fontSize:11,color:"var(--td)",marginTop:2}}>{isBat?(pl.hand+"타 · 파"+pl.power+" 정"+pl.accuracy+" 선"+pl.eye):(pl.hand+"투 · 변"+pl.change+" 구"+pl.stuff)}</div></div>
+              <div style={{fontSize:12,color:"var(--td)"}}>{pl.year}</div>
             </div>
           );})}
         </div>
@@ -1046,7 +1046,7 @@ function PlayerDBPage(p){
         {editing&&form&&(
           <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:16,alignSelf:"flex-start"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <span style={{fontSize:14,fontWeight:800,color:"var(--t1)",fontFamily:"var(--h)"}}>{editing==="new"?"새 선수":"수정"}</span>
+              <span style={{fontSize:16,fontWeight:800,color:"var(--t1)",fontFamily:"var(--h)"}}>{editing==="new"?"새 선수":"수정"}</span>
               <button onClick={function(){setEditing(null);setForm(null);}} style={{background:"none",border:"none",color:"var(--td)",cursor:"pointer",fontSize:16}}>{"✕"}</button>
             </div>
             <Inp label="이름" value={form.name} onChange={function(v){uf("name",v);}} ph="구자욱24" />
@@ -1056,7 +1056,7 @@ function PlayerDBPage(p){
               <Inp label="손잡이" type="select" value={form.hand} onChange={function(v){uf("hand",v);}} options={form.role==="투수"?["우","좌"]:["우","좌","양"]} />
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {CARD_STARS_SELECTABLE[form.cardType]?(<Inp label={form.cardType==="골든글러브"?"별(4~5)":"별(1~5)"} type="select" value={String(form.stars||(CARD_STARS[form.cardType]||5))} onChange={function(v){uf("stars",parseInt(v));}} options={form.cardType==="골든글러브"?["4","5"]:["1","2","3","4","5"]} />):(<div><div style={{fontSize:10,color:"var(--td)",marginBottom:4}}>{"별"}</div><span style={{fontSize:14,color:"var(--acc)"}}>{"★"+(CARD_STARS[form.cardType]||5)}</span></div>)}
+              {CARD_STARS_SELECTABLE[form.cardType]?(<Inp label={form.cardType==="골든글러브"?"별(4~5)":"별(1~5)"} type="select" value={String(form.stars||(CARD_STARS[form.cardType]||5))} onChange={function(v){uf("stars",parseInt(v));}} options={form.cardType==="골든글러브"?["4","5"]:["1","2","3","4","5"]} />):(<div><div style={{fontSize:12,color:"var(--td)",marginBottom:4}}>{"별"}</div><span style={{fontSize:16,color:"var(--acc)"}}>{"★"+(CARD_STARS[form.cardType]||5)}</span></div>)}
               {form.role==="타자"?(<Inp label="포지션" type="select" value={form.subPosition} onChange={function(v){uf("subPosition",v);}} options={BAT_POS} />):(<Inp label="역할" type="select" value={form.position||"선발"} onChange={function(v){uf("position",v);uf("subPosition",(PIT_POS_MAP[v]||["SP1"])[0]);}} options={["선발","중계","마무리"]} />)}
             </div>
             {form.role==="타자"&&null}
@@ -1066,14 +1066,14 @@ function PlayerDBPage(p){
             <div>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
                   <Inp label="사진" value={form.photoUrl||""} onChange={function(v){uf("photoUrl",v);}} ph="URL 또는 파일 선택" />
-                  <label style={{cursor:"pointer",padding:"4px 8px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,fontSize:10,color:"var(--t2)",marginTop:14,whiteSpace:"nowrap"}}>
+                  <label style={{cursor:"pointer",padding:"4px 8px",background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,fontSize:12,color:"var(--t2)",marginTop:14,whiteSpace:"nowrap"}}>
                     {"📁 파일"}
                     <input type="file" accept="image/*" style={{display:"none"}} onChange={function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){uf("photoUrl",r.result);};r.readAsDataURL(f);}} />
                   </label>
                 </div>
                 {form.photoUrl&&(<img src={form.photoUrl} alt="" style={{width:60,height:80,objectFit:"cover",borderRadius:4,marginTop:4,border:"1px solid var(--bd)"}} />)}
               </div>
-            <div style={{fontSize:11,fontWeight:700,color:"var(--t2)",marginTop:8,marginBottom:6}}>{"기본 능력치"}</div>
+            <div style={{fontSize:13,fontWeight:700,color:"var(--t2)",marginTop:8,marginBottom:6}}>{"기본 능력치"}</div>
             {form.role==="타자"?(
               <React.Fragment>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
@@ -1106,8 +1106,8 @@ function PlayerDBPage(p){
               </React.Fragment>
             )}
             <div style={{display:"flex",gap:8,marginTop:12}}>
-              <button onClick={saveF} style={{flex:1,padding:"10px 0",borderRadius:6,fontSize:13,fontWeight:800,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",color:"#1a1100",border:"none",cursor:"pointer"}}>{"저장"}</button>
-              {editing!=="new"&&(<button onClick={function(){delP(form.id);}} style={{padding:"10px 16px",borderRadius:6,fontSize:12,background:"rgba(239,83,80,0.1)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",cursor:"pointer"}}>{"삭제"}</button>)}
+              <button onClick={saveF} style={{flex:1,padding:"10px 0",borderRadius:6,fontSize:15,fontWeight:800,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",color:"#1a1100",border:"none",cursor:"pointer"}}>{"저장"}</button>
+              {editing!=="new"&&(<button onClick={function(){delP(form.id);}} style={{padding:"10px 16px",borderRadius:6,fontSize:14,background:"rgba(239,83,80,0.1)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",cursor:"pointer"}}>{"삭제"}</button>)}
             </div>
           </div>
         )}
@@ -1116,13 +1116,13 @@ function PlayerDBPage(p){
       {/* 도감 엑셀 관리 */}
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14, marginTop: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-          <span style={{ fontSize: 14 }}>{"📊"}</span>
-          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--acc)", fontFamily: "var(--h)" }}>{"도감 엑셀 관리"}</span>
+          <span style={{ fontSize: 16 }}>{"📊"}</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: "var(--acc)", fontFamily: "var(--h)" }}>{"도감 엑셀 관리"}</span>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <label style={{ flex: 1, minWidth: 140, padding: "12px", background: "linear-gradient(135deg,rgba(255,213,79,0.08),rgba(255,213,79,0.02))", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, cursor: "pointer", textAlign: "left", display: "block" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--acc)" }}>{"📊 엑셀 가져오기"}</div>
-            <div style={{ fontSize: 9, color: "var(--td)", marginTop: 4 }}>{"양식 업로드 → 도감 반영"}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--acc)" }}>{"📊 엑셀 가져오기"}</div>
+            <div style={{ fontSize: 11, color: "var(--td)", marginTop: 4 }}>{"양식 업로드 → 도감 반영"}</div>
             <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={function(e) {
               var f2 = e.target.files[0]; if (!f2) return;
               var rd = new FileReader(); rd.onload = function() {
@@ -1184,8 +1184,8 @@ function PlayerDBPage(p){
             });});
             XL.writeFile(wb3,"선수도감_"+new Date().toISOString().slice(0,10)+".xlsx");
           }} style={{ flex: 1, minWidth: 140, padding: "12px", background: "linear-gradient(135deg,rgba(206,147,216,0.08),rgba(206,147,216,0.02))", border: "1px solid rgba(206,147,216,0.2)", borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--acp)" }}>{"📋 엑셀 내보내기"}</div>
-            <div style={{ fontSize: 9, color: "var(--td)", marginTop: 4 }}>{"현재 도감 → 엑셀 다운로드"}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--acp)" }}>{"📋 엑셀 내보내기"}</div>
+            <div style={{ fontSize: 11, color: "var(--td)", marginTop: 4 }}>{"현재 도감 → 엑셀 다운로드"}</div>
           </button>
         </div>
       </div>
@@ -1315,22 +1315,22 @@ function BullpenLayout(p) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t2)", letterSpacing: 0.5 }}>{"불펜 편성"}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t2)", letterSpacing: 0.5 }}>{"불펜 편성"}</span>
         <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-          <button onClick={function() { setIdx(idx <= 0 ? BPC.length - 1 : idx - 1); }} style={{ width: 28, height: 28, borderRadius: "6px 0 0 6px", background: "var(--inner)", border: "1px solid var(--bd)", borderRight: "none", color: "var(--t2)", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>{"◀"}</button>
-          <button onClick={function() { setOpen(!open); }} style={{ width: 80, height: 28, background: "var(--inner)", border: "1px solid var(--bd)", borderLeft: "none", borderRight: "none", color: "var(--acc)", cursor: "pointer", fontSize: 13, fontWeight: 800, fontFamily: "var(--m)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>{cfg.label}<span style={{ fontSize: 7, color: "var(--td)" }}>{open ? "▲" : "▼"}</span></button>
-          <button onClick={function() { setIdx(idx >= BPC.length - 1 ? 0 : idx + 1); }} style={{ width: 28, height: 28, borderRadius: "0 6px 6px 0", background: "var(--inner)", border: "1px solid var(--bd)", borderLeft: "none", color: "var(--t2)", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>{"▶"}</button>
+          <button onClick={function() { setIdx(idx <= 0 ? BPC.length - 1 : idx - 1); }} style={{ width: 28, height: 28, borderRadius: "6px 0 0 6px", background: "var(--inner)", border: "1px solid var(--bd)", borderRight: "none", color: "var(--t2)", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{"◀"}</button>
+          <button onClick={function() { setOpen(!open); }} style={{ width: 80, height: 28, background: "var(--inner)", border: "1px solid var(--bd)", borderLeft: "none", borderRight: "none", color: "var(--acc)", cursor: "pointer", fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>{cfg.label}<span style={{ fontSize: 7, color: "var(--td)" }}>{open ? "▲" : "▼"}</span></button>
+          <button onClick={function() { setIdx(idx >= BPC.length - 1 ? 0 : idx + 1); }} style={{ width: 28, height: 28, borderRadius: "0 6px 6px 0", background: "var(--inner)", border: "1px solid var(--bd)", borderLeft: "none", color: "var(--t2)", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{"▶"}</button>
           {open && (
-            <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, marginTop: 4, background: "#141a24", border: "1px solid var(--bd)", borderRadius: 8, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", width: 170 }}>
+            <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, marginTop: 4, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 8, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", width: 170 }}>
               {BPC.map(function(c, i) {
                 var act = i === idx;
-                return (<button key={c.label} onClick={function() { setIdx(i); setOpen(false); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "10px 14px", background: act ? "var(--ta)" : "transparent", border: "none", borderBottom: "1px solid var(--bd)", color: act ? "var(--acc)" : "var(--t2)", cursor: "pointer", fontSize: 12, fontFamily: "var(--m)", fontWeight: act ? 800 : 500, textAlign: "left" }}><span>{c.label}</span><span style={{ fontSize: 9, color: "var(--td)" }}>{"승" + c.w + " 패" + c.l + " 롱" + c.r}</span></button>);
+                return (<button key={c.label} onClick={function() { setIdx(i); setOpen(false); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "10px 14px", background: act ? "var(--ta)" : "transparent", border: "none", borderBottom: "1px solid var(--bd)", color: act ? "var(--acc)" : "var(--t2)", cursor: "pointer", fontSize: 14, fontFamily: "var(--m)", fontWeight: act ? 800 : 500, textAlign: "left" }}><span>{c.label}</span><span style={{ fontSize: 11, color: "var(--td)" }}>{"승" + c.w + " 패" + c.l + " 롱" + c.r}</span></button>);
               })}
             </div>
           )}
         </div>
         {cfg.w === 3 && (
-          <button onClick={function() { setIsWinSplit(!isWinSplit); }} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
+          <button onClick={function() { setIsWinSplit(!isWinSplit); }} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
         )}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
@@ -1342,13 +1342,13 @@ function BullpenLayout(p) {
         ].map(function(col) {
           return (
             <div key={col.label} style={cs}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: col.color, letterSpacing: 1, marginBottom: 4, textAlign: "center" }}>{col.label + " (" + col.count + ")"}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: col.color, letterSpacing: 1, marginBottom: 4, textAlign: "center" }}>{col.label + " (" + col.count + ")"}</div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                 {col.slots.map(function(s) {
                   if (s.pl) {
                     return (<div key={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ cursor: onSlotClick ? "pointer" : "default" }}><PCard p={s.pl} /></div>);
                   }
-                  return (<div key={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--re)" }}><span style={{ fontSize: 9, color: "var(--td)" }}>{s.slot}</span></div>);
+                  return (<div key={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--re)" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{s.slot}</span></div>);
                 })}
               </div>
             </div>
@@ -1430,7 +1430,7 @@ function SetDeckPanel(p) {
   var radioStyle = function(active, selected, side) {
     var baseC = side === "L" ? "#FFD54F" : "#CE93D8";
     return {
-      flex: 1, padding: "6px 4px", fontSize: 10, fontWeight: selected ? 700 : 400,
+      flex: 1, padding: "6px 4px", fontSize: 12, fontWeight: selected ? 700 : 400,
       background: selected ? baseC + "18" : "transparent",
       border: selected ? "1px solid " + baseC + "55" : "1px solid var(--bd)",
       borderRadius: side === "L" ? "6px 0 0 6px" : "0 6px 6px 0",
@@ -1450,8 +1450,8 @@ function SetDeckPanel(p) {
       return (
         <div key={k} style={{ padding: "5px 14px", display: "flex", alignItems: "center", gap: 8, opacity: active ? 1 : 0.35 }}>
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: active ? "#4CAF50" : "var(--bd)", flexShrink: 0 }} />
-          <span style={{ fontSize: 11, color: active ? "#4CAF50" : "var(--td)", fontWeight: 700, fontFamily: "var(--m)" }}>{r.sp}</span>
-          <span style={{ fontSize: 10, color: active ? "var(--t1)" : "var(--td)" }}>{r.desc}</span>
+          <span style={{ fontSize: 13, color: active ? "#4CAF50" : "var(--td)", fontWeight: 700, fontFamily: "var(--m)" }}>{r.sp}</span>
+          <span style={{ fontSize: 12, color: active ? "var(--t1)" : "var(--td)" }}>{r.desc}</span>
           {active && (<span style={{ marginLeft: "auto", fontSize: 8, color: "#4CAF50", fontFamily: "var(--m)", background: "rgba(76,175,80,0.1)", padding: "2px 6px", borderRadius: 3 }}>{"AUTO"}</span>)}
         </div>
       );
@@ -1462,10 +1462,10 @@ function SetDeckPanel(p) {
       return (
         <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
           </div>
           <button onClick={active ? function() { upd(k, on ? "" : "L"); } : undefined}
-            style={{ width: "100%", padding: "6px 8px", fontSize: 10, background: on ? "rgba(255,213,79,0.12)" : "var(--inner)", border: on ? "1px solid rgba(255,213,79,0.4)" : "1px solid var(--bd)", borderRadius: 6, color: on ? "var(--acc)" : "var(--t2)", cursor: active ? "pointer" : "default", fontWeight: on ? 700 : 400 }}>
+            style={{ width: "100%", padding: "6px 8px", fontSize: 12, background: on ? "rgba(255,213,79,0.12)" : "var(--inner)", border: on ? "1px solid rgba(255,213,79,0.4)" : "1px solid var(--bd)", borderRadius: 6, color: on ? "var(--acc)" : "var(--t2)", cursor: active ? "pointer" : "default", fontWeight: on ? 700 : 400 }}>
             {r.lDesc}
           </button>
         </div>
@@ -1477,10 +1477,10 @@ function SetDeckPanel(p) {
       return (
         <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acp)" }}>{r.sp}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acp)" }}>{r.sp}</span>
           </div>
           <button onClick={active ? function() { upd(k, on2 ? "" : "R"); } : undefined}
-            style={{ width: "100%", padding: "6px 8px", fontSize: 10, background: on2 ? "rgba(206,147,216,0.12)" : "var(--inner)", border: on2 ? "1px solid rgba(206,147,216,0.4)" : "1px solid var(--bd)", borderRadius: 6, color: on2 ? "var(--acp)" : "var(--t2)", cursor: active ? "pointer" : "default", fontWeight: on2 ? 700 : 400 }}>
+            style={{ width: "100%", padding: "6px 8px", fontSize: 12, background: on2 ? "rgba(206,147,216,0.12)" : "var(--inner)", border: on2 ? "1px solid rgba(206,147,216,0.4)" : "1px solid var(--bd)", borderRadius: 6, color: on2 ? "var(--acp)" : "var(--t2)", cursor: active ? "pointer" : "default", fontWeight: on2 ? 700 : 400 }}>
             {r.rDesc}
           </button>
         </div>
@@ -1491,12 +1491,12 @@ function SetDeckPanel(p) {
       return (
         <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acp)" }}>{r.sp}</span>
-            <span style={{ fontSize: 9, color: "var(--td)" }}>{"연도 선택"}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acp)" }}>{r.sp}</span>
+            <span style={{ fontSize: 11, color: "var(--td)" }}>{"연도 선택"}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 10, color: "var(--t2)", flex: 1 }}>{r.rDesc}</span>
-            <select value={val} onChange={active ? function(e) { upd(k, e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: val ? "var(--acp)" : "var(--t1)", outline: "none" }}>
+            <span style={{ fontSize: 12, color: "var(--t2)", flex: 1 }}>{r.rDesc}</span>
+            <select value={val} onChange={active ? function(e) { upd(k, e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: val ? "var(--acp)" : "var(--t1)", outline: "none" }}>
               <option value="">{"X"}</option>
               {[1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(function(y) { return (<option key={y} value={String(y)}>{y}</option>); })}
             </select>
@@ -1512,8 +1512,8 @@ function SetDeckPanel(p) {
       return (
         <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
-            <span style={{ fontSize: 9, color: "var(--td)" }}>{"연도 선택 좌/우"}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
+            <span style={{ fontSize: 11, color: "var(--td)" }}>{"연도 선택 좌/우"}</span>
           </div>
           <div style={{ display: "flex", gap: 0, marginBottom: 4 }}>
             <button onClick={active ? function() { upd(k, side === "L" ? "" : "L:"); } : undefined} style={radioStyle(active, side === "L", "L")}>
@@ -1523,7 +1523,7 @@ function SetDeckPanel(p) {
               <span>{r.rDesc + " ▶"}</span>
             </button>
           </div>
-          {side && (<select value={yearV} onChange={active ? function(e) { upd(k, side + ":" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>
+          {side && (<select value={yearV} onChange={active ? function(e) { upd(k, side + ":" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>
             <option value="">{"X"}</option>
             {[1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(function(y) { return (<option key={y} value={String(y)}>{y}</option>); })}
           </select>)}
@@ -1538,7 +1538,7 @@ function SetDeckPanel(p) {
       return (
         <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
           </div>
           <div style={{ display: "flex", gap: 0, marginBottom: isR ? 4 : 0 }}>
             <button onClick={active ? function() { upd(k, isL ? "" : "L"); } : undefined} style={radioStyle(active, isL, "L")}>
@@ -1548,7 +1548,7 @@ function SetDeckPanel(p) {
               <span>{r.rDesc + " ▶"}</span>
             </button>
           </div>
-          {isR && (<select value={yrVal} onChange={active ? function(e) { upd(k, "R:" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#FFD54F", outline: "none" }}>
+          {isR && (<select value={yrVal} onChange={active ? function(e) { upd(k, "R:" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#FFD54F", outline: "none" }}>
             <option value="">{"X"}</option>
             {[1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(function(y) { return (<option key={y} value={String(y)}>{y}</option>); })}
           </select>)}
@@ -1560,7 +1560,7 @@ function SetDeckPanel(p) {
     return (
       <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
         </div>
         <div style={{ display: "flex", gap: 0 }}>
           <button onClick={active ? function() { upd(k, val === "L" ? "" : "L"); } : undefined} style={radioStyle(active, val === "L", "L")}>
@@ -1583,7 +1583,7 @@ function SetDeckPanel(p) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)" }}>{"SET DECK"}</div>
-              <div style={{ fontSize: 9, color: "var(--td)" }}>{"좌/우 선택 · 활성 " + activeCount + "개"}</div>
+              <div style={{ fontSize: 11, color: "var(--td)" }}>{"좌/우 선택 · 활성 " + activeCount + "개"}</div>
             </div>
             <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18 }}>{"✕"}</button>
           </div>
@@ -1627,7 +1627,7 @@ function SetDeckPanel(p) {
               best[k]=scores[0].v;
             });
             setSdState(function(prev){return Object.assign({},prev,best);});
-          }} style={{ marginTop: 8, width: "100%", padding: "8px", fontSize: 11, fontWeight: 700, background: "linear-gradient(135deg,rgba(255,213,79,0.15),rgba(255,143,0,0.08))", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 6, color: "var(--acc)", cursor: "pointer" }}>{"⚡ 자동 최적화"}</button>
+          }} style={{ marginTop: 8, width: "100%", padding: "8px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg,rgba(255,213,79,0.15),rgba(255,143,0,0.08))", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 6, color: "var(--acc)", cursor: "pointer" }}>{"⚡ 자동 최적화"}</button>
         </div>
 
         {/* Scrollable toggle list */}
@@ -1635,7 +1635,7 @@ function SetDeckPanel(p) {
           {SD_ROWS.map(renderRow)}
 
           {/* Synergy */}
-          <div style={{ padding: "10px 14px 4px", fontSize: 11, fontWeight: 800, color: "var(--acp)", fontFamily: "var(--h)", borderTop: "1px solid var(--bd)", marginTop: 6 }}>{"시너지"}</div>
+          <div style={{ padding: "10px 14px 4px", fontSize: 13, fontWeight: 800, color: "var(--acp)", fontFamily: "var(--h)", borderTop: "1px solid var(--bd)", marginTop: 6 }}>{"시너지"}</div>
           {(function() {
             var counts = {};
             var allSlots2 = ["C","1B","2B","3B","SS","LF","CF","RF","DH","SP1","SP2","SP3","SP4","SP5","RP1","RP2","RP3","RP4","RP5","RP6","CP","BN1","BN2","BN3","BN4","BN5","BN6"];
@@ -1656,7 +1656,7 @@ function SetDeckPanel(p) {
                   <div style={{ width: 12, height: 12, borderRadius: "50%", background: on ? "#fff" : "var(--td)", position: "absolute", top: 1, left: on ? 14 : 1, transition: "left 0.2s" }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, color: on ? "var(--t1)" : "var(--td)", fontWeight: on ? 700 : 400 }}>{syn.label + " 시너지"}</div>
+                  <div style={{ fontSize: 12, color: on ? "var(--t1)" : "var(--td)", fontWeight: on ? 700 : 400 }}>{syn.label + " 시너지"}</div>
                   <div style={{ fontSize: 8, color: "var(--td)" }}>{syn.desc + " → " + syn.effect}</div>
                 </div>
                 {syn.auto && manual === undefined && (<span style={{ fontSize: 7, color: "#4CAF50", background: "rgba(76,175,80,0.1)", padding: "1px 4px", borderRadius: 3 }}>{"AUTO"}</span>)}
@@ -1665,7 +1665,7 @@ function SetDeckPanel(p) {
           })()}
 
           {/* Special skills (auto-detect + manual) */}
-          <div style={{ padding: "10px 14px 4px", fontSize: 11, fontWeight: 800, color: "#2E86C1", fontFamily: "var(--h)", borderTop: "1px solid var(--bd)", marginTop: 6 }}>{"특수 스킬"}</div>
+          <div style={{ padding: "10px 14px 4px", fontSize: 13, fontWeight: 800, color: "#2E86C1", fontFamily: "var(--h)", borderTop: "1px solid var(--bd)", marginTop: 6 }}>{"특수 스킬"}</div>
           {(function() {
             /* Auto-detect from lineup */
             var autoNatBat = "없음"; var autoNatPit = "없음"; var autoCatch = "없음";
@@ -1694,8 +1694,8 @@ function SetDeckPanel(p) {
               var cur = sdState[sp.key] || sp.auto;
               return (
                 <div key={sp.key} style={{ padding: "4px 14px", display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 10, color: "var(--t2)", flex: 1 }}>{sp.label}</span>
-                  <select value={cur} onChange={function(e) { upd(sp.key, e.target.value); }} style={{ width: 65, padding: "3px", fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: cur!=="없음"?"#2E86C1":"var(--t1)", fontWeight: cur!=="없음"?700:400, outline: "none" }}>
+                  <span style={{ fontSize: 12, color: "var(--t2)", flex: 1 }}>{sp.label}</span>
+                  <select value={cur} onChange={function(e) { upd(sp.key, e.target.value); }} style={{ width: 65, padding: "3px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: cur!=="없음"?"#2E86C1":"var(--t1)", fontWeight: cur!=="없음"?700:400, outline: "none" }}>
                     {sp.opts.map(function(o) { return (<option key={o} value={o}>{o}</option>); })}
                   </select>
                   {sp.auto!=="없음" && !sdState[sp.key] && (<span style={{ fontSize: 7, color: "#4CAF50", background: "rgba(76,175,80,0.1)", padding: "1px 4px", borderRadius: 3 }}>{"AUTO"}</span>)}
@@ -1955,7 +1955,7 @@ function LineupPage(p) {
     save(players.map(function(x) { if (x.id !== id) return x; var c = Object.assign({}, x); c[key] = val; return c; }));
   };
   var miniIn = function(id, field, val, color, max) {
-    return (<input type="number" value={val || 0} onChange={function(e) { var v = parseInt(e.target.value) || 0; if (max) v = Math.min(max, Math.max(0, v)); updatePl(id, field, v); }} style={{ width: 34, padding: "2px 1px", textAlign: "center", background: "var(--inner)", border: "1px solid " + (color || "var(--bd)") + "44", borderRadius: 3, color: color || "var(--t1)", fontSize: 10, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />);
+    return (<input type="number" value={val || 0} onChange={function(e) { var v = parseInt(e.target.value) || 0; if (max) v = Math.min(max, Math.max(0, v)); updatePl(id, field, v); }} style={{ width: 34, padding: "2px 1px", textAlign: "center", background: "var(--inner)", border: "1px solid " + (color || "var(--bd)") + "44", borderRadius: 3, color: color || "var(--t1)", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />);
   };
   var skillInput = function(pl, num) {
     var opts = getSkillOpts(pl);
@@ -1964,12 +1964,12 @@ function LineupPage(p) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
         <select value={pl[nameField] || ""} onChange={function(e) { updatePl(pl.id, nameField, e.target.value); }}
-          style={{ width: 90, padding: "3px 2px", fontSize: 9, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>
+          style={{ width: 90, padding: "3px 2px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>
           <option value="">{"없음"}</option>
           {opts.map(function(s) { return (<option key={s} value={s} style={{background:"#1e293b",color:"#e2e8f0"}}>{s}</option>); })}
         </select>
         <select value={pl[lvField] || 0} onChange={function(e) { updatePl(pl.id, lvField, parseInt(e.target.value)); }}
-          style={{ width: 38, padding: "3px 1px", fontSize: 10, background: "#1e293b", border: "1px solid " + c + "88", borderRadius: 3, color: c, fontFamily: "var(--m)", fontWeight: 700, outline: "none", textAlign: "center" }}>
+          style={{ width: 38, padding: "3px 1px", fontSize: 12, background: "#1e293b", border: "1px solid " + c + "88", borderRadius: 3, color: c, fontFamily: "var(--m)", fontWeight: 700, outline: "none", textAlign: "center" }}>
           {[0,5,6,7,8,9,10].map(function(v) { return (<option key={v} value={v} style={{background:"#1e293b",color:v===0?"#94a3b8":c}}>{v === 0 ? "-" : "Lv" + v}</option>); })}
         </select>
       </div>
@@ -1980,9 +1980,9 @@ function LineupPage(p) {
   var batRow = function(slot, pl, idx) {
     if (!pl) return (
       <div key={slot} onClick={function() { setPickerSlot(slot); }} style={{ display: "grid", gridTemplateColumns: "32px 68px 1fr", alignItems: "center", gap: 6, padding: "8px 10px", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)", cursor: "pointer" }}>
-        <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--td)", fontFamily: "var(--m)" }}>{slot}</div>
+        <div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--td)", fontFamily: "var(--m)" }}>{slot}</div>
         <div style={{ width: 64, height: 88, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--inner)" }}><span style={{ fontSize: 20, opacity: 0.2 }}>{"+"}</span></div>
-        <div style={{ fontSize: 10, color: "var(--td)" }}>{"클릭하여 선수 등록"}</div>
+        <div style={{ fontSize: 12, color: "var(--td)" }}>{"클릭하여 선수 등록"}</div>
       </div>
     );
     var calc = calcBatSD(pl, slot);
@@ -1998,30 +1998,30 @@ function LineupPage(p) {
           onClick={function() { setSelId(isSel ? null : pl.id); }}
           style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "32px 68px minmax(100px,1fr) 80px 120px 75px 46px 110px 40px 46px", alignItems: "center", gap: 28, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acc)", fontFamily: "var(--h)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-            {idx > 0 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx-1); }} style={{ fontSize: 10, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
+            {idx > 0 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx-1); }} style={{ fontSize: 12, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
             <span>{idx + 1}</span>
-            {idx < 8 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx+1); }} style={{ fontSize: 10, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▼"}</span>)}
+            {idx < 8 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx+1); }} style={{ fontSize: 12, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▼"}</span>)}
           </div>
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span></div>
-            <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
+            <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} /></div>) : null}
           {!mob && (<React.Fragment>
             <div style={{ textAlign: "left" }}><GS val={calc.total.toFixed(1)} size={28} /></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: 40 }}>
               {[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"]].map(function(it) {
-                return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 13, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 13, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
+                return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 15, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
               })}
             </div>
             <div style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-              <div style={{ fontSize: 11, color: pctColor((pl.trainP||0)*getW().p+(pl.trainA||0)*getW().a+(pl.trainE||0)*getW().e, allBatTrainScores, "gold") }}>{"훈련"}</div>
-              <span style={{ fontSize: 13, fontFamily: "var(--m)" }}><span style={{ color: "#EF5350" }}>{"+" + (pl.trainP || 0)}</span>{" "}<span style={{ color: "#42A5F5" }}>{"+" + (pl.trainA || 0)}</span>{" "}<span style={{ color: "#66BB6A" }}>{"+" + (pl.trainE || 0)}</span></span>
+              <div style={{ fontSize: 13, color: pctColor((pl.trainP||0)*getW().p+(pl.trainA||0)*getW().a+(pl.trainE||0)*getW().e, allBatTrainScores, "gold") }}>{"훈련"}</div>
+              <span style={{ fontSize: 15, fontFamily: "var(--m)" }}><span style={{ color: "#EF5350" }}>{"+" + (pl.trainP || 0)}</span>{" "}<span style={{ color: "#42A5F5" }}>{"+" + (pl.trainA || 0)}</span>{" "}<span style={{ color: "#66BB6A" }}>{"+" + (pl.trainE || 0)}</span></span>
             </div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "var(--td)" }}>{"특훈"}</div>
-              <span style={{ fontSize: 13, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specPower || 0) + "/" + (pl.specAccuracy || 0) + "/" + (pl.specEye || 0)}</span>
+              <div style={{ fontSize: 13, color: "var(--td)" }}>{"특훈"}</div>
+              <span style={{ fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specPower || 0) + "/" + (pl.specAccuracy || 0) + "/" + (pl.specEye || 0)}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               {pl.skill1 && (<SkBadge name={pl.skill1} lv={pl.s1Lv} />)}
@@ -2030,11 +2030,11 @@ function LineupPage(p) {
             </div>
             {(function(){
               var skSc=Math.round((getSkillScore(pl.skill1,pl.s1Lv||0,"타자")+getSkillScore(pl.skill2,pl.s2Lv||0,"타자")+getSkillScore(pl.skill3,pl.s3Lv||0,"타자"))*100)/100;
-              return (<div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color: pctColor(skSc, allBatSkillScores, "gold"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
+              return (<div style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: pctColor(skSc, allBatSkillScores, "gold"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
             })()}
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "var(--td)" }}>{"잠재"}</div>
-              <div style={{ fontSize: 13, color: "var(--t2)" }}>{(<span><span style={{fontSize:9,color:"var(--td)"}}>풀</span>{pl.pot1||"-"} <span style={{fontSize:9,color:"var(--td)"}}>클</span>{pl.pot2||"-"}</span>)}</div>
+              <div style={{ fontSize: 13, color: "var(--td)" }}>{"잠재"}</div>
+              <div style={{ fontSize: 15, color: "var(--t2)" }}>{(<span><span style={{fontSize:11,color:"var(--td)"}}>풀</span>{pl.pot1||"-"} <span style={{fontSize:11,color:"var(--td)"}}>클</span>{pl.pot2||"-"}</span>)}</div>
             </div>
           </React.Fragment>)}
         </div>
@@ -2046,7 +2046,7 @@ function LineupPage(p) {
             if (!photos || photos.length === 0) return null;
             return (
               <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontSize:11,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
+                <span style={{fontSize:13,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
                 {photos.map(function(url, i){
                   var isCur = pl.photoUrl === url;
                   var pos = (PHOTO_POS_MAP[pl.name]!==undefined?PHOTO_POS_MAP[pl.name]:20)+"%";
@@ -2057,17 +2057,17 @@ function LineupPage(p) {
                     </div>
                   );
                 })}
-                {pl.photoUrl && (<button onClick={function(){updatePl(pl.id,"photoUrl","");}} style={{padding:"3px 8px",fontSize:10,background:"rgba(239,83,80,0.08)",border:"1px solid rgba(239,83,80,0.2)",borderRadius:4,color:"#EF5350",cursor:"pointer",flexShrink:0}}>{"사진 제거"}</button>)}
+                {pl.photoUrl && (<button onClick={function(){updatePl(pl.id,"photoUrl","");}} style={{padding:"3px 8px",fontSize:12,background:"rgba(239,83,80,0.08)",border:"1px solid rgba(239,83,80,0.2)",borderRadius:4,color:"#EF5350",cursor:"pointer",flexShrink:0}}>{"사진 제거"}</button>)}
               </div>
             );
           })()}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"강화"}</div><select value={pl.enhance||""} onChange={function(e){updatePl(pl.id,"enhance",e.target.value);}} style={{ padding: "3px 4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>{["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e){return(<option key={e} value={e} style={{background:"#1e293b",color:"#e2e8f0"}}>{e}</option>);})}</select></div>
-            {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 13, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
-            <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "trainP", pl.trainP, "#EF5350")}<span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "trainA", pl.trainA, "#42A5F5")}<span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "trainE", pl.trainE, "#66BB6A")}</div></div>
-            <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "specPower", pl.specPower, "#EF5350", 15)}<span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "specAccuracy", pl.specAccuracy, "#42A5F5", 15)}<span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "specEye", pl.specEye, "#66BB6A", 15)}</div></div>
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3, alignItems: "center" }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"풀스윙"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"클러치"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"강화"}</div><select value={pl.enhance||""} onChange={function(e){updatePl(pl.id,"enhance",e.target.value);}} style={{ padding: "3px 4px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>{["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e){return(<option key={e} value={e} style={{background:"#1e293b",color:"#e2e8f0"}}>{e}</option>);})}</select></div>
+            {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 15, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "trainP", pl.trainP, "#EF5350")}<span style={{ fontSize: 13, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "trainA", pl.trainA, "#42A5F5")}<span style={{ fontSize: 13, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "trainE", pl.trainE, "#66BB6A")}</div></div>
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "specPower", pl.specPower, "#EF5350", 15)}<span style={{ fontSize: 13, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "specAccuracy", pl.specAccuracy, "#42A5F5", 15)}<span style={{ fontSize: 13, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "specEye", pl.specEye, "#66BB6A", 15)}</div></div>
+            <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3, alignItems: "center" }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"풀스윙"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:12,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"클러치"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_BAT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:12,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
+            <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
           </div>
         </div>)}
       </React.Fragment>
@@ -2078,9 +2078,9 @@ function LineupPage(p) {
   var pitRow = function(slot, pl, idx, showWt) {
     if (!pl) return (
       <div key={slot} onClick={function() { setPickerSlot(slot); }} style={{ display: "grid", gridTemplateColumns: "32px 68px 1fr", alignItems: "center", gap: 6, padding: "8px 10px", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)", cursor: "pointer" }}>
-        <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--td)", fontFamily: "var(--m)" }}>{slot}</div>
+        <div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--td)", fontFamily: "var(--m)" }}>{slot}</div>
         <div style={{ width: 64, height: 88, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--inner)" }}><span style={{ fontSize: 20, opacity: 0.2 }}>{"+"}</span></div>
-        <div style={{ fontSize: 10, color: "var(--td)" }}>{"클릭하여 선수 등록"}</div>
+        <div style={{ fontSize: 12, color: "var(--td)" }}>{"클릭하여 선수 등록"}</div>
       </div>
     );
     var calc = calcPitSD(pl, slot);
@@ -2092,23 +2092,23 @@ function LineupPage(p) {
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span></div>
-            <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
+            <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" /></div>) : null}
           {!mob && (<React.Fragment>
             <div style={{ textAlign: "left" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" /></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 3, marginLeft: 40 }}>
               {[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"]].map(function(it) {
-                return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 13, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 13, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
+                return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 15, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
               })}
             </div>
             <div style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-              <div style={{ fontSize: 11, color: pctColor((pl.trainC||0)*getW().c+(pl.trainS||0)*getW().s, allPitTrainScores, "gold") }}>{"훈련"}</div>
-              <span style={{ fontSize: 13, fontFamily: "var(--m)" }}><span style={{ color: "#AB47BC" }}>{"+" + (pl.trainC || 0)}</span>{" "}<span style={{ color: "#FF7043" }}>{"+" + (pl.trainS || 0)}</span></span>
+              <div style={{ fontSize: 13, color: pctColor((pl.trainC||0)*getW().c+(pl.trainS||0)*getW().s, allPitTrainScores, "gold") }}>{"훈련"}</div>
+              <span style={{ fontSize: 15, fontFamily: "var(--m)" }}><span style={{ color: "#AB47BC" }}>{"+" + (pl.trainC || 0)}</span>{" "}<span style={{ color: "#FF7043" }}>{"+" + (pl.trainS || 0)}</span></span>
             </div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "var(--td)" }}>{"특훈"}</div>
-              <span style={{ fontSize: 13, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specChange || 0) + "/" + (pl.specStuff || 0)}</span>
+              <div style={{ fontSize: 13, color: "var(--td)" }}>{"특훈"}</div>
+              <span style={{ fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specChange || 0) + "/" + (pl.specStuff || 0)}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               {pl.skill1 && (<SkBadge name={pl.skill1} lv={pl.s1Lv} />)}
@@ -2118,11 +2118,11 @@ function LineupPage(p) {
             {(function(){
               var pt2=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
               var skSc=Math.round((getSkillScore(pl.skill1,pl.s1Lv||0,pt2)+getSkillScore(pl.skill2,pl.s2Lv||0,pt2)+getSkillScore(pl.skill3,pl.s3Lv||0,pt2))*100)/100;
-              return (<div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color: pctColor(skSc, allPitSkillScores, "blue"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
+              return (<div style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: pctColor(skSc, allPitSkillScores, "blue"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
             })()}
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "var(--td)" }}>{"잠재"}</div>
-              <div style={{ fontSize: 13, color: "var(--t2)" }}>{(<span><span style={{fontSize:9,color:"var(--td)"}}>장</span>{pl.pot1||"-"} <span style={{fontSize:9,color:"var(--td)"}}>침</span>{pl.pot2||"-"}</span>)}</div>
+              <div style={{ fontSize: 13, color: "var(--td)" }}>{"잠재"}</div>
+              <div style={{ fontSize: 15, color: "var(--t2)" }}>{(<span><span style={{fontSize:11,color:"var(--td)"}}>장</span>{pl.pot1||"-"} <span style={{fontSize:11,color:"var(--td)"}}>침</span>{pl.pot2||"-"}</span>)}</div>
             </div>
           </React.Fragment>)}
         </div>
@@ -2134,7 +2134,7 @@ function LineupPage(p) {
             if (!photos || photos.length === 0) return null;
             return (
               <div style={{marginBottom:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontSize:11,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
+                <span style={{fontSize:13,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
                 {photos.map(function(url, i){
                   var isCur = pl.photoUrl === url;
                   var pos = (PHOTO_POS_MAP[pl.name]!==undefined?PHOTO_POS_MAP[pl.name]:20)+"%";
@@ -2145,18 +2145,18 @@ function LineupPage(p) {
                     </div>
                   );
                 })}
-                {pl.photoUrl && (<button onClick={function(){updatePl(pl.id,"photoUrl","");}} style={{padding:"3px 8px",fontSize:10,background:"rgba(239,83,80,0.08)",border:"1px solid rgba(239,83,80,0.2)",borderRadius:4,color:"#EF5350",cursor:"pointer",flexShrink:0}}>{"사진 제거"}</button>)}
+                {pl.photoUrl && (<button onClick={function(){updatePl(pl.id,"photoUrl","");}} style={{padding:"3px 8px",fontSize:12,background:"rgba(239,83,80,0.08)",border:"1px solid rgba(239,83,80,0.2)",borderRadius:4,color:"#EF5350",cursor:"pointer",flexShrink:0}}>{"사진 제거"}</button>)}
               </div>
             );
           })()}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"강화"}</div><select value={pl.enhance||""} onChange={function(e){updatePl(pl.id,"enhance",e.target.value);}} style={{ padding: "3px 4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>{["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e){return(<option key={e} value={e} style={{background:"#1e293b",color:"#e2e8f0"}}>{e}</option>);})}</select></div>
-            {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 13, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
-            <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}</div></div>
-            <div><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}<span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}</div></div>
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"강화"}</div><select value={pl.enhance||""} onChange={function(e){updatePl(pl.id,"enhance",e.target.value);}} style={{ padding: "3px 4px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>{["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e){return(<option key={e} value={e} style={{background:"#1e293b",color:"#e2e8f0"}}>{e}</option>);})}</select></div>
+            {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 15, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}</div></div>
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}</div></div>
             
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"장타억제"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"침착"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:10,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
-            <div><div style={{ fontSize: 9, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
+            <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"장타억제"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:12,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"침착"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:12,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
+            <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
           </div>
         </div>)}
       </React.Fragment>
@@ -2175,10 +2175,10 @@ function LineupPage(p) {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <DeckDropdown decks={p.decks||[]} curDeckId={p.curDeckId} onSwitch={p.onSwitchDeck} onAdd={p.onAddDeck} onDelete={p.onDeleteDeck}/>
           </div>
-          <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--td)" }}>{"가중치: 파워 " + LIVE_WEIGHTS.p + " / 정확 " + LIVE_WEIGHTS.a + " / 선구 " + LIVE_WEIGHTS.e + " / 변화 " + LIVE_WEIGHTS.c + " / 구위 " + LIVE_WEIGHTS.s}</p>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--td)" }}>{"가중치: 파워 " + LIVE_WEIGHTS.p + " / 정확 " + LIVE_WEIGHTS.a + " / 선구 " + LIVE_WEIGHTS.e + " / 변화 " + LIVE_WEIGHTS.c + " / 구위 " + LIVE_WEIGHTS.s}</p>
         </div>
         <div style={{ textAlign: mob ? "left" : "right" }}>
-          <div style={{ fontSize: 9, color: "var(--td)", letterSpacing: 1 }}>{"TOTAL SCORE"}</div>
+          <div style={{ fontSize: 11, color: "var(--td)", letterSpacing: 1 }}>{"TOTAL SCORE"}</div>
           <GS val={totalScore.toFixed(1)} size={mob ? 28 : 36} grad="linear-gradient(135deg,#FFD54F,#FF8F00,#F44336)" />
         </div>
       </div>
@@ -2190,9 +2190,9 @@ function LineupPage(p) {
         </div>
         <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--t2)", letterSpacing: 1, marginBottom: 8 }}>{"STARTING ROTATION"}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t2)", letterSpacing: 1, marginBottom: 8 }}>{"STARTING ROTATION"}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {SP_SLOTS.map(function(pos) { var pl = pick(pos); return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} /></div>) : (<div key={pos} onClick={function() { setPickerSlot(pos); }} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--re)" }}><span style={{ fontSize: 9, color: "var(--td)" }}>{pos}</span></div>); })}
+              {SP_SLOTS.map(function(pos) { var pl = pick(pos); return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} /></div>) : (<div key={pos} onClick={function() { setPickerSlot(pos); }} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--re)" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{pos}</span></div>); })}
             </div>
           </div>
           <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} />
@@ -2234,7 +2234,7 @@ function LineupPage(p) {
                       <span style={{ fontSize: 16, opacity: 0.4 }}>{"⚾"}</span>
                       <span style={{ fontSize: 7, color: "#fff", fontWeight: 700 }}>{bnPl.subPosition}</span>
                     </div>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{bnPl.name.replace(/\d+$/, "")}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{bnPl.name.replace(/\d+$/, "")}</span>
                     <Badge type={bnPl.cardType} />
                   </div>
                 );
@@ -2244,12 +2244,12 @@ function LineupPage(p) {
                   <div style={{ width: 42, height: 56, borderRadius: 5, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4 }}>
                     <span style={{ fontSize: 16, opacity: 0.15 }}>{"+"}</span>
                   </div>
-                  <span style={{ fontSize: 9, color: "var(--td)" }}>{"후보 " + n}</span>
+                  <span style={{ fontSize: 11, color: "var(--td)" }}>{"후보 " + n}</span>
                 </div>
               );
             })}
           </div>
-          <p style={{ fontSize: 9, color: "var(--td)", marginTop: 8, textAlign: "center" }}>{"후보선수는 세트덱 포인트에 기여합니다"}</p>
+          <p style={{ fontSize: 11, color: "var(--td)", marginTop: 8, textAlign: "center" }}>{"후보선수는 세트덱 포인트에 기여합니다"}</p>
         </div>
       </div>
 
@@ -2259,7 +2259,7 @@ function LineupPage(p) {
         width: 28, height: 56, borderRadius: "8px 0 0 8px", zIndex: 191,
         background: "linear-gradient(180deg,rgba(255,213,79,0.15),rgba(255,143,0,0.1))",
         border: "1px solid rgba(255,213,79,0.2)", borderRight: "none",
-        color: "var(--acc)", cursor: "pointer", fontSize: 14, fontWeight: 700,
+        color: "var(--acc)", cursor: "pointer", fontSize: 16, fontWeight: 700,
         display: "flex", alignItems: "center", justifyContent: "center",
         transition: "right 0.3s ease", boxShadow: "-2px 0 12px rgba(0,0,0,0.3)"
       }}>
@@ -2314,9 +2314,9 @@ function PosTrainRow(rp) {
   var colTpl = "70px 56px " + stats.map(function() { return "1fr"; }).join(" ");
   return (
     <div style={{ display: "grid", gridTemplateColumns: colTpl, gap: 6, padding: "6px 14px", alignItems: "center", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)" }}>
-      <div style={{ fontWeight: 700, color: "var(--t1)", fontSize: 11 }}>{pos}</div>
+      <div style={{ fontWeight: 700, color: "var(--t1)", fontSize: 13 }}>{pos}</div>
       <div style={{ textAlign: "center" }}>
-        <select value={String(lv)} onChange={function(e) { upd(pos, "level", parseInt(e.target.value)); }} style={{ width: 50, padding: "4px 2px", textAlign: "center", background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
+        <select value={String(lv)} onChange={function(e) { upd(pos, "level", parseInt(e.target.value)); }} style={{ width: 50, padding: "4px 2px", textAlign: "center", background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", fontSize: 14, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
           {lvOpts.map(function(v) { return (<option key={v} value={v}>{v}</option>); })}
         </select>
         <div style={{ fontSize: 7, color: "var(--td)", marginTop: 1 }}>{"/" + mx}</div>
@@ -2327,13 +2327,13 @@ function PosTrainRow(rp) {
         var reset = d["r" + i] || 0;
         return (
           <div key={stat} style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "center" }}>
-            <span style={{ fontSize: 10, color: colors[i], fontFamily: "var(--m)", fontWeight: 800 }}>{base}</span>
-            <span style={{ fontSize: 9, color: "var(--td)" }}>{"+"}</span>
-            <select value={String(reset)} onChange={function(e) { upd(pos, "r" + i, parseInt(e.target.value)); }} style={{ width: 34, padding: "4px 1px", textAlign: "center", background: "#1e293b", border: "1px solid " + colors[i] + "88", borderRadius: 4, color: colors[i], fontSize: 11, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
+            <span style={{ fontSize: 12, color: colors[i], fontFamily: "var(--m)", fontWeight: 800 }}>{base}</span>
+            <span style={{ fontSize: 11, color: "var(--td)" }}>{"+"}</span>
+            <select value={String(reset)} onChange={function(e) { upd(pos, "r" + i, parseInt(e.target.value)); }} style={{ width: 34, padding: "4px 1px", textAlign: "center", background: "#1e293b", border: "1px solid " + colors[i] + "88", borderRadius: 4, color: colors[i], fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
               {RS_OPTS.map(function(v) { return (<option key={v} value={v}>{v}</option>); })}
             </select>
-            <span style={{ fontSize: 9, color: "var(--td)" }}>{"="}</span>
-            <span style={{ fontSize: 11, color: colors[i], fontFamily: "var(--m)", fontWeight: 800 }}>{base + reset}</span>
+            <span style={{ fontSize: 11, color: "var(--td)" }}>{"="}</span>
+            <span style={{ fontSize: 13, color: colors[i], fontFamily: "var(--m)", fontWeight: 800 }}>{base + reset}</span>
           </div>
         );
       })}
@@ -2371,14 +2371,14 @@ function PosTrainPage(p) {
   return (
     <div style={{ padding: mob ? 12 : 18, maxWidth: 900, paddingBottom: mob ? 80 : 18 }}>
       <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: "0 0 4px" }}>{"포지션 특훈"}</h2>
-      <p style={{ fontSize: 10, color: "var(--td)", margin: "0 0 12px" }}>{"계정 귀속 - 포지션별 레벨과 재설정 효과를 입력하세요"}</p>
+      <p style={{ fontSize: 12, color: "var(--td)", margin: "0 0 12px" }}>{"계정 귀속 - 포지션별 레벨과 재설정 효과를 입력하세요"}</p>
       {groups.map(function(grp) {
         return (
           <div key={grp.label} style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 14 }}>
             <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--bd)", background: "rgba(255,213,79,0.02)" }}>
-              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", letterSpacing: 1 }}>{grp.label}</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", letterSpacing: 1 }}>{grp.label}</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "70px 56px " + grp.stats.map(function() { return "1fr"; }).join(" "), gap: 6, padding: "6px 14px", borderBottom: "1px solid var(--bd)", fontSize: 9, fontWeight: 700, color: "var(--td)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "70px 56px " + grp.stats.map(function() { return "1fr"; }).join(" "), gap: 6, padding: "6px 14px", borderBottom: "1px solid var(--bd)", fontSize: 11, fontWeight: 700, color: "var(--td)" }}>
               <div>{"포지션"}</div>
               <div style={{ textAlign: "center" }}>{"레벨"}</div>
               {grp.stats.map(function(s, i) { return (<div key={s} style={{ textAlign: "center", color: grp.colors[i] }}>{s + " (기본+재설정)"}</div>); })}
@@ -2435,7 +2435,7 @@ function LoginPage(p) {
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontSize: 52, marginBottom: 10 }}>{"⚾"}</div>
           <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0, fontFamily: "var(--h)", letterSpacing: 4, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", color: "transparent" }}>{"DECK MANAGER"}</h1>
-          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 8, fontFamily: "var(--m)", letterSpacing: 2 }}>{"컴투스 프로야구 v26"}</p>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", marginTop: 8, fontFamily: "var(--m)", letterSpacing: 2 }}>{"컴투스 프로야구 v26"}</p>
         </div>
 
         {/* Google Login - Main CTA */}
@@ -2458,37 +2458,37 @@ function LoginPage(p) {
         {/* Google benefits */}
         <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: 20 }}>
           {["여러 팀 관리", "클라우드 저장", "기기 간 동기화"].map(function(t) {
-            return (<span key={t} style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.03)", padding: "3px 8px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" }}>{t}</span>);
+            return (<span key={t} style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.03)", padding: "3px 8px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" }}>{t}</span>);
           })}
         </div>
 
         {/* Guest link */}
         {!guestOpen ? (
           <div style={{ textAlign: "center" }}>
-            <button onClick={function() { setGuestOpen(true); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.25)", cursor: "pointer", fontSize: 12, padding: "8px 0", textDecoration: "underline", textUnderlineOffset: 3 }}>
+            <button onClick={function() { setGuestOpen(true); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.25)", cursor: "pointer", fontSize: 14, padding: "8px 0", textDecoration: "underline", textUnderlineOffset: 3 }}>
               {"게스트로 시작하기"}
             </button>
-            <p style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", marginTop: 4 }}>{"1개 팀만 관리 가능 · 브라우저에 데이터 저장"}</p>
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", marginTop: 4 }}>{"1개 팀만 관리 가능 · 브라우저에 데이터 저장"}</p>
           </div>
         ) : (
           <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 16, border: "1px solid rgba(255,255,255,0.06)" }}>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 8 }}>{"게스트 모드"}</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 8 }}>{"게스트 모드"}</div>
             <div style={{ display: "flex", gap: 8 }}>
               <input type="text" value={nick} onChange={function(e) { setNick(e.target.value); }} placeholder="닉네임 입력" onKeyDown={function(e) { if (e.key === "Enter") guestLogin(); }}
-                style={{ flex: 1, padding: "10px 14px", fontSize: 13, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff", outline: "none", boxSizing: "border-box" }} />
-              <button onClick={guestLogin} disabled={ld} style={{ padding: "10px 20px", fontSize: 13, fontWeight: 800, background: ld ? "rgba(255,213,79,0.2)" : "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 8, cursor: ld ? "wait" : "pointer", color: "#1a1100", fontFamily: "var(--h)", whiteSpace: "nowrap" }}>
+                style={{ flex: 1, padding: "10px 14px", fontSize: 15, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff", outline: "none", boxSizing: "border-box" }} />
+              <button onClick={guestLogin} disabled={ld} style={{ padding: "10px 20px", fontSize: 15, fontWeight: 800, background: ld ? "rgba(255,213,79,0.2)" : "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 8, cursor: ld ? "wait" : "pointer", color: "#1a1100", fontFamily: "var(--h)", whiteSpace: "nowrap" }}>
                 {ld ? "..." : "시작"}
               </button>
             </div>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 10, padding: "8px 10px", background: "rgba(255,152,0,0.05)", borderRadius: 6, border: "1px solid rgba(255,152,0,0.1)" }}>
-              <span style={{ fontSize: 12, flexShrink: 0, marginTop: 1 }}>{"!"}</span>
-              <p style={{ fontSize: 9, color: "rgba(255,152,0,0.5)", margin: 0, lineHeight: 1.5 }}>{"게스트 데이터는 이 브라우저에만 저장됩니다. 브라우저 데이터 삭제 시 초기화될 수 있으며, 1개 팀만 관리 가능합니다. Google 계정 연동 시 여러 팀을 영구 저장할 수 있습니다."}</p>
+              <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{"!"}</span>
+              <p style={{ fontSize: 11, color: "rgba(255,152,0,0.5)", margin: 0, lineHeight: 1.5 }}>{"게스트 데이터는 이 브라우저에만 저장됩니다. 브라우저 데이터 삭제 시 초기화될 수 있으며, 1개 팀만 관리 가능합니다. Google 계정 연동 시 여러 팀을 영구 저장할 수 있습니다."}</p>
             </div>
           </div>
         )}
 
         {/* Footer */}
-        <p style={{ fontSize: 9, color: "rgba(255,255,255,0.12)", textAlign: "center", marginTop: 24, lineHeight: 1.5 }}>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.12)", textAlign: "center", marginTop: 24, lineHeight: 1.5 }}>
           {"로그인 시 서비스 이용약관 및 개인정보처리방침에 동의합니다"}
         </p>
       </div>
@@ -2510,8 +2510,8 @@ function DeckDropdown(p){
   return(
     <div style={{position:"relative"}}>
       <button onClick={function(){setOpen(!open);setConfirmDel(null);}}
-        style={{display:"flex",alignItems:"center",gap:5,padding:"6px 10px",background:"rgba(255,255,255,0.05)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--acc)",cursor:"pointer",fontSize:12,fontWeight:800,fontFamily:"var(--h)",letterSpacing:1,maxWidth:160}}>
-        <span style={{fontSize:14}}>⚾</span>
+        style={{display:"flex",alignItems:"center",gap:5,padding:"6px 10px",background:"rgba(255,255,255,0.05)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--acc)",cursor:"pointer",fontSize:14,fontWeight:800,fontFamily:"var(--h)",letterSpacing:1,maxWidth:160}}>
+        <span style={{fontSize:16}}>⚾</span>
         <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</span>
         <span style={{fontSize:8,color:"var(--td)",marginLeft:"auto"}}>{open?"▲":"▼"}</span>
       </button>
@@ -2525,21 +2525,21 @@ function DeckDropdown(p){
               return(
                 <div key={d.deckId} style={{display:"flex",alignItems:"center",borderBottom:"1px solid var(--bd)",background:isCur?"rgba(255,213,79,0.06)":"transparent"}}>
                   <button onClick={function(){p.onSwitch(d.deckId);setOpen(false);setConfirmDel(null);}}
-                    style={{flex:1,display:"flex",alignItems:"center",gap:6,padding:"10px 14px",background:"transparent",border:"none",color:isCur?"var(--acc)":"var(--t1)",fontSize:12,fontWeight:isCur?800:500,cursor:"pointer",textAlign:"left"}}>
+                    style={{flex:1,display:"flex",alignItems:"center",gap:6,padding:"10px 14px",background:"transparent",border:"none",color:isCur?"var(--acc)":"var(--t1)",fontSize:14,fontWeight:isCur?800:500,cursor:"pointer",textAlign:"left"}}>
                     {isCur&&<span style={{fontSize:8}}>▶</span>}
                     <span>{d.teamName}</span>
                   </button>
                   {isDel?(
                     <div style={{display:"flex",gap:4,padding:"0 8px"}}>
                       <button onClick={function(e){e.stopPropagation();p.onDelete(d.deckId);setConfirmDel(null);setOpen(false);}}
-                        style={{padding:"3px 8px",fontSize:10,background:"#c62828",border:"none",borderRadius:4,color:"#fff",cursor:"pointer",fontWeight:700}}>{"삭제"}</button>
+                        style={{padding:"3px 8px",fontSize:12,background:"#c62828",border:"none",borderRadius:4,color:"#fff",cursor:"pointer",fontWeight:700}}>{"삭제"}</button>
                       <button onClick={function(e){e.stopPropagation();setConfirmDel(null);}}
-                        style={{padding:"3px 8px",fontSize:10,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"취소"}</button>
+                        style={{padding:"3px 8px",fontSize:12,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"취소"}</button>
                     </div>
                   ):(
                     <button onClick={function(e){e.stopPropagation();setConfirmDel(d.deckId);}}
                       title="덱 삭제"
-                      style={{padding:"0 10px",height:"100%",background:"transparent",border:"none",color:"rgba(255,255,255,0.2)",cursor:"pointer",fontSize:14,lineHeight:1}}
+                      style={{padding:"0 10px",height:"100%",background:"transparent",border:"none",color:"rgba(255,255,255,0.2)",cursor:"pointer",fontSize:16,lineHeight:1}}
                       onMouseEnter={function(e){e.currentTarget.style.color="#ef5350";}}
                       onMouseLeave={function(e){e.currentTarget.style.color="rgba(255,255,255,0.2)";}}
                     >{"✕"}</button>
@@ -2549,13 +2549,13 @@ function DeckDropdown(p){
             })}
             {canAdd&&(
               <button onClick={function(){p.onAdd();setOpen(false);}}
-                style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"10px 14px",background:"transparent",border:"none",color:"#81C784",fontSize:12,fontWeight:700,cursor:"pointer",textAlign:"left"}}>
+                style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"10px 14px",background:"transparent",border:"none",color:"#81C784",fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left"}}>
                 <span>{"＋ 덱 추가"}</span>
-                <span style={{fontSize:9,color:"var(--td)"}}>{(p.decks||[]).length+"/5"}</span>
+                <span style={{fontSize:11,color:"var(--td)"}}>{(p.decks||[]).length+"/5"}</span>
               </button>
             )}
             {!canAdd&&(
-              <div style={{padding:"8px 14px",fontSize:10,color:"var(--td)",textAlign:"center"}}>{"최대 5개 · ✕ 버튼으로 삭제 가능"}</div>
+              <div style={{padding:"8px 14px",fontSize:12,color:"var(--td)",textAlign:"center"}}>{"최대 5개 · ✕ 버튼으로 삭제 가능"}</div>
             )}
           </div>
         </React.Fragment>
@@ -2573,11 +2573,12 @@ function Nav(p){
   if(p.mobile){return(
     <React.Fragment>
       <div style={{position:"fixed",top:0,left:0,right:0,height:44,zIndex:110,background:"var(--side)",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",padding:"0 10px",gap:8}}>
-        <span style={{fontSize:10,fontWeight:900,fontFamily:"var(--h)",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",whiteSpace:"nowrap"}}>{"DECK"}</span>
+        <span style={{fontSize:12,fontWeight:900,fontFamily:"var(--h)",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",whiteSpace:"nowrap"}}>{"DECK"}</span>
         <DeckDropdown {...deckProps}/>
+        <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px"}}>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18}}>{t.icon}</span><span style={{fontSize:9,fontWeight:p.tab===t.id?700:500}}>{t.label}</span></button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18}}>{t.icon}</span><span style={{fontSize:11,fontWeight:p.tab===t.id?700:500}}>{t.label}</span></button>);})}
       </div>
     </React.Fragment>
   );}
@@ -2588,10 +2589,11 @@ function Nav(p){
       {open&&(<div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:150}}/>)}
       <div style={{position:"fixed",left:open?0:-260,top:0,bottom:0,width:240,background:"var(--side)",borderRight:"1px solid var(--bd)",zIndex:160,transition:"left 0.25s ease",display:"flex",flexDirection:"column",padding:"14px 0 16px"}}>
         <div style={{padding:"0 14px 12px"}}><DeckDropdown {...deckProps}/></div>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid #FFD54F":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:12,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}</button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}</button>);})}
         <div style={{marginTop:"auto",padding:"12px 16px",borderTop:"1px solid var(--bd)"}}>
-          {p.isAdmin&&(<div style={{fontSize:9,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
-          <button onClick={p.logout} style={{width:"100%",padding:8,fontSize:10,background:"rgba(255,255,255,0.03)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
+          {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
+          <button onClick={p.toggleTheme} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:6}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
+          <button onClick={p.logout} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
         </div>
       </div>
     </React.Fragment>
@@ -2600,25 +2602,26 @@ function Nav(p){
   return(
     <div style={{width:200,minHeight:"100vh",background:"var(--side)",borderRight:"1px solid var(--bd)",display:"flex",flexDirection:"column",padding:"14px 0",flexShrink:0}}>
       <div style={{padding:"0 14px",marginBottom:12}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}><span style={{fontSize:18}}>{"⚾"}</span><div><div style={{fontSize:11,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{"DECK MANAGER"}</div><div style={{fontSize:7,color:"var(--td)",letterSpacing:1}}>{"COM2US PRO BASEBALL v26"}</div></div></div>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}><span style={{fontSize:18}}>{"⚾"}</span><div><div style={{fontSize:13,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{"DECK MANAGER"}</div><div style={{fontSize:7,color:"var(--td)",letterSpacing:1}}>{"COM2US PRO BASEBALL v26"}</div></div></div>
         <DeckDropdown {...deckProps}/>
       </div>
       <div style={{flex:1}}>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid #FFD54F":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:11,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40}}><span style={{fontSize:13}}>{t.icon}</span>{t.label}</button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:13,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40}}><span style={{fontSize:15}}>{t.icon}</span>{t.label}</button>);})}
       </div>
       <div style={{padding:"10px 14px",borderTop:"1px solid var(--bd)"}}>
-        {p.isAdmin&&(<div style={{fontSize:9,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
+        {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
           {p.authType==="google"?(
             <div style={{width:26,height:26,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
               <svg width="14" height="14" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
             </div>
           ):(
-            <div style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#1a1100"}}>{p.user[0]}</div>
+            <div style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#1a1100"}}>{p.user[0]}</div>
           )}
-          <div><div style={{fontSize:10,fontWeight:700,color:"var(--t1)"}}>{p.user}</div><div style={{fontSize:7,color:"var(--td)"}}>{p.authType==="google"?"Google 계정":"게스트"}</div></div>
+          <div><div style={{fontSize:12,fontWeight:700,color:"var(--t1)"}}>{p.user}</div><div style={{fontSize:9,color:"var(--td)"}}>{p.authType==="google"?"Google 계정":"게스트"}</div></div>
         </div>
-        <button onClick={p.logout} style={{width:"100%",padding:5,fontSize:9,background:"rgba(255,255,255,0.03)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
+        <button onClick={p.toggleTheme} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:4}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
+        <button onClick={p.logout} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
       </div>
     </div>
   );
@@ -2635,14 +2638,14 @@ function EnhancePage(p){
     <div style={{padding:mob?12:18,maxWidth:900,paddingBottom:mob?80:18}}>
       <h2 style={{fontSize:mob?16:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 12px"}}>{"강화/각성 참조 테이블"}</h2>
       <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
-        {Object.keys(ENHANCE).map(function(ct){return(<button key={ct} onClick={function(){setVt(ct);}} style={{padding:"6px 12px",borderRadius:5,fontSize:11,fontWeight:ct===vt?800:500,background:ct===vt?"var(--ta)":"var(--inner)",color:ct===vt?"var(--acc)":"var(--t2)",border:ct===vt?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{ct}</button>);})}
+        {Object.keys(ENHANCE).map(function(ct){return(<button key={ct} onClick={function(){setVt(ct);}} style={{padding:"6px 12px",borderRadius:5,fontSize:13,fontWeight:ct===vt?800:500,background:ct===vt?"var(--ta)":"var(--inner)",color:ct===vt?"var(--acc)":"var(--t2)",border:ct===vt?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{ct}</button>);})}
       </div>
       <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",overflow:"hidden"}}>
         <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
             <thead><tr>
               <th style={{padding:"8px 10px",textAlign:"left",color:"var(--td)",borderBottom:"1px solid var(--bd)",fontWeight:600}}>{"능력치"}</th>
-              {hdrs.map(function(h){return(<th key={h} style={{padding:"8px 6px",textAlign:"center",color:"var(--td)",borderBottom:"1px solid var(--bd)",fontWeight:600,fontFamily:"var(--m)",fontSize:10,whiteSpace:"nowrap"}}>{h}</th>);})}
+              {hdrs.map(function(h){return(<th key={h} style={{padding:"8px 6px",textAlign:"center",color:"var(--td)",borderBottom:"1px solid var(--bd)",fontWeight:600,fontFamily:"var(--m)",fontSize:12,whiteSpace:"nowrap"}}>{h}</th>);})}
             </tr></thead>
             <tbody>{stats.map(function(st,si){var arr=table[st];var sc={"파워":"#EF5350","정확":"#42A5F5","선구":"#66BB6A","변화":"#AB47BC","구위":"#FF7043"};return(
               <tr key={st}><td style={{padding:"6px 10px",color:sc[st]||"var(--t1)",fontWeight:700,borderBottom:"1px solid var(--bd)"}}>{st}</td>
@@ -2692,9 +2695,9 @@ function LockerRoomPage(p) {
   var miniStat = function(label, color, key, val) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-        <span style={{ fontSize: 9, color: color, fontWeight: 700 }}>{label}</span>
+        <span style={{ fontSize: 11, color: color, fontWeight: 700 }}>{label}</span>
         <input type="number" value={val || 0} onChange={function(e) { upd(key, parseInt(e.target.value) || 0); }}
-          style={{ width: 30, padding: "3px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid " + color + "44", borderRadius: 3, color: color, fontSize: 11, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
+          style={{ width: 30, padding: "3px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid " + color + "44", borderRadius: 3, color: color, fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
       </div>
     );
   };
@@ -2755,17 +2758,17 @@ function LockerRoomPage(p) {
         {/* 타자 주장 */}
         <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-            <span style={{ fontSize: 14 }}>{"👑"}</span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--acc)", fontFamily: "var(--h)" }}>{"타자 주장"}</span>
+            <span style={{ fontSize: 16 }}>{"👑"}</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "var(--acc)", fontFamily: "var(--h)" }}>{"타자 주장"}</span>
           </div>
-          <select value={batCapId} onChange={function(e) { upd("capBatId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
+          <select value={batCapId} onChange={function(e) { upd("capBatId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
             {lineupBats.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "")}</option>); })}
           </select>
           {batCap && (<div style={{ padding: "6px 8px", background: "var(--ta)", borderRadius: 6, marginBottom: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={batCap.cardType} /><span style={{ fontWeight: 700, fontSize: 12, color: "var(--t1)" }}>{batCap.name}</span><span style={{ fontSize: 14, marginLeft: "auto" }}>{"👑"}</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={batCap.cardType} /><span style={{ fontWeight: 700, fontSize: 14, color: "var(--t1)" }}>{batCap.name}</span><span style={{ fontSize: 16, marginLeft: "auto" }}>{"👑"}</span></div>
           </div>)}
-          <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)"}</div>
+          <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)"}</div>
           <div style={{ display: "flex", gap: 6 }}>
             {miniStat("파", "#EF5350", "capBatP", sdState.capBatP)}
             {miniStat("정", "#42A5F5", "capBatA", sdState.capBatA)}
@@ -2776,17 +2779,17 @@ function LockerRoomPage(p) {
         {/* 투수 주장 */}
         <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-            <span style={{ fontSize: 14 }}>{"👑"}</span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--acp)", fontFamily: "var(--h)" }}>{"투수 주장"}</span>
+            <span style={{ fontSize: 16 }}>{"👑"}</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "var(--acp)", fontFamily: "var(--h)" }}>{"투수 주장"}</span>
           </div>
-          <select value={pitCapId} onChange={function(e) { upd("capPitId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
+          <select value={pitCapId} onChange={function(e) { upd("capPitId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
             {lineupPits.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "")}</option>); })}
           </select>
           {pitCap && (<div style={{ padding: "6px 8px", background: "rgba(206,147,216,0.06)", borderRadius: 6, marginBottom: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pitCap.cardType} /><span style={{ fontWeight: 700, fontSize: 12, color: "var(--t1)" }}>{pitCap.name}</span><span style={{ fontSize: 14, marginLeft: "auto" }}>{"👑"}</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pitCap.cardType} /><span style={{ fontWeight: 700, fontSize: 14, color: "var(--t1)" }}>{pitCap.name}</span><span style={{ fontSize: 16, marginLeft: "auto" }}>{"👑"}</span></div>
           </div>)}
-          <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)"}</div>
+          <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)"}</div>
           <div style={{ display: "flex", gap: 6 }}>
             {miniStat("변", "#AB47BC", "capPitC", sdState.capPitC)}
             {miniStat("구", "#FF7043", "capPitS", sdState.capPitS)}
@@ -2797,17 +2800,17 @@ function LockerRoomPage(p) {
       {/* 유니폼 효과 */}
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14, marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-          <span style={{ fontSize: 14 }}>{"👕"}</span>
-          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"유니폼 효과"}</span>
-          <span style={{ fontSize: 9, color: "var(--td)", marginLeft: 4 }}>{"(모든 선수 적용)"}</span>
+          <span style={{ fontSize: 16 }}>{"👕"}</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"유니폼 효과"}</span>
+          <span style={{ fontSize: 11, color: "var(--td)", marginLeft: 4 }}>{"(모든 선수 적용)"}</span>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {[{k:"uniP",l:"파워",c:"#EF5350"},{k:"uniA",l:"정확",c:"#42A5F5"},{k:"uniE",l:"선구",c:"#66BB6A"},{k:"uniC",l:"변화",c:"#AB47BC"},{k:"uniS",l:"구위",c:"#FF7043"}].map(function(s) {
             return (
               <div key={s.k} style={{ background: "var(--inner)", borderRadius: 6, padding: "8px 10px", border: "1px solid " + s.c + "22", textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: s.c, fontWeight: 700, marginBottom: 4 }}>{s.l}</div>
+                <div style={{ fontSize: 11, color: s.c, fontWeight: 700, marginBottom: 4 }}>{s.l}</div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
-                  <span style={{ fontSize: 12, color: s.c }}>{"+"}</span>
+                  <span style={{ fontSize: 14, color: s.c }}>{"+"}</span>
                   <input type="number" value={sdState[s.k] || 0} onChange={function(e) { upd(s.k, parseInt(e.target.value) || 0); }}
                     style={{ width: 32, padding: "4px 2px", textAlign: "center", background: "rgba(0,0,0,0.2)", border: "1px solid " + s.c + "44", borderRadius: 4, color: s.c, fontSize: 16, fontFamily: "var(--m)", fontWeight: 800, outline: "none" }} />
                 </div>
@@ -2821,8 +2824,8 @@ function LockerRoomPage(p) {
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 14 }}>{"🌟"}</span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: "#FFD54F", fontFamily: "var(--h)" }}>{"POTM (이달의 선수)"}</span>
+            <span style={{ fontSize: 16 }}>{"🌟"}</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#FFD54F", fontFamily: "var(--h)" }}>{"POTM (이달의 선수)"}</span>
           </div>
           <button onClick={function() { upd("potmList", []); }} style={{ padding: "3px 8px", fontSize: 8, background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 3, color: "#EF5350", cursor: "pointer" }}>{"명단 초기화"}</button>
         </div>
@@ -2830,38 +2833,38 @@ function LockerRoomPage(p) {
         {/* Admin: manage POTM roster - 선수도감 검색 */}
         {isAdmin && (
           <div style={{ padding: 10, background: "var(--inner)", borderRadius: 8, border: "1px solid var(--bd)", marginBottom: 10 }}>
-            <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 6 }}>{"관리자: POTM 선수 지정 (선수도감 검색)"}</div>
+            <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 6 }}>{"관리자: POTM 선수 지정 (선수도감 검색)"}</div>
             <div style={{ position: "relative", marginBottom: 8 }} onBlur={function(e) { if (!e.currentTarget.contains(e.relatedTarget)) setPotmSearchOpen(false); }}>
               <input type="text" value={potmSearch} onChange={function(e) { setPotmSearch(e.target.value); setPotmSearchOpen(true); }}
                 onFocus={function() { setPotmSearchOpen(true); }}
                 placeholder="선수 이름 또는 팀 검색..."
-                style={{ width: "100%", padding: "7px 10px", fontSize: 12, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", outline: "none", boxSizing: "border-box" }} />
+                style={{ width: "100%", padding: "7px 10px", fontSize: 14, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", outline: "none", boxSizing: "border-box" }} />
               {potmSearchOpen && potmSearchResults.length > 0 && (
-                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, background: "#141a24", border: "1px solid var(--bd)", borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.6)" }}>
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.6)" }}>
                   {potmSearchResults.map(function(sp) {
                     var already = potmList.some(function(x) { return x.name === sp.name && x.team === (sp.team||""); });
                     return (
                       <div key={sp.name} onMouseDown={function(e) { e.preventDefault(); if (!already) addPotmPlayer(sp); }}
                         style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--bd)", cursor: already ? "not-allowed" : "pointer", opacity: already ? 0.4 : 1 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>{sp.name}</span>
-                        {already && <span style={{ fontSize: 9, color: "var(--acc)", marginLeft: "auto" }}>{"등록됨"}</span>}
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)" }}>{sp.name}</span>
+                        {already && <span style={{ fontSize: 11, color: "var(--acc)", marginLeft: "auto" }}>{"등록됨"}</span>}
                       </div>
                     );
                   })}
                 </div>
               )}
               {potmSearchOpen && potmSearch.trim().length >= 1 && potmSearchResults.length === 0 && (
-                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, background: "#141a24", border: "1px solid var(--bd)", borderRadius: 8, marginTop: 4, padding: "10px 12px", fontSize: 11, color: "var(--td)" }}>{"검색 결과 없음"}</div>
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 8, marginTop: 4, padding: "10px 12px", fontSize: 13, color: "var(--td)" }}>{"검색 결과 없음"}</div>
               )}
             </div>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               {potmList.map(function(pl, i) {
-                return (<span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 4, fontSize: 10, color: "var(--acc)" }}>
-                  {pl.name}{pl.team && <span style={{fontSize:9,color:"var(--td)",marginLeft:3}}>{"("+pl.team+")"}</span>}
-                  <button onClick={function() { rmPotm(i); }} style={{ background: "none", border: "none", color: "rgba(239,83,80,0.6)", cursor: "pointer", fontSize: 10, padding: 0, marginLeft: 2 }}>{"×"}</button>
+                return (<span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 4, fontSize: 12, color: "var(--acc)" }}>
+                  {pl.name}{pl.team && <span style={{fontSize:11,color:"var(--td)",marginLeft:3}}>{"("+pl.team+")"}</span>}
+                  <button onClick={function() { rmPotm(i); }} style={{ background: "none", border: "none", color: "rgba(239,83,80,0.6)", cursor: "pointer", fontSize: 12, padding: 0, marginLeft: 2 }}>{"×"}</button>
                 </span>);
               })}
-              {potmList.length === 0 && (<span style={{ fontSize: 10, color: "var(--td)" }}>{"등록된 POTM 선수가 없습니다"}</span>)}
+              {potmList.length === 0 && (<span style={{ fontSize: 12, color: "var(--td)" }}>{"등록된 POTM 선수가 없습니다"}</span>)}
             </div>
           </div>
         )}
@@ -2886,29 +2889,29 @@ function LockerRoomPage(p) {
               else if (teamMatch) setDelta = 1;
               return (
                 <div key={pl.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderRadius: 6, background: "rgba(255,213,79,0.06)", border: "1px solid rgba(255,213,79,0.2)" }}>
-                  <span style={{ fontSize: 12, flexShrink: 0 }}>{"🌟"}</span>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>{"🌟"}</span>
                   <Badge type={pl.cardType} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--t1)" }}>{pl.name}</div>
-                    <div style={{ fontSize: 9, color: "var(--td)" }}>{ct + (stars ? " " + stars + "성" : "") + (pl.team ? " · " + pl.team : "")}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)" }}>{pl.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--td)" }}>{ct + (stars ? " " + stars + "성" : "") + (pl.team ? " · " + pl.team : "")}</div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
                     {isSpecial ? (
-                      <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 3, background: "rgba(171,71,188,0.12)", color: "#CE93D8", fontWeight: 700 }}>{"스페셜 POTM"}</span>
+                      <span style={{ fontSize: 11, padding: "1px 6px", borderRadius: 3, background: "rgba(171,71,188,0.12)", color: "#CE93D8", fontWeight: 700 }}>{"스페셜 POTM"}</span>
                     ) : (
-                      <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 3, background: "rgba(255,213,79,0.12)", color: "#FFD54F", fontWeight: 700 }}>{"POTM"}</span>
+                      <span style={{ fontSize: 11, padding: "1px 6px", borderRadius: 3, background: "rgba(255,213,79,0.12)", color: "#FFD54F", fontWeight: 700 }}>{"POTM"}</span>
                     )}
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                       {statBonus > 0 && (
-                        <span style={{ fontSize: 10, color: "#66BB6A", fontFamily: "var(--m)", fontWeight: 700 }}>
+                        <span style={{ fontSize: 12, color: "#66BB6A", fontFamily: "var(--m)", fontWeight: 700 }}>
                           {"능력치 +" + statBonus + (isSpecial ? " (팀일치)" : teamMatch ? "" : " (50%)")}
                         </span>
                       )}
                       {statBonus === 0 && isSpecial && !teamMatch && (
-                        <span style={{ fontSize: 10, color: "var(--td)" }}>{"팀 불일치 — 효과 없음"}</span>
+                        <span style={{ fontSize: 12, color: "var(--td)" }}>{"팀 불일치 — 효과 없음"}</span>
                       )}
                       {setDelta > 0 && (
-                        <span style={{ fontSize: 10, color: "#FF9800", fontFamily: "var(--m)", fontWeight: 700 }}>{"세트덱 +" + setDelta}</span>
+                        <span style={{ fontSize: 12, color: "#FF9800", fontFamily: "var(--m)", fontWeight: 700 }}>{"세트덱 +" + setDelta}</span>
                       )}
                     </div>
                   </div>
@@ -2917,7 +2920,7 @@ function LockerRoomPage(p) {
             })}
           </div>
         ) : (
-          <div style={{ padding: 16, textAlign: "center", color: "var(--td)", fontSize: 11 }}>
+          <div style={{ padding: 16, textAlign: "center", color: "var(--td)", fontSize: 13 }}>
             {potmList.length > 0 ? "내 선수 중 매칭되는 POTM 선수가 없습니다" : "관리자가 POTM 명단을 등록하면 자동으로 매칭됩니다"}
           </div>
         )}
@@ -2926,8 +2929,8 @@ function LockerRoomPage(p) {
       {/* 데이터 관리 */}
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14, marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-          <span style={{ fontSize: 14 }}>{"💾"}</span>
-          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"데이터 관리"}</span>
+          <span style={{ fontSize: 16 }}>{"💾"}</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"데이터 관리"}</span>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 10 }}>
@@ -2938,14 +2941,14 @@ function LockerRoomPage(p) {
             var url = URL.createObjectURL(blob);
             var a = document.createElement("a"); a.href = url; a.download = "deck-backup-" + new Date().toISOString().slice(0,10) + ".json"; a.click(); URL.revokeObjectURL(url);
           }} style={{ padding: "12px", background: "linear-gradient(135deg,rgba(76,175,80,0.08),rgba(76,175,80,0.02))", border: "1px solid rgba(76,175,80,0.2)", borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#4CAF50" }}>{"📥 JSON 백업 내보내기"}</div>
-            <div style={{ fontSize: 9, color: "var(--td)", marginTop: 4 }}>{"선수, 라인업, 세트덱, 스킬 전체 데이터"}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#4CAF50" }}>{"📥 JSON 백업 내보내기"}</div>
+            <div style={{ fontSize: 11, color: "var(--td)", marginTop: 4 }}>{"선수, 라인업, 세트덱, 스킬 전체 데이터"}</div>
           </button>
 
           {/* JSON 복원 */}
           <label style={{ padding: "12px", background: "linear-gradient(135deg,rgba(66,165,245,0.08),rgba(66,165,245,0.02))", border: "1px solid rgba(66,165,245,0.2)", borderRadius: 8, cursor: "pointer", textAlign: "left", display: "block" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#42A5F5" }}>{"📤 JSON 백업 복원"}</div>
-            <div style={{ fontSize: 9, color: "var(--td)", marginTop: 4 }}>{"이전에 내보낸 JSON 파일로 복원"}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#42A5F5" }}>{"📤 JSON 백업 복원"}</div>
+            <div style={{ fontSize: 11, color: "var(--td)", marginTop: 4 }}>{"이전에 내보낸 JSON 파일로 복원"}</div>
             <input type="file" accept=".json" style={{ display: "none" }} onChange={function(e) {
               var f = e.target.files[0]; if (!f) return;
               var r = new FileReader(); r.onload = function() {
@@ -3001,8 +3004,11 @@ function correctCardType(players) {
   return players.map(function(p) {
     var year = (p.year || '').trim();
     var ct = p.cardType || '';
-    /* 연도가 없으면 무조건 임팩트 */
+    /* 연도가 없으면 → 임팩트. 단, 라이브/올스타가 연도 없이 오면 인식실패 */
     if (!year) {
+      if (ct === '라이브' || ct === '올스타') {
+        return Object.assign({}, p, { cardType: '인식실패' });
+      }
       return Object.assign({}, p, { cardType: '임팩트' });
     }
     /* 연도가 있는데 임팩트로 왔으면 인식실패로 변환 */
@@ -3032,31 +3038,37 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '- NO (숫자가 없다) → 배경이 아무리 금색이고 화려해도 무조건 임팩트 확정. 다른 단계로 넘어가지 마라.',
     '- YES (숫자가 있다) → 2단계로 이동.',
     '',
-    '[2단계: 시그니처 판정 - 임팩트 다음 최우선. 골든글러브보다 반드시 먼저 확인]',
+    '[2단계: 라이브 판정]',
+    '- 선수 이름 바로 위 텍스트를 확인하라.',
+    '- "LIVE V1", "LIVE V2", "LIVE V3" 중 하나가 이름 바로 위에 있으면 → 라이브 확정. 연도 반드시 있음.',
+    '- YES → 라이브 확정. 3단계로 넘어가지 말 것.',
+    '- NO → 3단계로 이동.',
+    '',
+    '[3단계: 시그니처 판정 - 골든글러브보다 반드시 먼저 확인]',
     '★★★ 이 단계는 골든글러브보다 절대적으로 우선한다. ★★★',
     '- 위치 고정: 선수 이름 텍스트의 왼쪽 위 모서리 바로 옆. 정확히 이 위치만 확인하라.',
     '- 찾을 것: 빨간색(적색) 필기체 S자 로고. 기울어진 서명 스타일.',
     '- 이 S 필기체 로고는 이 게임에서 오직 시그니처 카드에만 존재한다. 다른 카드 종류에는 절대 없다.',
     '- 판정 기준은 넉넉하게: 작아도, 흐려도, 일부만 보여도, 배경에 묻혀도 S처럼 보이면 시그니처.',
     '- 배경색(황금/분홍/어떤 색이든)은 판단 기준이 아니다. 오직 이름 왼쪽 위의 빨간 S 유무만 본다.',
-    '- YES (이름 왼쪽 위에 빨간 S 확인) → 즉시 시그니처 확정. 3단계로 넘어가지 말 것.',
-    '- NO (이름 왼쪽 위에 없음) → 3단계로 이동.',
+    '- YES (이름 왼쪽 위에 빨간 S 확인) → 즉시 시그니처 확정. 4단계로 넘어가지 말 것.',
+    '- NO (이름 왼쪽 위에 없음) → 4단계로 이동.',
     '',
-    '[3단계: 골든글러브 판정]',
-    '- 1단계(연도 있음), 2단계(S 로고 없음)를 모두 통과한 상태.',
+    '[4단계: 골든글러브 판정]',
+    '- 1단계(연도 있음), 2단계(LIVE V 없음), 3단계(S 로고 없음)를 모두 통과한 상태.',
     '- 선수 이름을 살짝 감싸고 있는 테두리/장식 영역의 색상을 확인하라.',
     '- 이름을 둘러싼 영역(이름표 테두리, 이름 아래 장식선, 이름 좌우 색상)이 노란색 또는 황금색 계열이면 → 골든글러브 확정.',
     '- YES → 골든글러브 확정.',
     '',
-    '[4단계: 기타]',
-    '- 이름 위에 V1/V2/V3 있으면 → 라이브 (연도 반드시 있음)',
+    '[5단계: 기타]',
     '- ALL STAR 영문 텍스트 있으면 → 올스타 (별점★★★★★과 혼동 금지)',
     '- 배경이 파란색/남색 계열 → 국가대표',
     '- 모두 해당 없음 → 인식실패',
     '',
     '[핵심 요약]',
     '- 연도 없음 → 100% 임팩트',
-    '- 이름 주변 빨간 S 필기체 (조금이라도) → 100% 시그니처. 이 게임에서 S 필기체는 시그니처뿐.',
+    '- 이름 바로 위 "LIVE V1/V2/V3" 텍스트 → 100% 라이브. 연도 있음.',
+    '- 이름 왼쪽 위 빨간 S 필기체 (조금이라도) → 100% 시그니처. 이 게임에서 S 필기체는 시그니처뿐.',
     '- 이름 주변 노란/황금색 → 골든글러브 (S 필기체 없을 때만)',
     '',
     '=== 임팩트 종류 (이름 왼쪽에 보이는 텍스트) ===',
@@ -3372,8 +3384,26 @@ function nameSimilar(a, b) {
 // SEED_PLAYERS에서 매칭
 function matchSeedPlayer(scanned) {
   var ct = scanned.cardType; var nm = scanned.name; var yr = expandYr(scanned.year); var it = scanned.impactType||'';
-  /* 인식실패 카드는 매칭 불가 */
-  if (!ct || ct === '인식실패') return { seed: null, candidates: [], failed: true };
+  /* 인식실패 카드: 도감 폴백 시도 (시그니처 → 국가대표 → 실패) */
+  if (!ct || ct === '인식실패') {
+    if (nm && yr) {
+      /* 1순위: 시그니처 도감에서 이름+연도 탐색 */
+      var sigFallback = SEED_PLAYERS.find(function(sp) {
+        if ((sp.cardType||'') !== '시그니처') return false;
+        if (!nameSimilar(sp.name||'', nm)) return false;
+        return (sp.year||'') === yr || (sp.year||'').replace(/'\\d+/,'') === yr;
+      });
+      if (sigFallback) return { seed: sigFallback, candidates: [], fallback: '시그니처' };
+      /* 2순위: 국가대표 도감에서 이름+연도 탐색 */
+      var natFallback = SEED_PLAYERS.find(function(sp) {
+        if ((sp.cardType||'') !== '국가대표') return false;
+        if (!nameSimilar(sp.name||'', nm)) return false;
+        return (sp.year||'') === yr || (sp.year||'').replace(/'\\d+/,'') === yr;
+      });
+      if (natFallback) return { seed: natFallback, candidates: [], fallback: '국가대표' };
+    }
+    return { seed: null, candidates: [], failed: true };
+  }
   if (ct === '임팩트') {
     /* 임팩트는 이름(퍼지)으로 후보 검색 */
     var candidates = SEED_PLAYERS.filter(function(sp) {
@@ -3674,11 +3704,11 @@ function BulkScanModal(p) {
   };
 
   var OVERLAY = { position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 };
-  var BOX = { background:'#111827', border:'1px solid #1e3a5f', borderRadius:16, width:'100%', maxWidth:540, maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.7)' };
-  var HDR = { padding:'18px 24px 14px', borderBottom:'1px solid #1e3a5f', display:'flex', justifyContent:'space-between', alignItems:'flex-start' };
+  var BOX = { background:'var(--card)', border:'1px solid var(--bd)', borderRadius:16, width:'100%', maxWidth:540, maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.7)' };
+  var HDR = { padding:'18px 24px 14px', borderBottom:'1px solid var(--bd)', display:'flex', justifyContent:'space-between', alignItems:'flex-start' };
   var BODY = { padding:'18px 24px 24px', display:'flex', flexDirection:'column', gap:14 };
-  var BTN_P = { background:'linear-gradient(135deg,#4ade80,#22c55e)', color:'#000', fontWeight:900, fontSize:13, padding:'10px 20px', borderRadius:8, border:'none', cursor:'pointer' };
-  var BTN_G = { background:'transparent', border:'1px solid #1e3a5f', color:'#94a3b8', fontSize:12, padding:'9px 16px', borderRadius:8, cursor:'pointer' };
+  var BTN_P = { background:'linear-gradient(135deg,#4ade80,#22c55e)', color:'#000', fontWeight:900, fontSize:15, padding:'10px 20px', borderRadius:8, border:'none', cursor:'pointer' };
+  var BTN_G = { background:'transparent', border:'1px solid var(--bd)', color:'var(--t2)', fontSize:14, padding:'9px 16px', borderRadius:8, cursor:'pointer' };
 
   return (
     React.createElement('div', {style:OVERLAY, onClick:onClose},
@@ -3686,9 +3716,9 @@ function BulkScanModal(p) {
         // Header
         React.createElement('div', {style:HDR},
           React.createElement('div', null,
-            React.createElement('div', {style:{fontSize:11,fontWeight:900,background:'linear-gradient(135deg,#00d4ff,#0080ff)',color:'#000',display:'inline-block',padding:'1px 7px',borderRadius:3,letterSpacing:1,marginBottom:6}}, 'AI SCANNER'),
+            React.createElement('div', {style:{fontSize:13,fontWeight:900,background:'linear-gradient(135deg,#00d4ff,#0080ff)',color:'#000',display:'inline-block',padding:'1px 7px',borderRadius:3,letterSpacing:1,marginBottom:6}}, 'AI SCANNER'),
             React.createElement('div', {style:{fontSize:17,fontWeight:900,color:'#e2e8f0'}}, '선수 일괄 업데이트'),
-            React.createElement('div', {style:{fontSize:11,color:'#64748b',marginTop:2}}, '라인업 캡처 → 선수도감 매칭 → 내 선수 자동 등록')
+            React.createElement('div', {style:{fontSize:13,color:'#64748b',marginTop:2}}, '라인업 캡처 → 선수도감 매칭 → 내 선수 자동 등록')
           ),
           React.createElement('button', {onClick:onClose,style:{background:'none',border:'none',color:'#64748b',fontSize:20,cursor:'pointer',padding:'0 4px'}}, '✕')
         ),
@@ -3704,12 +3734,12 @@ function BulkScanModal(p) {
                 var img = imgs[i];
                 return React.createElement('div', {key:i, style:{display:'flex',flexDirection:'column',gap:5}},
                   React.createElement('div', {style:{display:'flex',alignItems:'center',gap:5}},
-                    React.createElement('span', {style:{fontSize:10,fontWeight:900,padding:'1px 6px',borderRadius:3,background:lbl.color+'22',color:lbl.color,border:'1px solid '+lbl.color+'44'}}, '화면'+(i+1)),
-                    React.createElement('span', {style:{fontSize:11,fontWeight:700,color:'#e2e8f0'}}, lbl.title),
+                    React.createElement('span', {style:{fontSize:12,fontWeight:900,padding:'1px 6px',borderRadius:3,background:lbl.color+'22',color:lbl.color,border:'1px solid '+lbl.color+'44'}}, '화면'+(i+1)),
+                    React.createElement('span', {style:{fontSize:13,fontWeight:700,color:'#e2e8f0'}}, lbl.title),
 
                   ),
                   React.createElement('div', {
-                    style:{border:'2px dashed '+(img?lbl.color+'88':'#1e3a5f'),borderRadius:9,background:'#0d1117',minHeight:110,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:8,transition:'all 0.2s'},
+                    style:{border:'2px dashed '+(img?lbl.color+'88':'var(--bd)'),borderRadius:9,background:'var(--bg)',minHeight:110,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:8,transition:'all 0.2s'},
                     onClick:function(idx){return function(){fileRefs[idx].current&&fileRefs[idx].current.click();};}(i),
                     onDragOver:function(e){e.preventDefault();},
                     onDrop:function(idx){return function(e){e.preventDefault();var f=e.dataTransfer.files[0];if(f)handleFile(idx,f);};}(i)
@@ -3719,19 +3749,19 @@ function BulkScanModal(p) {
                       ? React.createElement('img', {src:img.src,alt:'',style:{maxWidth:'100%',maxHeight:120,objectFit:'contain',borderRadius:5}})
                       : React.createElement('div', {style:{display:'flex',flexDirection:'column',alignItems:'center',gap:4}},
                           React.createElement('div', {style:{position:'relative'}},
-                            React.createElement('img', {src:SCAN_THUMBS[i],alt:'예시',style:{height:90,objectFit:'contain',borderRadius:4,opacity:0.5,border:'1px solid #1e3a5f'}}),
+                            React.createElement('img', {src:SCAN_THUMBS[i],alt:'예시',style:{height:90,objectFit:'contain',borderRadius:4,opacity:0.5,border:'1px solid var(--bd)'}}),
                             React.createElement('div', {style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.3)',borderRadius:4}},
-                              React.createElement('span', {style:{fontSize:9,color:'#e2e8f0',fontWeight:700,textAlign:'center',padding:'2px 4px',background:'rgba(0,0,0,0.5)',borderRadius:3}}, '예시')
+                              React.createElement('span', {style:{fontSize:11,color:'#e2e8f0',fontWeight:700,textAlign:'center',padding:'2px 4px',background:'rgba(0,0,0,0.5)',borderRadius:3}}, '예시')
                             )
                           ),
-                          React.createElement('div', {style:{fontSize:9,color:'#64748b'}}, '클릭 또는 드래그')
+                          React.createElement('div', {style:{fontSize:11,color:'#64748b'}}, '클릭 또는 드래그')
                         )
                   ),
-                  img&&React.createElement('div', {style:{fontSize:10,color:'#22c55e'}}, '✓ '+img.name)
+                  img&&React.createElement('div', {style:{fontSize:12,color:'#22c55e'}}, '✓ '+img.name)
                 );
               })
             ),
-            err&&React.createElement('div', {style:{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'#fca5a5'}}, '⚠️ '+err),
+            err&&React.createElement('div', {style:{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:8,padding:'10px 14px',fontSize:14,color:'#fca5a5'}}, '⚠️ '+err),
             React.createElement('div', {style:{display:'flex',gap:10}},
               React.createElement('button', {style:{...BTN_P,opacity:imgs[0]?1:0.35,cursor:imgs[0]?'pointer':'not-allowed'},disabled:!imgs[0],onClick:runScan},
                 '🔍 분석 시작' + (imgs[0]&&imgs[2]?' (타자+투수)':imgs[0]?' (타자만)':'')
@@ -3742,16 +3772,16 @@ function BulkScanModal(p) {
 
           // Scanning
           step === 'scanning' && React.createElement('div', {style:{display:'flex',alignItems:'center',gap:14,padding:'24px 0',justifyContent:'center'}},
-            React.createElement('div', {style:{width:24,height:24,border:'3px solid #1e3a5f',borderTopColor:'#00d4ff',borderRadius:'50%',animation:'spin 0.8s linear infinite',flexShrink:0}}),
+            React.createElement('div', {style:{width:24,height:24,border:'3px solid var(--bd)',borderTopColor:'#00d4ff',borderRadius:'50%',animation:'spin 0.8s linear infinite',flexShrink:0}}),
             React.createElement('div', null,
-              React.createElement('div', {style:{color:'#e2e8f0',fontWeight:600,fontSize:13}}, msg),
-              React.createElement('div', {style:{color:'#64748b',fontSize:11,marginTop:3}}, '잠시만 기다려주세요…')
+              React.createElement('div', {style:{color:'#e2e8f0',fontWeight:600,fontSize:15}}, msg),
+              React.createElement('div', {style:{color:'#64748b',fontSize:13,marginTop:3}}, '잠시만 기다려주세요…')
             )
           ),
 
           // Review
           step === 'review' && React.createElement(React.Fragment, null,
-            React.createElement('div', {style:{fontSize:14,fontWeight:700,color:'#22c55e'}},
+            React.createElement('div', {style:{fontSize:16,fontWeight:700,color:'#22c55e'}},
               '✅ ' + extracted.length + '명 추출 완료'
             ),
             React.createElement('div', {style:{display:'flex',flexDirection:'column',gap:6,maxHeight:340,overflowY:'auto'}},
@@ -3760,24 +3790,24 @@ function BulkScanModal(p) {
                 var isDH = sc.slot==='DH' && item.seed && item.seed.subPosition && item.seed.subPosition!=='DH';
                 var CARD_CLR = {골든글러브:{bg:'#78350f',brd:'#fbbf24',txt:'#fde68a'},시그니처:{bg:'#701a75',brd:'#e879f9',txt:'#f5d0fe'},임팩트:{bg:'#14532d',brd:'#4ade80',txt:'#bbf7d0'},국가대표:{bg:'#1e3a8a',brd:'#60a5fa',txt:'#bfdbfe'},라이브:{bg:'#7c2d12',brd:'#fb923c',txt:'#fed7aa'},시즌:{bg:'#1e293b',brd:'#64748b',txt:'#cbd5e1'},올스타:{bg:'#4a1d96',brd:'#a78bfa',txt:'#ede9fe'}};
                 var cs = CARD_CLR[sc.cardType]||CARD_CLR['시즌'];
-                return React.createElement('div', {key:i, style:{background:'#0d1117',borderRadius:8,padding:'8px 12px',border:'1px solid '+(matched?'#1e3a5f':item.needSelect?'rgba(251,191,36,0.4)':item.failed?'rgba(156,163,175,0.4)':'rgba(239,68,68,0.3)'),opacity:(matched||item.needSelect)?1:0.65}},
+                return React.createElement('div', {key:i, style:{background:'var(--card)',borderRadius:8,padding:'8px 12px',border:'1px solid '+(matched?'var(--bd)':item.needSelect?'rgba(251,191,36,0.4)':item.failed?'rgba(156,163,175,0.4)':'rgba(239,68,68,0.3)'),opacity:(matched||item.needSelect)?1:0.65}},
                   React.createElement('div', {style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
-                    React.createElement('span', {style:{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:3,background:cs.bg,color:cs.txt,border:'1px solid '+cs.brd,whiteSpace:'nowrap'}}, sc.cardType||'?'),
-                    React.createElement('span', {style:{fontWeight:900,fontSize:13,color:'#e2e8f0'}}, sc.name),
-                    sc.year&&React.createElement('span', {style:{fontSize:10,color:'#64748b'}}, "'"+sc.year),
-                    sc.slot&&React.createElement('span', {style:{fontSize:11,fontWeight:700,color:'#00d4ff',background:'rgba(0,212,255,0.1)',padding:'1px 6px',borderRadius:4}}, sc.slot),
+                    React.createElement('span', {style:{fontSize:11,fontWeight:700,padding:'1px 5px',borderRadius:3,background:cs.bg,color:cs.txt,border:'1px solid '+cs.brd,whiteSpace:'nowrap'}}, sc.cardType||'?'),
+                    React.createElement('span', {style:{fontWeight:900,fontSize:15,color:'#e2e8f0'}}, sc.name),
+                    sc.year&&React.createElement('span', {style:{fontSize:12,color:'#64748b'}}, "'"+sc.year),
+                    sc.slot&&React.createElement('span', {style:{fontSize:13,fontWeight:700,color:'#00d4ff',background:'rgba(0,212,255,0.1)',padding:'1px 6px',borderRadius:4}}, sc.slot),
                     matched
-                      ? React.createElement('span', {style:{fontSize:10,color:'#22c55e'}}, '✓ 매칭됨')
+                      ? React.createElement('span', {style:{fontSize:12,color:'#22c55e'}}, '✓ 매칭됨')
                       : item.failed
-                        ? React.createElement('span', {style:{fontSize:10,color:'#9ca3af'}}, '? 카드 종류 인식 실패')
+                        ? React.createElement('span', {style:{fontSize:12,color:'#9ca3af'}}, '? 카드 종류 인식 실패')
                         : item.needSelect
-                          ? React.createElement('span', {style:{fontSize:10,color:'#fbbf24'}}, '⚠️ 임팩트 종류 선택 필요')
-                          : React.createElement('span', {style:{fontSize:10,color:'#ef4444'}}, '✗ 도감 미등록'),
-                    isDH&&React.createElement('span', {style:{fontSize:9,color:'#fbbf24'}}, '⚠️ DH(포지션 상이)')
+                          ? React.createElement('span', {style:{fontSize:12,color:'#fbbf24'}}, '⚠️ 임팩트 종류 선택 필요')
+                          : React.createElement('span', {style:{fontSize:12,color:'#ef4444'}}, '✗ 도감 미등록'),
+                    isDH&&React.createElement('span', {style:{fontSize:11,color:'#fbbf24'}}, '⚠️ DH(포지션 상이)')
                   ),
                   item.needSelect && React.createElement('div', {style:{marginTop:6}},
                     React.createElement('select', {
-                      style:{width:'100%',padding:'4px 8px',background:'#1e293b',border:'1px solid #fbbf24',borderRadius:4,color:'#e2e8f0',fontSize:11,outline:'none'},
+                      style:{width:'100%',padding:'4px 8px',background:'#1e293b',border:'1px solid #fbbf24',borderRadius:4,color:'#e2e8f0',fontSize:13,outline:'none'},
                       value: item.selectedImpactIdx !== undefined ? item.selectedImpactIdx : '',
                       onChange: function(e) {
                         var idx = parseInt(e.target.value);
@@ -3814,7 +3844,7 @@ function BulkScanModal(p) {
                           var hasCandidates = cands.length > 0;
                           var skIdx = sk.idx; /* 클로저 캡처 */
                           return React.createElement('div', {key:sk.idx, style:{display:'flex',alignItems:'center',gap:4,marginBottom:3}},
-                            React.createElement('span', {style:{fontSize:9,color:'#a78bfa',width:16,flexShrink:0}}, 'S'+(sk.idx+1)),
+                            React.createElement('span', {style:{fontSize:11,color:'#a78bfa',width:16,flexShrink:0}}, 'S'+(sk.idx+1)),
                             hasCandidates
                               ? React.createElement('select', {
                                   defaultValue: res.name,
@@ -3830,16 +3860,16 @@ function BulkScanModal(p) {
                                       return next;
                                     });
                                   },
-                                  style:{flex:1,padding:'2px 4px',fontSize:10,background:'#1e293b',border:'1px solid #FBBF24',borderRadius:4,color:'#e2e8f0'}
+                                  style:{flex:1,padding:'2px 4px',fontSize:12,background:'#1e293b',border:'1px solid #FBBF24',borderRadius:4,color:'#e2e8f0'}
                                 },
                                 cands.map(function(c){ return React.createElement('option',{key:c,value:c},c); })
                               )
-                              : React.createElement('span', {style:{fontSize:10,color:(res&&res.missing)?'#EF4444':'#c4b5fd'}}, (res&&res.name)||('❌ '+sk.raw)),
-                            React.createElement('span', {style:{fontSize:9,color:'#64748b',flexShrink:0}}, 'Lv'+sk.lv)
+                              : React.createElement('span', {style:{fontSize:12,color:(res&&res.missing)?'#EF4444':'#c4b5fd'}}, (res&&res.name)||('❌ '+sk.raw)),
+                            React.createElement('span', {style:{fontSize:11,color:'#64748b',flexShrink:0}}, 'Lv'+sk.lv)
                           );
                         });
                       } catch(e) {
-                        return React.createElement('div', {style:{fontSize:10,color:'#94a3b8'}},
+                        return React.createElement('div', {style:{fontSize:12,color:'var(--t2)'}},
                           [sc.skill1&&('S1:'+sc.skill1), sc.skill2&&('S2:'+sc.skill2), sc.skill3&&('S3:'+sc.skill3)].filter(Boolean).join(' · ')
                         );
                       }
@@ -3848,7 +3878,7 @@ function BulkScanModal(p) {
                 );
               })
             ),
-            err&&React.createElement('div', {style:{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'#fca5a5'}}, '⚠️ '+err),
+            err&&React.createElement('div', {style:{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:8,padding:'10px 14px',fontSize:14,color:'#fca5a5'}}, '⚠️ '+err),
             React.createElement('div', {style:{display:'flex',gap:10,flexWrap:'wrap'}},
               React.createElement('button', {style:BTN_P,onClick:function(){setConfirmOpen(true);}},
                 '💾 저장하기 ('+extracted.filter(function(x){return x.matched;}).length+'명 매칭 / 선택필요:'+extracted.filter(function(x){return x.needSelect;}).length+'명)'
@@ -3861,13 +3891,13 @@ function BulkScanModal(p) {
           step === 'done' && result && React.createElement('div', {style:{display:'flex',flexDirection:'column',alignItems:'center',gap:10,padding:'16px 0'}},
             React.createElement('div', {style:{fontSize:40}}, '✅'),
             React.createElement('div', {style:{fontSize:18,fontWeight:900,color:'#22c55e'}}, result.ok.length+'명 처리 완료'),
-            result.ok.length>0&&React.createElement('div', {style:{background:'#0d1117',border:'1px solid #1e3a5f',borderRadius:8,padding:'10px 14px',width:'100%',fontSize:11,color:'#94a3b8'}},
+            result.ok.length>0&&React.createElement('div', {style:{background:'var(--inner)',border:'1px solid var(--bd)',borderRadius:8,padding:'10px 14px',width:'100%',fontSize:13,color:'var(--t2)'}},
               result.ok.map(function(n,i){return React.createElement('div',{key:i},'✓ '+n);})
             ),
-            result.warn.length>0&&React.createElement('div', {style:{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:8,padding:'10px 14px',width:'100%',fontSize:11,color:'#fbbf24'}},
+            result.warn.length>0&&React.createElement('div', {style:{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:8,padding:'10px 14px',width:'100%',fontSize:13,color:'#fbbf24'}},
               result.warn.map(function(n,i){return React.createElement('div',{key:i},'⚠️ '+n);})
             ),
-            result.skip.length>0&&React.createElement('div', {style:{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:8,padding:'10px 14px',width:'100%',fontSize:11,color:'#fca5a5'}},
+            result.skip.length>0&&React.createElement('div', {style:{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:8,padding:'10px 14px',width:'100%',fontSize:13,color:'#fca5a5'}},
               result.skip.map(function(n,i){return React.createElement('div',{key:i},'✗ '+n);})
             ),
             React.createElement('div', {style:{display:'flex',gap:10}},
@@ -3879,21 +3909,21 @@ function BulkScanModal(p) {
 
         // Confirm modal
         confirmOpen&&React.createElement('div', {style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}},
-          React.createElement('div', {style:{background:'#111827',border:'1px solid #1e3a5f',borderRadius:14,padding:'24px 22px',maxWidth:400,width:'100%',display:'flex',flexDirection:'column',alignItems:'center',gap:10}},
+          React.createElement('div', {style:{background:'var(--card)',border:'1px solid var(--bd)',borderRadius:14,padding:'24px 22px',maxWidth:400,width:'100%',display:'flex',flexDirection:'column',alignItems:'center',gap:10}},
             React.createElement('div', {style:{fontSize:28}}, '⚠️'),
             React.createElement('div', {style:{fontSize:15,fontWeight:900,color:'#e2e8f0'}}, '라인업 저장 확인'),
-            React.createElement('div', {style:{fontSize:12,color:'#94a3b8',textAlign:'center'}},
+            React.createElement('div', {style:{fontSize:14,color:'var(--t2)',textAlign:'center'}},
               '매칭된 ' + extracted.filter(function(x){return x.matched;}).length + '명을 내 선수에 추가하고 라인업 슬롯에 배치합니다.'
             ),
-            React.createElement('div', {style:{background:'#0d1117',border:'1px solid #1e3a5f',borderRadius:8,padding:'10px 14px',width:'100%',maxHeight:180,overflowY:'auto'}},
+            React.createElement('div', {style:{background:'var(--inner)',border:'1px solid var(--bd)',borderRadius:8,padding:'10px 14px',width:'100%',maxHeight:180,overflowY:'auto'}},
               extracted.filter(function(x){return x.matched;}).map(function(item,i){
-                return React.createElement('div', {key:i, style:{display:'flex',justifyContent:'space-between',fontSize:11,padding:'3px 0',borderBottom:'1px solid #1e3a5f',color:'#e2e8f0'}},
+                return React.createElement('div', {key:i, style:{display:'flex',justifyContent:'space-between',fontSize:13,padding:'3px 0',borderBottom:'1px solid var(--bd)',color:'var(--t1)'}},
                   React.createElement('span', null, item.scanned.name),
                   React.createElement('span', {style:{color:'#00d4ff'}}, item.scanned.slot||'-')
                 );
               })
             ),
-            React.createElement('div', {style:{fontSize:10,color:'#ef4444'}}, '기존 해당 슬롯 선수는 교체됩니다.'),
+            React.createElement('div', {style:{fontSize:12,color:'#ef4444'}}, '기존 해당 슬롯 선수는 교체됩니다.'),
             React.createElement('div', {style:{display:'flex',gap:10,marginTop:4}},
               React.createElement('button', {style:{...BTN_P,flex:1},onClick:runSave}, '✅ 확인, 저장'),
               React.createElement('button', {style:{...BTN_G,flex:1},onClick:function(){setConfirmOpen(false);}}, '취소')
@@ -3962,7 +3992,7 @@ function MyPlayersPage(p) {
   var filtered = filter === "타자" ? bats : filter === "선발" ? sps : filter === "중계" ? rps : cps;
 
   var miniIn = function(id, field, val, color, max) {
-    return (<input type="number" value={val || 0} onChange={function(e) { var v = parseInt(e.target.value) || 0; if (max) v = Math.min(max, Math.max(0, v)); upd(id, field, v); }} style={{ width: 32, padding: "2px 1px", textAlign: "center", background: "var(--inner)", border: "1px solid " + (color || "var(--bd)") + "44", borderRadius: 3, color: color || "var(--t1)", fontSize: 10, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />);
+    return (<input type="number" value={val || 0} onChange={function(e) { var v = parseInt(e.target.value) || 0; if (max) v = Math.min(max, Math.max(0, v)); upd(id, field, v); }} style={{ width: 32, padding: "2px 1px", textAlign: "center", background: "var(--inner)", border: "1px solid " + (color || "var(--bd)") + "44", borderRadius: 3, color: color || "var(--t1)", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />);
   };
 
   var skillSel = function(pl, num) {
@@ -3972,12 +4002,12 @@ function MyPlayersPage(p) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
         <select value={pl[nf] || ""} onChange={function(e) { upd(pl.id, nf, e.target.value); }}
-          style={{ width: 88, padding: "2px", fontSize: 9, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>
+          style={{ width: 88, padding: "2px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>
           <option value="">{"없음"}</option>
           {opts.map(function(s) { return (<option key={s} value={s}>{s}</option>); })}
         </select>
         <select value={pl[lf] || 0} onChange={function(e) { upd(pl.id, lf, parseInt(e.target.value)); }}
-          style={{ width: 36, padding: "2px", fontSize: 9, background: "var(--inner)", border: "1px solid " + c + "44", borderRadius: 3, color: c, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }}>
+          style={{ width: 36, padding: "2px", fontSize: 11, background: "var(--inner)", border: "1px solid " + c + "44", borderRadius: 3, color: c, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }}>
           {[0,5,6,7,8,9,10].map(function(v) { return (<option key={v} value={v}>{v === 0 ? "-" : "Lv" + v}</option>); })}
         </select>
       </div>
@@ -4000,18 +4030,18 @@ function MyPlayersPage(p) {
             <Badge type={pl.cardType} />
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span>
+                <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span>
                 {pl.isFa && (<span style={{ fontSize: 8, color: "#FF9800", fontFamily: "var(--m)", fontWeight: 800, background: "rgba(255,152,0,0.1)", padding: "1px 4px", borderRadius: 3, border: "1px solid rgba(255,152,0,0.2)" }}>{"FA"}</span>)}
-                {slot && (<span style={{ fontSize: 9, color: accentC, fontFamily: "var(--m)", fontWeight: 700, background: "rgba(255,213,79,0.08)", padding: "1px 5px", borderRadius: 3 }}>{slot}</span>)}
+                {slot && (<span style={{ fontSize: 11, color: accentC, fontFamily: "var(--m)", fontWeight: 700, background: "rgba(255,213,79,0.08)", padding: "1px 5px", borderRadius: 3 }}>{slot}</span>)}
               </div>
-              <div style={{ fontSize: 11, color: "var(--td)" }}>{(pl.team ? pl.team+" " : "") + (pl.subPosition || "") + " · " + (pl.hand || "") + (isBat ? "타" : "투") + " · " + (pl.enhance || "") + (pl.cardType==="임팩트"&&pl.impactType?" · "+pl.impactType:pl.year?" · "+pl.year:"") + " · ★" + (pl.stars || 5)}</div>
+              <div style={{ fontSize: 13, color: "var(--td)" }}>{(pl.team ? pl.team+" " : "") + (pl.subPosition || "") + " · " + (pl.hand || "") + (isBat ? "타" : "투") + " · " + (pl.enhance || "") + (pl.cardType==="임팩트"&&pl.impactType?" · "+pl.impactType:pl.year?" · "+pl.year:"") + " · ★" + (pl.stars || 5)}</div>
             </div>
           </div>
           {/* Score */}
           <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={18} grad={isBat ? undefined : "linear-gradient(135deg,#CE93D8,#7B1FA2)"} /></div>
           {!mob && (<React.Fragment>
             {/* Training */}
-            <div style={{ fontSize: 12, fontFamily: "var(--m)" }}>
+            <div style={{ fontSize: 14, fontFamily: "var(--m)" }}>
               {isBat ? (
                 <React.Fragment><span style={{ color: "#EF5350" }}>{"+" + (pl.trainP||0)}</span>{" "}<span style={{ color: "#42A5F5" }}>{"+" + (pl.trainA||0)}</span>{" "}<span style={{ color: "#66BB6A" }}>{"+" + (pl.trainE||0)}</span></React.Fragment>
               ) : (
@@ -4019,17 +4049,17 @@ function MyPlayersPage(p) {
               )}
             </div>
             {/* Spec */}
-            <div style={{ fontSize: 12, fontFamily: "var(--m)", color: "var(--t2)" }}>
+            <div style={{ fontSize: 14, fontFamily: "var(--m)", color: "var(--t2)" }}>
               {isBat ? ((pl.specPower||0) + "/" + (pl.specAccuracy||0) + "/" + (pl.specEye||0)) : ((pl.specChange||0) + "/" + (pl.specStuff||0))}
             </div>
             {/* Skills - all 3 visible */}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {pl.skill1 ? (<SkBadge name={pl.skill1} lv={pl.s1Lv} />) : (<span style={{ fontSize: 9, color: "var(--td)" }}>{"-"}</span>)}
+              {pl.skill1 ? (<SkBadge name={pl.skill1} lv={pl.s1Lv} />) : (<span style={{ fontSize: 11, color: "var(--td)" }}>{"-"}</span>)}
               {pl.skill2 ? (<SkBadge name={pl.skill2} lv={pl.s2Lv} />) : null}
               {pl.skill3 ? (<SkBadge name={pl.skill3} lv={pl.s3Lv} />) : null}
             </div>
             {/* Potential */}
-            <div style={{ fontSize: 12, color: "var(--td)", textAlign: "center" }}>{(pl.pot1 || "-") + "/" + (pl.pot2 || "-")}</div>
+            <div style={{ fontSize: 14, color: "var(--td)", textAlign: "center" }}>{(pl.pot1 || "-") + "/" + (pl.pot2 || "-")}</div>
           </React.Fragment>)}
         </div>
 
@@ -4038,88 +4068,88 @@ function MyPlayersPage(p) {
           <div style={{ padding: "10px 14px", background: "rgba(255,213,79,0.02)", borderBottom: "1px solid var(--bd)" }}>
             {/* Basic info */}
             <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-              <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"이름"}</div><span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)" }}>{pl.name}</span></div>
-              <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"카드"}</div><Badge type={pl.cardType} /></div>
-              {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><span style={{ fontSize: 12, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
-              {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"세트덱"}</div><input type="number" value={pl.setScore||0} onChange={function(e){upd(pl.id,"setScore",parseInt(e.target.value)||0);}} style={{ width: 36, padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--acc)", borderRadius: 3, color: "var(--acc)", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} /></div>)}
-              {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><select value={pl.liveType||""} onChange={function(e){upd(pl.id,"liveType",e.target.value);}} style={{ width: 44, padding: "3px 2px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}><option value="">-</option><option value="V1">V1</option><option value="V2">V2</option><option value="V3">V3</option></select></div>)}
-              {CARD_STARS_SELECTABLE[pl.cardType]&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><select value={pl.stars||(CARD_STARS[pl.cardType]||5)} onChange={function(e){upd(pl.id,"stars",parseInt(e.target.value));}} style={{ width: 38, padding: "3px 2px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>{(pl.cardType==="골든글러브"?[4,5]:[1,2,3,4,5]).map(function(s){return(<option key={s} value={s}>{s}</option>);})}</select></div>)}
-              <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"강화"}</div><select value={pl.enhance || ""} onChange={function(e) { upd(pl.id, "enhance", e.target.value); }} style={{ width: 64, padding: "3px 2px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>
+              <div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"이름"}</div><span style={{ fontSize: 15, fontWeight: 700, color: "var(--t1)" }}>{pl.name}</span></div>
+              <div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"카드"}</div><Badge type={pl.cardType} /></div>
+              {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><span style={{ fontSize: 14, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
+              {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"세트덱"}</div><input type="number" value={pl.setScore||0} onChange={function(e){upd(pl.id,"setScore",parseInt(e.target.value)||0);}} style={{ width: 36, padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--acc)", borderRadius: 3, color: "var(--acc)", fontSize: 14, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} /></div>)}
+              {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><select value={pl.liveType||""} onChange={function(e){upd(pl.id,"liveType",e.target.value);}} style={{ width: 44, padding: "3px 2px", fontSize: 13, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}><option value="">-</option><option value="V1">V1</option><option value="V2">V2</option><option value="V3">V3</option></select></div>)}
+              {CARD_STARS_SELECTABLE[pl.cardType]&&(<div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><select value={pl.stars||(CARD_STARS[pl.cardType]||5)} onChange={function(e){upd(pl.id,"stars",parseInt(e.target.value));}} style={{ width: 38, padding: "3px 2px", fontSize: 13, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>{(pl.cardType==="골든글러브"?[4,5]:[1,2,3,4,5]).map(function(s){return(<option key={s} value={s}>{s}</option>);})}</select></div>)}
+              <div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"강화"}</div><select value={pl.enhance || ""} onChange={function(e) { upd(pl.id, "enhance", e.target.value); }} style={{ width: 64, padding: "3px 2px", fontSize: 13, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}>
                 {["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e) { return (<option key={e} value={e}>{e}</option>); })}
               </select></div>
-              {!CARD_STARS_SELECTABLE[pl.cardType]&&(<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><span style={{ fontSize: 13, color: "var(--acc)" }}>{"★" + (pl.stars || CARD_STARS[pl.cardType] || 5)}</span></div>)}
-              {!isBat && (<div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"세부포지션"}</div><select value={pl.subPosition||""} onChange={function(e){
+              {!CARD_STARS_SELECTABLE[pl.cardType]&&(<div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"별"}</div><span style={{ fontSize: 15, color: "var(--acc)" }}>{"★" + (pl.stars || CARD_STARS[pl.cardType] || 5)}</span></div>)}
+              {!isBat && (<div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"세부포지션"}</div><select value={pl.subPosition||""} onChange={function(e){
                 var sp = e.target.value;
                 var newPos = sp.startsWith("SP") ? "선발" : sp === "CP" ? "마무리" : "중계";
                 upd(pl.id, "subPosition", sp, "position", newPos);
-              }} style={{ width: 56, padding: "3px 2px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--acp)", borderRadius: 3, color: "var(--acp)", fontWeight: 700, outline: "none" }}>
+              }} style={{ width: 56, padding: "3px 2px", fontSize: 13, background: "var(--inner)", border: "1px solid var(--acp)", borderRadius: 3, color: "var(--acp)", fontWeight: 700, outline: "none" }}>
                 {["SP1","SP2","SP3","SP4","SP5","RP1","RP2","RP3","RP4","RP5","RP6","CP"].map(function(s){return(<option key={s} value={s}>{s}</option>);})}
               </select></div>)}
               {/* FA toggle - 임팩트/시그니처만 */}
               {(pl.cardType==="임팩트"||pl.cardType==="시그니처") && (
-              <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 2 }}>{"FA"}</div>
+              <div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"FA"}</div>
                 <div onClick={function(){upd(pl.id,"isFa",!pl.isFa);}} style={{ width: 36, height: 20, borderRadius: 10, background: pl.isFa ? "#FF9800" : "var(--inner)", border: "1px solid " + (pl.isFa ? "#FF9800" : "var(--bd)"), position: "relative", cursor: "pointer" }}>
                   <div style={{ width: 16, height: 16, borderRadius: "50%", background: pl.isFa ? "#fff" : "var(--td)", position: "absolute", top: 1, left: pl.isFa ? 18 : 1, transition: "left 0.2s" }} />
                 </div>
               </div>
               )}
-              <button onClick={function() { if (confirm("'" + pl.name + "' 삭제?")) { save(players.filter(function(x) { return x.id !== pl.id; })); setSelId(null); } }} style={{ padding: "3px 8px", fontSize: 9, background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)", borderRadius: 3, color: "#EF5350", cursor: "pointer", marginLeft: "auto" }}>{"삭제"}</button>
+              <button onClick={function() { if (confirm("'" + pl.name + "' 삭제?")) { save(players.filter(function(x) { return x.id !== pl.id; })); setSelId(null); } }} style={{ padding: "3px 8px", fontSize: 11, background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)", borderRadius: 3, color: "#EF5350", cursor: "pointer", marginLeft: "auto" }}>{"삭제"}</button>
             </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 6, padding: "4px 8px", background: "var(--inner)", borderRadius: 4, fontSize: 11 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 6, padding: "4px 8px", background: "var(--inner)", borderRadius: 4, fontSize: 13 }}>
               <span style={{ color: "var(--td)" }}>{"세트덱 스코어:"}</span>
               <span style={{ color: "var(--acc)", fontWeight: 800, fontFamily: "var(--m)" }}>{(function(){var sc=pl.cardType==="라이브"?(pl.setScore||0):(SET_POINTS[pl.cardType]||0);if(pl.isFa)sc=Math.max(0,sc-1);return sc;})()}</span>
-              {pl.isFa && pl.cardType==="시그니처" && (<span style={{ color: "#FF9800", fontSize: 9 }}>{"(FA -1)"}</span>)}{pl.isFa && pl.cardType==="임팩트" && (<span style={{ color: "#FF9800", fontSize: 9 }}>{"(FA -2)"}</span>)}
+              {pl.isFa && pl.cardType==="시그니처" && (<span style={{ color: "#FF9800", fontSize: 11 }}>{"(FA -1)"}</span>)}{pl.isFa && pl.cardType==="임팩트" && (<span style={{ color: "#FF9800", fontSize: 11 }}>{"(FA -2)"}</span>)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: 10 }}>
               {/* Training */}
               <div>
-                <div style={{ fontSize: 11, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"훈련"}</div>
+                <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"훈련"}</div>
                 <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
                   {isBat ? (
                     <React.Fragment>
-                      <span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "trainP", pl.trainP, "#EF5350")}
-                      <span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "trainA", pl.trainA, "#42A5F5")}
-                      <span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "trainE", pl.trainE, "#66BB6A")}
+                      <span style={{ fontSize: 13, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "trainP", pl.trainP, "#EF5350")}
+                      <span style={{ fontSize: 13, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "trainA", pl.trainA, "#42A5F5")}
+                      <span style={{ fontSize: 13, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "trainE", pl.trainE, "#66BB6A")}
                     </React.Fragment>
                   ) : (
                     <React.Fragment>
-                      <span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}
-                      <span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}
+                      <span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}
+                      <span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}
                     </React.Fragment>
                   )}
                 </div>
               </div>
               {/* Spec training */}
               <div>
-                <div style={{ fontSize: 11, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"특훈 (0~15)"}</div>
+                <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"특훈 (0~15)"}</div>
                 <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
                   {isBat ? (
                     <React.Fragment>
-                      <span style={{ fontSize: 11, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "specPower", pl.specPower, "#EF5350", 15)}
-                      <span style={{ fontSize: 11, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "specAccuracy", pl.specAccuracy, "#42A5F5", 15)}
-                      <span style={{ fontSize: 11, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "specEye", pl.specEye, "#66BB6A", 15)}
+                      <span style={{ fontSize: 13, color: "#EF5350" }}>{"파"}</span>{miniIn(pl.id, "specPower", pl.specPower, "#EF5350", 15)}
+                      <span style={{ fontSize: 13, color: "#42A5F5" }}>{"정"}</span>{miniIn(pl.id, "specAccuracy", pl.specAccuracy, "#42A5F5", 15)}
+                      <span style={{ fontSize: 13, color: "#66BB6A" }}>{"선"}</span>{miniIn(pl.id, "specEye", pl.specEye, "#66BB6A", 15)}
                     </React.Fragment>
                   ) : (
                     <React.Fragment>
-                      <span style={{ fontSize: 11, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}
-                      <span style={{ fontSize: 11, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}
+                      <span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}
+                      <span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}
                     </React.Fragment>
                   )}
                 </div>
               </div>
               {/* Potential */}
               <div>
-                <div style={{ fontSize: 11, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{pl.role === "타자" ? "잠재력 (풀스윙/클러치)" : "잠재력 (장타억제/침착)"}</div>
+                <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{pl.role === "타자" ? "잠재력 (풀스윙/클러치)" : "잠재력 (장타억제/침착)"}</div>
                 <div style={{ display: "flex", gap: 4 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span style={{ fontSize: 9, color: "var(--td)" }}>{pl.role === "타자" ? "풀스윙" : "장타억제"}</span>
-                    <select value={pl.pot1||""} onChange={function(e){upd(pl.id,"pot1",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 12, outline: "none", width: 52 }}>
+                    <span style={{ fontSize: 11, color: "var(--td)" }}>{pl.role === "타자" ? "풀스윙" : "장타억제"}</span>
+                    <select value={pl.pot1||""} onChange={function(e){upd(pl.id,"pot1",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 14, outline: "none", width: 52 }}>
                       <option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
                     </select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span style={{ fontSize: 9, color: "var(--td)" }}>{pl.role === "타자" ? "클러치" : "침착"}</span>
-                    <select value={pl.pot2||""} onChange={function(e){upd(pl.id,"pot2",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 12, outline: "none", width: 52 }}>
+                    <span style={{ fontSize: 11, color: "var(--td)" }}>{pl.role === "타자" ? "클러치" : "침착"}</span>
+                    <select value={pl.pot2||""} onChange={function(e){upd(pl.id,"pot2",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 14, outline: "none", width: 52 }}>
                       <option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
                     </select>
                   </div>
@@ -4128,7 +4158,7 @@ function MyPlayersPage(p) {
             </div>
             {/* Skills */}
             <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: 11, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"스킬 (" + getSkillCat(pl) + ")"}</div>
+              <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"스킬 (" + getSkillCat(pl) + ")"}</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {skillSel(pl, 1)}{skillSel(pl, 2)}{skillSel(pl, 3)}
               </div>
@@ -4147,10 +4177,10 @@ function MyPlayersPage(p) {
         <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
           {[{k:"타자",l:"타자 "+bats.length},{k:"선발",l:"선발 "+sps.length},{k:"중계",l:"중계 "+rps.length},{k:"마무리",l:"마무리 "+cps.length}].map(function(f) {
             var a = f.k === filter;
-            return (<button key={f.k} onClick={function(){setFilter(f.k);}} style={{ padding: "5px 10px", fontSize: 10, fontWeight: a?700:400, background: a?"var(--ta)":"var(--inner)", color: a?"var(--acc)":"var(--t2)", border: a?"1px solid var(--acc)":"1px solid var(--bd)", borderRadius: 5, cursor: "pointer" }}>{f.l}</button>);
+            return (<button key={f.k} onClick={function(){setFilter(f.k);}} style={{ padding: "5px 10px", fontSize: 12, fontWeight: a?700:400, background: a?"var(--ta)":"var(--inner)", color: a?"var(--acc)":"var(--t2)", border: a?"1px solid var(--acc)":"1px solid var(--bd)", borderRadius: 5, cursor: "pointer" }}>{f.l}</button>);
           })}
-          <button onClick={function() { setAddOpen(true); setAddQuery(""); }} style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 5, color: "#1a1100", cursor: "pointer", marginLeft: 4 }}>{"+ 추가"}</button>
-          <button onClick={function() { setScanOpen(true); }} style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, background: "linear-gradient(135deg,#4ade80,#22c55e)", border: "none", borderRadius: 5, color: "#0a0a0a", cursor: "pointer", marginLeft: 4 }}>{"📸 일괄 업데이트"}</button>
+          <button onClick={function() { setAddOpen(true); setAddQuery(""); }} style={{ padding: "5px 12px", fontSize: 12, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 5, color: "#1a1100", cursor: "pointer", marginLeft: 4 }}>{"+ 추가"}</button>
+          <button onClick={function() { setScanOpen(true); }} style={{ padding: "5px 12px", fontSize: 12, fontWeight: 700, background: "linear-gradient(135deg,#4ade80,#22c55e)", border: "none", borderRadius: 5, color: "#0a0a0a", cursor: "pointer", marginLeft: 4 }}>{"📸 일괄 업데이트"}</button>
         </div>
       </div>
 
@@ -4199,23 +4229,23 @@ function MyPlayersPage(p) {
         };
         return (
           <div onClick={function(){setAddOpen(false);}} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-            <div onClick={function(e){e.stopPropagation();}} style={{ background: "#141a24", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 440, width: "100%", maxHeight: "80vh", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div onClick={function(e){e.stopPropagation();}} style={{ background: "var(--card)", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 440, width: "100%", maxHeight: "80vh", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--bd)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"도감에서 선수 추가"}</div>
-                  <div style={{ fontSize: 10, color: "var(--td)", marginTop: 2 }}>{filter + " · " + dbPlayers.length + "명"}</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"도감에서 선수 추가"}</div>
+                  <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{filter + " · " + dbPlayers.length + "명"}</div>
                 </div>
                 <button onClick={function(){setAddOpen(false);}} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18 }}>{"✕"}</button>
               </div>
               <div style={{ padding: "8px 18px", borderBottom: "1px solid var(--bd)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, padding: "6px 10px" }}>
-                  <span style={{ fontSize: 14, opacity: 0.4 }}>{"🔍"}</span>
-                  <input type="text" value={addQuery} onChange={function(e){setAddQuery(e.target.value);}} placeholder="이름, 카드종류, 팀 검색..." style={{ flex: 1, background: "transparent", border: "none", color: "var(--t1)", fontSize: 12, outline: "none" }} />
+                  <span style={{ fontSize: 16, opacity: 0.4 }}>{"🔍"}</span>
+                  <input type="text" value={addQuery} onChange={function(e){setAddQuery(e.target.value);}} placeholder="이름, 카드종류, 팀 검색..." style={{ flex: 1, background: "transparent", border: "none", color: "var(--t1)", fontSize: 14, outline: "none" }} />
                 </div>
               </div>
               <div style={{ overflowY: "auto", maxHeight: "60vh" }}>
                 {dbPlayers.length === 0 ? (
-                  <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--td)", fontSize: 12 }}>{"도감에 등록된 선수가 없습니다."}</div>
+                  <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--td)", fontSize: 14 }}>{"도감에 등록된 선수가 없습니다."}</div>
                 ) : dbPlayers.map(function(sp) {
                   var already = players.some(function(x){ return x.name===sp.name && x.cardType===sp.cardType && (x.year||"")===(sp.year||"") && (x.impactType||"")===(sp.impactType||"") && (sp.cardType!=="라이브" || (x.liveType||"")===(sp.liveType||"")); });
                   return (
@@ -4224,16 +4254,16 @@ function MyPlayersPage(p) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <Badge type={sp.cardType} />
-                          <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 13 }}>{sp.name}</span>
-                          {sp.year && (<span style={{ fontSize: 9, color: "var(--td)" }}>{sp.year}</span>)}
-                          {sp.cardType === "임팩트" && sp.impactType && (<span style={{ fontSize: 9, color: "#a78bfa", marginLeft: 2 }}>{'(' + sp.impactType + ')'}</span>)}
-                          {sp.cardType === "라이브" && sp.liveType && (<span style={{ fontSize: 9, color: "#34d399", marginLeft: 2 }}>{'(' + sp.liveType + ')'}</span>)}
+                          <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 15 }}>{sp.name}</span>
+                          {sp.year && (<span style={{ fontSize: 11, color: "var(--td)" }}>{sp.year}</span>)}
+                          {sp.cardType === "임팩트" && sp.impactType && (<span style={{ fontSize: 11, color: "#a78bfa", marginLeft: 2 }}>{'(' + sp.impactType + ')'}</span>)}
+                          {sp.cardType === "라이브" && sp.liveType && (<span style={{ fontSize: 11, color: "#34d399", marginLeft: 2 }}>{'(' + sp.liveType + ')'}</span>)}
                         </div>
-                        <div style={{ fontSize: 9, color: "var(--td)", marginTop: 2 }}>
+                        <div style={{ fontSize: 11, color: "var(--td)", marginTop: 2 }}>
                           {isBat ? (sp.team + " · " + sp.hand + "타 · 파" + (sp.power||0) + " 정" + (sp.accuracy||0) + " 선" + (sp.eye||0)) : (sp.team + " · " + sp.hand + "투 · 변" + (sp.change||0) + " 구" + (sp.stuff||0))}
                         </div>
                       </div>
-                      {already && (<span style={{ fontSize: 9, color: "var(--acc)" }}>{"등록됨"}</span>)}
+                      {already && (<span style={{ fontSize: 11, color: "var(--acc)" }}>{"등록됨"}</span>)}
                     </div>
                   );
                 })}
@@ -4245,7 +4275,7 @@ function MyPlayersPage(p) {
 
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", overflow: "hidden" }}>
         {/* Header */}
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 50px" : "minmax(110px,1fr) 70px 90px 70px 130px 50px", gap: 5, padding: "6px 12px", borderBottom: "1px solid var(--bd)", fontSize: 11, fontWeight: 700, color: "var(--td)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 50px" : "minmax(110px,1fr) 70px 90px 70px 130px 50px", gap: 5, padding: "6px 12px", borderBottom: "1px solid var(--bd)", fontSize: 13, fontWeight: 700, color: "var(--td)" }}>
           <div>{"선수 (클릭→편집)"}</div>
           <div style={{ textAlign: "center" }}>{"점수"}</div>
           {!mob && (<React.Fragment>
@@ -4341,27 +4371,27 @@ function SkillManagePage(p) {
     var arr = table[name]; if (!arr) return null;
     return (
       <div style={{ padding: "8px 12px", background: "rgba(255,213,79,0.02)", borderBottom: "1px solid var(--bd)" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-          <thead><tr><th style={{ textAlign: "left", padding: "4px", color: "var(--td)" }}>{"능력치"}</th><th style={{ textAlign: "center", padding: "4px", color: "var(--td)", fontSize: 9 }}>{"항목"}</th>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead><tr><th style={{ textAlign: "left", padding: "4px", color: "var(--td)" }}>{"능력치"}</th><th style={{ textAlign: "center", padding: "4px", color: "var(--td)", fontSize: 11 }}>{"항목"}</th>
             {[5,6,7,8,9,10].map(function(lv) { return (<th key={lv} style={{ textAlign: "center", padding: "4px", color: {"10":"#FF4081","9":"#E040FB","8":"#FFD700","7":"#FF6B6B","6":"#4FC3F7","5":"#81C784"}[lv]||"#aaa" }}>{"Lv"+lv}</th>); })}
           </tr></thead>
           <tbody>{statKeys.map(function(sk, si) {
             var vk = statVKeys[si]; var fk = statFKeys[si];
             return (<React.Fragment key={sk}>
               <tr><td rowSpan={2} style={{ padding: "4px", color: statColors[si], fontWeight: 700, verticalAlign: "middle" }}>{statLabels[si]}</td>
-                <td style={{ fontSize: 9, color: "var(--td)", padding: "2px 4px" }}>{"수치"}</td>
+                <td style={{ fontSize: 11, color: "var(--td)", padding: "2px 4px" }}>{"수치"}</td>
                 {[0,1,2,3,4,5].map(function(li) { var entry = arr[li]; if(!entry)return null; var val = (typeof entry === "number") ? 0 : (entry[vk] || 0); var c = ["#81C784","#4FC3F7","#FF6B6B","#FFD700","#E040FB","#FF4081"][li];
-                  return (<td key={li} style={{ textAlign: "center", padding: "1px" }}><input type="number" step="1" value={val} onChange={function(e){updComp(name,li,vk,e.target.value);}} style={{ width: 38, padding: "2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+c+"33", borderRadius: 3, color: c, fontSize: 10, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} /></td>);
+                  return (<td key={li} style={{ textAlign: "center", padding: "1px" }}><input type="number" step="1" value={val} onChange={function(e){updComp(name,li,vk,e.target.value);}} style={{ width: 38, padding: "2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+c+"33", borderRadius: 3, color: c, fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} /></td>);
                 })}</tr>
-              <tr><td style={{ fontSize: 9, color: "var(--td)", padding: "2px 4px" }}>{"빈도"}</td>
+              <tr><td style={{ fontSize: 11, color: "var(--td)", padding: "2px 4px" }}>{"빈도"}</td>
                 {[0,1,2,3,4,5].map(function(li) { var entry = arr[li]; if(!entry)return null; var val = (typeof entry === "number") ? 0 : (entry[fk] || 0); var c = ["#81C784","#4FC3F7","#FF6B6B","#FFD700","#E040FB","#FF4081"][li];
-                  return (<td key={li} style={{ textAlign: "center", padding: "1px" }}><input type="number" step="0.01" value={val} onChange={function(e){updComp(name,li,fk,e.target.value);}} style={{ width: 38, padding: "2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+c+"22", borderRadius: 3, color: c, fontSize: 9, fontFamily: "var(--m)", opacity: 0.7, outline: "none" }} /></td>);
+                  return (<td key={li} style={{ textAlign: "center", padding: "1px" }}><input type="number" step="0.01" value={val} onChange={function(e){updComp(name,li,fk,e.target.value);}} style={{ width: 38, padding: "2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+c+"22", borderRadius: 3, color: c, fontSize: 11, fontFamily: "var(--m)", opacity: 0.7, outline: "none" }} /></td>);
                 })}</tr>
             </React.Fragment>); })}
             <tr><td colSpan={2} style={{ padding: "4px", fontWeight: 700, color: "var(--t1)" }}>{"합계"}</td>
               {[0,1,2,3,4,5].map(function(li) { var entry = arr[li]; if(!entry)return null; var sc = 0;
                 if (typeof entry === "number") { sc = entry; } else { sc = (entry.pV||0)*(entry.pF||0)*w.p + (entry.aV||0)*(entry.aF||0)*w.a + (entry.eV||0)*(entry.eF||0)*w.e + (entry.cV||0)*(entry.cF||0)*w.c + (entry.sV||0)*(entry.sF||0)*w.s; }
-                return (<td key={li} style={{ textAlign: "center", fontWeight: 800, fontFamily: "var(--m)", color: "var(--acc)", fontSize: 12 }}>{Math.round(sc*100)/100}</td>);
+                return (<td key={li} style={{ textAlign: "center", fontWeight: 800, fontFamily: "var(--m)", color: "var(--acc)", fontSize: 14 }}>{Math.round(sc*100)/100}</td>);
               })}</tr>
           </tbody>
         </table>
@@ -4374,51 +4404,51 @@ function SkillManagePage(p) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 6 }}>
         <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: 0 }}>{"스킬 관리"}</h2>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          <button onClick={doExport} style={{ padding: "5px 10px", fontSize: 10, background: "rgba(66,165,245,0.08)", border: "1px solid rgba(66,165,245,0.2)", borderRadius: 4, color: "#42A5F5", cursor: "pointer" }}>{"CSV 내보내기"}</button>
-          <button onClick={function(){setImpMode(!impMode);}} style={{ padding: "5px 10px", fontSize: 10, background: "rgba(102,187,106,0.08)", border: "1px solid rgba(102,187,106,0.2)", borderRadius: 4, color: "#66BB6A", cursor: "pointer" }}>{impMode?"닫기":"CSV 가져오기"}</button>
-          <button onClick={resetAll} style={{ padding: "5px 10px", fontSize: 10, background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 4, color: "#EF5350", cursor: "pointer" }}>{"기본값 복원"}</button>
+          <button onClick={doExport} style={{ padding: "5px 10px", fontSize: 12, background: "rgba(66,165,245,0.08)", border: "1px solid rgba(66,165,245,0.2)", borderRadius: 4, color: "#42A5F5", cursor: "pointer" }}>{"CSV 내보내기"}</button>
+          <button onClick={function(){setImpMode(!impMode);}} style={{ padding: "5px 10px", fontSize: 12, background: "rgba(102,187,106,0.08)", border: "1px solid rgba(102,187,106,0.2)", borderRadius: 4, color: "#66BB6A", cursor: "pointer" }}>{impMode?"닫기":"CSV 가져오기"}</button>
+          <button onClick={resetAll} style={{ padding: "5px 10px", fontSize: 12, background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 4, color: "#EF5350", cursor: "pointer" }}>{"기본값 복원"}</button>
         </div>
       </div>
       {showCSV && (<div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 10, color: "var(--td)" }}>{"CSV (복사→엑셀)"}</span><button onClick={function(){setShowCSV(false);}} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer" }}>{"✕"}</button></div>
-        <textarea value={csvText} readOnly rows={8} onClick={function(e){e.target.select();}} style={{ width: "100%", padding: 8, fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: "var(--td)" }}>{"CSV (복사→엑셀)"}</span><button onClick={function(){setShowCSV(false);}} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer" }}>{"✕"}</button></div>
+        <textarea value={csvText} readOnly rows={8} onClick={function(e){e.target.select();}} style={{ width: "100%", padding: 8, fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
       </div>)}
       {impMode && (<div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 12 }}>
-        <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 6 }}>{"CSV 붙여넣기 (카테고리,스킬명,레벨,능력치...)"}</div>
-        <textarea value={impText} onChange={function(e){setImpText(e.target.value);}} rows={6} style={{ width: "100%", padding: 8, fontSize: 10, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
-        <button onClick={doImport} style={{ marginTop: 6, padding: "6px 16px", fontSize: 11, fontWeight: 700, background: "linear-gradient(135deg,#66BB6A,#43A047)", border: "none", borderRadius: 6, color: "#fff", cursor: "pointer" }}>{"적용"}</button>
+        <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 6 }}>{"CSV 붙여넣기 (카테고리,스킬명,레벨,능력치...)"}</div>
+        <textarea value={impText} onChange={function(e){setImpText(e.target.value);}} rows={6} style={{ width: "100%", padding: 8, fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
+        <button onClick={doImport} style={{ marginTop: 6, padding: "6px 16px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg,#66BB6A,#43A047)", border: "none", borderRadius: 6, color: "#fff", cursor: "pointer" }}>{"적용"}</button>
       </div>)}
       {/* Weights */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 6 }}>{"능력치 가중치 (사이트 전체 적용)"}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 6 }}>{"능력치 가중치 (사이트 전체 적용)"}</div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {[{k:"p",l:"파워",cl:"#EF5350"},{k:"a",l:"정확",cl:"#42A5F5"},{k:"e",l:"선구",cl:"#66BB6A"},{k:"c",l:"변화",cl:"#AB47BC"},{k:"s",l:"구위",cl:"#FF7043"}].map(function(it){
-            return (<div key={it.k} style={{ textAlign: "center" }}><div style={{ fontSize: 10, color: it.cl, fontWeight: 700, marginBottom: 2 }}>{it.l}</div>
-              <input type="number" step="0.001" value={w[it.k]} onChange={function(e){updWeight(it.k,e.target.value);}} style={{ width: 56, padding: "4px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+it.cl+"44", borderRadius: 4, color: it.cl, fontSize: 14, fontFamily: "var(--m)", fontWeight: 800, outline: "none" }} /></div>);
+            return (<div key={it.k} style={{ textAlign: "center" }}><div style={{ fontSize: 12, color: it.cl, fontWeight: 700, marginBottom: 2 }}>{it.l}</div>
+              <input type="number" step="0.001" value={w[it.k]} onChange={function(e){updWeight(it.k,e.target.value);}} style={{ width: 56, padding: "4px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+it.cl+"44", borderRadius: 4, color: it.cl, fontSize: 16, fontFamily: "var(--m)", fontWeight: 800, outline: "none" }} /></div>);
           })}
         </div>
       </div>
       {/* Potential Scores - 종류별 */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{"잠재력 등급별 점수 (종류별)"}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{"잠재력 등급별 점수 (종류별)"}</div>
         {["풀스윙","클러치","장타억제","침착"].map(function(potType) {
           var byType = skills.potScoresByType || DEFAULT_POT_SCORES_BY_TYPE;
           var typeScores = byType[potType] || DEFAULT_POT_SCORES_BY_TYPE[potType] || DEFAULT_POT_SCORES;
           var typeColor = potType==="풀스윙"?"#EF5350":potType==="클러치"?"#42A5F5":potType==="장타억제"?"#AB47BC":"#66BB6A";
           return (<div key={potType} style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: typeColor, marginBottom: 4 }}>{potType + (potType==="풀스윙"||potType==="클러치" ? " (타자)" : " (투수)")}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: typeColor, marginBottom: 4 }}>{potType + (potType==="풀스윙"||potType==="클러치" ? " (타자)" : " (투수)")}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {POT_GRADES.map(function(g) {
                 var ps = typeScores[g] !== undefined ? typeScores[g] : (DEFAULT_POT_SCORES[g] || 0);
                 return (<div key={g} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--td)", marginBottom: 2 }}>{g}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--td)", marginBottom: 2 }}>{g}</div>
                   <input type="number" step="1" value={ps} onChange={function(e) {
                     var copy = JSON.parse(JSON.stringify(skills));
                     if (!copy.potScoresByType) copy.potScoresByType = JSON.parse(JSON.stringify(DEFAULT_POT_SCORES_BY_TYPE));
                     if (!copy.potScoresByType[potType]) copy.potScoresByType[potType] = Object.assign({}, DEFAULT_POT_SCORES);
                     copy.potScoresByType[potType][g] = parseFloat(e.target.value) || 0;
                     saveSK(copy);
-                  }} style={{ width: 36, padding: "3px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+typeColor+"44", borderRadius: 4, color: typeColor, fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
+                  }} style={{ width: 36, padding: "3px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+typeColor+"44", borderRadius: 4, color: typeColor, fontSize: 14, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
                 </div>);
               })}
             </div>
@@ -4427,26 +4457,26 @@ function SkillManagePage(p) {
       </div>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
-        {cats.map(function(c){ var a=c===cat; return (<button key={c} onClick={function(){setCat(c);setExpName("");}} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: a?800:500, background: a?"var(--ta)":"var(--inner)", color: a?"var(--acc)":"var(--t2)", border: a?"1px solid var(--acc)":"1px solid var(--bd)", cursor: "pointer" }}>{c+" ("+Object.keys(skills[c]||{}).length+")"}</button>); })}
+        {cats.map(function(c){ var a=c===cat; return (<button key={c} onClick={function(){setCat(c);setExpName("");}} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13, fontWeight: a?800:500, background: a?"var(--ta)":"var(--inner)", color: a?"var(--acc)":"var(--t2)", border: a?"1px solid var(--acc)":"1px solid var(--bd)", cursor: "pointer" }}>{c+" ("+Object.keys(skills[c]||{}).length+")"}</button>); })}
       </div>
       {/* Add */}
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        <input type="text" value={newName} onChange={function(e){setNewName(e.target.value);}} placeholder="새 스킬 이름" onKeyDown={function(e){if(e.key==="Enter")addSkill();}} style={{ flex: 1, padding: "7px 10px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none" }} />
-        <button onClick={addSkill} style={{ padding: "7px 14px", fontSize: 11, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6, color: "#1a1100", cursor: "pointer" }}>{"+ 추가"}</button>
+        <input type="text" value={newName} onChange={function(e){setNewName(e.target.value);}} placeholder="새 스킬 이름" onKeyDown={function(e){if(e.key==="Enter")addSkill();}} style={{ flex: 1, padding: "7px 10px", fontSize: 13, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none" }} />
+        <button onClick={addSkill} style={{ padding: "7px 14px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6, color: "#1a1100", cursor: "pointer" }}>{"+ 추가"}</button>
       </div>
       {/* List */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "24px minmax(100px,1fr) 48px 48px 48px 48px 48px 48px 28px", gap: 2, padding: "6px 10px", borderBottom: "1px solid var(--bd)", fontSize: 10, fontWeight: 700, color: "var(--td)" }}>
-          <div style={{textAlign:"center",fontSize:9}}>{"★"}</div><div>{"스킬명 (Lv6순) ▼클릭편집"}</div><div style={{ textAlign: "center", color: "#81C784" }}>{"Lv5"}</div><div style={{ textAlign: "center", color: "#4FC3F7" }}>{"Lv6"}</div><div style={{ textAlign: "center", color: "#FF6B6B" }}>{"Lv7"}</div><div style={{ textAlign: "center", color: "#FFD700" }}>{"Lv8"}</div><div style={{ textAlign: "center", color: "#E040FB" }}>{"Lv9"}</div><div style={{ textAlign: "center", color: "#FF4081" }}>{"Lv10"}</div><div />
+        <div style={{ display: "grid", gridTemplateColumns: "24px minmax(100px,1fr) 48px 48px 48px 48px 48px 48px 28px", gap: 2, padding: "6px 10px", borderBottom: "1px solid var(--bd)", fontSize: 12, fontWeight: 700, color: "var(--td)" }}>
+          <div style={{textAlign:"center",fontSize:11}}>{"★"}</div><div>{"스킬명 (Lv6순) ▼클릭편집"}</div><div style={{ textAlign: "center", color: "#81C784" }}>{"Lv5"}</div><div style={{ textAlign: "center", color: "#4FC3F7" }}>{"Lv6"}</div><div style={{ textAlign: "center", color: "#FF6B6B" }}>{"Lv7"}</div><div style={{ textAlign: "center", color: "#FFD700" }}>{"Lv8"}</div><div style={{ textAlign: "center", color: "#E040FB" }}>{"Lv9"}</div><div style={{ textAlign: "center", color: "#FF4081" }}>{"Lv10"}</div><div />
         </div>
-        {names.length === 0 ? (<div style={{ padding: 20, textAlign: "center", color: "var(--td)", fontSize: 11 }}>{"없음"}</div>) :
+        {names.length === 0 ? (<div style={{ padding: 20, textAlign: "center", color: "var(--td)", fontSize: 13 }}>{"없음"}</div>) :
         names.map(function(name, idx) { var vals = table[name]; var scores = calcSkillDisp(vals, cat); var isExp = (expName === name);
           return (<React.Fragment key={name}>
             <div onClick={function(){setExpName(isExp?"":name);}} style={{ display: "grid", gridTemplateColumns: "24px minmax(100px,1fr) 48px 48px 48px 48px 48px 48px 28px", gap: 2, padding: "5px 10px", alignItems: "center", borderBottom: "1px solid var(--bd)", background: isExp?"var(--ta)":(idx%2===0?"var(--re)":"transparent"), cursor: "pointer" }}>
-              <button onClick={function(e){e.stopPropagation();var copy=JSON.parse(JSON.stringify(skills));if(!copy[cat][name])return;if(!copy._major)copy._major={};if(!copy._major[cat])copy._major[cat]={};copy._major[cat][name]=!((copy._major[cat]||{})[name]);saveSK(copy);}} style={{width:20,height:20,borderRadius:3,background:(((skills._major||{})[cat]||{})[name])?"rgba(171,71,188,0.2)":"transparent",border:"1px solid "+(((skills._major||{})[cat]||{})[name])?"#AB47BC":"var(--bd)",color:(((skills._major||{})[cat]||{})[name])?"#CE93D8":"var(--td)",cursor:"pointer",fontSize:9,padding:0,flexShrink:0}}>{"★"}</button>
-              <div style={{ fontSize: 11, fontWeight: 700, color: isExp?"var(--acc)":"var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(isExp?"▼ ":"▶ ")+name+(((skills._major||{})[cat]||{})[name]?" ⭐":"")}</div>
-              {scores.map(function(sc,i){ var c=["#81C784","#4FC3F7","#FF6B6B","#FFD700","#E040FB","#FF4081"][i]; return (<div key={i} style={{ textAlign: "center", fontSize: 11, fontFamily: "var(--m)", fontWeight: 700, color: c }}>{Math.round(sc*100)/100}</div>); })}
-              <button onClick={function(e){e.stopPropagation();delSkill(name);}} style={{ width: 22, height: 22, borderRadius: 3, background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)", color: "#EF5350", cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>{"×"}</button>
+              <button onClick={function(e){e.stopPropagation();var copy=JSON.parse(JSON.stringify(skills));if(!copy[cat][name])return;if(!copy._major)copy._major={};if(!copy._major[cat])copy._major[cat]={};copy._major[cat][name]=!((copy._major[cat]||{})[name]);saveSK(copy);}} style={{width:20,height:20,borderRadius:3,background:(((skills._major||{})[cat]||{})[name])?"rgba(171,71,188,0.2)":"transparent",border:"1px solid "+(((skills._major||{})[cat]||{})[name])?"#AB47BC":"var(--bd)",color:(((skills._major||{})[cat]||{})[name])?"#CE93D8":"var(--td)",cursor:"pointer",fontSize:11,padding:0,flexShrink:0}}>{"★"}</button>
+              <div style={{ fontSize: 13, fontWeight: 700, color: isExp?"var(--acc)":"var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(isExp?"▼ ":"▶ ")+name+(((skills._major||{})[cat]||{})[name]?" ⭐":"")}</div>
+              {scores.map(function(sc,i){ var c=["#81C784","#4FC3F7","#FF6B6B","#FFD700","#E040FB","#FF4081"][i]; return (<div key={i} style={{ textAlign: "center", fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, color: c }}>{Math.round(sc*100)/100}</div>); })}
+              <button onClick={function(e){e.stopPropagation();delSkill(name);}} style={{ width: 22, height: 22, borderRadius: 3, background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)", color: "#EF5350", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>{"×"}</button>
             </div>
             {isExp && renderDetail(name)}
           </React.Fragment>);
@@ -4467,7 +4497,7 @@ function ClubLoungePage(p) {
       <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>{"🎙️"}</div>
         <h3 style={{fontSize:16,fontWeight:800,color:"var(--t1)",margin:"0 0 8px",fontFamily:"var(--h)"}}>{"업데이트 예정"}</h3>
-        <p style={{fontSize:12,color:"var(--td)",margin:0}}>{"커뮤니티 기능이 준비되면 이 페이지에서 만나보실 수 있습니다."}</p>
+        <p style={{fontSize:14,color:"var(--td)",margin:0}}>{"커뮤니티 기능이 준비되면 이 페이지에서 만나보실 수 있습니다."}</p>
       </div>
     </div>
   );
@@ -4489,7 +4519,7 @@ function DataCenterPage(p) {
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
         {[{id:"analysis",label:"📈 라인업 분석"},{id:"skill",label:"🎯 스킬 계산기"},{id:"train",label:"🏋️ 훈재분 계산기"},{id:"top",label:"👑 고점덱 정보"}].map(function(t){
           var a = dcTab===t.id;
-          return (<button key={t.id} onClick={function(){setDcTab(t.id);}} style={{padding:"8px 16px",fontSize:11,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
+          return (<button key={t.id} onClick={function(){setDcTab(t.id);}} style={{padding:"8px 16px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
         })}
       </div>
       {dcTab==="analysis" && <LineupAnalysis mobile={mob} players={players} lineupMap={lineupMap} skills={skills} />}
@@ -4499,7 +4529,7 @@ function DataCenterPage(p) {
         <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}>
           <div style={{fontSize:40,marginBottom:10}}>{"👑"}</div>
           <h3 style={{fontSize:15,fontWeight:700,color:"var(--t1)",margin:"0 0 6px"}}>{"업데이트 예정"}</h3>
-          <p style={{fontSize:12,color:"var(--td)",margin:0}}>{"고점덱 정보가 준비되면 안내드리겠습니다."}</p>
+          <p style={{fontSize:14,color:"var(--td)",margin:0}}>{"고점덱 정보가 준비되면 안내드리겠습니다."}</p>
         </div>
       )}
     </div>
@@ -4775,7 +4805,7 @@ function LineupAnalysis(p) {
         <div style={{flex:1,minWidth:40,height:5,background:"var(--inner)",borderRadius:3,overflow:"hidden"}}>
           <div style={{width:(100-w2)+"%",height:"100%",background:barColor,borderRadius:3,transition:"width 0.4s"}} />
         </div>
-        <span style={{fontSize:11,fontWeight:800,color:barColor,minWidth:50,flexShrink:0,textAlign:"right"}}>
+        <span style={{fontSize:13,fontWeight:800,color:barColor,minWidth:50,flexShrink:0,textAlign:"right"}}>
           {top===null?"계산중":("상위 "+top+"%")}
         </span>
       </div>
@@ -4825,25 +4855,25 @@ function LineupAnalysis(p) {
         <div style={{display:"flex",alignItems:"center",gap:8,minWidth:140}}>
           <Badge type={pl.cardType} />
           <div>
-            <span style={{fontSize:12,fontWeight:800,color:"var(--t1)"}}>{pl.name}</span>
-            <span style={{fontSize:9,color:"var(--td)",marginLeft:4}}>{slot}</span>
+            <span style={{fontSize:14,fontWeight:800,color:"var(--t1)"}}>{pl.name}</span>
+            <span style={{fontSize:11,color:"var(--td)",marginLeft:4}}>{slot}</span>
           </div>
         </div>
         <div style={{flex:1,display:"flex",flexDirection:"column",gap:4,width:"100%",minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
-            <span style={{fontSize:10,color:"var(--td)",width:36,flexShrink:0}}>스킬</span>
-            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{skSc}</span>
+            <span style={{fontSize:12,color:"var(--td)",width:36,flexShrink:0}}>스킬</span>
+            <span style={{fontSize:12,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{skSc}</span>
             {pctBar(skPct, "#CE93D8")}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
-            <span style={{fontSize:10,color:"var(--td)",width:36,flexShrink:0}}>훈련</span>
-            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{trSc.toFixed(1)}</span>
+            <span style={{fontSize:12,color:"var(--td)",width:36,flexShrink:0}}>훈련</span>
+            <span style={{fontSize:12,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{trSc.toFixed(1)}</span>
             {pctBar(trPct, "#42A5F5")}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
-            <span style={{fontSize:10,color:"var(--td)",width:36,flexShrink:0}}>특훈</span>
-            <span style={{fontSize:10,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{spSc.toFixed(1)}</span>
-            {spPct !== null ? pctBar(spPct) : <span style={{fontSize:10,color:"var(--td)"}}>{"해당없음"}</span>}
+            <span style={{fontSize:12,color:"var(--td)",width:36,flexShrink:0}}>특훈</span>
+            <span style={{fontSize:12,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{spSc.toFixed(1)}</span>
+            {spPct !== null ? pctBar(spPct) : <span style={{fontSize:12,color:"var(--td)"}}>{"해당없음"}</span>}
           </div>
         </div>
       </div>
@@ -4852,8 +4882,8 @@ function LineupAnalysis(p) {
 
   if (building) return (
     <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:40,textAlign:"center"}}>
-      <div style={{fontSize:13,color:"var(--td)",marginBottom:8}}>{"분포 계산 중..."}</div>
-      <div style={{fontSize:11,color:"var(--td)"}}>{"분포 데이터 로딩 중..."}</div>
+      <div style={{fontSize:15,color:"var(--td)",marginBottom:8}}>{"분포 계산 중..."}</div>
+      <div style={{fontSize:13,color:"var(--td)"}}>{"분포 데이터 로딩 중..."}</div>
     </div>
   );
 
@@ -4861,23 +4891,23 @@ function LineupAnalysis(p) {
     <div>
       <div style={{display:"flex",gap:6,marginBottom:12,alignItems:"center"}}>
         {["타자","투수"].map(function(r){ var a=r===role; return (
-          <button key={r} onClick={function(){setRole(r);}} style={{padding:"6px 16px",fontSize:11,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{r}</button>
+          <button key={r} onClick={function(){setRole(r);}} style={{padding:"6px 16px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{r}</button>
         );})}
-        <button onClick={function(){buildAndSet(true);}} style={{marginLeft:"auto",padding:"5px 10px",fontSize:10,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--td)",cursor:"pointer"}}>{"🔄 분포 갱신"}</button>
-        <span style={{fontSize:9,color:"var(--td)"}}>{"(스킬 변경 시)"}</span>
+        <button onClick={function(){buildAndSet(true);}} style={{marginLeft:"auto",padding:"5px 10px",fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,color:"var(--td)",cursor:"pointer"}}>{"🔄 분포 갱신"}</button>
+        <span style={{fontSize:11,color:"var(--td)"}}>{"(스킬 변경 시)"}</span>
       </div>
 
       <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",overflow:"hidden",marginBottom:6}}>
         <div style={{padding:"8px 12px",background:"var(--inner)",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:12,fontWeight:800,color:"var(--t1)"}}>{role==="타자"?"⚾ 타자 라인업":"⚾ 투수 라인업"}</span>
-          <span style={{fontSize:10,color:"var(--td)"}}>{"("+( role==="타자"?batPlayers.length:pitPlayers.length)+"명)"}</span>
+          <span style={{fontSize:14,fontWeight:800,color:"var(--t1)"}}>{role==="타자"?"⚾ 타자 라인업":"⚾ 투수 라인업"}</span>
+          <span style={{fontSize:12,color:"var(--td)"}}>{"("+( role==="타자"?batPlayers.length:pitPlayers.length)+"명)"}</span>
         </div>
         {(role==="타자"?batPlayers:pitPlayers).length === 0 ? (
-          <div style={{padding:24,textAlign:"center",fontSize:11,color:"var(--td)"}}>{"라인업에 등록된 선수가 없습니다"}</div>
+          <div style={{padding:24,textAlign:"center",fontSize:13,color:"var(--td)"}}>{"라인업에 등록된 선수가 없습니다"}</div>
         ) : (role==="타자"?batPlayers:pitPlayers).map(function(x){ return renderRow(x.slot, x.pl, role==="타자"); })}
       </div>
 
-      <div style={{padding:"8px 12px",background:"var(--inner)",borderRadius:8,fontSize:10,color:"var(--td)"}}>
+      <div style={{padding:"8px 12px",background:"var(--inner)",borderRadius:8,fontSize:12,color:"var(--td)"}}>
         {"💡 스킬 분포는 5만 회 시뮬레이션 기반. 훈련/특훈은 최대치 대비 비율. "}
         <span style={{color:"#FFD700"}}>{"금색: 상위 5%"}</span>{" "}
         <span style={{color:"#66BB6A"}}>{"초록: 상위 20%"}</span>{" "}
@@ -5039,41 +5069,41 @@ function SkillPhotoScan(p) {
   /* 슬롯 렌더 */
   var renderSlots = function(slotList, setSlotList, label, color) {
     return React.createElement("div", {style:{flex:1,minWidth:0}},
-      React.createElement("div", {style:{fontSize:11,fontWeight:700,color:color,marginBottom:8,textAlign:"center"}}, label),
+      React.createElement("div", {style:{fontSize:13,fontWeight:700,color:color,marginBottom:8,textAlign:"center"}}, label),
       slotList.map(function(s, i) {
         var score = Math.round(skillScore(s.selected, s.lv) * 100) / 100;
         var hasMulti = s.candidates.length > 1;
         return React.createElement("div", {key:i, style:{background:"var(--inner)",borderRadius:8,padding:"8px 10px",marginBottom:6,border:"1px solid "+(hasMulti?"rgba(251,191,36,0.4)":"var(--bd)")}},
           React.createElement("div", {style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
-            React.createElement("span", {style:{fontSize:10,fontWeight:800,color:"#FFD54F",width:16,textAlign:"center"}}, i+1),
-            React.createElement("span", {style:{fontSize:11,color:"var(--td)"}}, s.rawName),
-            hasMulti && React.createElement("span", {style:{fontSize:9,color:"#FBBF24",marginLeft:"auto"}}, "⚠️ 선택 필요")
+            React.createElement("span", {style:{fontSize:12,fontWeight:800,color:"#FFD54F",width:16,textAlign:"center"}}, i+1),
+            React.createElement("span", {style:{fontSize:13,color:"var(--td)"}}, s.rawName),
+            hasMulti && React.createElement("span", {style:{fontSize:11,color:"#FBBF24",marginLeft:"auto"}}, "⚠️ 선택 필요")
           ),
           s.candidates.length > 1
             ? React.createElement("select", {
                 value: s.selected,
                 onChange: function(e){ updateSlot(slotList, setSlotList, i, "selected", e.target.value); },
-                style:{width:"100%",padding:"4px 6px",fontSize:11,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",marginBottom:4}
+                style:{width:"100%",padding:"4px 6px",fontSize:13,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",marginBottom:4}
               },
               s.candidates.map(function(c){ return React.createElement("option",{key:c,value:c},c); })
             )
             : s.selected
-              ? React.createElement("div", {style:{fontSize:12,fontWeight:700,color:"var(--t1)",padding:"2px 0"}}, s.selected)
-              : React.createElement("div", {style:{fontSize:11,color:"#EF4444"}}, "❌ 스킬 미매칭: " + s.rawName),
+              ? React.createElement("div", {style:{fontSize:14,fontWeight:700,color:"var(--t1)",padding:"2px 0"}}, s.selected)
+              : React.createElement("div", {style:{fontSize:13,color:"#EF4444"}}, "❌ 스킬 미매칭: " + s.rawName),
           React.createElement("div", {style:{display:"flex",alignItems:"center",gap:6,marginTop:4}},
             React.createElement("select", {
               value: s.lv,
               onChange: function(e){ updateSlot(slotList, setSlotList, i, "lv", parseInt(e.target.value)); },
-              style:{width:60,padding:"3px 4px",fontSize:11,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#4FC3F7",fontWeight:700}
+              style:{width:60,padding:"3px 4px",fontSize:13,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#4FC3F7",fontWeight:700}
             },
               [5,6,7,8,9,10].map(function(v){ return React.createElement("option",{key:v,value:v},"Lv"+v); })
             ),
-            React.createElement("span", {style:{fontSize:12,fontWeight:800,color:"#FFD54F",marginLeft:"auto",fontFamily:"var(--m)"}}, score)
+            React.createElement("span", {style:{fontSize:14,fontWeight:800,color:"#FFD54F",marginLeft:"auto",fontFamily:"var(--m)"}}, score)
           )
         );
       }),
       slotList.length > 0 && React.createElement("div", {
-        style:{textAlign:"center",fontSize:13,fontWeight:900,color:color,fontFamily:"var(--m)",padding:"8px 0",borderTop:"1px solid var(--bd)",marginTop:4}
+        style:{textAlign:"center",fontSize:15,fontWeight:900,color:color,fontFamily:"var(--m)",padding:"8px 0",borderTop:"1px solid var(--bd)",marginTop:4}
       }, "합계 " + Math.round(totalScore(slotList)*100)/100)
     );
   };
@@ -5081,7 +5111,7 @@ function SkillPhotoScan(p) {
   return React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:10}},
     /* 포지션 선택 */
     React.createElement("div", {style:{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}},
-      React.createElement("div", {style:{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}, "포지션 선택"),
+      React.createElement("div", {style:{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:8}}, "포지션 선택"),
       React.createElement("div", {style:{display:"flex",gap:6,flexWrap:"wrap"}},
         POS_TYPES_PS.map(function(pt) {
           var a = localPos === pt;
@@ -5091,15 +5121,15 @@ function SkillPhotoScan(p) {
               setLocalPos(pt);
               setSlots([]); setSlotsB([]); setScanResult(null); setMode(null); setErr("");
             },
-            style: {padding:"7px 18px",fontSize:12,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}
+            style: {padding:"7px 18px",fontSize:14,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}
           }, pt);
         })
       )
     ),
     /* 이미지 업로드 */
     React.createElement("div", {style:{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}},
-      React.createElement("div", {style:{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}, "📸 스킬 화면 사진 업로드"),
-      React.createElement("div", {style:{fontSize:10,color:"var(--td)",marginBottom:10,lineHeight:1.5}},
+      React.createElement("div", {style:{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:8}}, "📸 스킬 화면 사진 업로드"),
+      React.createElement("div", {style:{fontSize:12,color:"var(--td)",marginBottom:10,lineHeight:1.5}},
         "스킬 변경 화면 스크린샷을 올려주세요.", React.createElement("br",null),
         "• 스킬 3개만 있는 화면 → 단일 분석", React.createElement("br",null),
         "• 기존스킬 vs 변경스킬 비교 화면 → 점수 비교"
@@ -5110,7 +5140,7 @@ function SkillPhotoScan(p) {
             ? React.createElement("img", {src:img.preview, style:{maxWidth:"100%",maxHeight:200,borderRadius:6,objectFit:"contain"}})
             : React.createElement("div", null,
                 React.createElement("div", {style:{fontSize:24,marginBottom:6}}, "📷"),
-                React.createElement("div", {style:{fontSize:12,color:"var(--td)"}}, "사진을 클릭하여 업로드")
+                React.createElement("div", {style:{fontSize:14,color:"var(--td)"}}, "사진을 클릭하여 업로드")
               )
         ),
         React.createElement("input", {type:"file",accept:"image/*",onChange:onImgChange,style:{display:"none"}})
@@ -5119,44 +5149,44 @@ function SkillPhotoScan(p) {
         React.createElement("button", {
           onClick: runScan,
           disabled: scanning,
-          style:{flex:1,padding:"10px",fontSize:12,fontWeight:800,background:scanning?"var(--inner)":"linear-gradient(135deg,#667eea,#764ba2)",border:"none",borderRadius:8,color:scanning?"var(--td)":"#fff",cursor:scanning?"not-allowed":"pointer"}
+          style:{flex:1,padding:"10px",fontSize:14,fontWeight:800,background:scanning?"var(--inner)":"linear-gradient(135deg,#667eea,#764ba2)",border:"none",borderRadius:8,color:scanning?"var(--td)":"#fff",cursor:scanning?"not-allowed":"pointer"}
         }, scanning ? "🔍 판독 중..." : "🔍 스킬 판독"),
         React.createElement("button", {
           onClick:function(){setImg(null);setScanResult(null);setSlots([]);setSlotsB([]);setMode(null);setErr("");},
-          style:{padding:"10px 14px",fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:8,color:"var(--t2)",cursor:"pointer"}
+          style:{padding:"10px 14px",fontSize:14,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:8,color:"var(--t2)",cursor:"pointer"}
         }, "✕")
       )
     ),
 
     /* 에러 */
-    err && React.createElement("div", {style:{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#fca5a5"}}, "⚠️ " + err),
+    err && React.createElement("div", {style:{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#fca5a5"}}, "⚠️ " + err),
 
     /* 결과 - single 모드 */
     mode === "single" && slots.length > 0 && React.createElement("div", {style:{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}},
-      React.createElement("div", {style:{fontSize:12,fontWeight:800,color:"var(--t1)",marginBottom:10}}, "📊 스킬 분석 결과"),
+      React.createElement("div", {style:{fontSize:14,fontWeight:800,color:"var(--t1)",marginBottom:10}}, "📊 스킬 분석 결과"),
       renderSlots(slots, setSlots, "스킬 조합", "#FFD54F"),
       React.createElement("button", {
         onClick: function(){
           if (onApply) onApply(slots.map(function(s){return {name:s.selected,lv:s.lv};}));
         },
         disabled: slots.some(function(s){return !s.selected;}),
-        style:{width:"100%",marginTop:10,padding:"10px",fontSize:12,fontWeight:800,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",border:"none",borderRadius:8,color:"#1a1100",cursor:"pointer",opacity:slots.some(function(s){return !s.selected;})? 0.5:1}
+        style:{width:"100%",marginTop:10,padding:"10px",fontSize:14,fontWeight:800,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",border:"none",borderRadius:8,color:"#1a1100",cursor:"pointer",opacity:slots.some(function(s){return !s.selected;})? 0.5:1}
       }, "✅ 스킬계산기에 적용")
     ),
 
     /* 결과 - compare 모드 */
     mode === "compare" && slots.length > 0 && React.createElement("div", {style:{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}},
-      React.createElement("div", {style:{fontSize:12,fontWeight:800,color:"var(--t1)",marginBottom:12}}, "⚖️ 스킬 비교 결과"),
+      React.createElement("div", {style:{fontSize:14,fontWeight:800,color:"var(--t1)",marginBottom:12}}, "⚖️ 스킬 비교 결과"),
       /* 승패 배너 */
       React.createElement("div", {style:{
         textAlign:"center",padding:"10px",borderRadius:8,marginBottom:12,
         background: scoreA > scoreB ? "rgba(74,222,128,0.1)" : scoreB > scoreA ? "rgba(251,191,36,0.1)" : "rgba(148,163,184,0.1)",
         border: "1px solid " + (scoreA > scoreB ? "#4ade80" : scoreB > scoreA ? "#FBBF24" : "#94a3b8")
       }},
-        React.createElement("div", {style:{fontSize:14,fontWeight:900,color: scoreA > scoreB ? "#4ade80" : scoreB > scoreA ? "#FBBF24" : "var(--td)"}},
+        React.createElement("div", {style:{fontSize:16,fontWeight:900,color: scoreA > scoreB ? "#4ade80" : scoreB > scoreA ? "#FBBF24" : "var(--td)"}},
           scoreA > scoreB ? "✅ 기존 스킬 유지 추천" : scoreB > scoreA ? "🔄 스킬 변경 추천" : "🤝 동점"
         ),
-        React.createElement("div", {style:{fontSize:11,color:"var(--td)",marginTop:2}},
+        React.createElement("div", {style:{fontSize:13,color:"var(--td)",marginTop:2}},
           "기존 " + Math.round(scoreA*100)/100 + " vs 변경 " + Math.round(scoreB*100)/100 +
           " (차이: " + Math.round(Math.abs(scoreA-scoreB)*100)/100 + ")"
         )
@@ -5319,7 +5349,7 @@ function SkillCalculator(p) {
       <div style={{display:"flex",gap:6}}>
         {[{id:"manual",label:"✏️ 직접 입력"},{id:"photo",label:"📸 사진 판독"}].map(function(t){
           var a=scTab===t.id;
-          return (<button key={t.id} onClick={function(){setScTab(t.id);}} style={{flex:1,padding:"9px",fontSize:12,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
+          return (<button key={t.id} onClick={function(){setScTab(t.id);}} style={{flex:1,padding:"9px",fontSize:14,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
         })}
       </div>
       {/* 사진판독 탭 */}
@@ -5338,49 +5368,49 @@ function SkillCalculator(p) {
       {scTab==="manual" && (<>
       {/* 카드종류 + 포지션 선택 */}
       <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}}>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}>{"카드 종류"}</div>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:8}}>{"카드 종류"}</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
           {CARD_TYPES_SC.map(function(ct){
             var a=cardType===ct;
-            return (<button key={ct} onClick={function(){onCardChange(ct);}} style={{padding:"5px 10px",fontSize:10,fontWeight:a?800:500,background:a?"rgba("+([212,175,55].join(","))+",0.15)":"var(--inner)",border:"1px solid "+(a?cardColor[ct]:"var(--bd)"),borderRadius:6,color:a?cardColor[ct]:"var(--t2)",cursor:"pointer"}}>{ct}</button>);
+            return (<button key={ct} onClick={function(){onCardChange(ct);}} style={{padding:"5px 10px",fontSize:12,fontWeight:a?800:500,background:a?"rgba("+([212,175,55].join(","))+",0.15)":"var(--inner)",border:"1px solid "+(a?cardColor[ct]:"var(--bd)"),borderRadius:6,color:a?cardColor[ct]:"var(--t2)",cursor:"pointer"}}>{ct}</button>);
           })}
         </div>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}>{"포지션"}</div>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:8}}>{"포지션"}</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {POS_TYPES.map(function(pt){
             var a=pos===pt;
-            return (<button key={pt} onClick={function(){setPos(pt);setSks(function(prev){return prev.map(function(s){return Object.assign({},s,{name:""});});});setResult(null);}} style={{padding:"5px 14px",fontSize:11,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{pt}</button>);
+            return (<button key={pt} onClick={function(){setPos(pt);setSks(function(prev){return prev.map(function(s){return Object.assign({},s,{name:""});});});setResult(null);}} style={{padding:"5px 14px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{pt}</button>);
           })}
         </div>
       </div>
 
       {/* 스킬 입력 */}
       <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}}>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:10}}>{"스킬 입력"+(majorSkills.length===0?" (⚠️ 스킬관리에서 ★메이저 스킬을 설정해주세요)":"")}</div>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:10}}>{"스킬 입력"+(majorSkills.length===0?" (⚠️ 스킬관리에서 ★메이저 스킬을 설정해주세요)":"")}</div>
         {sks.map(function(sk,i){
           var lvs = DEFAULT_LV[cardType]||[6,5,5];
           var isLocked = cardType==="임팩트"&&i===0;
           return (
             <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-              <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(255,213,79,0.15)",border:"1px solid rgba(255,213,79,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:"#FFD54F",flexShrink:0}}>{i+1}</div>
-              {isLocked && <span style={{fontSize:9,color:"#66BB6A",flexShrink:0}}>{"🔒고정"}</span>}
+              <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(255,213,79,0.15)",border:"1px solid rgba(255,213,79,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#FFD54F",flexShrink:0}}>{i+1}</div>
+              {isLocked && <span style={{fontSize:11,color:"#66BB6A",flexShrink:0}}>{"🔒고정"}</span>}
               <select value={sk.name} onChange={function(e){var v=e.target.value;setSks(function(prev){var n=prev.slice();n[i]=Object.assign({},n[i],{name:v});return n;});setResult(null);}}
-                style={{flex:1,padding:"5px 8px",fontSize:11,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",outline:"none"}}>
+                style={{flex:1,padding:"5px 8px",fontSize:13,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#e2e8f0",outline:"none"}}>
                 <option value="">{"-- 스킬 선택 --"}</option>
                 {majorSkills.length>0&&(<optgroup label={"⭐ 메이저 스킬"} style={{color:"#CE93D8"}}>{majorSkills.map(function(n){return(<option key={n} value={n}>{n}</option>);})}</optgroup>)}
                 {minorSkills.length>0&&(<optgroup label={"일반 스킬"} style={{color:"#94a3b8"}}>{minorSkills.map(function(n){return(<option key={n} value={n}>{n}</option>);})}</optgroup>)}
               </select>
               <select value={sk.lv} onChange={function(e){setSks(function(prev){var n=prev.slice();n[i]=Object.assign({},n[i],{lv:parseInt(e.target.value)});return n;});setResult(null);}}
-                style={{width:52,padding:"5px 4px",fontSize:11,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#4FC3F7",fontWeight:700,outline:"none",textAlign:"center"}}>
+                style={{width:52,padding:"5px 4px",fontSize:13,background:"#1e293b",border:"1px solid #334155",borderRadius:6,color:"#4FC3F7",fontWeight:700,outline:"none",textAlign:"center"}}>
                 {[5,6,7,8,9,10].map(function(v){return(<option key={v} value={v}>{"Lv"+v}</option>);})}
               </select>
-              <span style={{fontSize:11,fontFamily:"var(--m)",fontWeight:700,color:"#FFD54F",minWidth:36,textAlign:"right"}}>{Math.round(skillScore(sk.name,sk.lv)*100)/100}</span>
+              <span style={{fontSize:13,fontFamily:"var(--m)",fontWeight:700,color:"#FFD54F",minWidth:36,textAlign:"right"}}>{Math.round(skillScore(sk.name,sk.lv)*100)/100}</span>
             </div>
           );
         })}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:10,paddingTop:10,borderTop:"1px solid var(--bd)"}}>
-          <span style={{fontSize:13,fontWeight:800,color:"var(--t1)"}}>{"합계 점수: "}<span style={{color:"var(--acc)",fontFamily:"var(--m)"}}>{Math.round(myScore*100)/100}</span></span>
-          <button onClick={runSim} disabled={running||allSkillNames.length<3} style={{padding:"8px 20px",fontSize:12,fontWeight:800,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",border:"none",borderRadius:8,color:"#1a1100",cursor:"pointer",opacity:running?0.6:1}}>
+          <span style={{fontSize:15,fontWeight:800,color:"var(--t1)"}}>{"합계 점수: "}<span style={{color:"var(--acc)",fontFamily:"var(--m)"}}>{Math.round(myScore*100)/100}</span></span>
+          <button onClick={runSim} disabled={running||allSkillNames.length<3} style={{padding:"8px 20px",fontSize:14,fontWeight:800,background:"linear-gradient(135deg,#FFD54F,#FF8F00)",border:"none",borderRadius:8,color:"#1a1100",cursor:"pointer",opacity:running?0.6:1}}>
             {running?"시뮬레이션 중...":"🎯 확률 계산"}
           </button>
         </div>
@@ -5390,9 +5420,9 @@ function SkillCalculator(p) {
       {result && (
         <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}}>
           <div style={{textAlign:"center",marginBottom:16}}>
-            <div style={{fontSize:13,color:"var(--td)",marginBottom:4}}>{"내 스킬 점수: "}<span style={{fontWeight:800,color:"var(--t1)",fontFamily:"var(--m)"}}>{result.myScore}</span>{" / 중간값: "}<span style={{fontWeight:700,color:"var(--td)",fontFamily:"var(--m)"}}>{result.avg}</span></div>
+            <div style={{fontSize:15,color:"var(--td)",marginBottom:4}}>{"내 스킬 점수: "}<span style={{fontWeight:800,color:"var(--t1)",fontFamily:"var(--m)"}}>{result.myScore}</span>{" / 중간값: "}<span style={{fontWeight:700,color:"var(--td)",fontFamily:"var(--m)"}}>{result.avg}</span></div>
             <div style={{fontSize:28,fontWeight:900,color:result.pct<=10?"#4ade80":result.pct<=30?"#FFD54F":"var(--t1)",fontFamily:"var(--h)"}}>{"상위 "+result.pct+"%"}</div>
-            <div style={{fontSize:11,color:"var(--td)"}}>{"(10만회 시뮬레이션 기준)"}</div>
+            <div style={{fontSize:13,color:"var(--td)"}}>{"(10만회 시뮬레이션 기준)"}</div>
           </div>
           {/* 히스토그램 */}
           <div style={{display:"flex",alignItems:"flex-end",gap:2,height:80,marginTop:8}}>
@@ -5401,11 +5431,11 @@ function SkillCalculator(p) {
               var maxPct = Math.max.apply(null,result.hist.map(function(b){return b.pct;}));
               var h = maxPct>0?(bin.pct/maxPct*100):0;
               return (<div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
-                <div style={{width:"100%",height:h+"%",background:isMe?"#FFD54F":"rgba(255,255,255,0.15)",borderRadius:"2px 2px 0 0",minHeight:isMe?4:1,transition:"height 0.3s"}}/>
+                <div style={{width:"100%",height:h+"%",background:isMe?"var(--acc)":"var(--bar)",borderRadius:"2px 2px 0 0",minHeight:isMe?4:1,transition:"height 0.3s"}}/>
               </div>);
             })}
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--td)",marginTop:2}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--td)",marginTop:2}}>
             <span>{result.hist[0]&&Math.round(result.hist[0].lo*10)/10}</span>
             <span style={{color:"#FFD54F"}}>{"▲ 내 점수"}</span>
             <span>{result.hist[result.hist.length-1]&&Math.round(result.hist[result.hist.length-1].hi*10)/10}</span>
@@ -5516,21 +5546,21 @@ function TrainSimulator(p) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}}>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}>{"카드 종류"}</div>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:8}}>{"카드 종류"}</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
           {CARD_TYPES_TR.map(function(ct){
             var a=cardType===ct;
-            return (<button key={ct} onClick={function(){setCardType(ct);setResult(null);}} style={{padding:"5px 10px",fontSize:10,fontWeight:a?800:500,background:"var(--inner)",border:"1px solid "+(a?cardColor[ct]:"var(--bd)"),borderRadius:6,color:a?cardColor[ct]:"var(--t2)",cursor:"pointer"}}>{ct+(ct==="국가대표"?" (60pt)":ct==="임팩트"?" (54pt)":" (75pt)")}</button>);
+            return (<button key={ct} onClick={function(){setCardType(ct);setResult(null);}} style={{padding:"5px 10px",fontSize:12,fontWeight:a?800:500,background:"var(--inner)",border:"1px solid "+(a?cardColor[ct]:"var(--bd)"),borderRadius:6,color:a?cardColor[ct]:"var(--t2)",cursor:"pointer"}}>{ct+(ct==="국가대표"?" (60pt)":ct==="임팩트"?" (54pt)":" (75pt)")}</button>);
           })}
         </div>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:8}}>{"포지션"}</div>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:8}}>{"포지션"}</div>
         <div style={{display:"flex",gap:6,marginBottom:14}}>
           {["타자","투수"].map(function(pt){
             var a=pos===pt;
-            return (<button key={pt} onClick={function(){setPos(pt);setResult(null);}} style={{padding:"5px 14px",fontSize:11,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{pt}</button>);
+            return (<button key={pt} onClick={function(){setPos(pt);setResult(null);}} style={{padding:"5px 14px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{pt}</button>);
           })}
         </div>
-        <div style={{padding:"10px 12px",background:"var(--inner)",borderRadius:8,marginBottom:12,fontSize:11,color:"var(--td)"}}>
+        <div style={{padding:"10px 12px",background:"var(--inner)",borderRadius:8,marginBottom:12,fontSize:13,color:"var(--td)"}}>
           <div style={{fontWeight:700,color:"var(--t1)",marginBottom:4}}>{"📋 시뮬레이션 조건"}</div>
           <div>{"• 훈련 포인트: "}<span style={{color:"var(--acc)",fontWeight:700}}>{totalPts}{"pt"}</span></div>
           <div>{"• 고정 능력치: "}<span style={{color:"#EF5350",fontWeight:700}}>{fixStats.join(", ")}</span>{" (최저값 배치)"}</div>
@@ -5538,13 +5568,13 @@ function TrainSimulator(p) {
           <div>{"• 점수 계산: "+(isBat?"파워×"+w.p+" + 정확×"+w.a+" + 선구×"+w.e:"변화×"+w.c+" + 구위×"+w.s)}</div>
         </div>
         <div style={{marginBottom:12}}>
-          <div style={{fontSize:11,fontWeight:700,color:"var(--td)",marginBottom:4}}>{"내 훈재분 수치 입력 (선택사항)"}</div>
-          <div style={{fontSize:9,color:"var(--td)",marginBottom:8}}>{isBat?"파워/정확/선구만 입력하면 됩니다":"변화/구위만 입력하면 됩니다"}</div>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:4}}>{"내 훈재분 수치 입력 (선택사항)"}</div>
+          <div style={{fontSize:11,color:"var(--td)",marginBottom:8}}>{isBat?"파워/정확/선구만 입력하면 됩니다":"변화/구위만 입력하면 됩니다"}</div>
           <div style={{display:"flex",gap:10}}>
             {(isBat?["파워","정확","선구"]:["변화","구위"]).map(function(s){
               var clr = isBat?(s==="파워"?"#EF5350":s==="정확"?"#42A5F5":"#66BB6A"):(s==="변화"?"#AB47BC":"#FF7043");
               return (<div key={s} style={{flex:1,textAlign:"center"}}>
-                <div style={{fontSize:10,fontWeight:700,color:clr,marginBottom:4}}>{s}</div>
+                <div style={{fontSize:12,fontWeight:700,color:clr,marginBottom:4}}>{s}</div>
                 <input type="number" min="0" max="75" value={myDist[s]||""} placeholder="0"
                   onChange={function(e){var v=parseInt(e.target.value)||0;setMyDist(function(prev){var n=Object.assign({},prev);n[s]=v;return n;});setResult(null);}}
                   style={{width:"100%",padding:"6px 4px",textAlign:"center",background:"#1e293b",border:"1px solid "+clr+"55",borderRadius:6,color:clr,fontSize:16,fontFamily:"var(--m)",fontWeight:800,outline:"none",boxSizing:"border-box"}} />
@@ -5552,24 +5582,24 @@ function TrainSimulator(p) {
             })}
           </div>
         </div>
-        <button onClick={runSim} disabled={running} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,#66BB6A,#43A047)",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",opacity:running?0.6:1}}>
+        <button onClick={runSim} disabled={running} style={{width:"100%",padding:"10px",fontSize:15,fontWeight:800,background:"linear-gradient(135deg,#66BB6A,#43A047)",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",opacity:running?0.6:1}}>
           {running?"시뮬레이션 중... (10만회)":"🏋️ 훈재분 계산"}
         </button>
       </div>
 
       {result && (
         <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:14}}>
-          <div style={{fontSize:13,fontWeight:800,color:"var(--t1)",marginBottom:12}}>{"📈 시뮬레이션 결과 (10만회)"}</div>
+          <div style={{fontSize:15,fontWeight:800,color:"var(--t1)",marginBottom:12}}>{"📈 시뮬레이션 결과 (10만회)"}</div>
           {result.myPct !== null && (
             <div style={{background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:12,textAlign:"center"}}>
-              <div style={{fontSize:11,color:"var(--td)",marginBottom:4}}>{"내 훈재분 점수: "}<span style={{fontWeight:800,color:"var(--t1)",fontFamily:"var(--m)"}}>{result.mySc}</span></div>
+              <div style={{fontSize:13,color:"var(--td)",marginBottom:4}}>{"내 훈재분 점수: "}<span style={{fontWeight:800,color:"var(--t1)",fontFamily:"var(--m)"}}>{result.mySc}</span></div>
               <div style={{fontSize:26,fontWeight:900,color:result.myPct<=1?"#4ade80":result.myPct<=10?"#FFD54F":"var(--t1)",fontFamily:"var(--h)"}}>{"상위 "+result.myPct+"%"}</div>
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
             {[{label:"중간값 (50%)",val:result.med,color:"var(--td)"},{label:"상위 10%",val:result.top10,color:"#FFD54F"},{label:"상위 1%",val:result.top1,color:"#4ade80"}].map(function(item){
               return (<div key={item.label} style={{background:"var(--inner)",borderRadius:8,padding:"10px 8px",textAlign:"center"}}>
-                <div style={{fontSize:9,color:"var(--td)",marginBottom:4}}>{item.label}</div>
+                <div style={{fontSize:11,color:"var(--td)",marginBottom:4}}>{item.label}</div>
                 <div style={{fontSize:18,fontWeight:900,color:item.color,fontFamily:"var(--m)"}}>{item.val}</div>
               </div>);
             })}
@@ -5586,7 +5616,7 @@ function TrainSimulator(p) {
               return (<div key={i} style={{flex:1,height:h+"%",background:bg,borderRadius:"2px 2px 0 0",minHeight:1,border:isMe?"1px solid #fff":"none"}}/>);
             })}
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--td)",marginTop:4}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--td)",marginTop:4}}>
             <span>{result.min}</span>
             <span style={{color:"#FFD54F"}}>{"황금 = 상위10%"}</span>
             <span style={{color:"#4ade80"}}>{"초록 = 상위1%"}</span>
@@ -5602,7 +5632,7 @@ function TrainSimulator(p) {
 function CommunityPage(p){return(
   <div style={{padding:p.mobile?12:18,maxWidth:760,paddingBottom:p.mobile?80:18}}>
     <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"정보"}</h2>
-    <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}><div style={{fontSize:40,marginBottom:10}}>{"📢"}</div><h3 style={{fontSize:15,fontWeight:700,color:"var(--t1)",margin:"0 0 6px"}}>{"추후 업데이트 예정"}</h3><p style={{fontSize:12,color:"var(--td)",margin:0}}>{"새로운 기능이 준비되면 이 페이지에서 안내드리겠습니다."}</p></div>
+    <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}><div style={{fontSize:40,marginBottom:10}}>{"📢"}</div><h3 style={{fontSize:15,fontWeight:700,color:"var(--t1)",margin:"0 0 6px"}}>{"추후 업데이트 예정"}</h3><p style={{fontSize:14,color:"var(--td)",margin:0}}>{"새로운 기능이 준비되면 이 페이지에서 안내드리겠습니다."}</p></div>
   </div>
 );}
 
@@ -5623,6 +5653,15 @@ export default function App(){
   var _uid=useState(null);var userId=_uid[0];var setUserId=_uid[1];
   var _authChecked=useState(false);var authChecked=_authChecked[0];var setAuthChecked=_authChecked[1];
   var mob=useMedia("(max-width:640px)");var tbl=useMedia("(min-width:641px) and (max-width:1024px)");
+
+  /* ── 테마 (다크/라이트) ── */
+  var _th=useState(function(){ try{return localStorage.getItem("deck-theme")||"dark";}catch(e){return"dark";} });
+  var theme=_th[0];var setTheme=_th[1];
+  var toggleTheme=function(){
+    var next=theme==="dark"?"light":"dark";
+    setTheme(next);
+    try{localStorage.setItem("deck-theme",next);}catch(e){}
+  };
 
   /* ── 멀티덱 상태 ── */
   var _decks=useState([]);var decks=_decks[0];var setDecks=_decks[1];
@@ -5782,43 +5821,49 @@ export default function App(){
   var CSS=(<style>{"\
     @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');\
     :root{--bg:#0d1117;--side:#0a0e14;--card:rgba(22,27,38,0.8);--inner:rgba(255,255,255,0.03);--bd:rgba(255,255,255,0.06);--re:rgba(255,255,255,0.015);--bar:rgba(255,255,255,0.06);--ta:rgba(255,213,79,0.06);--t1:#e6edf3;--t2:#8b949e;--td:rgba(255,255,255,0.35);--acc:#FFD54F;--acp:#CE93D8;--h:'Oswald',sans-serif;--m:'JetBrains Mono',monospace;}\
+    .light{--bg:#f8fafc;--side:#eef2f7;--card:rgba(255,255,255,0.98);--inner:rgba(0,0,0,0.025);--bd:rgba(0,0,0,0.10);--re:rgba(0,0,0,0.02);--bar:rgba(0,0,0,0.07);--ta:rgba(180,83,9,0.08);--t1:#1e293b;--t2:#475569;--td:rgba(0,0,0,0.45);--acc:#b45309;--acp:#7c3aed;}\
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}html{-webkit-text-size-adjust:100%;}body{margin:0;font-family:'Noto Sans KR',sans-serif;background:var(--bg);overflow-x:hidden;-webkit-font-smoothing:antialiased;}\
-    ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.06);border-radius:2px;}\
+    ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px;}\
+    .light ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);}\
+    .light body{background:#f8fafc;}\
+    .light select{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23475569' d='M6 8L1 3h10z'/%3E%3C/svg%3E\");}\
+    .light input,.light select,.light textarea{color:var(--t1);background:var(--card);border-color:var(--bd);}\
+    .light input::placeholder{color:var(--td);}\
     select{-webkit-appearance:none;appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;}\
     input[type=number]{-moz-appearance:textfield;}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}\
   "}</style>);
 
-  if(!authChecked)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0d1117",color:"#e6edf3"}}><div>{"⚾ 인증 확인중..."}</div>{CSS}</div>);
-  if(!li)return(<React.Fragment><LoginPage onLogin={function(u,type,adm){setUser(u);setAuthType(type||"dev");setAdmin(adm||false);if(!userId)setUserId("guest_"+Date.now());setLi(true);}}/>{CSS}</React.Fragment>);
+  if(!authChecked)return(<div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 인증 확인중..."}</div>{CSS}</div>);
+  if(!li)return(<div className={theme==="light"?"light":""}><LoginPage onLogin={function(u,type,adm){setUser(u);setAuthType(type||"dev");setAdmin(adm||false);if(!userId)setUserId("guest_"+Date.now());setLi(true);}}/>{CSS}</div>);
 
   /* ── 팀 선택 화면 ── */
   if(showTeamSelect){
     var isFirst=showTeamSelect==="first";
     return(
-      <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)",padding:20}}>
+      <div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)",padding:20}}>
         <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--bd)",padding:mob?24:40,maxWidth:420,width:"100%",textAlign:"center"}}>
           <div style={{fontSize:48,marginBottom:12}}>{"⚾"}</div>
           <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--acc)"}}>{isFirst?"팀 선택":"덱 추가"}</h2>
-          <p style={{margin:"0 0 6px",fontSize:12,color:"var(--td)"}}>{isFirst?"덱 매니저에서 사용할 팀을 선택하세요":"추가할 팀을 선택하세요"}</p>
-          <p style={{margin:"0 0 18px",fontSize:10,color:"var(--td)"}}>{isFirst?"팀 선택은 덱 저장 이름입니다. 선수 팀 정보와는 무관합니다":decks.length+"/5 덱 사용 중"}</p>
+          <p style={{margin:"0 0 6px",fontSize:14,color:"var(--td)"}}>{isFirst?"덱 매니저에서 사용할 팀을 선택하세요":"추가할 팀을 선택하세요"}</p>
+          <p style={{margin:"0 0 18px",fontSize:12,color:"var(--td)"}}>{isFirst?"팀 선택은 덱 저장 이름입니다. 선수 팀 정보와는 무관합니다":decks.length+"/5 덱 사용 중"}</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             {KBO_TEAMS.map(function(t){return(
               <button key={t} onClick={function(){handleSelectTeam(t);}}
-                style={{padding:"14px 0",fontSize:16,fontWeight:800,fontFamily:"var(--h)",letterSpacing:2,background:"rgba(255,255,255,0.03)",border:"1px solid var(--bd)",borderRadius:8,color:"var(--t1)",cursor:"pointer"}}
-                onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,213,79,0.12)";e.currentTarget.style.borderColor="rgba(255,213,79,0.3)";e.currentTarget.style.color="#FFD54F";}}
-                onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.borderColor="rgba(255,255,255,0.06)";e.currentTarget.style.color="var(--t1)";}}>
+                style={{padding:"14px 0",fontSize:16,fontWeight:800,fontFamily:"var(--h)",letterSpacing:2,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:8,color:"var(--t1)",cursor:"pointer"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="var(--ta)";e.currentTarget.style.borderColor="var(--acc)";e.currentTarget.style.color="var(--acc)";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="var(--inner)";e.currentTarget.style.borderColor="var(--bd)";e.currentTarget.style.color="var(--t1)";}}>
                 {t}
               </button>
             );})}
           </div>
-          {!isFirst&&(<button onClick={function(){setShowTeamSelect(false);}} style={{marginTop:14,padding:"8px 20px",fontSize:11,background:"transparent",border:"1px solid var(--bd)",borderRadius:8,color:"var(--td)",cursor:"pointer"}}>{"취소"}</button>)}
+          {!isFirst&&(<button onClick={function(){setShowTeamSelect(false);}} style={{marginTop:14,padding:"8px 20px",fontSize:13,background:"transparent",border:"1px solid var(--bd)",borderRadius:8,color:"var(--td)",cursor:"pointer"}}>{"취소"}</button>)}
         </div>
         {CSS}
       </div>
     );
   }
 
-  if(store.loading||!curDeckId)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0d1117",color:"#e6edf3"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
+  if(store.loading||!curDeckId)return(<div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
 
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} userId={userId}/>);
@@ -5833,12 +5878,13 @@ export default function App(){
   else pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap}/>);
 
   return(
-    <div style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
+    <div className={theme==="light"?"light":""} style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
       <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin}
         decks={decks} curDeckId={curDeckId}
         onSwitchDeck={handleSwitchDeck}
         onAddDeck={function(){setShowTeamSelect("add");}}
-        onDeleteDeck={handleDeleteDeck}/>
+        onDeleteDeck={handleDeleteDeck}
+        theme={theme} toggleTheme={toggleTheme}/>
       <div style={{flex:1,overflowY:"auto",minHeight:"100vh",paddingTop:mob?44:(tbl?50:0)}}>{pg}</div>
       {CSS}
     </div>
