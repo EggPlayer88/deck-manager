@@ -831,7 +831,7 @@ function PlayerDBPage(p){
 
   /* 이미지 압축: Canvas로 리사이즈 + JPEG 변환 */
   var compressImage=function(file, maxW, maxH, quality){
-    return new Promise(function(resolve){
+    return new Promise(function(resolve, rej){
       var reader=new FileReader();
       reader.onload=function(e){
         var img=new Image();
@@ -847,13 +847,13 @@ function PlayerDBPage(p){
           var ctx=canvas.getContext("2d");
           ctx.drawImage(img,0,0,w,h);
           canvas.toBlob(function(blob){
-            resolve(blob||file); /* 실패 시 원본 폴백 */
+            if(blob){resolve(blob);}else{rej(new Error('압축 실패'));}
           },"image/jpeg",quality);
         };
-        img.onerror=function(){ resolve(file); };
+        img.onerror=function(){ rej(new Error('이미지 로드 실패')); };
         img.src=e.target.result;
       };
-      reader.onerror=function(){ resolve(file); };
+      reader.onerror=function(){ rej(new Error('파일 읽기 실패')); };
       reader.readAsDataURL(file);
     });
   };
@@ -3048,18 +3048,18 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '[3단계: 시그니처 판정 - 골든글러브보다 반드시 먼저 확인]',
     '★★★ 이 단계는 골든글러브보다 절대적으로 우선한다. ★★★',
     '- 위치 고정: 선수 이름 텍스트의 왼쪽 위 모서리 바로 옆. 정확히 이 위치만 확인하라.',
-    '- 찾을 것: 빨간색(적색) 필기체 S자 로고. 기울어진 서명 스타일.',
-    '- 이 S 필기체 로고는 이 게임에서 오직 시그니처 카드에만 존재한다. 다른 카드 종류에는 절대 없다.',
-    '- 판정 기준은 넉넉하게: 작아도, 흐려도, 일부만 보여도, 배경에 묻혀도 S처럼 보이면 시그니처.',
-    '- 배경색(황금/분홍/어떤 색이든)은 판단 기준이 아니다. 오직 이름 왼쪽 위의 빨간 S 유무만 본다.',
-    '- YES (이름 왼쪽 위에 빨간 S 확인) → 즉시 시그니처 확정. 4단계로 넘어가지 말 것.',
-    '- NO (이름 왼쪽 위에 없음) → 4단계로 이동.',
+    '- 찾을 것: 핑크색 또는 마젠타 계열의 필기체 S자 로고. 기울어진 서명 스타일. 희미하거나 작아도 포함.',
+    '- 보조 조건: 카드 전체 배경이 핑크/마젠타 계열이면서 별 5성이 확인될 경우 → 시그니처로 판정.',
+    '- 이 S 필기체 로고(또는 핑크+별5성 조합)는 이 게임에서 오직 시그니처 카드에만 존재한다.',
+    '- 배경이 황금/기타 색이라도, 이름 왼쪽 위에 핑크 S가 조금이라도 보이면 시그니처.',
+    '- YES → 즉시 시그니처 확정. 4단계로 넘어가지 말 것.',
+    '- NO → 4단계로 이동.',
     '',
     '[4단계: 골든글러브 판정]',
-    '- 1단계(연도 있음), 2단계(LIVE V 없음), 3단계(S 로고 없음)를 모두 통과한 상태.',
+    '- 1단계(연도 있음), 2단계(LIVE V 없음), 3단계(S 로고·핑크+별5성 없음)를 모두 통과한 상태.',
     '- 위치 고정: 선수 이름의 첫 글자 바로 위.',
-    '- 찾을 것: 노란색 또는 황금색 계열의 야구공.',
-    '- YES (이름 첫 글자 바로 위에 노랑/황금 야구공 확인) → 골든글러브 확정.',
+    '- 찾을 것: 노란색 또는 황금색 계열의 동그라미(원형 오브젝트).',
+    '- YES (이름 첫 글자 바로 위에 노랑/황금 동그라미 확인) → 골든글러브 확정.',
     '- NO → 5단계로 이동.',
     '',
     '[5단계: 기타]',
@@ -3070,8 +3070,8 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '[핵심 요약]',
     '- 연도 없음 → 100% 임팩트',
     '- 이름 바로 위 "LIVE V1/V2/V3" 텍스트 → 100% 라이브. 연도 있음.',
-    '- 이름 왼쪽 위 빨간 S 필기체 (조금이라도) → 100% 시그니처. 이 게임에서 S 필기체는 시그니처뿐.',
-    '- 이름 첫 글자 바로 위에 노랑/황금 야구공 → 골든글러브 (S 필기체 없을 때만)',
+    '- 이름 왼쪽 위 핑크/마젠타 S 필기체 (조금이라도) → 100% 시그니처. 또는 핑크 배경+별5성 조합.',
+    '- 이름 첫 글자 바로 위에 노랑/황금 동그라미 → 골든글러브 (S 필기체·핑크+별5성 없을 때만)',
     '',
     '=== 임팩트 종류 (이름 왼쪽에 보이는 텍스트) ===',
     '2025TOP3,5툴선수,FA선수,WAR상위,가을사나이,거포,교타자,구조대,구종마스터,끝내기,난세의영웅,느림의미학,대체외인,대표타자,도루왕,돌격대장,라이징스타,마당쇠,마무리,마성의주자,백전노장,베스트포지션,베테랑,분위기메이커,비FA계약,빅게임헌터,신인왕,안경에이스,안방마님,얼리스타터,여름사나이,외국인,우완에이스,원클럽맨,원투펀치,이벤트,저니맨,전천후,좌완에이스,좌타해결사,주력선수,중간계투,철완,최강야구,추억의선수,캡틴,키플레이어,키스톤,파이어볼러,프랜차이즈,필승계투,해외파,호타준족,홈런타자',
@@ -3135,7 +3135,6 @@ function mergeSkillsInto(players, skillData) {
 function expandYr(y) {
   if (!y || y === '') return '';
   var n = parseInt(y); if (isNaN(n)) return y;
-  // 26 이상(26~99) → 1900년대, 25 이하(00~25) → 2000년대
   // 50 이상(50~99) → 1900년대, 50 미만(00~49) → 2000년대
   return n >= 50 ? '19' + String(n).padStart(2,'0') : '20' + String(n).padStart(2,'0');
 }
@@ -3508,7 +3507,7 @@ function BulkScanModal(p) {
       var r = new FileReader();
       r.onload = function(e) {
         var originalSrc = e.target.result;
-        /* Canvas로 리사이즈 + JPEG 압축 (스캔 정확도 유지: 최대 1280px, 품질 0.88) */
+        /* Canvas로 리사이즈 + JPEG 압축 (스캔 정확도 유지: 최대 1280px, 품질 0.92) */
         var img = new Image();
         img.onload = function() {
           var maxW = 1280;
@@ -3517,12 +3516,11 @@ function BulkScanModal(p) {
           var canvas = document.createElement('canvas');
           canvas.width = w; canvas.height = h;
           canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-          var compressed = canvas.toDataURL('image/jpeg', 0.88);
+          var compressed = canvas.toDataURL('image/jpeg', 0.92);
           res({ src: compressed, base64: compressed.split(',')[1], mediaType: 'image/jpeg', name: file.name });
         };
         img.onerror = function() {
-          /* 압축 실패 시 원본 그대로 */
-          res({ src: originalSrc, base64: originalSrc.split(',')[1], mediaType: file.type, name: file.name });
+          rej(new Error('이미지 로드 실패'));
         };
         img.src = originalSrc;
       };
@@ -4995,7 +4993,7 @@ function SkillPhotoScan(p) {
     var reader = new FileReader();
     reader.onload = function(ev) {
       var originalSrc = ev.target.result;
-      /* Canvas로 리사이즈 + JPEG 압축 (최대 1280px, 품질 0.88) */
+      /* Canvas로 리사이즈 + JPEG 압축 (최대 1280px, 품질 0.92) */
       var img = new Image();
       img.onload = function() {
         var maxW = 1280;
@@ -5004,14 +5002,12 @@ function SkillPhotoScan(p) {
         var canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        var compressed = canvas.toDataURL('image/jpeg', 0.88);
+        var compressed = canvas.toDataURL('image/jpeg', 0.92);
         setImg({ base64: compressed.split(",")[1], mediaType: 'image/jpeg', preview: compressed });
         setScanResult(null); setSlots([]); setSlotsB([]); setMode(null); setErr("");
       };
       img.onerror = function() {
-        /* 압축 실패 시 원본 그대로 */
-        setImg({ base64: originalSrc.split(",")[1], mediaType: file.type, preview: originalSrc });
-        setScanResult(null); setSlots([]); setSlotsB([]); setMode(null); setErr("");
+        setErr('이미지 로드 실패');
       };
       img.src = originalSrc;
     };
