@@ -3509,23 +3509,11 @@ function BulkScanModal(p) {
       if (!file||!file.type.startsWith('image/')) { rej(new Error('이미지 파일만 가능')); return; }
       var r = new FileReader();
       r.onload = function(e) {
+        /* 원본 그대로 전송 (압축 없음) */
         var originalSrc = e.target.result;
-        /* Canvas로 리사이즈 + JPEG 압축 (스캔 정확도 유지: 최대 1280px, 품질 0.92) */
-        var img = new Image();
-        img.onload = function() {
-          var maxW = 1280;
-          var w = img.width; var h = img.height;
-          if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-          var canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-          var compressed = canvas.toDataURL('image/jpeg', 0.92);
-          res({ src: compressed, base64: compressed.split(',')[1], mediaType: 'image/jpeg', name: file.name });
-        };
-        img.onerror = function() {
-          rej(new Error('이미지 로드 실패'));
-        };
-        img.src = originalSrc;
+        var parts = originalSrc.split(',');
+        var mediaType = parts[0].match(/:(.*?);/)[1];
+        res({ src: originalSrc, base64: parts[1], mediaType: mediaType, name: file.name });
       };
       r.onerror = function(){ rej(new Error('읽기 실패')); };
       r.readAsDataURL(file);
