@@ -3057,11 +3057,9 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '',
     '[4단계: 골든글러브 판정]',
     '- 1단계(연도 있음), 2단계(LIVE V 없음), 3단계(S 로고 없음)를 모두 통과한 상태.',
-    '- 위치 고정: 선수 이름 텍스트의 왼쪽 위 모서리 바로 옆.',
-    '- 찾을 것: 황금색(금색) 야구공+글러브 아이콘. 작은 크기로 박혀 있음.',
-    '- 이 황금 야구공+글러브 아이콘은 이 게임에서 오직 골든글러브 카드에만 존재한다.',
-    '- ★★★ 배경이 황금색이어도 이 아이콘이 없으면 골든글러브가 아니다. 아이콘 유무만 판단하라. ★★★',
-    '- YES (이름 왼쪽 위에 황금 야구공+글러브 아이콘 확인) → 골든글러브 확정.',
+    '- 위치 고정: 선수 이름의 첫 글자 바로 위.',
+    '- 찾을 것: 노란색 또는 황금색 계열의 야구공.',
+    '- YES (이름 첫 글자 바로 위에 노랑/황금 야구공 확인) → 골든글러브 확정.',
     '- NO → 5단계로 이동.',
     '',
     '[5단계: 기타]',
@@ -3073,7 +3071,7 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '- 연도 없음 → 100% 임팩트',
     '- 이름 바로 위 "LIVE V1/V2/V3" 텍스트 → 100% 라이브. 연도 있음.',
     '- 이름 왼쪽 위 빨간 S 필기체 (조금이라도) → 100% 시그니처. 이 게임에서 S 필기체는 시그니처뿐.',
-    '- 이름 왼쪽 위 황금색 야구공+글러브 아이콘 → 골든글러브 (S 필기체 없을 때만)',
+    '- 이름 첫 글자 바로 위에 노랑/황금 야구공 → 골든글러브 (S 필기체 없을 때만)',
     '',
     '=== 임팩트 종류 (이름 왼쪽에 보이는 텍스트) ===',
     '2025TOP3,5툴선수,FA선수,WAR상위,가을사나이,거포,교타자,구조대,구종마스터,끝내기,난세의영웅,느림의미학,대체외인,대표타자,도루왕,돌격대장,라이징스타,마당쇠,마무리,마성의주자,백전노장,베스트포지션,베테랑,분위기메이커,비FA계약,빅게임헌터,신인왕,안경에이스,안방마님,얼리스타터,여름사나이,외국인,우완에이스,원클럽맨,원투펀치,이벤트,저니맨,전천후,좌완에이스,좌타해결사,주력선수,중간계투,철완,최강야구,추억의선수,캡틴,키플레이어,키스톤,파이어볼러,프랜차이즈,필승계투,해외파,호타준족,홈런타자',
@@ -3802,20 +3800,25 @@ function BulkScanModal(p) {
                 var sc = item.scanned; var matched = item.matched;
                 var isDH = sc.slot==='DH' && item.seed && item.seed.subPosition && item.seed.subPosition!=='DH';
                 var CARD_CLR = {골든글러브:{bg:'#78350f',brd:'#fbbf24',txt:'#fde68a'},시그니처:{bg:'#701a75',brd:'#e879f9',txt:'#f5d0fe'},임팩트:{bg:'#14532d',brd:'#4ade80',txt:'#bbf7d0'},국가대표:{bg:'#1e3a8a',brd:'#60a5fa',txt:'#bfdbfe'},라이브:{bg:'#7c2d12',brd:'#fb923c',txt:'#fed7aa'},시즌:{bg:'#1e293b',brd:'#64748b',txt:'#cbd5e1'},올스타:{bg:'#4a1d96',brd:'#a78bfa',txt:'#ede9fe'}};
-                var cs = CARD_CLR[sc.cardType]||CARD_CLR['시즌'];
-                return React.createElement('div', {key:i, style:{background:'var(--card)',borderRadius:8,padding:'8px 12px',border:'1px solid '+(matched?'var(--bd)':item.needSelect?'rgba(251,191,36,0.4)':item.failed?'rgba(156,163,175,0.4)':'rgba(239,68,68,0.3)'),opacity:(matched||item.needSelect)?1:0.65}},
+                /* 폴백 매칭된 경우 카드종류를 seed 기준으로 표시 */
+                var displayCt = (item.fallback && item.seed) ? item.seed.cardType : sc.cardType;
+                var cs = CARD_CLR[displayCt]||CARD_CLR['시즌'];
+                var borderColor = item.fallback ? 'rgba(251,191,36,0.5)' : matched ? 'var(--bd)' : item.needSelect ? 'rgba(251,191,36,0.4)' : item.failed ? 'rgba(156,163,175,0.4)' : 'rgba(239,68,68,0.3)';
+                return React.createElement('div', {key:i, style:{background:'var(--card)',borderRadius:8,padding:'8px 12px',border:'1px solid '+borderColor,opacity:(matched||item.needSelect||item.fallback)?1:0.65}},
                   React.createElement('div', {style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
-                    React.createElement('span', {style:{fontSize:11,fontWeight:700,padding:'1px 5px',borderRadius:3,background:cs.bg,color:cs.txt,border:'1px solid '+cs.brd,whiteSpace:'nowrap'}}, sc.cardType||'?'),
+                    React.createElement('span', {style:{fontSize:11,fontWeight:700,padding:'1px 5px',borderRadius:3,background:cs.bg,color:cs.txt,border:'1px solid '+cs.brd,whiteSpace:'nowrap'}}, displayCt||'?'),
                     React.createElement('span', {style:{fontWeight:900,fontSize:15,color:'#e2e8f0'}}, sc.name),
                     sc.year&&React.createElement('span', {style:{fontSize:12,color:'#64748b'}}, "'"+sc.year),
                     sc.slot&&React.createElement('span', {style:{fontSize:13,fontWeight:700,color:'#00d4ff',background:'rgba(0,212,255,0.1)',padding:'1px 6px',borderRadius:4}}, sc.slot),
-                    matched
-                      ? React.createElement('span', {style:{fontSize:12,color:'#22c55e'}}, '✓ 매칭됨')
-                      : item.failed
-                        ? React.createElement('span', {style:{fontSize:12,color:'#9ca3af'}}, '? 카드 종류 인식 실패')
-                        : item.needSelect
-                          ? React.createElement('span', {style:{fontSize:12,color:'#fbbf24'}}, '⚠️ 임팩트 종류 선택 필요')
-                          : React.createElement('span', {style:{fontSize:12,color:'#ef4444'}}, '✗ 도감 미등록'),
+                    item.fallback
+                      ? React.createElement('span', {style:{fontSize:12,color:'#fbbf24',fontWeight:700}}, '⚠ 확인필요')
+                      : matched
+                        ? React.createElement('span', {style:{fontSize:12,color:'#22c55e'}}, '✓ 매칭됨')
+                        : item.failed
+                          ? React.createElement('span', {style:{fontSize:12,color:'#9ca3af'}}, '? 카드 종류 인식 실패')
+                          : item.needSelect
+                            ? React.createElement('span', {style:{fontSize:12,color:'#fbbf24'}}, '⚠️ 임팩트 종류 선택 필요')
+                            : React.createElement('span', {style:{fontSize:12,color:'#ef4444'}}, '✗ 도감 미등록'),
                     isDH&&React.createElement('span', {style:{fontSize:11,color:'#fbbf24'}}, '⚠️ DH(포지션 상이)')
                   ),
                   item.needSelect && React.createElement('div', {style:{marginTop:6}},
