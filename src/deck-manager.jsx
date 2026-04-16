@@ -4641,7 +4641,7 @@ function LineupAnalysis(p) {
 
   /* 분포 빌드 (처음 열거나 스킬 변경 시) */
   var buildAndSet = React.useCallback(async function(force) {
-    if (!force && skills === DEFAULT_SKILLS) {
+    if (!force) {
       DIST_CACHE = PREBUILT_DIST;
       setDist(PREBUILT_DIST);
       return;
