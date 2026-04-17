@@ -40,15 +40,30 @@ export default async function handler(req, res) {
   const isSkill = type === 'skill';
 
   /* 타입별 설정 */
-  const DAILY_LIMIT      = isSkill ? 10000 : 1000;
-  const USER_DAILY_LIMIT = isSkill ? 50    : 10;
+  const DAILY_LIMIT      = isSkill ? 2000 : 400;   /* 전체 일일 한도: 사진일괄 400회, 스킬 2000회 */
+  const USER_DAILY_LIMIT = isSkill ? 20    : 4;    /* 사용자 한도: 사진일괄 4회, 스킬 20회 (관리자 예외) */
   const MODELS_TO_USE    = isSkill
     ? ['gemini-2.5-flash-lite']                                                    /* 스킬판독: 텍스트 OCR이므로 lite로 충분 */
     : ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];    /* 사진일괄: 3 Flash 우선 → 503 등 실패 시 2.5 Flash → 최후 lite 폴백 */
   const today = new Date().toISOString().slice(0, 10);
 
-  /* ── 일일 한도 체크 ── */
-  if (supabaseUrl && supabaseKey) {
+  /* ── 관리자 여부 확인 (profiles.is_admin = true 이면 한도 면제) ── */
+  let isAdmin = false;
+  if (supabaseUrl && supabaseKey && userId) {
+    try {
+      const profRes = await fetch(
+        `${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=is_admin`,
+        { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
+      );
+      const profData = await profRes.json();
+      isAdmin = Array.isArray(profData) && profData[0] && profData[0].is_admin === true;
+    } catch (e) {
+      console.error('관리자 여부 확인 오류:', e);
+    }
+  }
+
+  /* ── 일일 한도 체크 (관리자는 건너뜀) ── */
+  if (!isAdmin && supabaseUrl && supabaseKey) {
     try {
       const globalRes = await fetch(
         `${supabaseUrl}/rest/v1/scan_usage?date=eq.${today}`,
