@@ -43,8 +43,8 @@ export default async function handler(req, res) {
   const DAILY_LIMIT      = isSkill ? 10000 : 1000;
   const USER_DAILY_LIMIT = isSkill ? 50    : 10;
   const MODELS_TO_USE    = isSkill
-    ? ['gemini-2.5-flash-lite']   /* 스킬판독: 텍스트 OCR */
-    : ['gemini-2.5-flash'];       /* 사진일괄: 비전 판정 */
+    ? ['gemini-2.5-flash-lite']      /* 스킬판독: 텍스트 OCR이므로 lite로 충분 */
+    : ['gemini-3-flash-preview'];    /* 사진일괄(라인업): 카드 비전 판정 - Gemini 3 Flash 업그레이드 */
   const today = new Date().toISOString().slice(0, 10);
 
   /* ── 일일 한도 체크 ── */
