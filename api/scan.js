@@ -22,7 +22,7 @@ async function callGemini(apiKey, model, contents, maxTokens) {
         contents,
         generationConfig: {
           maxOutputTokens: maxTokens || 8192,
-          temperature: 0.1,
+          temperature: 0,
           responseMimeType: 'application/json',
         }
       })
@@ -111,13 +111,13 @@ export default async function handler(req, res) {
     {
       role: 'user',
       parts: [
-        { text: '[카드종류 판정 예시 2 - 시그니처]\n이름 왼쪽 위에 마젠타/핑크 계열 필기체 S 로고가 있고, 배경이 전체적으로 핑크/마젠타 계열입니다.' },
+        { text: '[카드종류 판정 예시 2 - 시그니처]\n이름 왼쪽 위에 빨간색 필기체 S 로고가 있습니다. 핑크/마젠타/로즈레드 계열이며, 이 S 로고의 형태와 위치가 시그니처 판정의 핵심입니다.' },
         { inlineData: { mimeType: 'image/jpeg', data: FEW_SHOT_SIG } },
       ]
     },
     {
       role: 'model',
-      parts: [{ text: '두 번째 예시는 [시그니처]입니다. 마젠타 S 로고와 핑크/마젠타 배경이 특징입니다.' }]
+      parts: [{ text: '두 번째 예시는 [시그니처]입니다. 이름 왼쪽 위의 빨간색 필기체 S 로고(형태와 위치)가 핵심 판정 기준입니다.' }]
     },
     {
       role: 'user',
