@@ -3043,18 +3043,19 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '- 있다 → [라이브] 확정.',
     '- 없다 → 3단계로 이동.',
     '',
-    '[3단계: 시그니처]',
-    '★ 이 단계는 4단계보다 반드시 먼저 확인한다 ★',
-    '- 이름 왼쪽 위 근처에 필기체 S 마크가 있는가?',
-    '  S 마크 색상: 핑크/마젠타 계열. 흰색이 섞여 연하거나 희미하게 보여도 포함.',
-    '  배경도 핑크/마젠타/로즈레드 계열이면 S 마크가 작아도 시그니처로 판정.',
+    '[3단계: 시그니처] ★ 4단계보다 반드시 먼저 확인 ★',
+    '★ 색상(Color)만 보지 말고, 로고의 형태(Shape)와 위치(Position)를 우선적으로 샘플 B와 비교하라 ★',
+    '- 이름 왼쪽 위 근처에 빨간색 필기체 S 로고가 있는가?',
+    '  (핑크/마젠타/로즈레드 계열 포함. 흰색 섞여 희미해도 포함.)',
     '- 있다 → [시그니처] 확정.',
     '- 없다 → 4단계로 이동.',
     '',
     '[4단계: 골든글러브]',
-    '- 아래 두 가지 중 하나라도 해당하면 → [골든글러브] 확정.',
-    '  ① 선수 이름을 둘러싼 배경(이름 영역)이 황금/노랑 계열인가?',
-    '  ② 이름 첫 글자 바로 위에 황금/노랑 계열의 야구공 또는 동그란 로고가 있는가?',
+    '★ 색상(Color)만 보지 말고, 로고의 형태(Shape)와 위치(Position)를 우선적으로 샘플 A와 비교하라 ★',
+    '- S 로고가 없는 것이 확인된 상태에서 아래 조건을 검토한다.',
+    '  ① 이름 바로 위에 황금색 야구공 로고가 있는가? (샘플 A 참조)',
+    '  ② 전체적인 배경이 황금색/노란색 광택을 띠고 있는가?',
+    '- ① 또는 ② 중 하나라도 해당하면 → [골든글러브] 확정.',
     '- 해당 없으면 → 5단계로 이동.',
     '',
     '[5단계: 국가대표]',
@@ -3070,8 +3071,8 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '[핵심 요약]',
     '- 연도 없음 → 임팩트',
     '- 이름 위 LIVE V1/V2/V3 → 라이브',
-    '- 이름 왼쪽 위 핑크/마젠타 S 마크(희미해도 포함) → 시그니처',
-    '- 이름 위 황금 동그란 로고 → 골든글러브',
+    '- 이름 왼쪽 위 빨간색 필기체 S 로고(희미해도, 배경 노란색이어도) → 시그니처',
+    '- S 로고 없음 + 이름 위 황금 야구공 로고 또는 황금/노란 광택 배경 → 골든글러브',
     '- 흰색 배경 + 국가대표 표식 → 국가대표',
     '- 파란 배경 or ALLSTAR 글자 → 올스타',
     '- 그 외 → 인식실패',
@@ -3509,11 +3510,21 @@ function BulkScanModal(p) {
       if (!file||!file.type.startsWith('image/')) { rej(new Error('이미지 파일만 가능')); return; }
       var r = new FileReader();
       r.onload = function(e) {
-        /* 원본 그대로 전송 (압축 없음) */
+        /* 가로 1000px 내외로 리사이징 (토큰 절약 + 인식률 최적화) */
         var originalSrc = e.target.result;
-        var parts = originalSrc.split(',');
-        var mediaType = parts[0].match(/:(.*?);/)[1];
-        res({ src: originalSrc, base64: parts[1], mediaType: mediaType, name: file.name });
+        var img = new Image();
+        img.onload = function() {
+          var maxW = 1000;
+          var w = img.width; var h = img.height;
+          if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+          var canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          var resized = canvas.toDataURL('image/jpeg', 0.95);
+          res({ src: resized, base64: resized.split(',')[1], mediaType: 'image/jpeg', name: file.name });
+        };
+        img.onerror = function() { rej(new Error('이미지 로드 실패')); };
+        img.src = originalSrc;
       };
       r.onerror = function(){ rej(new Error('읽기 실패')); };
       r.readAsDataURL(file);
