@@ -3069,14 +3069,25 @@ async function scanLineupScreen(base64, mediaType, role, userId) {
     '     → [국가대표]',
     '',
     '   ▸ 위 네 가지 중 어느 색상도 명확히 지배적이지 않거나 카드가 회색/검정 계열 모노톤',
-    '     → [인식실패] (최후의 수단)',
+    '     → 아래 【빈도 기반 기본값】을 적용하라. [인식실패]는 마지막 수단.',
+    '',
+    '【빈도 기반 기본값 — 애매한 경우 이 규칙으로 결정】',
+    '이 게임의 실제 카드 분포상 아래 빈도를 따른다:',
+    isBat
+      ? '- 타자: 골든글러브 > 시그니처 > 국가대표 > 라이브 > 올스타 순으로 흔함.'
+      : '- 투수: 시그니처 > 골든글러브 > 국가대표 > 라이브 순으로 흔함 (임팩트는 연도 없음으로 이미 분리됨).',
+    '따라서 색감 판별이 애매하면 다음 원칙을 적용하라:',
+    isBat
+      ? '- 타자 카드에서 판단이 서지 않으면 → [골든글러브]로 판정 (가장 흔하므로).'
+      : '- 투수 카드에서 판단이 서지 않으면 → [시그니처]로 판정 (가장 흔하므로).',
+    '- 시그니처 vs 골든글러브가 애매한 경우에도 위 원칙을 따른다.',
+    '- 이 규칙은 코드에서 도감 매칭으로 다시 보정되므로, 6가지(임팩트/라이브/시그니처/골든글러브/국가대표/올스타) 중 하나로 최대한 판정하는 것이 유용하다.',
     '',
     '【판정 시 주의사항】',
     '- 색상은 "정확히 몇 %"가 아니라 "주된 색감 인상"으로 판단하라. 사람이 카드를 볼 때 "아 저 카드 노랑 계열이네"라고 느끼는 수준이면 충분.',
-    '- 색상이 애매하면 가장 가까운 쪽으로 판정하라. 확신이 없다고 "인식실패"로 빠지지 말 것.',
-    '- "인식실패"는 카드가 완전히 회색/무채색이거나 어떤 색도 두드러지지 않을 때만 사용. 조금이라도 치우친 색감이 있으면 해당 종류로 판정.',
-    '- 라이브 배지가 없는데 노란색이 지배적 → 골든글러브 (라이브 아님).',
-    '- 라이브 배지가 없는데 분홍/빨강이 지배적 → 시그니처 (라이브 아님).',
+    '- 색상이 애매하면 위 빈도 기본값에 따라 적극적으로 판정하라. "인식실패"로 빠지지 말 것.',
+    '- "인식실패"는 선수 이름조차 안 보일 정도로 카드 자체 식별이 완전히 불가능한 극단적 경우에만 사용. 색감이 조금이라도 치우쳤으면 해당 종류로 판정.',
+    '- 임팩트(연도 없음)와 라이브(LIVE V1/V2/V3 배지)는 각각의 명확한 단서로 반드시 올바르게 판정. 라이브 버전(V1/V2/V3)은 반드시 정확히 기록.',
     '',
     '=== 임팩트 종류 (이름 왼쪽에 보이는 텍스트) ===',
     '2025TOP3,5툴선수,FA선수,WAR상위,가을사나이,거포,교타자,구조대,구종마스터,끝내기,난세의영웅,느림의미학,대체외인,대표타자,도루왕,돌격대장,라이징스타,마당쇠,마무리,마성의주자,백전노장,베스트포지션,베테랑,분위기메이커,비FA계약,빅게임헌터,신인왕,안경에이스,안방마님,얼리스타터,여름사나이,외국인,우완에이스,원클럽맨,원투펀치,이벤트,저니맨,전천후,좌완에이스,좌타해결사,주력선수,중간계투,철완,최강야구,추억의선수,캡틴,키플레이어,키스톤,파이어볼러,프랜차이즈,필승계투,해외파,호타준족,홈런타자',
@@ -3390,32 +3401,28 @@ function nameSimilar(a, b) {
 // SEED_PLAYERS에서 매칭
 function matchSeedPlayer(scanned) {
   var ct = scanned.cardType; var nm = scanned.name; var yr = expandYr(scanned.year); var it = scanned.impactType||'';
+  var isBat = (scanned.role||'') === '타자';
+  /* 자동교정용 fallback 우선순위 - 포지션별 빈도 반영.
+     - 타자: 골든글러브 > 시그니처 > 국가대표 > 라이브 순으로 많이 사용됨.
+     - 투수: 시그니처 > 골든글러브 > 국가대표 > 라이브 순으로 많이 사용됨. (임팩트는 이미 분리됨)
+     따라서 도감 매칭 실패 시 이 순서대로 재탐색. */
+  var FALLBACK_ORDER = isBat
+    ? ['골든글러브', '시그니처', '국가대표', '라이브']
+    : ['시그니처', '골든글러브', '국가대표', '라이브'];
   /* 인식실패 카드:
      - 연도 없음 → correctCardType에서 이미 임팩트로 변환됨 (여기 안 옴)
-     - 연도 있음 → 시그니처 → 골든글러브 → 국가대표 순서로 이름+연도 매칭 시도 */
+     - 연도 있음 → 포지션별 FALLBACK_ORDER 순서로 이름+연도 매칭 시도 */
   if (!ct || ct === '인식실패') {
     if (nm && yr) {
-      /* 1순위: 시그니처 */
-      var sigFallback = SEED_PLAYERS.find(function(sp) {
-        if ((sp.cardType||'') !== '시그니처') return false;
-        if (!nameSimilar(sp.name||'', nm)) return false;
-        return (sp.year||'') === yr || (sp.year||'').replace(/'\\d+/,'') === yr;
-      });
-      if (sigFallback) return { seed: sigFallback, candidates: [], fallback: '시그니처' };
-      /* 2순위: 골든글러브 */
-      var ggFallback = SEED_PLAYERS.find(function(sp) {
-        if ((sp.cardType||'') !== '골든글러브') return false;
-        if (!nameSimilar(sp.name||'', nm)) return false;
-        return (sp.year||'') === yr || (sp.year||'').replace(/'\\d+/,'') === yr;
-      });
-      if (ggFallback) return { seed: ggFallback, candidates: [], fallback: '골든글러브' };
-      /* 3순위: 국가대표 */
-      var natFallback = SEED_PLAYERS.find(function(sp) {
-        if ((sp.cardType||'') !== '국가대표') return false;
-        if (!nameSimilar(sp.name||'', nm)) return false;
-        return (sp.year||'') === yr || (sp.year||'').replace(/'\\d+/,'') === yr;
-      });
-      if (natFallback) return { seed: natFallback, candidates: [], fallback: '국가대표' };
+      for (var fui = 0; fui < FALLBACK_ORDER.length; fui++) {
+        var tryTypeUnk = FALLBACK_ORDER[fui];
+        var match = SEED_PLAYERS.find(function(sp) {
+          if ((sp.cardType||'') !== tryTypeUnk) return false;
+          if (!nameSimilar(sp.name||'', nm)) return false;
+          return (sp.year||'') === yr || (sp.year||'').replace(/'\d+/,'') === yr;
+        });
+        if (match) return { seed: match, candidates: [], fallback: tryTypeUnk };
+      }
     }
     return { seed: null, candidates: [], failed: true };
   }
@@ -3460,12 +3467,24 @@ function matchSeedPlayer(scanned) {
     return (sp.year||'') === yr || (sp.year||'').replace(/'\d+/,'') === yr;
   });
   if (fuzzy) return { seed: fuzzy, candidates: [] };
-  /* 3차: 카드종류 오인식 보정 - 이름+연도로 다른 카드종류 탐색 */
+  /* 3차: 카드종류 오인식 보정 - 상단 FALLBACK_ORDER(포지션별 빈도)대로 이름+연도 탐색.
+     이 fallback으로 매칭된 경우 "확인 필요" 표시를 위해 fallback 플래그 세팅. */
+  for (var fi = 0; fi < FALLBACK_ORDER.length; fi++) {
+    var tryCt = FALLBACK_ORDER[fi];
+    if (tryCt === ct) continue; /* 이미 1,2차에서 시도한 종류는 건너뜀 */
+    var fbMatch = SEED_PLAYERS.find(function(sp) {
+      if ((sp.cardType||'') !== tryCt) return false;
+      if (!nameSimilar(sp.name||'', nm)) return false;
+      return (sp.year||'') === yr || (sp.year||'').replace(/'\d+/,'') === yr;
+    });
+    if (fbMatch) return { seed: fbMatch, candidates: [], fallback: tryCt };
+  }
+  /* 4차: 위 4개 타입 외의 다른 카드종류에서 이름+연도 탐색 (올스타 등) */
   var otherCt = SEED_PLAYERS.find(function(sp) {
     if (!nameSimilar(sp.name||'', nm)) return false;
     return (sp.year||'') === yr || (sp.year||'').replace(/'\d+/,'') === yr;
   });
-  if (otherCt) return { seed: otherCt, candidates: [] };
+  if (otherCt) return { seed: otherCt, candidates: [], fallback: otherCt.cardType };
   return { seed: null, candidates: [] };
 }
 
