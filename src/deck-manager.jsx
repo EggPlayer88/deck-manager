@@ -2403,11 +2403,305 @@ function PosTrainPage(p) {
    ================================================================ */
 /* Auth handled by Supabase */
 
+/* ================================================================
+   LEGAL / POLICY MODAL CONTENT (AdSense 승인을 위한 필수 페이지)
+   ================================================================ */
+var CONTACT_EMAIL = "lyj198823@gmail.com";
+
+function PolicyModal(p) {
+  /* p: type("privacy"|"terms"|"guide"|"faq"|"about"), onClose */
+  var mob = useMedia("(max-width:600px)");
+  if (!p.type) return null;
+
+  var titleMap = {
+    privacy: "개인정보처리방침",
+    terms: "서비스 이용약관",
+    guide: "사용 가이드",
+    faq: "자주 묻는 질문 (FAQ)",
+    about: "사이트 소개",
+    glossary: "컴투스 프로야구 v26 용어 사전"
+  };
+
+  var content = null;
+
+  if (p.type === "privacy") {
+    content = (
+      <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
+        <p style={{ color: "#8b949e", fontSize: 12 }}>{"최종 업데이트: 2026년 4월 21일"}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"1. 개요"}</h3>
+        <p>{"'덱 매니저' (이하 '본 서비스')는 컴투스 프로야구 v26 게임 이용자들이 자신의 선수 라인업을 구성하고 전력을 계산할 수 있도록 돕는 개인 운영 서비스입니다. 본 방침은 이용자의 개인정보가 어떻게 수집되고 활용되는지를 투명하게 공개하기 위해 마련되었습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"2. 수집하는 정보"}</h3>
+        <p>{"본 서비스는 최소한의 정보만을 수집합니다."}</p>
+        <ul style={{ paddingLeft: 20 }}>
+          <li>{"Google 계정 로그인 시: 이메일 주소, 프로필 이름, 프로필 이미지 URL (Google OAuth를 통해 제공)"}</li>
+          <li>{"게스트 로그인 시: 이용자가 직접 입력한 닉네임"}</li>
+          <li>{"서비스 이용 데이터: 구성한 덱 정보, 선수 카드 정보, 강화 수치, 스킬 설정 등 게임과 관련된 데이터"}</li>
+          <li>{"자동 수집: 브라우저 종류, 접속 시간, 쿠키 식별자 (일반적인 웹 로그)"}</li>
+        </ul>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"3. 이용 목적"}</h3>
+        <p>{"수집한 정보는 다음의 목적으로만 사용됩니다."}</p>
+        <ul style={{ paddingLeft: 20 }}>
+          <li>{"이용자 계정 식별 및 덱 데이터 저장/복원"}</li>
+          <li>{"여러 기기 간 데이터 동기화"}</li>
+          <li>{"서비스 품질 개선을 위한 통계적 분석"}</li>
+          <li>{"부정 이용 방지 및 보안 관리"}</li>
+        </ul>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"4. 제3자 서비스 사용"}</h3>
+        <p>{"본 서비스는 원활한 운영을 위해 다음의 제3자 서비스를 이용합니다."}</p>
+        <ul style={{ paddingLeft: 20 }}>
+          <li><strong>{"Google OAuth"}</strong>{" - 로그인 인증 용도"}</li>
+          <li><strong>{"Supabase"}</strong>{" - 이용자 데이터 저장 용도 (데이터베이스 및 파일 스토리지)"}</li>
+          <li><strong>{"Vercel"}</strong>{" - 웹사이트 호스팅"}</li>
+          <li><strong>{"Google AdSense"}</strong>{" - 광고 게재를 위한 쿠키 사용 (하단 별도 안내)"}</li>
+        </ul>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"5. 쿠키 및 광고 관련 안내"}</h3>
+        <p>{"본 사이트는 수익 창출을 위해 Google AdSense 광고를 게재할 수 있습니다. 다음 사항을 알려드립니다."}</p>
+        <ul style={{ paddingLeft: 20 }}>
+          <li>{"Google을 비롯한 제3자 공급업체는 쿠키를 이용하여 이용자가 본 사이트 및 다른 사이트를 방문한 기록을 바탕으로 광고를 게재합니다."}</li>
+          <li>{"이용자는 광고 설정(adssettings.google.com)에서 맞춤 광고를 비활성화할 수 있습니다."}</li>
+          <li>{"맞춤 광고를 비활성화해도 광고가 완전히 사라지는 것은 아니며, 맞춤화만 중단됩니다."}</li>
+          <li>{"유럽 경제 지역(EEA) 및 영국 이용자에 대해서는 GDPR 동의 메시지가 표시되어 쿠키 사용 동의 여부를 선택할 수 있습니다."}</li>
+        </ul>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"6. 데이터 보관 및 삭제"}</h3>
+        <ul style={{ paddingLeft: 20 }}>
+          <li>{"이용자가 로그아웃하거나 계정을 삭제할 때까지 서버에 데이터가 보관됩니다."}</li>
+          <li>{"게스트 모드의 데이터는 이용자의 브라우저 저장소(localStorage)에만 저장되며, 운영자는 접근할 수 없습니다."}</li>
+          <li>{"이용자는 언제든 자신의 데이터 삭제를 요청할 수 있으며, 요청 후 7일 이내에 모든 개인 데이터가 영구 삭제됩니다."}</li>
+        </ul>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"7. 이용자 권리"}</h3>
+        <p>{"이용자는 언제든지 다음의 권리를 행사할 수 있습니다: 개인정보 열람 요청, 정정 요청, 삭제 요청, 처리 정지 요청, 데이터 이동 요청."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"8. 아동 정보 보호"}</h3>
+        <p>{"본 서비스는 만 14세 미만 아동의 개인정보를 의도적으로 수집하지 않습니다. 만 14세 미만임을 인지한 경우 즉시 해당 데이터를 삭제합니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"9. 보안 조치"}</h3>
+        <p>{"이용자 데이터는 HTTPS 암호화 통신으로 전송되며, Supabase의 Row Level Security를 통해 타인의 접근이 차단됩니다. 비밀번호는 저장되지 않으며, 인증은 Google OAuth를 통해서만 이루어집니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"10. 방침 변경"}</h3>
+        <p>{"본 방침이 변경될 경우 본 페이지 상단의 '최종 업데이트' 날짜가 수정되며, 중대한 변경 사항은 서비스 내 공지를 통해 안내합니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"11. 문의처"}</h3>
+        <p>{"개인정보 관련 문의나 권리 행사는 아래 이메일로 연락해 주시기 바랍니다."}</p>
+        <p style={{ background: "rgba(255,213,79,0.08)", padding: "10px 14px", borderRadius: 8, border: "1px solid rgba(255,213,79,0.2)", marginTop: 8 }}>
+          {"📧 이메일: "}<strong style={{ color: "#FFD54F" }}>{CONTACT_EMAIL}</strong>
+        </p>
+
+        <p style={{ color: "#6e7681", fontSize: 12, marginTop: 28, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          {"본 서비스는 컴투스(Com2uS)의 공식 서비스가 아니며, 해당 게임사와는 독립적으로 운영되는 팬 제작 도구입니다. '컴투스 프로야구 v26'은 해당 권리자의 상표이며, 본 방침은 팬 제작 환경에서의 개인정보 처리 방침을 설명하기 위한 것입니다."}
+        </p>
+      </div>
+    );
+  } else if (p.type === "terms") {
+    content = (
+      <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
+        <p style={{ color: "#8b949e", fontSize: 12 }}>{"최종 업데이트: 2026년 4월 21일"}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제1조 (목적)"}</h3>
+        <p>{"본 약관은 '덱 매니저' (이하 '서비스')의 이용 조건과 절차, 이용자와 운영자의 권리·의무 및 책임 사항을 규정함을 목적으로 합니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제2조 (서비스의 정의)"}</h3>
+        <p>{"본 서비스는 컴투스 프로야구 v26 게임 이용자가 자신의 보유 선수를 관리하고, 라인업을 구성하며, 강화 수치를 계산할 수 있는 보조 도구입니다. 게임 내 데이터를 자동으로 가져오거나 조작하지 않으며, 이용자가 직접 입력한 정보만을 관리합니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제3조 (이용료)"}</h3>
+        <p>{"본 서비스는 전액 무료로 제공됩니다. 다만 서비스 운영 비용 충당을 위해 Google AdSense 광고가 일부 페이지에 게재될 수 있습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제4조 (회원가입 및 계정)"}</h3>
+        <ul style={{ paddingLeft: 20 }}>
+          <li>{"이용자는 Google 계정을 통해 로그인하거나, 닉네임만 입력하여 게스트로 이용할 수 있습니다."}</li>
+          <li>{"Google 계정 이용자는 최대 5개 팀의 덱을 저장할 수 있으며, 게스트는 1개 팀의 덱만 저장할 수 있습니다."}</li>
+          <li>{"이용자는 자신의 계정 정보를 제3자에게 양도하거나 공유할 수 없습니다."}</li>
+        </ul>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제5조 (금지 행위)"}</h3>
+        <p>{"이용자는 다음 행위를 하여서는 안 됩니다."}</p>
+        <ul style={{ paddingLeft: 20 }}>
+          <li>{"서비스의 정상적인 운영을 방해하는 행위"}</li>
+          <li>{"자동화된 수단(봇, 스크래퍼 등)을 사용하여 서비스에 무단 접근하는 행위"}</li>
+          <li>{"타인의 개인정보를 무단으로 수집, 저장, 공개하는 행위"}</li>
+          <li>{"저작권, 상표권 등 타인의 지적재산권을 침해하는 행위"}</li>
+          <li>{"음란물, 폭력물, 기타 공공질서에 반하는 내용을 게시하는 행위"}</li>
+          <li>{"서비스를 상업적으로 무단 복제, 재배포하는 행위"}</li>
+        </ul>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제6조 (지적재산권)"}</h3>
+        <ul style={{ paddingLeft: 20 }}>
+          <li>{"'컴투스 프로야구 v26' 및 등장하는 모든 구단, 선수, 로고 등의 지적재산권은 해당 권리자에게 있습니다."}</li>
+          <li>{"본 서비스는 팬 커뮤니티를 위한 비영리 보조 도구로 제작되었으며, 해당 게임사와 공식적 제휴 관계가 없습니다."}</li>
+          <li>{"이용자가 서비스 내에서 입력한 데이터(덱 구성, 닉네임 등)의 저작권은 이용자 본인에게 있습니다."}</li>
+        </ul>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제7조 (서비스의 변경 및 중단)"}</h3>
+        <p>{"운영자는 기술적 필요 또는 운영상의 사유로 서비스의 전부 또는 일부를 변경, 중단할 수 있으며, 이에 따른 이용자의 손해에 대해 고의 또는 중과실이 없는 한 책임을 지지 않습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제8조 (면책 조항)"}</h3>
+        <ul style={{ paddingLeft: 20 }}>
+          <li>{"본 서비스는 '있는 그대로(as-is)' 제공되며, 계산 결과의 정확성을 절대적으로 보장하지 않습니다."}</li>
+          <li>{"서비스 이용으로 인해 발생한 게임 내 결과, 경제적 손실 등에 대해 운영자는 책임을 지지 않습니다."}</li>
+          <li>{"천재지변, 통신 장애, 제3자 서비스(Google, Supabase 등)의 장애로 인한 서비스 중단에 대해 책임을 지지 않습니다."}</li>
+        </ul>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제9조 (분쟁 해결)"}</h3>
+        <p>{"본 약관과 관련하여 분쟁이 발생할 경우, 운영자와 이용자는 상호 협의를 통해 해결하도록 노력하며, 해결되지 않을 경우 대한민국 법률에 따릅니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제10조 (약관의 변경)"}</h3>
+        <p>{"운영자는 필요시 본 약관을 개정할 수 있으며, 개정 시 본 페이지에 공지합니다. 이용자가 개정 약관에 동의하지 않는 경우 서비스 이용을 중단할 수 있습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"문의"}</h3>
+        <p style={{ background: "rgba(255,213,79,0.08)", padding: "10px 14px", borderRadius: 8, border: "1px solid rgba(255,213,79,0.2)" }}>
+          {"📧 이메일: "}<strong style={{ color: "#FFD54F" }}>{CONTACT_EMAIL}</strong>
+        </p>
+      </div>
+    );
+  } else if (p.type === "guide") {
+    content = (
+      <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
+        <p style={{ color: "#8b949e" }}>{"덱 매니저를 처음 이용하시는 분을 위한 단계별 안내입니다. 아래 순서대로 진행하면 자신의 덱을 완성하고 전력을 분석할 수 있습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"1단계. 로그인 방법 선택"}</h3>
+        <p>{"상단의 'Google 계정으로 시작하기' 버튼을 눌러 로그인하면 최대 5개 팀을 클라우드에 저장할 수 있고, 휴대폰과 PC에서 동일한 데이터를 확인할 수 있습니다. 간단히 체험해 보고 싶다면 '게스트로 시작하기'를 선택해 닉네임만 입력하고 바로 사용할 수 있습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"2단계. 팀 선택"}</h3>
+        <p>{"로그인 직후 나타나는 팀 선택 창에서 원하는 KBO 구단(키움, 삼성, LG, 두산, KT, SSG, 롯데, 한화, NC, KIA)을 선택합니다. 여기서 고르는 팀은 '덱 이름'으로만 사용되며, 실제 선수 소속팀과는 관계가 없습니다. 예를 들어 LG 덱 안에 키움 선수를 편성해도 전혀 문제가 없습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"3단계. 선수 추가"}</h3>
+        <p>{"'내 선수' 탭으로 이동하여 보유하고 있는 선수를 추가합니다. 선수 이름을 검색하면 DB에 등록된 기본 정보(포지션, 연도, 카드 종류 등)가 자동으로 불러와집니다. 이어서 강화 수치, 특능 수치, 훈련 수치, 스킬 레벨, 잠재력 등급 등 세부 정보를 입력하면 전력 계산에 반영됩니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"4단계. 라인업 구성"}</h3>
+        <p>{"'라인업' 탭에서는 추가한 선수들을 1번 타자부터 9번 타자까지 순서대로 배치하고, 선발/중계/마무리 투수 로테이션을 지정할 수 있습니다. 각 슬롯을 탭하여 선수를 지정하면 해당 선수의 공격력, 수비력, 투수력이 자동으로 계산되어 표시됩니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"5단계. 세트덱 보너스 확인"}</h3>
+        <p>{"라인업 화면 하단에는 선수 구성에 따라 활성화되는 세트덱 효과가 자동으로 표시됩니다. 예를 들어 특정 시즌 카드를 다수 포함하면 'OO년도 시즌' 세트 보너스가, 골든글러브 카드를 다수 포함하면 '골든글러브' 세트 보너스가 적용됩니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"6단계. 전력 분석"}</h3>
+        <p>{"'데이터 센터' 탭에서는 완성된 덱의 총 전력, 타순별 기여도, 스킬 분포, 포지션 균형 등을 종합적으로 분석할 수 있습니다. 또한 다른 이용자들의 평균 전력과 비교한 백분위 순위도 확인할 수 있어, 자신의 덱이 어느 수준인지 객관적으로 파악할 수 있습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"7단계. 여러 덱 관리 (Google 로그인)"}</h3>
+        <p>{"상단의 팀 이름을 누르면 덱 목록이 나타나며, '+' 버튼으로 새 덱을 추가할 수 있습니다. 예를 들어 시즌 카드 위주의 덱과 임팩트 카드 위주의 덱을 각각 만들어 비교하거나, 타이틀 매치용 덱과 일반 리그용 덱을 구분해 관리할 수 있습니다."}</p>
+      </div>
+    );
+  } else if (p.type === "faq") {
+    var faqs = [
+      { q: "덱 매니저는 무료로 이용할 수 있나요?",
+        a: "네, 모든 기능을 전액 무료로 이용할 수 있습니다. 서비스 운영 비용 충당을 위해 일부 페이지에 광고가 게재될 수 있으나, 광고 제거를 위한 유료 결제는 없습니다." },
+      { q: "컴투스(게임사)와 공식 제휴 관계인가요?",
+        a: "아닙니다. 본 서비스는 개인이 운영하는 팬 제작 도구이며, 컴투스와 어떤 공식 제휴 관계도 없습니다. 게임 내 데이터를 직접 가져오거나 자동 연동되지 않으며, 이용자가 직접 입력한 정보만을 관리합니다." },
+      { q: "게스트 모드와 Google 로그인의 차이가 무엇인가요?",
+        a: "게스트 모드는 닉네임만으로 바로 시작할 수 있지만 1개 팀만 관리할 수 있고, 데이터가 현재 사용 중인 브라우저에만 저장됩니다. 브라우저 데이터를 삭제하면 덱이 사라질 수 있습니다. 반면 Google 로그인은 최대 5개 팀을 클라우드에 저장하며, 여러 기기에서 동일한 데이터를 확인할 수 있습니다." },
+      { q: "내 선수 데이터는 다른 사람에게 공개되나요?",
+        a: "공개되지 않습니다. 로그인한 이용자의 개인 덱 데이터는 본인만 조회할 수 있으며, Supabase의 Row Level Security를 통해 타인의 접근이 원천적으로 차단됩니다. 데이터 센터에 표시되는 평균 비교 데이터는 모두 통계적으로 집계된 익명 수치이며, 개별 이용자를 식별할 수 없습니다." },
+      { q: "선수 사진은 어디서 가져오는 건가요?",
+        a: "관리자가 사전에 업로드한 선수 사진이 전역으로 공유되어 표시됩니다. 이용자가 직접 사진을 업로드할 수는 있지만, 이는 본인 덱에만 표시되며 DB의 기본 사진은 관리자 권한이 있는 계정만 수정할 수 있습니다." },
+      { q: "잠재력 점수는 어떤 기준으로 계산되나요?",
+        a: "잠재력은 C부터 SR+까지 12개 등급으로 나뉘며, 각 등급마다 기본 점수가 설정되어 있습니다. 풀스윙, 클러치, 장타억제, 침착 등 잠재력 종류에 따라 점수표가 다를 수 있으며, '스킬 관리' 페이지에서 관리자가 수치를 조정할 수 있습니다." },
+      { q: "강화 수치는 어디까지 입력할 수 있나요?",
+        a: "카드 종류에 따라 다릅니다. 시즌/라이브 카드는 최대 +10까지, 임팩트/시그니처/골든글러브 카드는 최대 +18까지 입력할 수 있습니다. 각 강화 단계별 스탯 증가량은 사이트에 내장된 ENHANCE 테이블에 따라 자동 계산됩니다." },
+      { q: "데이터를 실수로 삭제했는데 복구할 수 있나요?",
+        a: "죄송하지만 즉시 복구 기능은 제공하지 않습니다. Google 로그인 계정의 경우 Supabase 백업 정책에 따라 일부 복구가 가능할 수 있으니, 중요한 데이터를 삭제하신 경우 가급적 빨리 문의 이메일로 연락 주시기 바랍니다." },
+      { q: "PC와 스마트폰에서 모두 사용할 수 있나요?",
+        a: "네, 모든 화면이 반응형으로 제작되어 PC, 태블릿, 스마트폰 어느 환경에서도 원활하게 이용할 수 있습니다. Google 로그인을 하면 기기 간 데이터가 자동으로 동기화됩니다." },
+      { q: "광고가 너무 많이 나오거나 불편한 경우 어떻게 하나요?",
+        a: "Google 광고 설정 페이지(adssettings.google.com)에서 개인 맞춤 광고를 비활성화할 수 있습니다. 특정 광고가 부적절하다고 판단되면 광고 우측 상단의 정보 아이콘을 통해 Google에 직접 신고할 수 있습니다." },
+      { q: "버그를 발견했거나 기능을 건의하고 싶습니다.",
+        a: "페이지 하단에 명시된 운영자 이메일(" + CONTACT_EMAIL + ")로 연락해 주시면 확인 후 반영 여부를 검토하겠습니다. 스크린샷과 함께 어떤 환경(브라우저/OS)에서 발생했는지 알려주시면 빠른 해결에 도움이 됩니다." },
+      { q: "내 데이터를 완전히 삭제하고 싶습니다.",
+        a: "운영자 이메일로 탈퇴를 요청하시면 7일 이내에 해당 계정과 관련된 모든 데이터(덱, 선수 정보, 프로필 정보)가 영구 삭제됩니다. 삭제 후에는 복구가 불가능하니 신중히 결정해 주시기 바랍니다." }
+    ];
+    content = (
+      <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
+        {faqs.map(function(f, i) {
+          return (
+            <div key={i} style={{ marginBottom: 20, paddingBottom: 16, borderBottom: i < faqs.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
+              <p style={{ color: "#FFD54F", fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{"Q" + (i + 1) + ". " + f.q}</p>
+              <p style={{ margin: 0, color: "#c9d1d9" }}>{"A. " + f.a}</p>
+            </div>
+          );
+        })}
+      </div>
+    );
+  } else if (p.type === "about") {
+    content = (
+      <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 0, marginBottom: 10 }}>{"덱 매니저는 어떤 사이트인가요?"}</h3>
+        <p>{"덱 매니저는 모바일 야구 게임 '컴투스 프로야구 v26'을 플레이하는 이용자들을 위한 라인업 구성 및 전력 분석 도구입니다. 게임 내에서 수십 장에서 수백 장의 선수 카드를 보유하게 되면, 어떤 카드를 1군에 편성해야 가장 높은 전력이 나오는지 판단하기가 쉽지 않습니다. 덱 매니저는 이 고민을 해결하기 위해 제작되었습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"어떤 기능을 제공하나요?"}</h3>
+        <p>{"이용자가 자신의 보유 선수를 입력하면, 각 선수의 강화 수치, 특수능력 수치, 훈련 수치, 스킬 레벨, 잠재력 등급을 종합하여 공격력·수비력·투수력을 자동 계산합니다. 타순 배치에 따른 타격 기여도 가중치도 반영되므로, 단순히 스탯 합계만 보는 것보다 훨씬 정확한 전력 평가가 가능합니다. 또한 완성된 덱을 여러 벌 저장해 두고 상황에 맞게 교체해 가며 사용할 수 있습니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"왜 이 사이트를 만들었나요?"}</h3>
+        <p>{"컴투스 프로야구 v26은 선수 카드의 종류(시즌, 라이브, 임팩트, 시그니처, 골든글러브, 국가대표 등)와 강화 수치, 스킬 조합이 매우 복잡합니다. 각 카드 종류마다 강화 상승폭이 다르고, 스킬에 따른 능력치 보정도 천차만별이라 게임 내 화면만으로는 덱 최적화가 어렵습니다. 이 사이트는 해당 게임을 오래 플레이해 온 팬이 팬 커뮤니티를 위해 직접 만든 비공식 보조 도구입니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"게임사와 관련이 있나요?"}</h3>
+        <p>{"아닙니다. 본 사이트는 개인이 운영하는 팬 제작 프로젝트이며, 컴투스 또는 KBO와 어떠한 공식 제휴 관계도 없습니다. 게임 내 데이터를 자동으로 연동하거나 가져오지 않으며, 이용자가 직접 입력한 정보만을 처리합니다. 사이트에 표시되는 선수 이름, 구단명 등은 모두 해당 권리자의 상표이며, 본 사이트는 비영리 팬 사용 목적으로만 이를 참조합니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"어떤 기술로 만들어졌나요?"}</h3>
+        <p>{"프론트엔드는 React와 Vite로 제작되었으며, Vercel을 통해 호스팅됩니다. 이용자 데이터는 Supabase의 PostgreSQL 데이터베이스에 저장되며, 로그인 인증은 Google OAuth를 통해 처리됩니다. 모든 통신은 HTTPS로 암호화되어 안전하게 전송됩니다."}</p>
+
+        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"앞으로의 계획은?"}</h3>
+        <p>{"현재는 라인업 구성, 전력 계산, 데이터 비교 등 핵심 기능에 집중하고 있습니다. 이용자 피드백을 바탕으로 스킬 조합 시뮬레이터, 덱 공유 기능, 포지션별 추천 선수 제안 등을 점진적으로 추가할 계획입니다. 기능 건의나 버그 제보는 언제든지 운영자 이메일로 보내주시기 바랍니다."}</p>
+      </div>
+    );
+  } else if (p.type === "glossary") {
+    var glossary = [
+      { t: "덱 (Deck)", d: "게임에 실제 출전하는 선발 9명(타자)과 투수진으로 구성된 1군 엔트리입니다. 본 사이트에서는 여러 벌의 덱을 저장해 두고 필요에 따라 전환해 사용할 수 있습니다." },
+      { t: "카드 종류", d: "시즌, 라이브, 임팩트, 시그니처, 골든글러브, 국가대표 등으로 구분됩니다. 상위 카드일수록 최대 강화 단계가 높고 능력치 상승폭도 큽니다. 각 카드는 시즌 연도와 선수명을 조합하여 식별됩니다." },
+      { t: "시즌 카드", d: "특정 연도의 실제 성적을 기반으로 한 기본 카드입니다. 최대 +10 강화가 가능하며, 능력치 상승폭이 가장 완만합니다." },
+      { t: "라이브 카드", d: "현재 시즌의 실시간 성적이 반영되는 카드로, 매주 혹은 매월 수치가 갱신됩니다. 시즌 카드보다 능력치 상승폭이 크지만, 성적 부진 시 수치가 하락할 수도 있습니다." },
+      { t: "임팩트 카드", d: "특별 이벤트나 명경기 장면을 모티브로 한 한정 카드입니다. 최대 +18까지 강화할 수 있으며, 고유한 스킬 조합을 갖추고 있습니다." },
+      { t: "시그니처 카드", d: "전설적인 선수나 특정 시즌의 명장면을 기념하여 발매되는 최상급 카드입니다. 능력치 상승폭이 임팩트 카드보다 큽니다." },
+      { t: "골든글러브 카드", d: "각 포지션별 최고의 수비수에게 부여되는 최상위 등급 카드입니다. 게임 내 최강급 카드로 분류됩니다." },
+      { t: "강화 (Enhancement)", d: "카드의 능력치를 상승시키는 시스템입니다. +0부터 시작하여 강화 재료와 비용을 투입해 단계별로 수치를 올릴 수 있습니다. 각 단계별 상승폭은 카드 종류에 따라 다릅니다." },
+      { t: "특수능력 (특능)", d: "카드마다 고유하게 부여되는 파워, 정확, 선구(타자)·변화, 구위(투수) 등의 세부 능력치입니다. 강화와는 별개로 개별적으로 투자할 수 있습니다." },
+      { t: "훈련 (Training)", d: "선수의 기본 능력치를 항구적으로 상승시키는 시스템입니다. 파워/정확/선구/체력/주루 등 타자 훈련과 변화/구위 등 투수 훈련으로 나뉩니다." },
+      { t: "스킬 (Skill)", d: "선수 카드에 탑재된 특수 능력입니다. 예를 들어 '홈런 타자', '선풍기', '피칭 머신' 등의 스킬이 있으며, 스킬 레벨을 올리면 효과가 강화됩니다. 각 카드에는 최대 3개의 스킬이 탑재됩니다." },
+      { t: "잠재력 (Potential)", d: "선수 카드의 숨겨진 능력치로, C부터 SR+까지 12개 등급으로 나뉩니다. 풀스윙/클러치(타자), 장타억제/침착(투수) 등 종류에 따라 효과가 다릅니다." },
+      { t: "세트덱", d: "특정 조건(같은 시즌 연도, 같은 카드 종류, 같은 구단 등)을 만족하는 선수를 일정 수 이상 편성하면 발동되는 보너스입니다. 팀 전체의 능력치가 상승하며, 여러 세트덱을 동시에 활성화할 수도 있습니다." },
+      { t: "포지션 훈련", d: "주 포지션 외의 다른 포지션에도 출전할 수 있도록 선수를 훈련시키는 시스템입니다. 라인업 구성의 유연성이 크게 증가합니다." },
+      { t: "FA (Free Agent)", d: "자유 계약 선수를 의미하며, 본 사이트에서는 특정 구단에 소속되지 않은 상태로 표시되는 카드를 지칭합니다." },
+      { t: "SP / RP / CP", d: "투수의 역할을 나타냅니다. SP(Starting Pitcher)는 선발, RP(Relief Pitcher)는 중계, CP(Closing Pitcher)는 마무리 투수를 의미합니다." }
+    ];
+    content = (
+      <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
+        <p style={{ color: "#8b949e" }}>{"컴투스 프로야구 v26을 처음 접하거나 오랜만에 다시 시작하는 이용자를 위해, 본 사이트와 게임에서 자주 등장하는 용어를 정리했습니다."}</p>
+        {glossary.map(function(g, i) {
+          return (
+            <div key={i} style={{ marginTop: 16, padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderLeft: "3px solid #FFD54F", borderRadius: 6 }}>
+              <p style={{ color: "#FFD54F", fontWeight: 700, margin: "0 0 4px", fontSize: 14 }}>{g.t}</p>
+              <p style={{ margin: 0, fontSize: 13, color: "#c9d1d9" }}>{g.d}</p>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div onClick={p.onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: mob ? 8 : 20 }}>
+      <div onClick={function(e) { e.stopPropagation(); }} style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", background: "#0d1117", borderRadius: 16, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 24px 80px rgba(0,0,0,0.8)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: mob ? "14px 18px" : "18px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)", background: "linear-gradient(135deg, rgba(255,213,79,0.05), transparent)" }}>
+          <h2 style={{ margin: 0, fontSize: mob ? 16 : 18, fontWeight: 900, color: "#FFD54F", fontFamily: "var(--h)", letterSpacing: 1 }}>{titleMap[p.type]}</h2>
+          <button onClick={p.onClose} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#c9d1d9", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>{"✕"}</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: mob ? "18px 20px" : "24px 32px" }}>
+          {content}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LoginPage(p) {
   var mob = useMedia("(max-width:600px)");
   var _ld = useState(false); var ld = _ld[0]; var setLd = _ld[1];
   var _guestOpen = useState(false); var guestOpen = _guestOpen[0]; var setGuestOpen = _guestOpen[1];
   var _nick = useState(""); var nick = _nick[0]; var setNick = _nick[1];
+  var _modal = useState(null); var modal = _modal[0]; var setModal = _modal[1];
 
   var googleLogin = function() {
     if (supabase) {
@@ -2427,71 +2721,302 @@ function LoginPage(p) {
     setTimeout(function() { p.onLogin(nick, "guest", false); }, 500);
   };
 
+  /* ── 기능 카드 데이터 ── */
+  var features = [
+    { icon: "⚾", title: "라인업 구성", desc: "보유한 선수 카드를 1번 타자부터 9번 타자까지 드래그 앤 드롭으로 배치하고, 선발·중계·마무리 투수 로테이션을 자유롭게 편성할 수 있습니다. 포지션별 적합도와 타순별 기여도가 실시간으로 계산됩니다." },
+    { icon: "👥", title: "선수 관리", desc: "보유 중인 모든 선수 카드를 한 곳에서 관리합니다. 이름으로 검색하면 기본 정보가 자동으로 채워지고, 강화 수치·특능·스킬 레벨·잠재력 등급을 세부적으로 입력할 수 있습니다." },
+    { icon: "💪", title: "강화 계산", desc: "카드 종류(시즌·라이브·임팩트·시그니처·골든글러브)와 강화 단계에 따라 자동으로 능력치 상승분이 계산됩니다. +0부터 최대 +18까지 모든 단계의 수치가 내장되어 있어 정확한 전력 측정이 가능합니다." },
+    { icon: "⭐", title: "잠재력 점수", desc: "C부터 SR+까지 12개 등급의 잠재력을 풀스윙·클러치·장타억제·침착 등 종류별로 구분하여 점수화합니다. 잠재력만으로도 카드 간 우열을 판단할 수 있습니다." },
+    { icon: "📊", title: "데이터 센터", desc: "완성된 덱의 총 전력, 타순별 기여도, 스킬 분포, 포지션 균형을 종합적으로 분석합니다. 다른 이용자 평균과의 비교 백분위도 확인할 수 있어 객관적인 수준 파악이 가능합니다." },
+    { icon: "🏟️", title: "세트덱 보너스", desc: "같은 시즌, 같은 카드 종류, 같은 구단 선수를 일정 수 이상 편성하면 자동으로 발동되는 세트덱 효과를 실시간으로 알려줍니다. 어떤 조합이 시너지를 내는지 한눈에 확인할 수 있습니다." },
+    { icon: "🔄", title: "다중 덱 관리", desc: "Google 로그인 시 최대 5개 팀의 덱을 클라우드에 저장할 수 있습니다. 시즌 카드 덱, 임팩트 덱, 타이틀 매치용 덱 등 상황별로 구분해 관리할 수 있습니다." },
+    { icon: "📱", title: "기기 간 동기화", desc: "반응형 디자인으로 PC·태블릿·스마트폰에서 모두 원활하게 작동하며, Google 로그인을 이용하면 모든 기기에서 동일한 데이터를 실시간으로 확인할 수 있습니다." }
+  ];
+
+  /* ── 팀 목록 ── */
+  var teams = ["키움 히어로즈", "삼성 라이온즈", "LG 트윈스", "두산 베어스", "KT 위즈", "SSG 랜더스", "롯데 자이언츠", "한화 이글스", "NC 다이노스", "KIA 타이거즈"];
+
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg,#0a0e17,#1a1028,#0d1117)", padding: mob ? 16 : 0 }}>
-      <div style={{ width: mob ? "100%" : 420, maxWidth: 460, padding: mob ? "36px 24px" : "48px 40px", background: "rgba(15,20,30,0.92)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(180deg,#0a0e17 0%,#1a1028 50%,#0d1117 100%)", color: "#c9d1d9" }}>
 
-        {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ fontSize: 52, marginBottom: 10 }}>{"⚾"}</div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0, fontFamily: "var(--h)", letterSpacing: 4, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", color: "transparent" }}>{"DECK MANAGER"}</h1>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", marginTop: 8, fontFamily: "var(--m)", letterSpacing: 2 }}>{"컴투스 프로야구 v26"}</p>
-        </div>
+      {/* =================== HERO / LOGIN SECTION =================== */}
+      <section style={{ minHeight: mob ? "auto" : "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: mob ? "40px 16px" : "60px 20px" }}>
+        <div style={{ width: "100%", maxWidth: 1100, display: "grid", gridTemplateColumns: mob ? "1fr" : "1.2fr 1fr", gap: mob ? 32 : 48, alignItems: "center" }}>
 
-        {/* Google Login - Main CTA */}
-        <button onClick={googleLogin} disabled={ld} style={{
-          width: "100%", padding: "16px 24px", fontSize: 15, fontWeight: 700,
-          background: "#fff", color: "#3c4043", border: "none", borderRadius: 12,
-          cursor: ld ? "wait" : "pointer", display: "flex", alignItems: "center",
-          justifyContent: "center", gap: 12, minHeight: 54, marginBottom: 10,
-          boxShadow: "0 2px 12px rgba(0,0,0,0.25)", transition: "transform 0.1s, box-shadow 0.2s"
-        }}>
-          <svg width="22" height="22" viewBox="0 0 48 48">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-          </svg>
-          {ld ? "로그인 중..." : "Google 계정으로 시작하기"}
-        </button>
+          {/* Left: Hero text */}
+          <div>
+            <div style={{ display: "inline-block", padding: "6px 14px", background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 20, fontSize: 12, color: "#FFD54F", fontWeight: 700, letterSpacing: 2, marginBottom: 20 }}>
+              {"⚾ 컴투스 프로야구 v26 전용"}
+            </div>
+            <h1 style={{ fontSize: mob ? 34 : 52, fontWeight: 900, margin: 0, fontFamily: "var(--h)", letterSpacing: mob ? 2 : 4, lineHeight: 1.1, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", color: "transparent" }}>
+              {"DECK MANAGER"}
+            </h1>
+            <p style={{ fontSize: mob ? 15 : 18, color: "#8b949e", lineHeight: 1.6, marginTop: 16, marginBottom: 24 }}>
+              {"컴투스 프로야구 v26 팬이 직접 만든 라인업 구성 및 전력 분석 도구입니다. 수많은 선수 카드 중 최적의 조합을 찾고, 강화·스킬·잠재력을 통합적으로 계산해 가장 강력한 덱을 완성하세요."}
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+              {["무료 이용", "Google 동기화", "최대 5개 덱 저장", "모바일 대응", "실시간 전력 계산"].map(function(t) {
+                return (<span key={t} style={{ fontSize: 12, color: "#c9d1d9", background: "rgba(255,255,255,0.04)", padding: "6px 12px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)" }}>{"✓ " + t}</span>);
+              })}
+            </div>
+          </div>
 
-        {/* Google benefits */}
-        <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: 20 }}>
-          {["여러 팀 관리", "클라우드 저장", "기기 간 동기화"].map(function(t) {
-            return (<span key={t} style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.03)", padding: "3px 8px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" }}>{t}</span>);
-          })}
-        </div>
+          {/* Right: Login card (기존 UI 유지) */}
+          <div style={{ width: "100%", maxWidth: 460, padding: mob ? "32px 24px" : "40px 32px", background: "rgba(15,20,30,0.92)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 64px rgba(0,0,0,0.6)", margin: mob ? "0 auto" : 0 }}>
+            <div style={{ textAlign: "center", marginBottom: 28 }}>
+              <div style={{ fontSize: 44, marginBottom: 8 }}>{"⚾"}</div>
+              <h2 style={{ fontSize: 20, fontWeight: 900, margin: 0, fontFamily: "var(--h)", letterSpacing: 3, color: "#FFD54F" }}>{"시작하기"}</h2>
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 6, fontFamily: "var(--m)", letterSpacing: 1 }}>{"무료 · 가입 즉시 이용 가능"}</p>
+            </div>
 
-        {/* Guest link */}
-        {!guestOpen ? (
-          <div style={{ textAlign: "center" }}>
-            <button onClick={function() { setGuestOpen(true); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.25)", cursor: "pointer", fontSize: 14, padding: "8px 0", textDecoration: "underline", textUnderlineOffset: 3 }}>
-              {"게스트로 시작하기"}
+            <button onClick={googleLogin} disabled={ld} style={{
+              width: "100%", padding: "16px 24px", fontSize: 15, fontWeight: 700,
+              background: "#fff", color: "#3c4043", border: "none", borderRadius: 12,
+              cursor: ld ? "wait" : "pointer", display: "flex", alignItems: "center",
+              justifyContent: "center", gap: 12, minHeight: 54, marginBottom: 10,
+              boxShadow: "0 2px 12px rgba(0,0,0,0.25)"
+            }}>
+              <svg width="22" height="22" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+              </svg>
+              {ld ? "로그인 중..." : "Google 계정으로 시작하기"}
             </button>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", marginTop: 4 }}>{"1개 팀만 관리 가능 · 브라우저에 데이터 저장"}</p>
-          </div>
-        ) : (
-          <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 16, border: "1px solid rgba(255,255,255,0.06)" }}>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 8 }}>{"게스트 모드"}</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input type="text" value={nick} onChange={function(e) { setNick(e.target.value); }} placeholder="닉네임 입력" onKeyDown={function(e) { if (e.key === "Enter") guestLogin(); }}
-                style={{ flex: 1, padding: "10px 14px", fontSize: 15, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff", outline: "none", boxSizing: "border-box" }} />
-              <button onClick={guestLogin} disabled={ld} style={{ padding: "10px 20px", fontSize: 15, fontWeight: 800, background: ld ? "rgba(255,213,79,0.2)" : "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 8, cursor: ld ? "wait" : "pointer", color: "#1a1100", fontFamily: "var(--h)", whiteSpace: "nowrap" }}>
-                {ld ? "..." : "시작"}
-              </button>
-            </div>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 10, padding: "8px 10px", background: "rgba(255,152,0,0.05)", borderRadius: 6, border: "1px solid rgba(255,152,0,0.1)" }}>
-              <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{"!"}</span>
-              <p style={{ fontSize: 11, color: "rgba(255,152,0,0.5)", margin: 0, lineHeight: 1.5 }}>{"게스트 데이터는 이 브라우저에만 저장됩니다. 브라우저 데이터 삭제 시 초기화될 수 있으며, 1개 팀만 관리 가능합니다. Google 계정 연동 시 여러 팀을 영구 저장할 수 있습니다."}</p>
-            </div>
-          </div>
-        )}
 
-        {/* Footer */}
-        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.12)", textAlign: "center", marginTop: 24, lineHeight: 1.5 }}>
-          {"로그인 시 서비스 이용약관 및 개인정보처리방침에 동의합니다"}
-        </p>
-      </div>
+            <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: 20 }}>
+              {["여러 팀 관리", "클라우드 저장", "기기 간 동기화"].map(function(t) {
+                return (<span key={t} style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.03)", padding: "3px 8px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" }}>{t}</span>);
+              })}
+            </div>
+
+            {!guestOpen ? (
+              <div style={{ textAlign: "center" }}>
+                <button onClick={function() { setGuestOpen(true); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.25)", cursor: "pointer", fontSize: 14, padding: "8px 0", textDecoration: "underline", textUnderlineOffset: 3 }}>
+                  {"게스트로 시작하기"}
+                </button>
+                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", marginTop: 4 }}>{"1개 팀만 관리 가능 · 브라우저에 데이터 저장"}</p>
+              </div>
+            ) : (
+              <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 16, border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 8 }}>{"게스트 모드"}</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input type="text" value={nick} onChange={function(e) { setNick(e.target.value); }} placeholder="닉네임 입력" onKeyDown={function(e) { if (e.key === "Enter") guestLogin(); }}
+                    style={{ flex: 1, padding: "10px 14px", fontSize: 15, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff", outline: "none", boxSizing: "border-box" }} />
+                  <button onClick={guestLogin} disabled={ld} style={{ padding: "10px 20px", fontSize: 15, fontWeight: 800, background: ld ? "rgba(255,213,79,0.2)" : "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 8, cursor: ld ? "wait" : "pointer", color: "#1a1100", fontFamily: "var(--h)", whiteSpace: "nowrap" }}>
+                    {ld ? "..." : "시작"}
+                  </button>
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 10, padding: "8px 10px", background: "rgba(255,152,0,0.05)", borderRadius: 6, border: "1px solid rgba(255,152,0,0.1)" }}>
+                  <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{"!"}</span>
+                  <p style={{ fontSize: 11, color: "rgba(255,152,0,0.5)", margin: 0, lineHeight: 1.5 }}>{"게스트 데이터는 이 브라우저에만 저장됩니다. 브라우저 데이터 삭제 시 초기화될 수 있으며, 1개 팀만 관리 가능합니다. Google 계정 연동 시 여러 팀을 영구 저장할 수 있습니다."}</p>
+                </div>
+              </div>
+            )}
+
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.12)", textAlign: "center", marginTop: 24, lineHeight: 1.5 }}>
+              {"로그인 시 "}
+              <a onClick={function(e) { e.preventDefault(); setModal("terms"); }} href="#terms" style={{ color: "rgba(255,213,79,0.5)", textDecoration: "underline", cursor: "pointer" }}>{"서비스 이용약관"}</a>
+              {" 및 "}
+              <a onClick={function(e) { e.preventDefault(); setModal("privacy"); }} href="#privacy" style={{ color: "rgba(255,213,79,0.5)", textDecoration: "underline", cursor: "pointer" }}>{"개인정보처리방침"}</a>
+              {"에 동의합니다"}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* =================== ABOUT SECTION =================== */}
+      <section style={{ padding: mob ? "48px 20px" : "80px 24px", background: "rgba(0,0,0,0.3)", borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <p style={{ fontSize: 13, color: "#FFD54F", fontWeight: 700, letterSpacing: 3, margin: 0, fontFamily: "var(--h)" }}>{"ABOUT"}</p>
+            <h2 style={{ fontSize: mob ? 26 : 34, fontWeight: 900, margin: "8px 0 0", color: "#e6edf3", fontFamily: "var(--h)", letterSpacing: 2 }}>{"덱 매니저가 필요한 이유"}</h2>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 24 }}>
+            <div style={{ padding: 24, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+              <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 0, marginBottom: 10, fontFamily: "var(--h)", letterSpacing: 1 }}>{"복잡한 카드 시스템, 한눈에"}</h3>
+              <p style={{ fontSize: 14, lineHeight: 1.7, color: "#c9d1d9", margin: 0 }}>{"컴투스 프로야구 v26은 시즌·라이브·임팩트·시그니처·골든글러브 등 다양한 카드 종류가 존재하며, 각 카드마다 강화 상승폭과 스킬 조합이 다릅니다. 게임 내 화면만으로 수십~수백 장의 카드를 비교하기는 사실상 불가능하죠. 덱 매니저는 이 모든 변수를 일관된 기준으로 계산하여, 어떤 선수가 실제로 가장 강한지 객관적으로 판단할 수 있게 해줍니다."}</p>
+            </div>
+            <div style={{ padding: 24, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+              <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 0, marginBottom: 10, fontFamily: "var(--h)", letterSpacing: 1 }}>{"타순 배치까지 고려한 전력 계산"}</h3>
+              <p style={{ fontSize: 14, lineHeight: 1.7, color: "#c9d1d9", margin: 0 }}>{"단순 스탯 합계가 아니라, 각 타순의 타격 기여도 가중치까지 반영해 실제 경기에 가까운 전력 점수를 산출합니다. 3번과 4번에 어떤 타자를 배치할지, 마무리 투수로 누구를 쓸지에 따라 총 전력이 어떻게 달라지는지 실시간으로 확인할 수 있습니다."}</p>
+            </div>
+            <div style={{ padding: 24, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+              <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 0, marginBottom: 10, fontFamily: "var(--h)", letterSpacing: 1 }}>{"세트덱 시너지를 놓치지 마세요"}</h3>
+              <p style={{ fontSize: 14, lineHeight: 1.7, color: "#c9d1d9", margin: 0 }}>{"같은 시즌·같은 카드 종류·같은 구단 선수를 일정 수 이상 편성하면 활성화되는 세트덱 보너스. 덱 매니저는 라인업 변경 즉시 어떤 세트덱이 켜지고 꺼지는지 알려주어, 시너지를 극대화하는 조합을 찾을 수 있도록 돕습니다."}</p>
+            </div>
+            <div style={{ padding: 24, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+              <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 0, marginBottom: 10, fontFamily: "var(--h)", letterSpacing: 1 }}>{"내 덱은 전체에서 어느 수준?"}</h3>
+              <p style={{ fontSize: 14, lineHeight: 1.7, color: "#c9d1d9", margin: 0 }}>{"데이터 센터에서는 다른 이용자들이 구성한 덱들과 익명으로 통계 비교가 가능합니다. 내 덱의 전력이 상위 몇 %에 해당하는지, 어떤 포지션이 부족한지를 백분위로 확인하며 구체적인 보강 방향을 잡을 수 있습니다."}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =================== FEATURES SECTION =================== */}
+      <section style={{ padding: mob ? "48px 20px" : "80px 24px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <p style={{ fontSize: 13, color: "#FFD54F", fontWeight: 700, letterSpacing: 3, margin: 0, fontFamily: "var(--h)" }}>{"FEATURES"}</p>
+            <h2 style={{ fontSize: mob ? 26 : 34, fontWeight: 900, margin: "8px 0 0", color: "#e6edf3", fontFamily: "var(--h)", letterSpacing: 2 }}>{"주요 기능"}</h2>
+            <p style={{ fontSize: 14, color: "#8b949e", marginTop: 12 }}>{"덱 매니저가 제공하는 핵심 기능들을 소개합니다"}</p>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+            {features.map(function(f, i) {
+              return (
+                <div key={i} style={{ padding: 22, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>{f.icon}</div>
+                  <h3 style={{ color: "#FFD54F", fontSize: 16, margin: "0 0 8px", fontFamily: "var(--h)", letterSpacing: 1 }}>{f.title}</h3>
+                  <p style={{ fontSize: 13, lineHeight: 1.6, color: "#c9d1d9", margin: 0 }}>{f.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* =================== HOW TO USE SECTION =================== */}
+      <section style={{ padding: mob ? "48px 20px" : "80px 24px", background: "rgba(0,0,0,0.3)", borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <p style={{ fontSize: 13, color: "#FFD54F", fontWeight: 700, letterSpacing: 3, margin: 0, fontFamily: "var(--h)" }}>{"HOW IT WORKS"}</p>
+            <h2 style={{ fontSize: mob ? 26 : 34, fontWeight: 900, margin: "8px 0 0", color: "#e6edf3", fontFamily: "var(--h)", letterSpacing: 2 }}>{"이용 방법"}</h2>
+            <p style={{ fontSize: 14, color: "#8b949e", marginTop: 12 }}>{"3단계로 첫 덱을 완성할 수 있습니다"}</p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {[
+              { n: "01", t: "로그인 및 팀 선택", d: "상단 로그인 카드에서 Google 계정으로 로그인하거나 게스트 모드를 이용합니다. 로그인 후 나타나는 10개의 KBO 구단 중 하나를 선택해 첫 덱을 만듭니다. 이때 고르는 팀은 단순히 덱 이름으로 사용되므로, 내가 응원하는 구단이나 기억하기 쉬운 이름을 고르시면 됩니다." },
+              { n: "02", t: "선수 입력 및 강화 수치 기록", d: "'내 선수' 탭에서 보유한 선수를 하나씩 추가합니다. 선수명을 검색하면 해당 카드의 기본 정보가 자동으로 불러와지며, 이어서 강화 단계(+0~+18), 특수능력 수치, 훈련 수치, 스킬과 스킬 레벨, 잠재력 등급을 입력하면 됩니다. 모든 데이터는 입력 즉시 자동 저장됩니다." },
+              { n: "03", t: "라인업 배치 및 전력 확인", d: "'라인업' 탭에서 추가한 선수들을 타순대로 배치하고 투수 로테이션을 지정합니다. 배치가 완료되면 총 전력 점수, 공격·수비·투수 세부 점수, 활성화된 세트덱 보너스가 화면에 표시됩니다. '데이터 센터'에서는 더 자세한 분석과 전체 이용자 대비 백분위를 확인할 수 있습니다." }
+            ].map(function(s, i) {
+              return (
+                <div key={i} style={{ display: "flex", gap: mob ? 14 : 20, padding: mob ? 18 : 24, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ fontSize: mob ? 28 : 40, fontWeight: 900, fontFamily: "var(--h)", color: "#FFD54F", lineHeight: 1, flexShrink: 0, minWidth: mob ? 40 : 60 }}>{s.n}</div>
+                  <div>
+                    <h3 style={{ color: "#e6edf3", fontSize: mob ? 15 : 17, margin: "0 0 6px", fontFamily: "var(--h)", letterSpacing: 1 }}>{s.t}</h3>
+                    <p style={{ fontSize: 13, lineHeight: 1.7, color: "#c9d1d9", margin: 0 }}>{s.d}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ textAlign: "center", marginTop: 28 }}>
+            <button onClick={function() { setModal("guide"); }} style={{ padding: "12px 24px", fontSize: 14, background: "rgba(255,213,79,0.1)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 10, color: "#FFD54F", cursor: "pointer", fontWeight: 700, fontFamily: "var(--h)", letterSpacing: 1 }}>
+              {"📖 자세한 가이드 보기"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* =================== KBO TEAMS SECTION =================== */}
+      <section style={{ padding: mob ? "48px 20px" : "80px 24px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <p style={{ fontSize: 13, color: "#FFD54F", fontWeight: 700, letterSpacing: 3, margin: 0, fontFamily: "var(--h)" }}>{"TEAMS"}</p>
+            <h2 style={{ fontSize: mob ? 26 : 34, fontWeight: 900, margin: "8px 0 0", color: "#e6edf3", fontFamily: "var(--h)", letterSpacing: 2 }}>{"지원 구단"}</h2>
+            <p style={{ fontSize: 14, color: "#8b949e", marginTop: 12 }}>{"10개 KBO 구단을 기반으로 덱을 만들 수 있습니다"}</p>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: 10 }}>
+            {teams.map(function(t, i) {
+              return (
+                <div key={i} style={{ padding: "18px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)", textAlign: "center", fontSize: 13, fontWeight: 700, color: "#c9d1d9", fontFamily: "var(--h)", letterSpacing: 1 }}>
+                  {t}
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ textAlign: "center", fontSize: 12, color: "#6e7681", marginTop: 18 }}>
+            {"※ 구단 이름과 로고는 각 권리자의 상표이며, 본 서비스는 비공식 팬 제작 도구입니다."}
+          </p>
+        </div>
+      </section>
+
+      {/* =================== FAQ SHORT SECTION =================== */}
+      <section style={{ padding: mob ? "48px 20px" : "80px 24px", background: "rgba(0,0,0,0.3)", borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+        <div style={{ maxWidth: 800, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 36 }}>
+            <p style={{ fontSize: 13, color: "#FFD54F", fontWeight: 700, letterSpacing: 3, margin: 0, fontFamily: "var(--h)" }}>{"FAQ"}</p>
+            <h2 style={{ fontSize: mob ? 26 : 34, fontWeight: 900, margin: "8px 0 0", color: "#e6edf3", fontFamily: "var(--h)", letterSpacing: 2 }}>{"자주 묻는 질문"}</h2>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[
+              { q: "덱 매니저는 정말 무료인가요?", a: "네, 모든 핵심 기능을 영구적으로 무료로 이용할 수 있습니다. 운영 비용 충당을 위해 일부 광고가 게재되지만, 유료 플랜이나 결제는 없습니다." },
+              { q: "게임 계정과 자동 연동되나요?", a: "아닙니다. 본 서비스는 컴투스의 공식 서비스가 아니므로, 게임 내 선수 정보를 자동으로 가져올 수 없습니다. 이용자가 직접 선수를 입력해야 하며, 그만큼 개인정보도 안전하게 보호됩니다." },
+              { q: "내가 구성한 덱을 다른 사람이 볼 수 있나요?", a: "아닙니다. 본인이 공개하지 않는 한 타인은 내 덱을 조회할 수 없습니다. 데이터 센터의 통계 비교 기능은 모든 이용자 데이터를 익명으로 집계한 것이며, 개별 이용자를 식별할 수 없도록 처리됩니다." },
+              { q: "모바일에서도 편하게 쓸 수 있나요?", a: "네, 본 사이트는 스마트폰·태블릿에 최적화된 반응형 디자인으로 제작되었습니다. 브라우저 주소창에 주소를 입력하는 것만으로 바로 이용할 수 있으며, 별도 앱 설치가 필요 없습니다." }
+            ].map(function(f, i) {
+              return (
+                <div key={i} style={{ padding: mob ? 16 : 20, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <p style={{ color: "#FFD54F", fontWeight: 700, fontSize: 14, margin: "0 0 6px" }}>{"Q. " + f.q}</p>
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "#c9d1d9" }}>{"A. " + f.a}</p>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ textAlign: "center", marginTop: 24 }}>
+            <button onClick={function() { setModal("faq"); }} style={{ padding: "12px 24px", fontSize: 14, background: "rgba(255,213,79,0.1)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 10, color: "#FFD54F", cursor: "pointer", fontWeight: 700, fontFamily: "var(--h)", letterSpacing: 1 }}>
+              {"💬 더 많은 FAQ 보기"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* =================== GLOSSARY TEASER =================== */}
+      <section style={{ padding: mob ? "40px 20px" : "56px 24px" }}>
+        <div style={{ maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
+          <h2 style={{ fontSize: mob ? 20 : 24, fontWeight: 900, color: "#e6edf3", fontFamily: "var(--h)", letterSpacing: 2, marginTop: 0 }}>{"게임 용어가 낯설다면?"}</h2>
+          <p style={{ fontSize: 14, color: "#8b949e", lineHeight: 1.7 }}>{"카드 종류, 강화 단계, 잠재력 등급 등 컴투스 프로야구 v26에서 자주 쓰는 용어를 정리해 두었습니다. 처음 접하시는 분은 용어 사전을 참고한 후 사이트를 이용하시면 훨씬 쉽습니다."}</p>
+          <button onClick={function() { setModal("glossary"); }} style={{ marginTop: 16, padding: "12px 24px", fontSize: 14, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 10, color: "#1a1100", cursor: "pointer", fontWeight: 800, fontFamily: "var(--h)", letterSpacing: 1 }}>
+            {"📚 용어 사전 열기"}
+          </button>
+        </div>
+      </section>
+
+      {/* =================== FOOTER =================== */}
+      <footer style={{ padding: mob ? "32px 20px" : "48px 24px", background: "#050810", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "2fr 1fr 1fr", gap: 28 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 22 }}>{"⚾"}</span>
+                <span style={{ fontSize: 16, fontWeight: 900, color: "#FFD54F", fontFamily: "var(--h)", letterSpacing: 3 }}>{"DECK MANAGER"}</span>
+              </div>
+              <p style={{ fontSize: 12, color: "#6e7681", lineHeight: 1.7, margin: 0 }}>
+                {"컴투스 프로야구 v26 이용자를 위한 라인업 구성 및 전력 분석 도구입니다. 팬이 직접 만든 비공식 프로젝트이며, 해당 게임사와 공식 제휴 관계가 없습니다."}
+              </p>
+            </div>
+            <div>
+              <p style={{ fontSize: 12, color: "#FFD54F", fontWeight: 700, margin: "0 0 10px", fontFamily: "var(--h)", letterSpacing: 2 }}>{"INFO"}</p>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 13 }}>
+                <li style={{ marginBottom: 6 }}><a onClick={function(e) { e.preventDefault(); setModal("about"); }} href="#about" style={{ color: "#c9d1d9", textDecoration: "none", cursor: "pointer" }}>{"사이트 소개"}</a></li>
+                <li style={{ marginBottom: 6 }}><a onClick={function(e) { e.preventDefault(); setModal("guide"); }} href="#guide" style={{ color: "#c9d1d9", textDecoration: "none", cursor: "pointer" }}>{"사용 가이드"}</a></li>
+                <li style={{ marginBottom: 6 }}><a onClick={function(e) { e.preventDefault(); setModal("faq"); }} href="#faq" style={{ color: "#c9d1d9", textDecoration: "none", cursor: "pointer" }}>{"자주 묻는 질문"}</a></li>
+                <li style={{ marginBottom: 6 }}><a onClick={function(e) { e.preventDefault(); setModal("glossary"); }} href="#glossary" style={{ color: "#c9d1d9", textDecoration: "none", cursor: "pointer" }}>{"용어 사전"}</a></li>
+              </ul>
+            </div>
+            <div>
+              <p style={{ fontSize: 12, color: "#FFD54F", fontWeight: 700, margin: "0 0 10px", fontFamily: "var(--h)", letterSpacing: 2 }}>{"LEGAL"}</p>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 13 }}>
+                <li style={{ marginBottom: 6 }}><a onClick={function(e) { e.preventDefault(); setModal("privacy"); }} href="#privacy" style={{ color: "#c9d1d9", textDecoration: "none", cursor: "pointer" }}>{"개인정보처리방침"}</a></li>
+                <li style={{ marginBottom: 6 }}><a onClick={function(e) { e.preventDefault(); setModal("terms"); }} href="#terms" style={{ color: "#c9d1d9", textDecoration: "none", cursor: "pointer" }}>{"이용약관"}</a></li>
+                <li style={{ marginBottom: 6, color: "#6e7681", fontSize: 12, marginTop: 10 }}>{"문의:"}</li>
+                <li style={{ fontSize: 12 }}><a href={"mailto:" + CONTACT_EMAIL} style={{ color: "#FFD54F", textDecoration: "none" }}>{CONTACT_EMAIL}</a></li>
+              </ul>
+            </div>
+          </div>
+          <div style={{ marginTop: 32, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.06)", textAlign: "center" }}>
+            <p style={{ fontSize: 11, color: "#484f58", margin: 0, lineHeight: 1.6 }}>
+              {"© 2026 Deck Manager. All rights reserved."}<br/>
+              {"'컴투스 프로야구 v26', 'KBO', 구단명 및 선수명 등의 상표는 각 권리자에게 귀속됩니다."}<br/>
+              {"본 사이트는 비영리 팬 제작 프로젝트로, 해당 권리자와 공식 제휴 관계가 없습니다."}
+            </p>
+          </div>
+        </div>
+      </footer>
+
+      {/* =================== POLICY MODAL =================== */}
+      <PolicyModal type={modal} onClose={function() { setModal(null); }} />
     </div>
   );
 }
