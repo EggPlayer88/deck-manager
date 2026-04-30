@@ -297,3 +297,36 @@ export async function savePhotoPosMap(posMap) {
   }, { onConflict: 'user_id,key' });
   return !error;
 }
+
+/* ── POTM 전역 명단 ──
+   관리자 계정의 user_settings 에 'potm_list' 키로 저장
+   value: JSON 배열 [{name, team}, ...]
+   모든 유저가 읽기, 관리자만 쓰기 (앱 레벨에서 관리자 UI만 노출하여 제한) */
+const POTM_LIST_KEY = 'potm_list';
+
+export async function loadGlobalPotmList() {
+  if (!supabase) return [];
+  var { data, error } = await supabase
+    .from('user_settings')
+    .select('value')
+    .eq('user_id', ADMIN_UID)
+    .eq('key', POTM_LIST_KEY)
+    .single();
+  if (error || !data) return [];
+  try {
+    var parsed = JSON.parse(data.value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch(e) { return []; }
+}
+
+export async function saveGlobalPotmList(potmList) {
+  if (!supabase) return false;
+  var arr = Array.isArray(potmList) ? potmList : [];
+  var { error } = await supabase.from('user_settings').upsert({
+    user_id: ADMIN_UID,
+    key: POTM_LIST_KEY,
+    value: JSON.stringify(arr),
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'user_id,key' });
+  return !error;
+}
