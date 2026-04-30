@@ -1151,6 +1151,30 @@ function PlayerDBPage(p){
                   var added2 = 0; var updated2 = 0; var np = SEED_PLAYERS.slice();
                   var cm = {"골든글러브(타자)":"골든글러브","골든글러브(투수)":"골든글러브","시그니처(타자)":"시그니처","시그니처(투수)":"시그니처","국가대표(타자)":"국가대표","국가대표(투수)":"국가대표","임팩트(타자)":"임팩트","임팩트(투수)":"임팩트","라이브(타자)":"라이브","라이브(투수)":"라이브","시즌(타자)":"시즌","시즌(투수)":"시즌","올스타(타자)":"올스타","올스타(투수)":"올스타"};
                   var sm = {"골든글러브":5,"시그니처":5,"국가대표":5,"임팩트":4};
+
+                  /* 라이브 동기화: 엑셀에 라이브(타자) 또는 라이브(투수) 시트가 있을 때만 활성화
+                     없으면 부분 업로드(다른 카드만 갱신)로 간주하여 삭제 로직 건너뜀 */
+                  var hasLiveBat = wb2.SheetNames.indexOf("라이브(타자)") >= 0;
+                  var hasLivePit = wb2.SheetNames.indexOf("라이브(투수)") >= 0;
+                  /* A3 키: 이름 + 팀 + 라이브종류 (역할별로 분리해서 양 시트 한쪽만 있어도 안전) */
+                  var liveKeyOf = function(p) {
+                    return (p.role||"") + "|" + (p.name||"") + "|" + (p.team||"") + "|" + (p.liveType||"");
+                  };
+                  /* 엑셀의 라이브 시트에 등장한 카드 키 모음 */
+                  var excelLiveKeys = {};
+                  if (hasLiveBat) {
+                    XL.utils.sheet_to_json(wb2.Sheets["라이브(타자)"],{defval:""}).forEach(function(r){
+                      var nm=String(r["이름"]||"").trim(); if(!nm)return;
+                      excelLiveKeys["타자|"+nm+"|"+(r["팀"]||"")+"|"+(r["라이브종류"]||"")] = true;
+                    });
+                  }
+                  if (hasLivePit) {
+                    XL.utils.sheet_to_json(wb2.Sheets["라이브(투수)"],{defval:""}).forEach(function(r){
+                      var nm=String(r["이름"]||"").trim(); if(!nm)return;
+                      excelLiveKeys["투수|"+nm+"|"+(r["팀"]||"")+"|"+(r["라이브종류"]||"")] = true;
+                    });
+                  }
+
                   wb2.SheetNames.forEach(function(sn2) { if (sn2==="안내"||sn2==="임팩트종류") return; var ct2=cm[sn2]; if(!ct2)return; var iB=sn2.indexOf("타자")>=0;
                     XL.utils.sheet_to_json(wb2.Sheets[sn2],{defval:""}).forEach(function(row) {
                       var nm=String(row["이름"]||"").trim(); if(!nm)return;
@@ -1171,16 +1195,60 @@ function PlayerDBPage(p){
                       if(ex!==null){np[ex]=pl2;updated2++;}else{np.push(pl2);added2++;}
                     });
                   });
-                  SEED_PLAYERS.length=0;np.forEach(function(pp){SEED_PLAYERS.push(pp);});
-                  /* 배치 저장: 100명씩 묶어서 순차 저장 */
-                  (async function() {
-                    var batchSize = 100;
-                    for (var i = 0; i < np.length; i += batchSize) {
-                      var batch = np.slice(i, i + batchSize);
-                      await saveGlobalPlayers(batch);
+
+                  /* 라이브 동기화 - 엑셀에 없는 라이브 카드 식별 (해당 역할 시트가 있을 때만) */
+                  var liveToDelete = [];
+                  if (hasLiveBat || hasLivePit) {
+                    for (var iL = np.length - 1; iL >= 0; iL--) {
+                      var spL = np[iL];
+                      if (spL.cardType !== "라이브") continue;
+                      /* 해당 역할의 시트가 엑셀에 없으면 그 역할은 건드리지 않음 (부분 업로드 안전) */
+                      if (spL.role === "타자" && !hasLiveBat) continue;
+                      if (spL.role === "투수" && !hasLivePit) continue;
+                      var keyL = liveKeyOf(spL);
+                      if (!excelLiveKeys[keyL]) {
+                        liveToDelete.push(spL);
+                        np.splice(iL, 1);
+                      }
                     }
-                    alert("완료! 추가:"+added2+"명 업데이트:"+updated2+"명");
-                  })();
+                  }
+
+                  /* 삭제 대상이 있으면 confirm 후에만 진행 */
+                  var proceed = function() {
+                    SEED_PLAYERS.length=0;np.forEach(function(pp){SEED_PLAYERS.push(pp);});
+                    /* 배치 저장 + 삭제 처리 */
+                    (async function() {
+                      var batchSize = 100;
+                      for (var i = 0; i < np.length; i += batchSize) {
+                        var batch = np.slice(i, i + batchSize);
+                        await saveGlobalPlayers(batch);
+                      }
+                      /* 삭제는 한 건씩 (deleteGlobalPlayer는 단건 호출 함수) */
+                      for (var j = 0; j < liveToDelete.length; j++) {
+                        await deleteGlobalPlayer(liveToDelete[j].id);
+                      }
+                      var msg = "완료! 추가:"+added2+"명 업데이트:"+updated2+"명";
+                      if (liveToDelete.length > 0) msg += " 라이브삭제:"+liveToDelete.length+"명";
+                      alert(msg);
+                    })();
+                  };
+
+                  if (liveToDelete.length > 0) {
+                    var preview = liveToDelete.slice(0, 10).map(function(p){
+                      return "  • "+(p.name||"?")+" ("+(p.team||"?")+", "+(p.liveType||"?")+", "+(p.role||"?")+")";
+                    }).join("\n");
+                    var more = liveToDelete.length > 10 ? "\n  ... 외 "+(liveToDelete.length-10)+"명" : "";
+                    var confirmMsg = "⚠️ 라이브 카드 동기화\n\n엑셀에 없는 라이브 카드 "+liveToDelete.length+"명이 도감에서 삭제됩니다.\n해당 카드를 보유한 유저의 라인업/내선수에서 빈 슬롯으로 표시될 수 있습니다.\n\n삭제 대상:\n"+preview+more+"\n\n계속 진행하시겠습니까?";
+                    if (confirm(confirmMsg)) {
+                      proceed();
+                    } else {
+                      /* 취소 시 - 삭제했던 항목을 np에 복구하지 않고 그냥 종료
+                         (이미 splice 했으므로 SEED_PLAYERS는 갱신하지 않고 함수 종료) */
+                      alert("업로드가 취소되었습니다.");
+                    }
+                  } else {
+                    proceed();
+                  }
                 } catch(err) { alert("오류: "+err.message); }
               }; rd.readAsArrayBuffer(f2); e.target.value="";
             }} />
