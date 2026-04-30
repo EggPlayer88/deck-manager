@@ -23,6 +23,8 @@ import {
   uploadTeamLogo,
   loadPhotoPosMap,
   savePhotoPosMap,
+  loadGlobalPotmList,
+  saveGlobalPotmList,
 } from './supabase.js';
 
 window._SUPABASE = {
@@ -47,6 +49,8 @@ window._SUPABASE = {
   uploadTeamLogo,
   loadPhotoPosMap,
   savePhotoPosMap,
+  loadGlobalPotmList,
+  saveGlobalPotmList,
 };
 
 import('./deck-manager.jsx').then(function(module) {
