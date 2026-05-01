@@ -454,8 +454,23 @@ function useData(userId, sdState, setSdState, curDeckId){
     var list = Array.isArray(arr) ? arr : [];
     GLOBAL_POTM_LIST = list;
     setPotmListState(list);
-    if(supabase){ await saveGlobalPotmList(list); }
-    else { await sSet("global-potm-list", list); }
+    try {
+      if(supabase){
+        var ok = await saveGlobalPotmList(list);
+        if(ok===false){
+          console.error("[POTM] saveGlobalPotmList 반환값 false - DB 저장 실패 가능성. window._SUPABASE.saveGlobalPotmList 등록 여부 확인 필요");
+          alert("POTM 저장에 실패했습니다. 브라우저 콘솔(F12)에서 오류를 확인해주세요.");
+        } else {
+          console.log("[POTM] 저장 성공, "+list.length+"명");
+        }
+      } else {
+        await sSet("global-potm-list", list);
+        console.log("[POTM] localStorage 저장, "+list.length+"명");
+      }
+    } catch(e) {
+      console.error("[POTM] savePotmList 예외:", e);
+      alert("POTM 저장 중 오류가 발생했습니다: "+(e.message||e));
+    }
   },[]);
 
   return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef};
@@ -1467,6 +1482,9 @@ function BullpenLayout(p) {
 function SkillPicker(p) {
   var _o = useState(false); var open = _o[0]; var setOpen = _o[1];
   var _q = useState(""); var q = _q[0]; var setQ = _q[1];
+  var _pos = useState({top:0,left:0,placement:"down"});
+  var pos = _pos[0]; var setPos = _pos[1];
+  var btnRef = React.useRef(null);
   var width = p.width || 90;
   var fontSize = p.fontSize || 11;
   var label = p.value || "없음";
@@ -1485,8 +1503,46 @@ function SkillPicker(p) {
   var filteredMinor = minorOpts.filter(matchQ);
   var totalShown = filteredMajor.length + filteredMinor.length;
 
+  /* 드롭다운 위치 계산 - 버튼 위치 기준 viewport 좌표
+     화면 아래쪽 공간이 부족하면 위로 flip */
+  var calcPos = function() {
+    if (!btnRef.current) return;
+    var rect = btnRef.current.getBoundingClientRect();
+    var vh = window.innerHeight;
+    var vw = window.innerWidth;
+    var maxH = 320;
+    var spaceBelow = vh - rect.bottom;
+    var spaceAbove = rect.top;
+    /* 아래 공간이 maxH 이하인데 위 공간이 더 크면 위로 flip */
+    var placeUp = spaceBelow < Math.min(maxH, 200) && spaceAbove > spaceBelow;
+    var top = placeUp ? Math.max(8, rect.top - Math.min(maxH, spaceAbove - 8) - 2) : (rect.bottom + 2);
+    /* 좌측 정렬, 우측이 화면 밖이면 우측 정렬로 보정 */
+    var left = rect.left;
+    if (left + popupWidth > vw - 8) left = Math.max(8, vw - popupWidth - 8);
+    setPos({top: top, left: left, placement: placeUp ? "up" : "down"});
+  };
+
   var pick = function(name) { p.onChange(name); setOpen(false); setQ(""); };
-  var openIt = function(e) { e.stopPropagation(); setOpen(!open); if (!open) setQ(""); };
+  var openIt = function(e) {
+    e.stopPropagation();
+    if (!open) {
+      calcPos();
+      setQ("");
+    }
+    setOpen(!open);
+  };
+
+  /* 열려있을 때 스크롤/리사이즈 시 닫기 (위치 추적 비용 회피) */
+  React.useEffect(function() {
+    if (!open) return;
+    var close = function() { setOpen(false); };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return function() {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
 
   var renderRow = function(s, isMajor) {
     var isSel = s === p.value;
@@ -1502,7 +1558,7 @@ function SkillPicker(p) {
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
-      <button onClick={openIt}
+      <button ref={btnRef} onClick={openIt}
         style={{ width: width, padding: "3px 6px", fontSize: fontSize, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: p.value ? "#e2e8f0" : "#94a3b8", textAlign: "left", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", outline: "none", height: 22, boxSizing: "border-box" }}
         title={label}>
         {label}
@@ -1510,8 +1566,8 @@ function SkillPicker(p) {
       {open && (
         <React.Fragment>
           <div onClick={function(){ setOpen(false); }}
-            style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99, background: "transparent" }} />
-          <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 100, marginTop: 2, background: "#0f172a", border: "1px solid #475569", borderRadius: 6, width: popupWidth, maxHeight: 320, display: "flex", flexDirection: "column", boxShadow: "0 8px 24px rgba(0,0,0,0.6)" }}>
+            style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998, background: "transparent" }} />
+          <div style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999, background: "#0f172a", border: "1px solid #475569", borderRadius: 6, width: popupWidth, maxHeight: 320, display: "flex", flexDirection: "column", boxShadow: "0 8px 24px rgba(0,0,0,0.6)" }}>
             <input autoFocus type="text" value={q}
               onChange={function(e){ setQ(e.target.value); }}
               onClick={function(e){ e.stopPropagation(); }}
