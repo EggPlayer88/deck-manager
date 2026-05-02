@@ -30,7 +30,7 @@ var saveGlobalPotmList = _SB.saveGlobalPotmList || function(){ return Promise.re
 /* ================================================================
    SEED DATA - 48 players from Excel + random fills
    ================================================================ */
-var KBO_TEAMS = ["키움","삼성","LG","두산","KT","SSG","롯데","한화","NC","KIA"];
+var KBO_TEAMS = ["키움","삼성","LG","두산","KT","SSG","롯데","한화","NC","기아"];
 var SEED_PLAYERS = [];
 var PHOTO_CACHE = {};
 var PHOTO_POS_MAP = {}; /* {선수이름: 위치(0~100)} - 관리자 설정, 전역 적용 */
@@ -2889,7 +2889,7 @@ function PolicyModal(p) {
         <p>{"상단의 'Google 계정으로 시작하기' 버튼을 눌러 로그인하면 최대 5개 팀을 클라우드에 저장할 수 있고, 휴대폰과 PC에서 동일한 데이터를 확인할 수 있습니다. 간단히 체험해 보고 싶다면 '게스트로 시작하기'를 선택해 닉네임만 입력하고 바로 사용할 수 있습니다."}</p>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"2단계. 팀 선택"}</h3>
-        <p>{"로그인 직후 나타나는 팀 선택 창에서 원하는 KBO 구단(키움, 삼성, LG, 두산, KT, SSG, 롯데, 한화, NC, KIA)을 선택합니다. 여기서 고르는 팀은 '덱 이름'으로만 사용되며, 실제 선수 소속팀과는 관계가 없습니다. 예를 들어 LG 덱 안에 키움 선수를 편성해도 전혀 문제가 없습니다."}</p>
+        <p>{"로그인 직후 나타나는 팀 선택 창에서 원하는 KBO 구단(키움, 삼성, LG, 두산, KT, SSG, 롯데, 한화, NC, 기아)을 선택합니다. 여기서 고르는 팀은 '덱 이름'으로만 사용되며, 실제 선수 소속팀과는 관계가 없습니다. 예를 들어 LG 덱 안에 키움 선수를 편성해도 전혀 문제가 없습니다."}</p>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"3단계. 선수 추가"}</h3>
         <p>{"'내 선수' 탭으로 이동하여 보유하고 있는 선수를 추가합니다. 선수 이름을 검색하면 DB에 등록된 기본 정보(포지션, 연도, 카드 종류 등)가 자동으로 불러와집니다. 이어서 강화 수치, 특능 수치, 훈련 수치, 스킬 레벨, 잠재력 등급 등 세부 정보를 입력하면 전력 계산에 반영됩니다."}</p>
@@ -6764,6 +6764,35 @@ export default function App(){
           ud.deckList=list; ud.deckCurrent=fallbackId;
           await saveUserData(userId,ud);
           await sSet("deck-list",list); await sSet("deck-current",fallbackId);
+        }
+      }
+
+      /* 팀명 마이그레이션: 과거에 "KIA"로 저장된 덱들을 "기아"로 자동 변환
+         선수도감 팀명이 "기아"로 통일되어 있어 매칭 일관성 확보 */
+      var needTeamMigration = false;
+      if (list && list.length > 0) {
+        list = list.map(function(d) {
+          if (d && d.teamName === "KIA") {
+            needTeamMigration = true;
+            return Object.assign({}, d, { teamName: "기아" });
+          }
+          return d;
+        });
+        if (needTeamMigration) {
+          /* 변환된 목록을 즉시 영속화 */
+          await sSet("deck-list", list);
+          if (supabase && userId) {
+            try {
+              var allM = store.allDataRef && store.allDataRef.current
+                ? store.allDataRef.current : (await loadUserData(userId) || {});
+              if (!allM.decks) allM.decks = {};
+              allM.deckList = list;
+              if (savedCurId) allM.deckCurrent = savedCurId;
+              if (store.allDataRef) store.allDataRef.current = allM;
+              await saveUserData(userId, allM);
+              console.log("[팀명 마이그레이션] KIA → 기아 변환 완료");
+            } catch(e) { console.warn("팀명 마이그레이션 저장 오류:", e); }
+          }
         }
       }
 
