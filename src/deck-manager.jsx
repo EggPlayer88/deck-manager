@@ -644,6 +644,42 @@ function findPhotoByName(players, name) {
   return "";
 }
 function Badge(p){var c={"골든글러브":"#D4AF37","시그니처":"#C0392B","국가대표":"#2E86C1","임팩트":"#7D3C98","라이브":"#E67E22"}[p.type]||"#555";return(<span style={{display:"inline-block",padding:"2px 7px",borderRadius:4,fontSize:12,fontWeight:700,background:c,color:p.type==="골든글러브"?"#1a1100":"#fff",whiteSpace:"nowrap"}}>{p.type}</span>);}
+
+/* POTM 표시 배지 - 라인업/내선수에서 카드가 POTM인지 한눈에 표시
+   props: pl (mergePl된 카드), sdState, size ("sm"|"md")
+   정책: 팀 일치 시에만 표시. 불일치 카드는 null 반환 (배지 없음) */
+function PotmBadge(p) {
+  var info = getPotmInfo(p.pl, p.sdState);
+  if (!info.isPotm) return null;
+  var sm = p.size === "sm";
+  /* 스페셜 POTM은 보라색, 그 외(라이브/올스타)는 노란색 */
+  var bg = info.kind === "special" ? "rgba(171,71,188,0.18)" : "rgba(255,213,79,0.18)";
+  var fg = info.kind === "special" ? "#CE93D8" : "#FFD54F";
+  var border = info.kind === "special" ? "rgba(171,71,188,0.4)" : "rgba(255,213,79,0.4)";
+  var label = info.kind === "special" ? "S.POTM" : "POTM";
+  var tooltip = info.kind === "special"
+    ? "스페셜 POTM — 능력치 +" + info.bonus + ", 세트덱 +1"
+    : info.kind === "live"
+      ? "라이브 POTM — 능력치 +" + info.bonus + ", 세트덱 보너스"
+      : "올스타 POTM — 능력치 +" + info.bonus;
+  return (
+    <span title={tooltip}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 2,
+        padding: sm ? "0px 4px" : "1px 6px",
+        borderRadius: 3,
+        background: bg, color: fg,
+        border: "1px solid " + border,
+        fontSize: sm ? 9 : 10,
+        fontWeight: 800,
+        letterSpacing: 0.3,
+        whiteSpace: "nowrap"
+      }}>
+      <span style={{fontSize: sm ? 9 : 10}}>{"🌟"}</span>
+      <span>{label}</span>
+    </span>
+  );
+}
 function GS(p){return(<div style={{fontSize:p.size||16,fontWeight:900,fontFamily:"var(--h)",background:p.grad||"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{p.val}</div>);}
 function SH(p){return(<div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"linear-gradient(90deg,"+p.color+"15,transparent)",borderLeft:"3px solid "+p.color,borderBottom:"1px solid var(--bd)"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:15,fontWeight:800,color:"var(--t1)",fontFamily:"var(--h)",letterSpacing:1}}>{p.title}</span><span style={{fontSize:12,color:"var(--td)",fontFamily:"var(--m)"}}>{"("+p.count+")"}</span></div>);}
 
@@ -1356,10 +1392,11 @@ function PCard(p) {
    sdState.potmList(레거시, 덱별 저장)가 아닌 이 전역값을 단일 진실원천으로 사용. */
 var GLOBAL_POTM_LIST = [];
 
-/* POTM 능력치 보너스
-   - 라이브: 팀 무관 능력치 보너스 (팀 불일치 시 절반)
-   - 올스타 별5: 팀 일치 6 / 불일치 3 (기존 룰 유지)
-   - 그 외 (스페셜 POTM): 내 덱 팀 == 선수 원소속팀일 때만 능력치 보너스, 불일치 시 0 */
+/* POTM 능력치 보너스 — 정책: 팀 일치할 때만 적용
+   - 라이브: 팀 일치 시 별 수에 따라 보너스
+   - 올스타 별5: 팀 일치 시 6
+   - 스페셜 POTM (그 외): 팀 일치 시 카드타입별 보너스
+   팀 불일치 시 모두 0 — POTM 자체로 인정 안 됨 */
 function getPotmBonus(pl, sdState) {
   var potmList = GLOBAL_POTM_LIST;
   if (!potmList.length || !pl) return 0;
@@ -1368,25 +1405,54 @@ function getPotmBonus(pl, sdState) {
     if (potmList[i].name === (pl.name||"") && potmList[i].team === (pl.team||"")) { isPotm = true; break; }
   }
   if (!isPotm) return 0;
+  /* 팀 일치 필수 - 팀명 정보가 없거나 불일치면 적용 안 함 */
+  var teamName = sdState.teamName || "";
+  if (!teamName || !pl.team || pl.team !== teamName) return 0;
+
   var ct = pl.cardType;
   var stars = pl.stars || 5;
-  var teamName = sdState.teamName || "";
-  var teamMatch = !teamName || !pl.team || pl.team === teamName;
-  var isLive = ct === "라이브";
-  var isOlstar = ct === "올스타";
 
-  /* 라이브: 팀 무관 능력치 보너스, 팀 불일치 시 절반 */
-  if (isLive) {
-    var b = stars >= 5 ? 6 : stars === 4 ? 12 : 16;
-    return teamMatch ? b : Math.round(b * 0.5);
+  /* 라이브: 별 수에 따라 차등 */
+  if (ct === "라이브") {
+    return stars >= 5 ? 6 : stars === 4 ? 12 : 16;
   }
 
-  /* 올스타 별5: 기존 룰 유지 */
-  if (isOlstar && stars === 5) { return teamMatch ? 6 : 3; }
+  /* 올스타 별5: 6 */
+  if (ct === "올스타" && stars === 5) { return 6; }
 
-  /* 그 외(스페셜 POTM): 팀 일치할 때만 능력치 보너스 */
-  if (!teamMatch) return 0;
+  /* 스페셜 POTM (그 외) */
   return {"임팩트":2,"시그니처":2,"국가대표":2,"골든글러브":1}[ct] || 0;
+}
+
+/* POTM 상태 판정 헬퍼 - UI 표시용
+   정책: 팀 일치 시에만 POTM으로 인정. 불일치는 아예 POTM이 아닌 것으로 처리.
+   반환: { isPotm, isSpecial, isLive, isOlstar, bonus, kind } */
+function getPotmInfo(pl, sdState) {
+  var potmList = GLOBAL_POTM_LIST;
+  if (!potmList.length || !pl) return { isPotm: false };
+  var inList = false;
+  for (var i = 0; i < potmList.length; i++) {
+    if (potmList[i].name === (pl.name||"") && potmList[i].team === (pl.team||"")) { inList = true; break; }
+  }
+  if (!inList) return { isPotm: false };
+  /* 팀 일치 체크 - 불일치면 POTM 아님 */
+  var teamName = (sdState && sdState.teamName) || "";
+  if (!teamName || !pl.team || pl.team !== teamName) return { isPotm: false };
+
+  var ct = pl.cardType;
+  var isLive = ct === "라이브";
+  var isOlstar = ct === "올스타";
+  var isSpecial = !isLive && !isOlstar;
+  /* 올스타는 별5만 효과가 있어 그 외 별 수는 POTM 인정 안 함 */
+  if (isOlstar && (pl.stars||5) !== 5) return { isPotm: false };
+  return {
+    isPotm: true,
+    isSpecial: isSpecial,
+    isLive: isLive,
+    isOlstar: isOlstar,
+    kind: isLive ? "live" : isOlstar ? "olstar" : "special",
+    bonus: getPotmBonus(pl, sdState)
+  };
 }
 
 var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1}];
@@ -2083,31 +2149,31 @@ function LineupPage(p) {
     var total = 0;
     var potmList = GLOBAL_POTM_LIST;
     var teamName = sdState.teamName || "";
-    /* POTM 세트덱 보너스
-       - 라이브: 능력치 보너스 받는 카드는 세트덱 점수도 10까지 끌어올림 (원래 10 이상이면 +1)
-                팀 일치/불일치 모두 적용 (라이브는 팀 무관)
-       - 올스타: 기존 룰 유지 - 10 미만이면 (10-baseScore), 10 이상이면 +1
-       - 그 외 (스페셜 POTM): 팀 일치할 때만 +1, 불일치 시 0 */
+    /* POTM 세트덱 보너스 — 정책: 팀 일치 시에만 적용
+       - 라이브: 세트덱 점수 10까지 끌어올림 (이미 10 이상이면 +1)
+       - 올스타: 동일
+       - 스페셜 POTM (그 외): +1
+       팀 불일치 시 모두 0 */
     var getPotmSetDelta = function(pl) {
       if (!potmList.length || !pl) return 0;
       var isPotm = potmList.some(function(p) { return p.name === (pl.name||"") && p.team === (pl.team||""); });
       if (!isPotm) return 0;
+      /* 팀 일치 필수 */
+      if (!teamName || !pl.team || pl.team !== teamName) return 0;
       var ct = pl.cardType;
-      var teamMatch = !teamName || !pl.team || pl.team === teamName;
       var isLive = ct === "라이브";
       var isOlstar = ct === "올스타";
+      /* 올스타 별5 외에는 효과 없음 */
+      if (isOlstar && (pl.stars||5) !== 5) return 0;
       var baseScore = isLive ? (pl.setScore || 0) : (SET_POINTS[ct] || 0);
       if (pl.isFa && ct==="시그니처") baseScore = Math.max(0, baseScore - 1);
       if (pl.isFa && ct==="임팩트") baseScore = Math.max(0, baseScore - 2);
-      if (isLive) {
-        /* 라이브 POTM: 10까지 올리거나, 이미 10 이상이면 +1 */
+      if (isLive || isOlstar) {
+        /* 10까지 끌어올리되, 이미 10 이상이면 +1 */
         return baseScore >= 10 ? 1 : (10 - baseScore);
       }
-      if (isOlstar) {
-        return baseScore >= 10 ? 1 : (10 - baseScore);
-      }
-      /* 스페셜 POTM (그 외 카드): 팀 일치 시 +1 */
-      return teamMatch ? 1 : 0;
+      /* 스페셜 POTM */
+      return 1;
     };
     var allSlots = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP"]);
     allSlots.forEach(function(slot) {
@@ -2259,7 +2325,7 @@ function LineupPage(p) {
           </div>
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} /></div>) : null}
@@ -2346,7 +2412,7 @@ function LineupPage(p) {
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" /></div>) : null}
@@ -3528,12 +3594,18 @@ function LockerRoomPage(p) {
     return results.slice(0, 10);
   })();
 
-  /* 유저 내 선수 중 POTM 매칭 (dbId 기준) */
+  /* 유저 내 선수 중 POTM 매칭 (dbId 기준)
+     정책: 팀 일치 시에만 POTM 적용 → 불일치 카드는 목록에 표시하지 않음 */
+  var teamNameForPotm = sdState.teamName || "";
   var potmMatched = [];
   players.forEach(function(pl) {
-    var dbId = pl.dbId || pl.id;
     var found = potmList.some(function(p) { return p.name === (pl.name||"") && p.team === (pl.team||""); });
-    if (found && potmMatched.indexOf(pl) < 0) potmMatched.push(mergePl(pl));
+    if (!found) return;
+    /* 팀 일치 필수 */
+    if (!teamNameForPotm || !pl.team || pl.team !== teamNameForPotm) return;
+    /* 올스타 별5만 효과 있음 */
+    if (pl.cardType === "올스타" && (pl.stars||5) !== 5) return;
+    if (potmMatched.indexOf(pl) < 0) potmMatched.push(mergePl(pl));
   });
 
   var updPotm = function(id, field, val) {
@@ -3678,20 +3750,17 @@ function LockerRoomPage(p) {
         {potmMatched.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {potmMatched.map(function(pl) {
-              var isBat = pl.role === "타자";
               var ct = pl.cardType;
               var stars = pl.stars || 5;
-              var teamName = sdState.teamName || "";
-              var teamMatch = !teamName || !pl.team || pl.team === teamName;
               var isLive = ct === "라이브";
               var isOlstar = ct === "올스타";
               var isSpecial = !isLive && !isOlstar;
               var statBonus = getPotmBonus(pl, sdState);
+              /* potmMatched는 팀 일치 + 효과 있는 카드만 들어옴 → 단순 표시 */
               var baseScore = isLive ? (pl.setScore || 0) : (SET_POINTS[ct] || 0);
-              if (pl.isFa) baseScore = Math.max(0, baseScore - 1);
-              var setDelta = 0;
-              if (isLive || isOlstar) setDelta = baseScore >= 10 ? 1 : (10 - baseScore);
-              else if (teamMatch) setDelta = 1;
+              if (pl.isFa && ct==="시그니처") baseScore = Math.max(0, baseScore - 1);
+              if (pl.isFa && ct==="임팩트") baseScore = Math.max(0, baseScore - 2);
+              var setDelta = (isLive || isOlstar) ? (baseScore >= 10 ? 1 : (10 - baseScore)) : 1;
               return (
                 <div key={pl.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderRadius: 6, background: "rgba(255,213,79,0.06)", border: "1px solid rgba(255,213,79,0.2)" }}>
                   <span style={{ fontSize: 14, flexShrink: 0 }}>{"🌟"}</span>
@@ -3709,11 +3778,8 @@ function LockerRoomPage(p) {
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                       {statBonus > 0 && (
                         <span style={{ fontSize: 12, color: "#66BB6A", fontFamily: "var(--m)", fontWeight: 700 }}>
-                          {"능력치 +" + statBonus + (isSpecial ? " (팀일치)" : teamMatch ? "" : " (50%)")}
+                          {"능력치 +" + statBonus}
                         </span>
-                      )}
-                      {statBonus === 0 && isSpecial && !teamMatch && (
-                        <span style={{ fontSize: 12, color: "var(--td)" }}>{"팀 불일치 — 효과 없음"}</span>
                       )}
                       {setDelta > 0 && (
                         <span style={{ fontSize: 12, color: "#FF9800", fontFamily: "var(--m)", fontWeight: 700 }}>{"세트덱 +" + setDelta}</span>
@@ -4813,6 +4879,7 @@ function MyPlayersPage(p) {
   var lm = p.lineupMap || {};
   var saveLM = p.saveLineupMap || function(){};
   var skillsDB = p.skills || {};
+  var sdState = p.sdState || {};
   var _sel = useState(null); var selId = _sel[0]; var setSelId = _sel[1];
   var _filter = useState("타자"); var filter = _filter[0]; var setFilter = _filter[1];
   var _addOpen = useState(false); var addOpen = _addOpen[0]; var setAddOpen = _addOpen[1];
@@ -4901,10 +4968,11 @@ function MyPlayersPage(p) {
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <Badge type={pl.cardType} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
                 <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span>
                 {pl.isFa && (<span style={{ fontSize: 8, color: "#FF9800", fontFamily: "var(--m)", fontWeight: 800, background: "rgba(255,152,0,0.1)", padding: "1px 4px", borderRadius: 3, border: "1px solid rgba(255,152,0,0.2)" }}>{"FA"}</span>)}
                 {slot && (<span style={{ fontSize: 11, color: accentC, fontFamily: "var(--m)", fontWeight: 700, background: "rgba(255,213,79,0.08)", padding: "1px 5px", borderRadius: 3 }}>{slot}</span>)}
+                <PotmBadge pl={pl} sdState={sdState} size="sm" />
               </div>
               <div style={{ fontSize: 13, color: "var(--td)" }}>{(pl.team ? pl.team+" " : "") + (pl.subPosition || "") + " · " + (pl.hand || "") + (isBat ? "타" : "투") + " · " + (pl.enhance || "") + (pl.cardType==="임팩트"&&pl.impactType?" · "+pl.impactType:pl.year?" · "+pl.year:"") + " · ★" + (pl.stars || 5)}</div>
             </div>
@@ -6819,7 +6887,7 @@ export default function App(){
 
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} userId={userId}/>);
-  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId}/>);
+  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdState}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdState} setSdState={setSdState}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdState} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} potmList={store.potmList} setPotmList={store.savePotmList} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
