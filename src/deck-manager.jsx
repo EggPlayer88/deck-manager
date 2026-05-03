@@ -1589,24 +1589,52 @@ function SkillPicker(p) {
   };
 
   var pick = function(name) { p.onChange(name); setOpen(false); setQ(""); };
+  /* openedAt: 드롭다운이 열린 시점. 모바일 ghost click(같은 터치가 새로 그려진
+     오버레이로 전달되어 즉시 닫히는 현상) 방지를 위해 grace period 사용 */
+  var openedAtRef = React.useRef(0);
   var openIt = function(e) {
     e.stopPropagation();
+    if (e.preventDefault) e.preventDefault();
     if (!open) {
       calcPos();
       setQ("");
+      openedAtRef.current = Date.now();
     }
     setOpen(!open);
   };
+  var closeFromOverlay = function(e) {
+    /* 열린 직후 250ms 이내의 클릭은 ghost click으로 간주하고 무시 */
+    if (Date.now() - openedAtRef.current < 250) {
+      if (e && e.stopPropagation) e.stopPropagation();
+      return;
+    }
+    setOpen(false);
+  };
 
-  /* 열려있을 때 스크롤/리사이즈 시 닫기 (위치 추적 비용 회피) */
+  /* 열려있을 때 스크롤/리사이즈 시 닫기 (위치 추적 비용 회피)
+     모바일 이슈 대응:
+     - 가상 키보드 올라오며 viewport resize → 즉시 close 되는 문제
+     - 첫 마운트 후 발생하는 자체 이벤트로 즉시 닫히는 문제
+     해결: (1) 등록을 다음 tick으로 지연 (2) 작은 resize 변화는 무시 */
   React.useEffect(function() {
     if (!open) return;
-    var close = function() { setOpen(false); };
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
+    var initialW = window.innerWidth;
+    var initialH = window.innerHeight;
+    var onScroll = function() { setOpen(false); };
+    var onResize = function() {
+      /* 너비 변화는 진짜 회전/창 변경, 높이만 변하면 가상 키보드 가능성 → 무시 */
+      var dw = Math.abs(window.innerWidth - initialW);
+      if (dw > 50) setOpen(false);
+    };
+    /* 다음 tick에 등록 - 열리는 시점의 자체 이벤트 회피 */
+    var t = setTimeout(function(){
+      window.addEventListener("scroll", onScroll, true);
+      window.addEventListener("resize", onResize);
+    }, 100);
     return function() {
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
+      clearTimeout(t);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
     };
   }, [open]);
 
@@ -1631,7 +1659,7 @@ function SkillPicker(p) {
       </button>
       {open && (
         <React.Fragment>
-          <div onClick={function(){ setOpen(false); }}
+          <div onClick={closeFromOverlay}
             style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998, background: "transparent" }} />
           <div style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999, background: "#0f172a", border: "1px solid #475569", borderRadius: 6, width: popupWidth, maxHeight: 320, display: "flex", flexDirection: "column", boxShadow: "0 8px 24px rgba(0,0,0,0.6)" }}>
             <input autoFocus type="text" value={q}
