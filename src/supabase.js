@@ -85,8 +85,8 @@ var _globalPlayersCache = null;
 var _globalPlayersCacheTime = 0;
 var CACHE_TTL = 10 * 60 * 1000; /* 10분 */
 
-/* 확장 컬럼 지원 여부를 기억한다 (매 페이지마다 실패 재시도하지 않도록) */
-var _globalPlayersCols = null;
+/* 어떤 컬럼 조합이 되는지 기억한다 (매번 실패 재시도하지 않도록) */
+var _globalPlayersColTier = 0;
 
 export async function loadGlobalPlayers() {
   if (!supabase) return [];
@@ -98,32 +98,39 @@ export async function loadGlobalPlayers() {
   /* 필요한 컬럼만 선택 (select * 대신) */
   var BASE_COLS = 'id,name,cardType,year,team,role,position,subPosition,hand,stars,power,accuracy,eye,patience,running,defense,speed,change,stuff,control,stamina,impactType,liveType,setScore';
   /* 선수 카드에 귀속되는 값이라 도감(DB)에 있어야 하는 항목.
-     아직 컬럼이 없는 환경도 있어서, 없으면 기본 목록으로 되돌아간다.
-     (없는 컬럼을 select 하면 쿼리 전체가 실패해 도감이 통째로 안 불러와진다) */
-  var EXTRA_COLS = 'launchAngle,whiteZone,coldZone';
+     DB 마다 있는 컬럼이 달라서 넓은 것부터 차례로 시도하고, 되는 조합을 기억한다.
+     한 묶음으로 처리하면 whiteZone 이 없다는 이유로 launchAngle 까지 버려진다. */
+  var COL_TIERS = [
+    BASE_COLS + ',launchAngle,whiteZone,coldZone',
+    BASE_COLS + ',launchAngle',
+    BASE_COLS,
+  ];
+  var tier = _globalPlayersColTier;
   var allData = [];
-  var page = 0;
   var pageSize = 1000;
-  var cols = _globalPlayersCols || (BASE_COLS + ',' + EXTRA_COLS);
-  while (true) {
-    var r = await supabase.from('global_players').select(cols)
-      .order('cardType').order('name')
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-    if (r.error && cols !== BASE_COLS) {
-      /* 확장 컬럼이 없는 DB — 기본 목록으로 한 번만 재시도하고 이후에는 기억한다 */
-      console.warn('[global_players] 확장 컬럼(' + EXTRA_COLS + ') 없음 — 기본 컬럼으로 로드합니다.', r.error.message);
-      _globalPlayersCols = BASE_COLS;
-      cols = BASE_COLS;
-      allData = [];
-      page = 0;
-      continue;
+
+  for (; tier < COL_TIERS.length; tier++) {
+    var cols = COL_TIERS[tier];
+    var ok = true;
+    allData = [];
+    for (var page = 0; ; page++) {
+      var r = await supabase.from('global_players').select(cols)
+        .order('cardType').order('name')
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+      if (r.error) {
+        if (tier < COL_TIERS.length - 1) {
+          console.warn('[global_players] 컬럼 조합 실패 — 다음 조합으로 재시도합니다.', r.error.message);
+        }
+        ok = false;
+        break;
+      }
+      if (!r.data || r.data.length === 0) break;
+      allData = allData.concat(r.data);
+      if (r.data.length < pageSize) break;
     }
-    if (r.error || !r.data || r.data.length === 0) break;
-    if (!_globalPlayersCols) _globalPlayersCols = cols;
-    allData = allData.concat(r.data);
-    if (r.data.length < pageSize) break;
-    page++;
+    if (ok) { _globalPlayersColTier = tier; break; }
   }
+
   _globalPlayersCache = allData;
   _globalPlayersCacheTime = Date.now();
   return allData;
@@ -132,7 +139,7 @@ export async function loadGlobalPlayers() {
 export function clearGlobalPlayersCache() {
   _globalPlayersCache = null;
   _globalPlayersCacheTime = 0;
-  _globalPlayersCols = null;
+  _globalPlayersColTier = 0;
 }
 
 /* 아직 DB 에 없을 수 있는 컬럼. 저장이 이것 때문에 실패하면 빼고 한 번 더 시도한다.
