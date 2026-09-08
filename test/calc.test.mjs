@@ -194,7 +194,8 @@ eq('스킬표가 새 값으로', resolved['타자']['정밀타격'][0], 20.7);
 eq('타자 스킬 수', Object.keys(resolved['타자']).length, 88);
 eq('가중치도 새 값으로', resolved.weights.a, 0.85);
 eq('인내 가중치 포함', resolved.weights.n, 0.15);
-eq('잠재력 커스터마이징 보존', resolved.potScoresByType['풀스윙']['SR+'], 99);
+/* v3 부터는 잠재력 등급별 점수를 시트 기준으로 통일한다 — 예전 입력값은 덮인다 */
+eq('잠재력 점수는 시트값으로 통일', resolved.potScoresByType['풀스윙']['SR+'], 14);
 eq('주요스킬 표시 보존', resolved._major['타자']['정밀타격'] ? 1 : 0, 1);
 /* 이미 최신이면 그대로 둔다 (관리자가 나중에 손댄 값을 덮지 않는다) */
 const current = JSON.parse(JSON.stringify(DEFAULT_SKILLS));
@@ -213,10 +214,30 @@ eq('타자는 좌투선호', awkTypesFor('타자').indexOf('좌투선호') >= 0 
 eq('투수는 좌타선호', awkTypesFor('투수').indexOf('좌타선호') >= 0 ? 1 : 0, 1);
 eq('타자에 좌타선호 없음', awkTypesFor('타자').indexOf('좌타선호') < 0 ? 1 : 0, 1);
 eq('땅볼형은 양쪽 공용', (POT_TYPES_AWK_BAT.indexOf('땅볼형') >= 0 && POT_TYPES_AWK_PIT.indexOf('땅볼형') >= 0) ? 1 : 0, 1);
-/* 점수는 아직 산정 전이라 전 등급 0 — 값이 정해지면 이 기대값을 바꾼다 */
-eq('S 점수(미산정)', getPotScoreByType('S', '좌투선호', null), 0);
-eq('C 점수', getPotScoreByType('C', '속구대처', null), 0);
-eq('점수 미산정이라 총점 영향 없음', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S', potType3: '좌투선호' }, {}, null).total, 305);
+/* C 3 / C+ 6.5 에서 사이 등급 0.2 씩, S 는 10 */
+eq('C 점수', getPotScoreByType('C', '속구대처', null), 3);
+eq('C+ 점수', getPotScoreByType('C+', '속구대처', null), 6.5);
+eq('B 점수', getPotScoreByType('B', '좌투선호', null), 6.7);
+eq('A+ 점수', getPotScoreByType('A+', '땅볼형', null), 7.3);
+eq('S 점수', getPotScoreByType('S', '좌투선호', null), 10);
+eq('투수 종류도 같은 표', getPotScoreByType('S', '변화구연마', null), 10);
+eq('총점에 반영', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S', potType3: '좌투선호' }, {}, null).total, 315);
+
+console.log('\n[잠재력 등급별 점수] 종류마다 표가 다르다');
+eq('풀스윙 C+', getPotScoreByType('C+', '풀스윙', null), 1);
+eq('풀스윙 A+', getPotScoreByType('A+', '풀스윙', null), 2);
+eq('풀스윙 S', getPotScoreByType('S', '풀스윙', null), 5);
+eq('풀스윙 SR+', getPotScoreByType('SR+', '풀스윙', null), 14);
+eq('침착 S', getPotScoreByType('S', '침착', null), 3);
+eq('침착 SR+', getPotScoreByType('SR+', '침착', null), 9);
+/* 클러치 = 침착 + S 이상 구간에 1점씩 */
+eq('클러치 A+ = 침착 A+', getPotScoreByType('A+', '클러치', null), getPotScoreByType('A+', '침착', null));
+eq('클러치 S = 침착 S + 1', getPotScoreByType('S', '클러치', null), getPotScoreByType('S', '침착', null) + 1);
+eq('클러치 SR = 침착 SR + 1', getPotScoreByType('SR', '클러치', null), getPotScoreByType('SR', '침착', null) + 1);
+/* 장타억제 = 풀스윙, 단 SR+ 는 별도 (확인 전이라 SR 과 동일) */
+eq('장타억제 S = 풀스윙 S', getPotScoreByType('S', '장타억제', null), getPotScoreByType('S', '풀스윙', null));
+eq('장타억제 SR = 풀스윙 SR', getPotScoreByType('SR', '장타억제', null), getPotScoreByType('SR', '풀스윙', null));
+eq('장타억제 SR+ 는 미확정(SR 과 동일)', getPotScoreByType('SR+', '장타억제', null), 7);
 /* 어드민이 점수를 채우면 곧바로 반영된다 */
 eq('점수 지정 시 반영', getPotScoreByType('S', '좌투선호', { potScoresByType: { '좌투선호': { 'S': 4 } } }), 4);
 eq('종류 없으면 0', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S' }, {}, null).total, 305);
