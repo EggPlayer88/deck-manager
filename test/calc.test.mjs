@@ -237,7 +237,7 @@ eq('클러치 SR = 침착 SR + 1', getPotScoreByType('SR', '클러치', null), g
 /* 장타억제 = 풀스윙, 단 SR+ 는 별도 (확인 전이라 SR 과 동일) */
 eq('장타억제 S = 풀스윙 S', getPotScoreByType('S', '장타억제', null), getPotScoreByType('S', '풀스윙', null));
 eq('장타억제 SR = 풀스윙 SR', getPotScoreByType('SR', '장타억제', null), getPotScoreByType('SR', '풀스윙', null));
-eq('장타억제 SR+ 는 미확정(SR 과 동일)', getPotScoreByType('SR+', '장타억제', null), 7);
+eq('장타억제 SR+ 는 풀스윙보다 높다', getPotScoreByType('SR+', '장타억제', null), 16);
 /* 어드민이 점수를 채우면 곧바로 반영된다 */
 eq('점수 지정 시 반영', getPotScoreByType('S', '좌투선호', { potScoresByType: { '좌투선호': { 'S': 4 } } }), 4);
 eq('종류 없으면 0', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S' }, {}, null).total, 305);
