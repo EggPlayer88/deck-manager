@@ -2431,12 +2431,17 @@ function LineupPage(p) {
     lBats.forEach(function(x, i) {
       if (!x.pl) return;
       var calc = calcBatSD(x.pl, x.slot);
-      var mult = i <= 4 ? 1.0 : i <= 6 ? 0.9 : 0.8;
+      /* 덱 보정 시트 기준 — 타순으로 구분한다.
+         1~2번 상위 1.15 / 3~5번 코어 1.3 / 6~7번 중위 1.0 / 8~9번 하위 0.75 */
+      var mult = i <= 1 ? 1.15 : i <= 4 ? 1.3 : i <= 6 ? 1.0 : 0.75;
       t += calc.total * mult;
     });
-    lSP.forEach(function(x) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * 1.1; });
+    /* 선발 — 1선발 1.4 / 2~4선발 1.3 / 5선발 1.2 */
+    lSP.forEach(function(x, i) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * (i === 0 ? 1.4 : i <= 3 ? 1.3 : 1.2); });
+    /* 중계 — 불펜 편성(11종)별 슬롯 가중치를 그대로 쓴다 (시트보다 세분화돼 있음) */
     lRP.forEach(function(x) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * getRPWeight(bpcIdx, x.slot, isWinSplit); });
-    if (lCP.pl) t += calcPitSD(lCP.pl, "CP").total;
+    /* 마무리 0.8 */
+    if (lCP.pl) t += calcPitSD(lCP.pl, "CP").total * 0.8;
     return Math.round(t * 100) / 100;
   };
   var totalScore = calcTotal();
