@@ -103,6 +103,8 @@ function mergePl(userPl) {
     specChange: userPl.specChange||0, specStuff: userPl.specStuff||0,
     /* 값이 없는 기존 선수는 저장된 레벨을 지키기 위해 수동으로 본다.
        신규 선수는 생성 시 sLvManual:false 로 만들어져 자동이 된다. */
+    /* 흰존·콜존은 도감이 아니라 유저가 직접 넣는 값이다 */
+    whiteZone: userPl.whiteZone||0, coldZone: userPl.coldZone||0,
     sLvManual: userPl.sLvManual === undefined ? true : !!userPl.sLvManual,
     skill1: userPl.skill1||"", s1Lv: userPl.s1Lv||0,
     skill2: userPl.skill2||"", s2Lv: userPl.s2Lv||0,
@@ -1285,9 +1287,7 @@ function PlayerDBPage(p){
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
                   <Inp label="발사각" type="number" value={form.launchAngle||0} onChange={function(v){uf("launchAngle",parseInt(v)||0);}} mb={6} />
-                  <Inp label="핫콜존" type="number" value={form.hotColdZone||0} onChange={function(v){uf("hotColdZone",parseInt(v)||0);}} mb={6} />
-                  <Inp label="흰존 개수 (-1.5/개)" type="number" value={form.whiteZone||0} onChange={function(v){uf("whiteZone",parseInt(v)||0);}} mb={6} />
-                  <Inp label="콜존 개수 (-3/개)" type="number" value={form.coldZone||0} onChange={function(v){uf("coldZone",parseInt(v)||0);}} mb={6} />
+                  <Inp label="핫콜존 (미사용)" type="number" value={form.hotColdZone||0} onChange={function(v){uf("hotColdZone",parseInt(v)||0);}} mb={6} />
                 </div>
               </React.Fragment>
             ):(
@@ -2489,7 +2489,7 @@ function LineupPage(p) {
           onDrop={function(e) { e.preventDefault(); if (dragSlot !== null && dragSlot !== idx) swapOrder(dragSlot, idx); }}
           onDragEnd={function() { setDragSlot(null); setDragOverSlot(null); }}
           onClick={function() { setSelId(isSel ? null : pl.id); }}
-          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,120px) minmax(0,110px) minmax(0,86px) minmax(0,110px) minmax(0,52px) minmax(0,46px)", alignItems: "center", gap: 22, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
+          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,120px) minmax(0,110px) minmax(0,86px) minmax(0,110px) minmax(0,52px) minmax(0,58px)", alignItems: "center", gap: 22, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acc)", fontFamily: "var(--h)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             {idx > 0 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx-1); }} style={{ fontSize: 12, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
             <span>{idx + 1}</span>
@@ -2530,6 +2530,7 @@ function LineupPage(p) {
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 13, color: "var(--td)" }}>{"잠재"}</div>
               <div style={{ fontSize: 15, color: "var(--t2)" }}>{(<span><span style={{fontSize:11,color:"var(--td)"}}>풀</span>{pl.pot1||"-"} <span style={{fontSize:11,color:"var(--td)"}}>클</span>{pl.pot2||"-"}</span>)}</div>
+              {pl.pot3 && pl.potType3 && (<div title={pl.potType3} style={{ fontSize: 12, color: "#FFA726", whiteSpace: "nowrap" }}>{"감 " + pl.pot3}</div>)}
             </div>
           </React.Fragment>)}
         </div>
@@ -2582,7 +2583,7 @@ function LineupPage(p) {
     var isSel = selId === pl.id;
     return (
       <React.Fragment key={pl.id}>
-        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,96px) minmax(0,74px) minmax(0,64px) minmax(0,110px) minmax(0,52px) minmax(0,46px)", alignItems: "center", gap: 22, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
+        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,96px) minmax(0,74px) minmax(0,64px) minmax(0,110px) minmax(0,52px) minmax(0,58px)", alignItems: "center", gap: 22, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
@@ -2620,6 +2621,7 @@ function LineupPage(p) {
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 13, color: "var(--td)" }}>{"잠재"}</div>
               <div style={{ fontSize: 15, color: "var(--t2)" }}>{(<span><span style={{fontSize:11,color:"var(--td)"}}>장</span>{pl.pot1||"-"} <span style={{fontSize:11,color:"var(--td)"}}>침</span>{pl.pot2||"-"}</span>)}</div>
+              {pl.pot3 && pl.potType3 && (<div title={pl.potType3} style={{ fontSize: 12, color: "#FFA726", whiteSpace: "nowrap" }}>{"감 " + pl.pot3}</div>)}
             </div>
           </React.Fragment>)}
         </div>
@@ -5469,6 +5471,43 @@ function MyPlayersPage(p) {
                 </div>
               </div>
             </div>
+            {/* 타자 전용 — 흰존/콜존 직접 입력, 발사각 보너스 확인 (라인업에는 표시하지 않는다) */}
+            {isBat && (
+              <div style={{ marginTop: 8, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"핫콜존"}</div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: "#B0BEC5" }}>{"흰존"}</span>
+                    {miniIn(pl.id, "whiteZone", pl.whiteZone, "#B0BEC5", 99)}
+                    <span style={{ fontSize: 11, color: "var(--td)" }}>{"-1.5/개"}</span>
+                    <span style={{ fontSize: 12, color: "#4FC3F7", marginLeft: 6 }}>{"콜존"}</span>
+                    {miniIn(pl.id, "coldZone", pl.coldZone, "#4FC3F7", 99)}
+                    <span style={{ fontSize: 11, color: "var(--td)" }}>{"-3/개"}</span>
+                    <span style={{ fontSize: 12, color: "#EF5350", fontFamily: "var(--m)", marginLeft: 4 }}>
+                      {calc.zonePen ? calc.zonePen : ""}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"발사각 보너스"}</div>
+                  {!pl.launchAngle ? (
+                    <span style={{ fontSize: 12, color: "var(--td)" }}>{"발사각 정보 없음"}</span>
+                  ) : calc.laReq === null ? (
+                    <span style={{ fontSize: 12, color: "var(--td)" }}>{"발사각 " + pl.launchAngle + "° · 13° 미만은 대상 아님"}</span>
+                  ) : (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, fontFamily: "var(--m)" }}>
+                      <span style={{ color: "var(--td)" }}>{pl.launchAngle + "°"}</span>
+                      <span style={{ color: "var(--td)" }}>{"필요파워 " + calc.laReq}</span>
+                      <span style={{ color: calc.laGain ? "#66BB6A" : "#EF5350", fontWeight: 800 }}>
+                        {calc.laGain
+                          ? "달성 +" + calc.laBonus + " (파워 여유 " + (calc.power - calc.laReq) + ")"
+                          : "미달 " + (calc.laReq - calc.power) + " 부족"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {/* Skills */}
             <div style={{ marginTop: 8 }}>
               <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"스킬 (" + getSkillCat(pl) + ")"}</div>
