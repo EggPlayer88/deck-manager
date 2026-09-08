@@ -19,18 +19,18 @@ var DEFAULT_POT_SCORES_BY_TYPE = {
 };
 var POT_TYPES_BAT = ["풀스윙","클러치"];
 var POT_TYPES_PIT = ["장타억제","침착"];
-var POT_GRADES_GAM = ["C","C+","B","B+","A","A+","S"];
-var POT_TYPES_GAM_BAT = ["좌투선호","우투선호","속구대처","변화구대처","땅볼형","뜬공형"];
-var POT_TYPES_GAM_PIT = ["좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
+var POT_GRADES_AWK = ["C","C+","B","B+","A","A+","S"];
+var POT_TYPES_AWK_BAT = ["좌투선호","우투선호","속구대처","변화구대처","땅볼형","뜬공형"];
+var POT_TYPES_AWK_PIT = ["좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
 /* 땅볼형·뜬공형은 타자/투수가 이름을 공유한다 — 점수도 함께 쓴다 */
-var POT_TYPES_GAM_ALL = ["좌투선호","우투선호","속구대처","변화구대처","좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
-/* 감성 잠재력 점수는 아직 산정 전이라 전부 0 으로 둔다.
+var POT_TYPES_AWK_ALL = ["좌투선호","우투선호","속구대처","변화구대처","좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
+/* 각성 잠재력 점수는 아직 산정 전이라 전부 0 으로 둔다.
    값이 정해지면 어드민 「잠재력 등급별 점수」에서 채우거나 이 표를 고친다. */
-var DEFAULT_GAM_SCORES = {"C":0,"C+":0,"B":0,"B+":0,"A":0,"A+":0,"S":0};
-POT_TYPES_GAM_ALL.forEach(function(t){
-  if(!DEFAULT_POT_SCORES_BY_TYPE[t]) DEFAULT_POT_SCORES_BY_TYPE[t] = Object.assign({}, DEFAULT_GAM_SCORES);
+var DEFAULT_AWK_SCORES = {"C":0,"C+":0,"B":0,"B+":0,"A":0,"A+":0,"S":0};
+POT_TYPES_AWK_ALL.forEach(function(t){
+  if(!DEFAULT_POT_SCORES_BY_TYPE[t]) DEFAULT_POT_SCORES_BY_TYPE[t] = Object.assign({}, DEFAULT_AWK_SCORES);
 });
-function gamTypesFor(role){ return role === "타자" ? POT_TYPES_GAM_BAT : POT_TYPES_GAM_PIT; }
+function awkTypesFor(role){ return role === "타자" ? POT_TYPES_AWK_BAT : POT_TYPES_AWK_PIT; }
 function getPotScoreByType(grade, type, skills) {
   if (!grade || !type) return 0;
   var byType = (skills && skills.potScoresByType) ? skills.potScoresByType : DEFAULT_POT_SCORES_BY_TYPE;
@@ -180,7 +180,7 @@ function calcBat(pl,lu,sdB){
   if(sdB&&sdB._sdState){var nb2=sdB._sdState.natBat||sdB._sdState._autoNatBat||"없음";if(nb2==="5렙"){t+=1*w.p+1*w.a;}if(nb2==="6렙"){t+=2*w.p+2*w.a;}}
   /* 잠재력 점수 */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
-  /* 감성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
+  /* 각성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
   t += getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
   return{power:fP,accuracy:fA,eye:fE,patience:fN,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100,
     laReq:launchAngleReq(pl.launchAngle),laBonus:launchAngleBonus(pl.launchAngle),
@@ -209,10 +209,10 @@ function calcPit(pl,lu,sdB){
   }
   /* 잠재력 점수 */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
-  /* 감성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
+  /* 각성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
   t += getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
   return{change:fC,stuff:fS,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };

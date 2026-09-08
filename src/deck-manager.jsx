@@ -65,19 +65,19 @@ var DEFAULT_POT_SCORES_BY_TYPE = {
 var POT_TYPES_BAT = ["풀스윙","클러치"];
 var POT_TYPES_PIT = ["장타억제","침착"];
 
-/* 감성 잠재력 — 등급이 C~S 까지만 있다 (SS 이상 없음) */
-var POT_GRADES_GAM = ["C","C+","B","B+","A","A+","S"];
-var POT_TYPES_GAM_BAT = ["좌투선호","우투선호","속구대처","변화구대처","땅볼형","뜬공형"];
-var POT_TYPES_GAM_PIT = ["좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
+/* 각성 잠재력 — 등급이 C~S 까지만 있다 (SS 이상 없음) */
+var POT_GRADES_AWK = ["C","C+","B","B+","A","A+","S"];
+var POT_TYPES_AWK_BAT = ["좌투선호","우투선호","속구대처","변화구대처","땅볼형","뜬공형"];
+var POT_TYPES_AWK_PIT = ["좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
 /* 땅볼형·뜬공형은 타자/투수가 이름을 공유한다 — 점수도 함께 쓴다 */
-var POT_TYPES_GAM_ALL = ["좌투선호","우투선호","속구대처","변화구대처","좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
-/* 감성 잠재력 점수는 아직 산정 전이라 전부 0 으로 둔다.
+var POT_TYPES_AWK_ALL = ["좌투선호","우투선호","속구대처","변화구대처","좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
+/* 각성 잠재력 점수는 아직 산정 전이라 전부 0 으로 둔다.
    값이 정해지면 어드민 「잠재력 등급별 점수」에서 채우거나 이 표를 고친다. */
-var DEFAULT_GAM_SCORES = {"C":0,"C+":0,"B":0,"B+":0,"A":0,"A+":0,"S":0};
-POT_TYPES_GAM_ALL.forEach(function(t){
-  if(!DEFAULT_POT_SCORES_BY_TYPE[t]) DEFAULT_POT_SCORES_BY_TYPE[t] = Object.assign({}, DEFAULT_GAM_SCORES);
+var DEFAULT_AWK_SCORES = {"C":0,"C+":0,"B":0,"B+":0,"A":0,"A+":0,"S":0};
+POT_TYPES_AWK_ALL.forEach(function(t){
+  if(!DEFAULT_POT_SCORES_BY_TYPE[t]) DEFAULT_POT_SCORES_BY_TYPE[t] = Object.assign({}, DEFAULT_AWK_SCORES);
 });
-function gamTypesFor(role){ return role === "타자" ? POT_TYPES_GAM_BAT : POT_TYPES_GAM_PIT; }
+function awkTypesFor(role){ return role === "타자" ? POT_TYPES_AWK_BAT : POT_TYPES_AWK_PIT; }
 function getPotScoreByType(grade, type, skills) {
   if (!grade || !type) return 0;
   var byType = (skills && skills.potScoresByType) ? skills.potScoresByType : DEFAULT_POT_SCORES_BY_TYPE;
@@ -318,7 +318,7 @@ function calcBat(pl,lu,sdB){
   if(sdB&&sdB._sdState){var nb2=sdB._sdState.natBat||sdB._sdState._autoNatBat||"없음";if(nb2==="5렙"){t+=1*w.p+1*w.a;}if(nb2==="6렙"){t+=2*w.p+2*w.a;}}
   /* 잠재력 점수 */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
-  /* 감성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
+  /* 각성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
   t += getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
   return{power:fP,accuracy:fA,eye:fE,patience:fN,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100,
     laReq:launchAngleReq(pl.launchAngle),laBonus:launchAngleBonus(pl.launchAngle),
@@ -348,7 +348,7 @@ function calcPit(pl,lu,sdB){
   }
   /* 잠재력 점수 */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
-  /* 감성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
+  /* 각성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
   t += getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
   return{change:fC,stuff:fS,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
 }
@@ -5554,20 +5554,20 @@ function MyPlayersPage(p) {
                   </div>
                 </div>
               </div>
-              {/* 감성 잠재력 — 종류를 직접 고르고 등급은 C~S 만 */}
+              {/* 각성 잠재력 — 종류를 직접 고르고 등급은 C~S 만 */}
               <div>
-                <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"감성 잠재력"}</div>
+                <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"각성 잠재력"}</div>
                 <div style={{ display: "flex", gap: 4 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontSize: 11, color: "var(--td)" }}>{"종류"}</span>
                     <select value={pl.potType3||""} onChange={function(e){upd(pl.id,"potType3",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 13, outline: "none", width: 96 }}>
-                      <option value="">-</option>{gamTypesFor(pl.role).map(function(t){return (<option key={t} value={t}>{t}</option>);})}
+                      <option value="">-</option>{awkTypesFor(pl.role).map(function(t){return (<option key={t} value={t}>{t}</option>);})}
                     </select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontSize: 11, color: "var(--td)" }}>{"등급"}</span>
                     <select value={pl.pot3||""} onChange={function(e){upd(pl.id,"pot3",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 14, outline: "none", width: 52 }}>
-                      <option value="">-</option>{POT_GRADES_GAM.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
+                      <option value="">-</option>{POT_GRADES_AWK.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
                     </select>
                   </div>
                 </div>
@@ -5926,14 +5926,14 @@ function SkillManagePage(p) {
       {/* Potential Scores - 종류별 */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{"잠재력 등급별 점수 (종류별)"}</div>
-        {["풀스윙","클러치","장타억제","침착"].concat(POT_TYPES_GAM_ALL).map(function(potType) {
+        {["풀스윙","클러치","장타억제","침착"].concat(POT_TYPES_AWK_ALL).map(function(potType) {
           var byType = skills.potScoresByType || DEFAULT_POT_SCORES_BY_TYPE;
           var typeScores = byType[potType] || DEFAULT_POT_SCORES_BY_TYPE[potType] || DEFAULT_POT_SCORES;
-          var isGam = POT_TYPES_GAM_ALL.indexOf(potType) >= 0;
-          var gradeList = isGam ? POT_GRADES_GAM : POT_GRADES;
-          var typeColor = isGam?"#FFA726":potType==="풀스윙"?"#EF5350":potType==="클러치"?"#42A5F5":potType==="장타억제"?"#AB47BC":"#66BB6A";
-          var roleTag = isGam
-            ? (POT_TYPES_GAM_BAT.indexOf(potType)>=0 && POT_TYPES_GAM_PIT.indexOf(potType)>=0 ? " (감성·공용)" : POT_TYPES_GAM_BAT.indexOf(potType)>=0 ? " (감성·타자)" : " (감성·투수)")
+          var isAwk = POT_TYPES_AWK_ALL.indexOf(potType) >= 0;
+          var gradeList = isAwk ? POT_GRADES_AWK : POT_GRADES;
+          var typeColor = isAwk?"#FFA726":potType==="풀스윙"?"#EF5350":potType==="클러치"?"#42A5F5":potType==="장타억제"?"#AB47BC":"#66BB6A";
+          var roleTag = isAwk
+            ? (POT_TYPES_AWK_BAT.indexOf(potType)>=0 && POT_TYPES_AWK_PIT.indexOf(potType)>=0 ? " (각성·공용)" : POT_TYPES_AWK_BAT.indexOf(potType)>=0 ? " (각성·타자)" : " (각성·투수)")
             : (potType==="풀스윙"||potType==="클러치" ? " (타자)" : " (투수)");
           return (<div key={potType} style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: typeColor, marginBottom: 4 }}>{potType + roleTag}</div>
@@ -5945,7 +5945,7 @@ function SkillManagePage(p) {
                   <input type="number" step="1" value={ps} onChange={function(e) {
                     var copy = JSON.parse(JSON.stringify(skills));
                     if (!copy.potScoresByType) copy.potScoresByType = JSON.parse(JSON.stringify(DEFAULT_POT_SCORES_BY_TYPE));
-                    if (!copy.potScoresByType[potType]) copy.potScoresByType[potType] = Object.assign({}, isGam ? DEFAULT_GAM_SCORES : DEFAULT_POT_SCORES);
+                    if (!copy.potScoresByType[potType]) copy.potScoresByType[potType] = Object.assign({}, isAwk ? DEFAULT_AWK_SCORES : DEFAULT_POT_SCORES);
                     copy.potScoresByType[potType][g] = parseFloat(e.target.value) || 0;
                     saveSK(copy);
                   }} style={{ width: 36, padding: "3px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+typeColor+"44", borderRadius: 4, color: typeColor, fontSize: 14, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />

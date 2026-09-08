@@ -4,7 +4,7 @@
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
-  getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT,
+  getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW,
 } from './calc-extract.mjs';
@@ -203,16 +203,16 @@ eq('최신본은 건드리지 않음', resolveSkills(current)['타자']['정밀�
 /* 저장본이 없으면 기본값 */
 eq('빈 저장본 → 기본값', resolveSkills(null)['타자']['정밀타격'][0], 20.7);
 
-console.log('\n[감성 잠재력] 등급은 C~S 만, 타자/투수 종류가 다르다');
-eq('등급 7개', POT_GRADES_GAM.length, 7);
-eq('마지막 등급 S', POT_GRADES_GAM[6] === 'S' ? 1 : 0, 1);
-eq('SS 없음', POT_GRADES_GAM.indexOf('SS') < 0 ? 1 : 0, 1);
-eq('타자 종류 6개', POT_TYPES_GAM_BAT.length, 6);
-eq('투수 종류 6개', POT_TYPES_GAM_PIT.length, 6);
-eq('타자는 좌투선호', gamTypesFor('타자').indexOf('좌투선호') >= 0 ? 1 : 0, 1);
-eq('투수는 좌타선호', gamTypesFor('투수').indexOf('좌타선호') >= 0 ? 1 : 0, 1);
-eq('타자에 좌타선호 없음', gamTypesFor('타자').indexOf('좌타선호') < 0 ? 1 : 0, 1);
-eq('땅볼형은 양쪽 공용', (POT_TYPES_GAM_BAT.indexOf('땅볼형') >= 0 && POT_TYPES_GAM_PIT.indexOf('땅볼형') >= 0) ? 1 : 0, 1);
+console.log('\n[각성 잠재력] 등급은 C~S 만, 타자/투수 종류가 다르다');
+eq('등급 7개', POT_GRADES_AWK.length, 7);
+eq('마지막 등급 S', POT_GRADES_AWK[6] === 'S' ? 1 : 0, 1);
+eq('SS 없음', POT_GRADES_AWK.indexOf('SS') < 0 ? 1 : 0, 1);
+eq('타자 종류 6개', POT_TYPES_AWK_BAT.length, 6);
+eq('투수 종류 6개', POT_TYPES_AWK_PIT.length, 6);
+eq('타자는 좌투선호', awkTypesFor('타자').indexOf('좌투선호') >= 0 ? 1 : 0, 1);
+eq('투수는 좌타선호', awkTypesFor('투수').indexOf('좌타선호') >= 0 ? 1 : 0, 1);
+eq('타자에 좌타선호 없음', awkTypesFor('타자').indexOf('좌타선호') < 0 ? 1 : 0, 1);
+eq('땅볼형은 양쪽 공용', (POT_TYPES_AWK_BAT.indexOf('땅볼형') >= 0 && POT_TYPES_AWK_PIT.indexOf('땅볼형') >= 0) ? 1 : 0, 1);
 /* 점수는 아직 산정 전이라 전 등급 0 — 값이 정해지면 이 기대값을 바꾼다 */
 eq('S 점수(미산정)', getPotScoreByType('S', '좌투선호', null), 0);
 eq('C 점수', getPotScoreByType('C', '속구대처', null), 0);
