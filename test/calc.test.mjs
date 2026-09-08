@@ -5,7 +5,7 @@
 import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT,
-  potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual,
+  potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW,
 } from './calc-extract.mjs';
 
@@ -45,6 +45,27 @@ eq('발사각 20 보너스', launchAngleBonus(20), 5);   /* 4+(20-16)*0.5 = 6 �
 eq('발사각 30 보너스', launchAngleBonus(30), 5);
 eq('파워 미달이면 0', launchAngleGain(20, 171), 0);
 eq('파워 충족이면 지급', launchAngleGain(20, 172), 5);
+
+console.log('\n[핫콜존 파싱] 선수도감 양식의 「핫콜존」 칸 (흰=흰존, 파=콜존)');
+/* 실제 파일에 나온 20가지 형식을 모두 확인한다 */
+const hz = (v) => { const r = parseHotColdZone(v); return r.whiteZone * 10 + r.coldZone; };  /* 흰*10+콜 로 압축 비교 */
+eq('빈칸', hz(''), 0);
+eq('null', hz(null), 0);
+eq('"0"', hz('0'), 0);
+eq('숫자 0', hz(0), 0);
+eq('흰1', hz('흰1'), 10);
+eq('흰4', hz('흰4'), 40);
+eq('파1', hz('파1'), 1);
+eq('파5', hz('파5'), 5);
+eq('파1흰1', hz('파1흰1'), 11);
+eq('파2흰2', hz('파2흰2'), 22);
+eq('파1흰3', hz('파1흰3'), 31);
+eq('파3흰1', hz('파3흰1'), 13);
+eq('파4흰2', hz('파4흰2'), 24);
+eq('공백 섞임', hz(' 파2 흰1 '), 12);
+/* 감점으로 이어지는지 */
+eq('파2흰1 감점 = -7.5', zonePenalty(parseHotColdZone('파2흰1')), -7.5);
+eq('흰3 감점 = -4.5', zonePenalty(parseHotColdZone('흰3')), -4.5);
 
 console.log('\n[흰존/콜존] 흰존 -1.5, 콜존 -3');
 eq('흰존 2 · 콜존 1', zonePenalty({ whiteZone: 2, coldZone: 1 }), -6);
