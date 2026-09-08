@@ -103,8 +103,11 @@ function mergePl(userPl) {
     specChange: userPl.specChange||0, specStuff: userPl.specStuff||0,
     /* 값이 없는 기존 선수는 저장된 레벨을 지키기 위해 수동으로 본다.
        신규 선수는 생성 시 sLvManual:false 로 만들어져 자동이 된다. */
-    /* 흰존·콜존은 도감이 아니라 유저가 직접 넣는 값이다 */
-    whiteZone: userPl.whiteZone||0, coldZone: userPl.coldZone||0,
+    /* 흰존·콜존은 최종적으로 도감(DB)에 들어갈 값이다.
+       도감 값을 기본으로 쓰고, 유저가 직접 넣은 값이 있으면 그것이 이긴다.
+       (유저 제보를 모아 도감에 정식 등재하는 절차는 추후 별도 진행) */
+    whiteZone: userPl.whiteZone !== undefined ? userPl.whiteZone : (seed.whiteZone || 0),
+    coldZone:  userPl.coldZone  !== undefined ? userPl.coldZone  : (seed.coldZone  || 0),
     sLvManual: userPl.sLvManual === undefined ? true : !!userPl.sLvManual,
     skill1: userPl.skill1||"", s1Lv: userPl.s1Lv||0,
     skill2: userPl.skill2||"", s2Lv: userPl.s2Lv||0,
@@ -1288,6 +1291,8 @@ function PlayerDBPage(p){
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
                   <Inp label="발사각" type="number" value={form.launchAngle||0} onChange={function(v){uf("launchAngle",parseInt(v)||0);}} mb={6} />
                   <Inp label="핫콜존 (미사용)" type="number" value={form.hotColdZone||0} onChange={function(v){uf("hotColdZone",parseInt(v)||0);}} mb={6} />
+                  <Inp label="흰존 개수 (정식)" type="number" value={form.whiteZone||0} onChange={function(v){uf("whiteZone",parseInt(v)||0);}} mb={6} />
+                  <Inp label="콜존 개수 (정식)" type="number" value={form.coldZone||0} onChange={function(v){uf("coldZone",parseInt(v)||0);}} mb={6} />
                 </div>
               </React.Fragment>
             ):(

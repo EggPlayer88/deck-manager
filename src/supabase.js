@@ -85,6 +85,9 @@ var _globalPlayersCache = null;
 var _globalPlayersCacheTime = 0;
 var CACHE_TTL = 10 * 60 * 1000; /* 10분 */
 
+/* 확장 컬럼 지원 여부를 기억한다 (매 페이지마다 실패 재시도하지 않도록) */
+var _globalPlayersCols = null;
+
 export async function loadGlobalPlayers() {
   if (!supabase) return [];
   /* 캐시 유효하면 재사용 */
@@ -93,15 +96,30 @@ export async function loadGlobalPlayers() {
     return _globalPlayersCache;
   }
   /* 필요한 컬럼만 선택 (select * 대신) */
-  var cols = 'id,name,cardType,year,team,role,position,subPosition,hand,stars,power,accuracy,eye,patience,running,defense,speed,change,stuff,control,stamina,impactType,liveType,setScore';
+  var BASE_COLS = 'id,name,cardType,year,team,role,position,subPosition,hand,stars,power,accuracy,eye,patience,running,defense,speed,change,stuff,control,stamina,impactType,liveType,setScore';
+  /* 선수 카드에 귀속되는 값이라 도감(DB)에 있어야 하는 항목.
+     아직 컬럼이 없는 환경도 있어서, 없으면 기본 목록으로 되돌아간다.
+     (없는 컬럼을 select 하면 쿼리 전체가 실패해 도감이 통째로 안 불러와진다) */
+  var EXTRA_COLS = 'launchAngle,whiteZone,coldZone';
   var allData = [];
   var page = 0;
   var pageSize = 1000;
+  var cols = _globalPlayersCols || (BASE_COLS + ',' + EXTRA_COLS);
   while (true) {
     var r = await supabase.from('global_players').select(cols)
       .order('cardType').order('name')
       .range(page * pageSize, (page + 1) * pageSize - 1);
+    if (r.error && cols !== BASE_COLS) {
+      /* 확장 컬럼이 없는 DB — 기본 목록으로 한 번만 재시도하고 이후에는 기억한다 */
+      console.warn('[global_players] 확장 컬럼(' + EXTRA_COLS + ') 없음 — 기본 컬럼으로 로드합니다.', r.error.message);
+      _globalPlayersCols = BASE_COLS;
+      cols = BASE_COLS;
+      allData = [];
+      page = 0;
+      continue;
+    }
     if (r.error || !r.data || r.data.length === 0) break;
+    if (!_globalPlayersCols) _globalPlayersCols = cols;
     allData = allData.concat(r.data);
     if (r.data.length < pageSize) break;
     page++;
@@ -114,17 +132,35 @@ export async function loadGlobalPlayers() {
 export function clearGlobalPlayersCache() {
   _globalPlayersCache = null;
   _globalPlayersCacheTime = 0;
+  _globalPlayersCols = null;
+}
+
+/* 아직 DB 에 없을 수 있는 컬럼. 저장이 이것 때문에 실패하면 빼고 한 번 더 시도한다.
+   (컬럼을 추가하기 전까지 도감 저장이 통째로 막히는 것을 막기 위한 임시 방어) */
+var OPTIONAL_PLAYER_COLS = ['whiteZone', 'coldZone'];
+function stripOptional(p) {
+  var c = Object.assign({}, p);
+  OPTIONAL_PLAYER_COLS.forEach(function (k) { delete c[k]; });
+  return c;
 }
 
 export async function saveGlobalPlayer(player) {
   if (!supabase) return false;
   var r = await supabase.from('global_players').upsert(player, { onConflict: 'id' });
+  if (r.error) {
+    console.warn('[global_players] 저장 실패 — 선택 컬럼을 빼고 재시도합니다.', r.error.message);
+    r = await supabase.from('global_players').upsert(stripOptional(player), { onConflict: 'id' });
+  }
   return !r.error;
 }
 
 export async function saveGlobalPlayers(players) {
   if (!supabase || !players || !players.length) return false;
   var r = await supabase.from('global_players').upsert(players, { onConflict: 'name,cardType,year,impactType,team' });
+  if (r.error) {
+    console.warn('[global_players] 일괄 저장 실패 — 선택 컬럼을 빼고 재시도합니다.', r.error.message);
+    r = await supabase.from('global_players').upsert(players.map(stripOptional), { onConflict: 'name,cardType,year,impactType,team' });
+  }
   return !r.error;
 }
 
