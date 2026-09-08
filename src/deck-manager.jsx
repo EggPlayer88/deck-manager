@@ -256,9 +256,19 @@ function autoSkillLv(name, cardType, num, cat, ptSkills){
 }
 
 /* 실제 적용 레벨 */
+/* 실제 적용 레벨.
+   출발점은 유저가 직접 고른 값(수동)이거나 카드 종류별 기본값(자동)이고,
+   포지션 특훈 스킬 보너스는 그 위에 얹힌다 — 카드 속성이 아니라 배치에 따른
+   효과라서 수동·자동 어느 쪽이든 똑같이 적용된다. */
 function effSkillLv(name, storedLv, manual, cardType, num, cat, ptSkills){
-  if(manual) return storedLv || 0;
-  return autoSkillLv(name, cardType, num, cat, ptSkills);
+  if(!name) return 0;
+  var base = manual
+    ? (storedLv || 0)
+    : ((CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5);
+  if(!base) return 0;   /* 수동인데 레벨을 안 넣었으면 스킬 없는 것으로 본다 */
+  if(ptSkills && ptSkills.indexOf(name) >= 0) base += 1;
+  var mx = maxSkillLv(name, cat);
+  return mx ? Math.min(base, mx) : base;
 }
 
 function calcBat(pl,lu,sdB){
@@ -5281,7 +5291,11 @@ function MyPlayersPage(p) {
     var pts = ptSkillsFor(pl);
     var isManual = isLvManual(pl);
     var autoLv = autoSkillLv(pl[nf], pl.cardType, num, cat, pts);
-    var shownLv = isManual ? (pl[lf] || 0) : autoLv;
+    /* 보너스 적용 전 레벨과 적용 후 레벨 — 차이가 나면 화면에 표시한다 */
+    var baseLv = isManual ? (pl[lf] || 0) : autoSkillLv(pl[nf], pl.cardType, num, cat, []);
+    var effLv = effSkillLv(pl[nf], pl[lf], isManual, pl.cardType, num, cat, pts);
+    var ptApplied = !!pl[nf] && effLv > baseLv;
+    var shownLv = effLv;
     var c = {10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[shownLv] || "var(--t2)";
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -5309,6 +5323,8 @@ function MyPlayersPage(p) {
           <option value="auto">{autoLv ? "자동 " + autoLv : "자동"}</option>
           {[0,5,6,7,8,9,10].map(function(v) { return (<option key={v} value={String(v)}>{v === 0 ? "-" : "Lv" + v}</option>); })}
         </select>
+        {ptApplied && (<span title={"포지션 특훈 스킬 보너스 +1 → Lv" + effLv}
+          style={{ fontSize: 10, fontWeight: 800, color: "#FFA726", whiteSpace: "nowrap" }}>{"→" + effLv}</span>)}
       </div>
     );
   };

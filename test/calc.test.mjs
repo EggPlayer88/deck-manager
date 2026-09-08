@@ -221,10 +221,17 @@ console.log('\n[기존 선수 보존] sLvManual 이 없으면 수동으로 본�
 eq('필드 없으면 수동', isLvManual({ cardType: '시즌' }) ? 1 : 0, 1);
 eq('false 면 자동', isLvManual({ sLvManual: false }) ? 1 : 0, 0);
 eq('true 면 수동', isLvManual({ sLvManual: true }) ? 1 : 0, 1);
-/* 기존 선수(필드 없음)는 특훈 보너스가 걸려도 저장된 Lv8 을 지킨다 */
+/* 기존 선수(필드 없음)는 저장된 Lv8 을 출발점으로 쓴다 */
 const plLegacy = { hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자' };
-eq('기존 선수는 저장값 유지',
-   calcBat(plLegacy, { skill1: '정밀타격', s1Lv: 8 }, { p:0,a:0,e:0,n:0, ptSkills: ['정밀타격'] }).total, 337.37);
+eq('기존 선수는 저장값이 출발점',
+   calcBat(plLegacy, { skill1: '정밀타격', s1Lv: 8 }, { p:0,a:0,e:0,n:0, ptSkills: [] }).total, 337.37);
+/* 포지션 특훈 보너스는 카드 속성이 아니라 배치 효과라, 수동 선수에도 얹힌다 */
+eq('수동 선수에도 특훈 보너스 +1',
+   calcBat(plLegacy, { skill1: '정밀타격', s1Lv: 8 }, { p:0,a:0,e:0,n:0, ptSkills: ['정밀타격'] }).total, 341.26);
+eq('수동 Lv8 + 보너스 = Lv9', effSkillLv('정밀타격', 8, true, '시즌', 1, '타자', ['정밀타격']), 9);
+eq('수동 Lv10 은 상한', effSkillLv('정밀타격', 10, true, '시즌', 1, '타자', ['정밀타격']), 10);
+eq('수동 Lv6 황금세대는 6에서 멈춤', effSkillLv('황금세대', 6, true, '시즌', 1, '타자', ['황금세대']), 6);
+eq('레벨 미설정(0)이면 0', effSkillLv('정밀타격', 0, true, '시즌', 1, '타자', ['정밀타격']), 0);
 
 console.log('\n[자동 레벨이 점수에 반영]');
 const plAuto = { hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', sLvManual: false };

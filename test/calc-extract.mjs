@@ -133,8 +133,14 @@ function autoSkillLv(name, cardType, num, cat, ptSkills){
   return mx ? Math.min(base, mx) : base;
 }
 function effSkillLv(name, storedLv, manual, cardType, num, cat, ptSkills){
-  if(manual) return storedLv || 0;
-  return autoSkillLv(name, cardType, num, cat, ptSkills);
+  if(!name) return 0;
+  var base = manual
+    ? (storedLv || 0)
+    : ((CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5);
+  if(!base) return 0;   /* 수동인데 레벨을 안 넣었으면 스킬 없는 것으로 본다 */
+  if(ptSkills && ptSkills.indexOf(name) >= 0) base += 1;
+  var mx = maxSkillLv(name, cat);
+  return mx ? Math.min(base, mx) : base;
 }
 function calcBat(pl,lu,sdB){
   if(!pl||!lu)return{power:0,accuracy:0,eye:0,total:0,skillScore:0};
