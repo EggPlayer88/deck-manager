@@ -62,6 +62,18 @@ var DEFAULT_POT_SCORES_BY_TYPE = {
 };
 var POT_TYPES_BAT = ["풀스윙","클러치"];
 var POT_TYPES_PIT = ["장타억제","침착"];
+
+/* 감성 잠재력 — 등급이 C~S 까지만 있다 (SS 이상 없음) */
+var POT_GRADES_GAM = ["C","C+","B","B+","A","A+","S"];
+var POT_TYPES_GAM_BAT = ["좌투선호","우투선호","속구대처","변화구대처","땅볼형","뜬공형"];
+var POT_TYPES_GAM_PIT = ["좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
+/* 땅볼형·뜬공형은 타자/투수가 이름을 공유한다 — 점수도 함께 쓴다 */
+var POT_TYPES_GAM_ALL = ["좌투선호","우투선호","속구대처","변화구대처","좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
+var DEFAULT_GAM_SCORES = {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6};
+POT_TYPES_GAM_ALL.forEach(function(t){
+  if(!DEFAULT_POT_SCORES_BY_TYPE[t]) DEFAULT_POT_SCORES_BY_TYPE[t] = Object.assign({}, DEFAULT_GAM_SCORES);
+});
+function gamTypesFor(role){ return role === "타자" ? POT_TYPES_GAM_BAT : POT_TYPES_GAM_PIT; }
 function getPotScoreByType(grade, type, skills) {
   if (!grade || !type) return 0;
   var byType = (skills && skills.potScoresByType) ? skills.potScoresByType : DEFAULT_POT_SCORES_BY_TYPE;
@@ -91,8 +103,8 @@ function mergePl(userPl) {
     skill2: userPl.skill2||"", s2Lv: userPl.s2Lv||0,
     skill3: userPl.skill3||"", s3Lv: userPl.s3Lv||0,
     enhance: userPl.enhance||"",
-    pot1: userPl.pot1||"", pot2: userPl.pot2||"",
-    potType1: userPl.potType1||"", potType2: userPl.potType2||"",
+    pot1: userPl.pot1||"", pot2: userPl.pot2||"", pot3: userPl.pot3||"",
+    potType1: userPl.potType1||"", potType2: userPl.potType2||"", potType3: userPl.potType3||"",
     isFa: userPl.isFa||false,
     liveType: userPl.liveType||seed.liveType||"",
     photoUrl: userPl.photoUrl||seed.photoUrl||"",
@@ -199,6 +211,15 @@ function launchAngleGain(la,finalPower){
 /* 흰존/콜존 감점 (라인업 기준: 흰존 -1.5, 콜존 -3) */
 function zonePenalty(pl){ return (pl.whiteZone||0)*-1.5 + (pl.coldZone||0)*-3; }
 
+/* 포지션 특훈 스킬 보너스: 지정된 스킬이면 레벨 +1 로 계산한다.
+   해당 레벨 데이터가 없어(0) 점수가 되레 낮아지는 스킬은 원래 레벨을 유지한다. */
+function skillScorePT(name, lv, pt, ptSkills){
+  var base = getSkillScore(name, lv, pt);
+  if(!name || !lv || !ptSkills || ptSkills.indexOf(name) < 0) return base;
+  var up = getSkillScore(name, Math.min(10, lv + 1), pt);
+  return up > base ? up : base;
+}
+
 function calcBat(pl,lu,sdB){
   if(!pl||!lu)return{power:0,accuracy:0,eye:0,total:0,skillScore:0};
   var w=getW();var sb=sdB||{p:0,a:0,e:0,n:0};
@@ -208,7 +229,8 @@ function calcBat(pl,lu,sdB){
   var fE=(pl.eye||0)+getEnhVal(pl.cardType,"선구",lu.enhance||"")+(lu.trainE||0)+(pl.specEye||0)+sb.e+faAdj;
   /* 260814 시트: 인내 × 0.15 */
   var fN=(pl.patience||0)+getEnhVal(pl.cardType,"인내",lu.enhance||"")+(lu.trainN||0)+(pl.specPatience||0)+(sb.n||0)+faAdj;
-  var ss=getSkillScore(lu.skill1,lu.s1Lv||0,"타자")+getSkillScore(lu.skill2,lu.s2Lv||0,"타자")+getSkillScore(lu.skill3,lu.s3Lv||0,"타자");
+  var pts=(sb.ptSkills)||[];
+  var ss=skillScorePT(lu.skill1,lu.s1Lv||0,"타자",pts)+skillScorePT(lu.skill2,lu.s2Lv||0,"타자",pts)+skillScorePT(lu.skill3,lu.s3Lv||0,"타자",pts);
   var t=fP*w.p+fA*w.a+fE*w.e+fN*(w.n||0)+ss;
   /* 260814 시트: 좌타 감점 / 흰존·콜존 감점 / 발사각 보너스 */
   if(pl.hand==="좌") t-=2.5;
@@ -218,6 +240,8 @@ function calcBat(pl,lu,sdB){
   if(sdB&&sdB._sdState){var nb2=sdB._sdState.natBat||sdB._sdState._autoNatBat||"없음";if(nb2==="5렙"){t+=1*w.p+1*w.a;}if(nb2==="6렙"){t+=2*w.p+2*w.a;}}
   /* 잠재력 점수 */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
+  /* 감성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
+  t += getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
   return{power:fP,accuracy:fA,eye:fE,patience:fN,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100,
     laReq:launchAngleReq(pl.launchAngle),laBonus:launchAngleBonus(pl.launchAngle),
     laGain:launchAngleGain(pl.launchAngle,fP),zonePen:zonePenalty(pl)};
@@ -230,7 +254,8 @@ function calcPit(pl,lu,sdB){
   var fC=(pl.change||0)+getEnhVal(pl.cardType,"변화",lu.enhance||"")+(lu.trainC||0)+(pl.specChange||0)+sb.c+faAdjP;
   var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s+faAdjP;
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
-  var ss=getSkillScore(lu.skill1,lu.s1Lv||0,pt)+getSkillScore(lu.skill2,lu.s2Lv||0,pt)+getSkillScore(lu.skill3,lu.s3Lv||0,pt);
+  var ptsP=(sb.ptSkills)||[];
+  var ss=skillScorePT(lu.skill1,lu.s1Lv||0,pt,ptsP)+skillScorePT(lu.skill2,lu.s2Lv||0,pt,ptsP)+skillScorePT(lu.skill3,lu.s3Lv||0,pt,ptsP);
   var t=fC*w.c+fS*w.s+ss;
   /* 260814 시트: 좌완 가산 */
   if(pl.hand==="좌") t+=1;
@@ -242,6 +267,8 @@ function calcPit(pl,lu,sdB){
   }
   /* 잠재력 점수 */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
+  /* 감성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
+  t += getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
   return{change:fC,stuff:fS,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
 }
 
@@ -367,7 +394,9 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (isBat) { bp += potmB; ba += potmB; be += potmB; }
   else { pc += potmB; ps += potmB; }
 
-  return isBat ? {p:bp,a:ba,e:be,n:bn,_sdState:sdState} : {c:pc,s:ps,_sdState:sdState};
+  var ptSkillList = (sdState["pts_" + slot] || []).filter(function(x){ return !!x; });
+  return isBat ? {p:bp,a:ba,e:be,n:bn,ptSkills:ptSkillList,_sdState:sdState}
+               : {c:pc,s:ps,ptSkills:ptSkillList,_sdState:sdState};
 }
 
 /* ================================================================
@@ -1450,14 +1479,29 @@ var GLOBAL_POTM_LIST = [];
    - 올스타 별5: 팀 일치 시 6
    - 스페셜 POTM (그 외): 팀 일치 시 카드타입별 보너스
    팀 불일치 시 모두 0 — POTM 자체로 인정 안 됨 */
-function getPotmBonus(pl, sdState) {
-  var potmList = GLOBAL_POTM_LIST;
-  if (!potmList.length || !pl) return 0;
-  var isPotm = false;
-  for (var i = 0; i < potmList.length; i++) {
-    if (potmList[i].name === (pl.name||"") && potmList[i].team === (pl.team||"")) { isPotm = true; break; }
+/* POTM 식별 키 — 전역 명단이 이름+팀으로 저장되므로 같은 기준을 쓴다 */
+function potmKey(pl) { return (pl && pl.name || "") + "|" + (pl && pl.team || ""); }
+
+/* 이 선수가 POTM 인가.
+   전역(관리자) 명단이 기본이고, 덱별로 유저가 켜고 끌 수 있다.
+     sdState.potmOff — 전역 POTM 이지만 이 덱에서는 빼고 계산
+     sdState.potmOn  — 전역에 없지만 이 덱에서는 POTM 으로 가정
+   유저가 끈 것이 가장 우선한다. */
+function isPotmFor(pl, sdState) {
+  if (!pl) return false;
+  var st = sdState || {};
+  var key = potmKey(pl);
+  if ((st.potmOff || []).indexOf(key) >= 0) return false;
+  if ((st.potmOn || []).indexOf(key) >= 0) return true;
+  for (var i = 0; i < GLOBAL_POTM_LIST.length; i++) {
+    var g = GLOBAL_POTM_LIST[i];
+    if (g.name === (pl.name || "") && g.team === (pl.team || "")) return true;
   }
-  if (!isPotm) return 0;
+  return false;
+}
+
+function getPotmBonus(pl, sdState) {
+  if (!pl || !isPotmFor(pl, sdState)) return 0;
   /* 팀 일치 필수 - 팀명 정보가 없거나 불일치면 적용 안 함 */
   var teamName = sdState.teamName || "";
   if (!teamName || !pl.team || pl.team !== teamName) return 0;
@@ -2710,6 +2754,10 @@ var RS_OPTS = ["0","1","2","3","4","5","6"];
 
 function PosTrainRow(rp) {
   var pos = rp.pos; var pt = POS_TRAIN[pos]; var d = rp.d; var upd = rp.upd; var colors = rp.colors; var stats = rp.stats; var idx = rp.idx;
+  var slots = rp.slots || 6;
+  var ptSkills = rp.ptSkills || [];
+  var _op = useState(false); var skOpen = _op[0]; var setSkOpen = _op[1];
+  var chosen = ptSkills.filter(function(x){ return !!x; }).length;
   var mx = pt.mx;
   var lvOpts = []; for (var _i = 0; _i <= mx; _i++) lvOpts.push(String(_i));
   var lv = Math.min(d.level, mx);
@@ -2739,6 +2787,28 @@ function PosTrainRow(rp) {
           </div>
         );
       })}
+      <button onClick={function(){ setSkOpen(!skOpen); }}
+        style={{ gridColumn: "1 / -1", justifySelf: "start", marginTop: 4, padding: "3px 8px", fontSize: 11, fontWeight: 700,
+          background: chosen ? "rgba(255,167,38,0.10)" : "transparent", border: "1px solid " + (chosen ? "#FFA72655" : "var(--bd)"),
+          borderRadius: 4, color: chosen ? "#FFA726" : "var(--td)", cursor: "pointer" }}>
+        {(skOpen ? "▼ " : "▶ ") + "스킬 보너스 " + chosen + "/" + slots}
+      </button>
+      {skOpen && (
+        <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 6, padding: "8px 0 4px" }}>
+          {Array.from({ length: slots }).map(function(_, si) {
+            return (
+              <div key={si} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 10, color: "var(--td)", width: 12, textAlign: "right" }}>{si + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <SkillPicker value={ptSkills[si] || ""} options={rp.skillOptions || []} majorOptions={rp.majorOptions || []}
+                    width="100%" fontSize={11}
+                    onChange={function(v){ rp.updSkill(pos, si, v); }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -2748,10 +2818,10 @@ function PosTrainPage(p) {
   var sdState = p.sdState || {};
   var setSdState = p.setSdState;
   var groups = [
-    { label: "타자", poss: ["C","1B","2B","3B","SS","LF","CF","RF","DH"], stats: ["파워","정확","선구"], colors: ["#EF5350","#42A5F5","#66BB6A"] },
-    { label: "선발", poss: ["SP1","SP2","SP3","SP4","SP5"], stats: ["변화","구위"], colors: ["#AB47BC","#FF7043"] },
-    { label: "중계", poss: ["RP1","RP2","RP3","RP4","RP5","RP6"], stats: ["변화","구위"], colors: ["#AB47BC","#FF7043"] },
-    { label: "마무리", poss: ["CP"], stats: ["변화","구위"], colors: ["#AB47BC","#FF7043"] },
+    { label: "타자", cat: "타자", poss: ["C","1B","2B","3B","SS","LF","CF","RF","DH"], stats: ["파워","정확","선구"], colors: ["#EF5350","#42A5F5","#66BB6A"] },
+    { label: "선발", cat: "선발", poss: ["SP1","SP2","SP3","SP4","SP5"], stats: ["변화","구위"], colors: ["#AB47BC","#FF7043"] },
+    { label: "중계", cat: "중계", poss: ["RP1","RP2","RP3","RP4","RP5","RP6"], stats: ["변화","구위"], colors: ["#AB47BC","#FF7043"] },
+    { label: "마무리", cat: "마무리", poss: ["CP"], stats: ["변화","구위"], colors: ["#AB47BC","#FF7043"] },
   ];
   /* Init posTrain in sdState if missing */
   var ptKey = function(pos) { return "pt_" + pos; };
@@ -2770,10 +2840,29 @@ function PosTrainPage(p) {
     });
   };
 
+  /* 포지션별 스킬 보너스 — 포지션당 6개까지. 지정된 스킬은 레벨 +1 로 계산된다. */
+  var PT_SKILL_SLOTS = 6;
+  var skills = p.skills || {};
+  var ptsKey = function(pos) { return "pts_" + pos; };
+  var getPTS = function(pos) {
+    var a = sdState[ptsKey(pos)];
+    return Array.isArray(a) ? a.slice(0, PT_SKILL_SLOTS) : [];
+  };
+  var updSkill = function(pos, idx, val) {
+    setSdState(function(prev) {
+      var c = Object.assign({}, prev);
+      var cur = (Array.isArray(prev[ptsKey(pos)]) ? prev[ptsKey(pos)].slice(0, PT_SKILL_SLOTS) : []);
+      while (cur.length < PT_SKILL_SLOTS) cur.push("");
+      cur[idx] = val || "";
+      c[ptsKey(pos)] = cur;
+      return c;
+    });
+  };
+
   return (
     <div style={{ padding: mob ? 12 : 18, maxWidth: 900, paddingBottom: mob ? 80 : 18 }}>
       <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: "0 0 4px" }}>{"포지션 특훈"}</h2>
-      <p style={{ fontSize: 12, color: "var(--td)", margin: "0 0 12px" }}>{"계정 귀속 - 포지션별 레벨과 재설정 효과를 입력하세요"}</p>
+      <p style={{ fontSize: 12, color: "var(--td)", margin: "0 0 12px" }}>{"계정 귀속 - 포지션별 레벨과 재설정 효과를 입력하세요. 스킬 보너스는 포지션당 6개까지 지정할 수 있고, 지정한 스킬은 레벨이 1 올라간 것으로 계산됩니다."}</p>
       {groups.map(function(grp) {
         return (
           <div key={grp.label} style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 14 }}>
@@ -2786,7 +2875,11 @@ function PosTrainPage(p) {
               {grp.stats.map(function(s, i) { return (<div key={s} style={{ textAlign: "center", color: grp.colors[i] }}>{s + " (기본+재설정)"}</div>); })}
             </div>
             {grp.poss.map(function(pos, idx) {
-              return (<PosTrainRow key={pos} pos={pos} d={getPT(pos)} upd={upd} colors={grp.colors} stats={grp.stats} idx={idx} />);
+              var catSk = skills[grp.cat] || {};
+              return (<PosTrainRow key={pos} pos={pos} d={getPT(pos)} upd={upd} colors={grp.colors} stats={grp.stats} idx={idx}
+                        ptSkills={getPTS(pos)} updSkill={updSkill} slots={PT_SKILL_SLOTS}
+                        skillOptions={Object.keys(catSk)}
+                        majorOptions={Object.keys((skills._major && skills._major[grp.cat]) || {})} />);
             })}
           </div>
         );
@@ -3632,6 +3725,38 @@ function LockerRoomPage(p) {
   /* POTM roster - 전역(GLOBAL_POTM_LIST)에서 읽고 관리자만 쓸 수 있음
      props.potmList / props.setPotmList 로 받아 React state와 동기화 */
   var potmList = p.potmList || [];
+
+  /* 내 덱 POTM 설정 — sdState 에 덱별로 저장된다. 전역 명단은 건드리지 않는다. */
+  var potmOff = sdState.potmOff || [];
+  var potmOn  = sdState.potmOn  || [];
+  var toggleInList = function(field, key) {
+    setSdState(function(prev) {
+      var c = Object.assign({}, prev);
+      var cur = (prev[field] || []).slice();
+      var at = cur.indexOf(key);
+      if (at >= 0) cur.splice(at, 1); else cur.push(key);
+      c[field] = cur;
+      /* 켜기와 끄기가 동시에 걸리지 않게 반대쪽에서 제거 */
+      var other = field === "potmOn" ? "potmOff" : "potmOn";
+      var oc = (prev[other] || []).slice();
+      var oi = oc.indexOf(key);
+      if (at < 0 && oi >= 0) { oc.splice(oi, 1); c[other] = oc; }
+      return c;
+    });
+  };
+  var isGlobalPotm = function(pl) {
+    return potmList.some(function(g) { return g.name === (pl.name||"") && g.team === (pl.team||""); });
+  };
+  /* 라인업에 편성된 선수 (중복 제거) */
+  var lineupPlayers = (function() {
+    var seen = {}; var out = [];
+    Object.keys(lm).forEach(function(slot) {
+      var pl = byId(lm[slot]);
+      if (pl && !seen[pl.id]) { seen[pl.id] = 1; out.push(pl); }
+    });
+    return out;
+  })();
+
   var _potmSearch = useState(""); var potmSearch = _potmSearch[0]; var setPotmSearch = _potmSearch[1];
   var _potmSearchOpen = useState(false); var potmSearchOpen = _potmSearchOpen[0]; var setPotmSearchOpen = _potmSearchOpen[1];
 
@@ -3680,8 +3805,7 @@ function LockerRoomPage(p) {
   var teamNameForPotm = sdState.teamName || "";
   var potmMatched = [];
   players.forEach(function(pl) {
-    var found = potmList.some(function(p) { return p.name === (pl.name||"") && p.team === (pl.team||""); });
-    if (!found) return;
+    if (!isPotmFor(pl, sdState)) return;
     /* 팀 일치 필수 */
     if (!teamNameForPotm || !pl.team || pl.team !== teamNameForPotm) return;
     /* 올스타 별5만 효과 있음 */
@@ -3813,19 +3937,70 @@ function LockerRoomPage(p) {
           </div>
         )}
 
-        {/* 일반 유저용 POTM 명단 표시 (읽기 전용) */}
-        {!isAdmin && potmList.length > 0 && (
-          <div style={{ padding: 10, background: "var(--inner)", borderRadius: 8, border: "1px solid var(--bd)", marginBottom: 10 }}>
-            <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 6 }}>{"이번 달 POTM 선수 명단"}</div>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {potmList.map(function(pl, i) {
-                return (<span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 4, fontSize: 12, color: "var(--acc)" }}>
-                  {pl.name}{pl.team && <span style={{fontSize:11,color:"var(--td)",marginLeft:3}}>{"("+pl.team+")"}</span>}
-                </span>);
-              })}
+        {/* 내 덱 POTM 설정 — 전역 명단을 끄거나, 라인업 선수를 직접 POTM 으로 지정 */}
+        <div style={{ padding: 10, background: "var(--inner)", borderRadius: 8, border: "1px solid var(--bd)", marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)", marginBottom: 2 }}>{"내 덱 POTM 설정"}</div>
+          <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 8 }}>{"이 덱에서만 적용됩니다. 관리자가 지정한 전역 명단은 바뀌지 않습니다."}</div>
+
+          {potmList.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 4 }}>{"이번 달 POTM 명단 — 체크를 풀면 이 덱에서 POTM 이 아닌 것으로 계산합니다"}</div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {potmList.map(function(gp, i) {
+                  var key = (gp.name||"") + "|" + (gp.team||"");
+                  var isOff = potmOff.indexOf(key) >= 0;
+                  return (
+                    <button key={i} onClick={function(){ toggleInList("potmOff", key); }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px",
+                        background: isOff ? "transparent" : "rgba(255,213,79,0.08)",
+                        border: "1px solid " + (isOff ? "var(--bd)" : "rgba(255,213,79,0.3)"),
+                        borderRadius: 4, fontSize: 12, cursor: "pointer",
+                        color: isOff ? "var(--td)" : "var(--acc)",
+                        textDecoration: isOff ? "line-through" : "none" }}>
+                      <span>{isOff ? "☐" : "☑"}</span>
+                      <span>{gp.name}</span>
+                      {gp.team && <span style={{ fontSize: 11, color: "var(--td)" }}>{"(" + gp.team + ")"}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+          )}
+
+          <div>
+            <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 4 }}>{"라인업 선수를 POTM 으로 가정해 보기"}</div>
+            {lineupPlayers.length === 0 ? (
+              <span style={{ fontSize: 12, color: "var(--td)" }}>{"라인업에 편성된 선수가 없습니다"}</span>
+            ) : (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {lineupPlayers.map(function(pl) {
+                  var key = potmKey(pl);
+                  var glob = isGlobalPotm(pl);
+                  var on = potmOn.indexOf(key) >= 0;
+                  var teamOk = !!sdState.teamName && !!pl.team && pl.team === sdState.teamName;
+                  return (
+                    <button key={pl.id} onClick={function(){ toggleInList("potmOn", key); }}
+                      disabled={glob}
+                      title={glob ? "이미 전역 POTM 입니다" : (teamOk ? "" : "구단이 달라 POTM 보너스는 0으로 계산됩니다")}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px",
+                        background: on ? "rgba(171,71,188,0.12)" : "transparent",
+                        border: "1px solid " + (on ? "rgba(171,71,188,0.45)" : "var(--bd)"),
+                        borderRadius: 4, fontSize: 12,
+                        cursor: glob ? "default" : "pointer",
+                        opacity: glob ? 0.45 : 1,
+                        color: on ? "#CE93D8" : "var(--t2)" }}>
+                      <span>{on ? "☑" : "☐"}</span>
+                      <span>{pl.name}</span>
+                      {glob && <span style={{ fontSize: 10, color: "var(--td)" }}>{"전역"}</span>}
+                      {!glob && !teamOk && <span style={{ fontSize: 10, color: "#EF5350" }}>{"구단불일치"}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
 
         {/* Matched POTM players with auto-calculated bonuses */}
         {potmMatched.length > 0 ? (
@@ -5178,6 +5353,24 @@ function MyPlayersPage(p) {
                   </div>
                 </div>
               </div>
+              {/* 감성 잠재력 — 종류를 직접 고르고 등급은 C~S 만 */}
+              <div>
+                <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"감성 잠재력"}</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: 11, color: "var(--td)" }}>{"종류"}</span>
+                    <select value={pl.potType3||""} onChange={function(e){upd(pl.id,"potType3",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 13, outline: "none", width: 96 }}>
+                      <option value="">-</option>{gamTypesFor(pl.role).map(function(t){return (<option key={t} value={t}>{t}</option>);})}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: 11, color: "var(--td)" }}>{"등급"}</span>
+                    <select value={pl.pot3||""} onChange={function(e){upd(pl.id,"pot3",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 14, outline: "none", width: 52 }}>
+                      <option value="">-</option>{POT_GRADES_GAM.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
+                    </select>
+                  </div>
+                </div>
+              </div>
             </div>
             {/* Skills */}
             <div style={{ marginTop: 8 }}>
@@ -5489,21 +5682,26 @@ function SkillManagePage(p) {
       {/* Potential Scores - 종류별 */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{"잠재력 등급별 점수 (종류별)"}</div>
-        {["풀스윙","클러치","장타억제","침착"].map(function(potType) {
+        {["풀스윙","클러치","장타억제","침착"].concat(POT_TYPES_GAM_ALL).map(function(potType) {
           var byType = skills.potScoresByType || DEFAULT_POT_SCORES_BY_TYPE;
           var typeScores = byType[potType] || DEFAULT_POT_SCORES_BY_TYPE[potType] || DEFAULT_POT_SCORES;
-          var typeColor = potType==="풀스윙"?"#EF5350":potType==="클러치"?"#42A5F5":potType==="장타억제"?"#AB47BC":"#66BB6A";
+          var isGam = POT_TYPES_GAM_ALL.indexOf(potType) >= 0;
+          var gradeList = isGam ? POT_GRADES_GAM : POT_GRADES;
+          var typeColor = isGam?"#FFA726":potType==="풀스윙"?"#EF5350":potType==="클러치"?"#42A5F5":potType==="장타억제"?"#AB47BC":"#66BB6A";
+          var roleTag = isGam
+            ? (POT_TYPES_GAM_BAT.indexOf(potType)>=0 && POT_TYPES_GAM_PIT.indexOf(potType)>=0 ? " (감성·공용)" : POT_TYPES_GAM_BAT.indexOf(potType)>=0 ? " (감성·타자)" : " (감성·투수)")
+            : (potType==="풀스윙"||potType==="클러치" ? " (타자)" : " (투수)");
           return (<div key={potType} style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: typeColor, marginBottom: 4 }}>{potType + (potType==="풀스윙"||potType==="클러치" ? " (타자)" : " (투수)")}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: typeColor, marginBottom: 4 }}>{potType + roleTag}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {POT_GRADES.map(function(g) {
+              {gradeList.map(function(g) {
                 var ps = typeScores[g] !== undefined ? typeScores[g] : (DEFAULT_POT_SCORES[g] || 0);
                 return (<div key={g} style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--td)", marginBottom: 2 }}>{g}</div>
                   <input type="number" step="1" value={ps} onChange={function(e) {
                     var copy = JSON.parse(JSON.stringify(skills));
                     if (!copy.potScoresByType) copy.potScoresByType = JSON.parse(JSON.stringify(DEFAULT_POT_SCORES_BY_TYPE));
-                    if (!copy.potScoresByType[potType]) copy.potScoresByType[potType] = Object.assign({}, DEFAULT_POT_SCORES);
+                    if (!copy.potScoresByType[potType]) copy.potScoresByType[potType] = Object.assign({}, isGam ? DEFAULT_GAM_SCORES : DEFAULT_POT_SCORES);
                     copy.potScoresByType[potType][g] = parseFloat(e.target.value) || 0;
                     saveSK(copy);
                   }} style={{ width: 36, padding: "3px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+typeColor+"44", borderRadius: 4, color: typeColor, fontSize: 14, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
@@ -7047,7 +7245,7 @@ export default function App(){
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} userId={userId}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam}/>);
-  else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState}/>);
+  else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} potmList={store.potmList} setPotmList={store.savePotmList} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
   else if(tab==="skills"&&isAdmin)pg=(<SkillManagePage mobile={mob} skills={store.skills} saveSkills={store.saveSkills}/>);

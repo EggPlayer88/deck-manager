@@ -3,7 +3,9 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  __setLiveWeights, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
+  __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
+  getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT,
+  potmKey, isPotmFor, getPotmBonus, skillScorePT,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW,
 } from './calc-extract.mjs';
 
@@ -169,6 +171,58 @@ current['타자']['정밀타격'] = [1, 2, 3, 4, 5, 6];
 eq('최신본은 건드리지 않음', resolveSkills(current)['타자']['정밀타격'][0], 1);
 /* 저장본이 없으면 기본값 */
 eq('빈 저장본 → 기본값', resolveSkills(null)['타자']['정밀타격'][0], 20.7);
+
+console.log('\n[감성 잠재력] 등급은 C~S 만, 타자/투수 종류가 다르다');
+eq('등급 7개', POT_GRADES_GAM.length, 7);
+eq('마지막 등급 S', POT_GRADES_GAM[6] === 'S' ? 1 : 0, 1);
+eq('SS 없음', POT_GRADES_GAM.indexOf('SS') < 0 ? 1 : 0, 1);
+eq('타자 종류 6개', POT_TYPES_GAM_BAT.length, 6);
+eq('투수 종류 6개', POT_TYPES_GAM_PIT.length, 6);
+eq('타자는 좌투선호', gamTypesFor('타자').indexOf('좌투선호') >= 0 ? 1 : 0, 1);
+eq('투수는 좌타선호', gamTypesFor('투수').indexOf('좌타선호') >= 0 ? 1 : 0, 1);
+eq('타자에 좌타선호 없음', gamTypesFor('타자').indexOf('좌타선호') < 0 ? 1 : 0, 1);
+eq('땅볼형은 양쪽 공용', (POT_TYPES_GAM_BAT.indexOf('땅볼형') >= 0 && POT_TYPES_GAM_PIT.indexOf('땅볼형') >= 0) ? 1 : 0, 1);
+eq('S 점수', getPotScoreByType('S', '좌투선호', null), 6);
+eq('C 점수', getPotScoreByType('C', '속구대처', null), 0);
+/* 점수 반영: 파워200 정확100 선구50 = 305, 감성 S(+6) */
+eq('감성 반영', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S', potType3: '좌투선호' }, {}, null).total, 311);
+eq('종류 없으면 0', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S' }, {}, null).total, 305);
+eq('등급 없으면 0', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', potType3: '좌투선호' }, {}, null).total, 305);
+
+console.log('\n[포지션 특훈 스킬 보너스] 지정 스킬은 레벨 +1 로 계산');
+eq('미지정이면 그대로', skillScorePT('정밀타격', 7, '타자', []), 28.48);
+eq('지정하면 Lv8 값', skillScorePT('정밀타격', 7, '타자', ['정밀타격']), 32.37);
+eq('Lv10 은 더 안 오름', skillScorePT('정밀타격', 10, '타자', ['정밀타격']), 40.15);
+/* 황금세대는 Lv6 까지만 값이 있다 — 올려서 0이 되면 원래 값을 지킨다 */
+eq('상위 레벨 데이터 없으면 유지', skillScorePT('황금세대', 6, '타자', ['황금세대']), 24.72);
+eq('스킬 없으면 0', skillScorePT('', 0, '타자', ['정밀타격']), 0);
+/* calcBat 경유: 305 + 정밀타격 Lv7(28.48) → 지정 시 Lv8(32.37) */
+const luSk = { skill1: '정밀타격', s1Lv: 7 };
+const plSk = { hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자' };
+eq('보너스 없음', calcBat(plSk, luSk, { p: 0, a: 0, e: 0, n: 0, ptSkills: [] }).total, 333.48);
+eq('보너스 적용', calcBat(plSk, luSk, { p: 0, a: 0, e: 0, n: 0, ptSkills: ['정밀타격'] }).total, 337.37);
+
+console.log('\n[POTM] 전역 명단 + 덱별 사용자 설정');
+const potmPl = { name: '홍길동', team: '키움', cardType: '라이브', stars: 5 };
+eq('키 형식', potmKey(potmPl) === '홍길동|키움' ? 1 : 0, 1);
+__setGlobalPotm([{ name: '홍길동', team: '키움' }]);
+eq('전역 POTM 인정', isPotmFor(potmPl, {}) ? 1 : 0, 1);
+eq('라이브 5성 보너스', getPotmBonus(potmPl, { teamName: '키움' }), 6);
+eq('구단 다르면 0', getPotmBonus(potmPl, { teamName: '삼성' }), 0);
+/* 유저가 끄면 이 덱에서는 POTM 이 아니다 */
+eq('사용자 해제', getPotmBonus(potmPl, { teamName: '키움', potmOff: ['홍길동|키움'] }), 0);
+/* 전역에 없어도 유저가 켜면 POTM */
+__setGlobalPotm([]);
+eq('전역에 없으면 0', getPotmBonus(potmPl, { teamName: '키움' }), 0);
+eq('사용자 지정', getPotmBonus(potmPl, { teamName: '키움', potmOn: ['홍길동|키움'] }), 6);
+eq('사용자 지정도 구단 일치 필요', getPotmBonus(potmPl, { teamName: '삼성', potmOn: ['홍길동|키움'] }), 0);
+/* 끄기가 켜기보다 우선 */
+eq('해제가 우선', getPotmBonus(potmPl, { teamName: '키움', potmOn: ['홍길동|키움'], potmOff: ['홍길동|키움'] }), 0);
+/* 카드 종류별 보너스 */
+eq('임팩트', getPotmBonus({ name: 'A', team: '키움', cardType: '임팩트' }, { teamName: '키움', potmOn: ['A|키움'] }), 2);
+eq('골든글러브', getPotmBonus({ name: 'A', team: '키움', cardType: '골든글러브' }, { teamName: '키움', potmOn: ['A|키움'] }), 1);
+eq('라이브 4성', getPotmBonus({ name: 'A', team: '키움', cardType: '라이브', stars: 4 }, { teamName: '키움', potmOn: ['A|키움'] }), 12);
+__setGlobalPotm([]);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
