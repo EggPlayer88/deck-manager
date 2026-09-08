@@ -15,6 +15,8 @@ var saveGlobalSkills = _SB.saveGlobalSkills || function(){ return Promise.resolv
 var loadGlobalPlayers = _SB.loadGlobalPlayers || function(){ return Promise.resolve([]); };
 var saveGlobalPlayer = _SB.saveGlobalPlayer || function(){ return Promise.resolve(false); };
 var saveGlobalPlayers = _SB.saveGlobalPlayers || function(){ return Promise.resolve(false); };
+var getPlayerSaveError = _SB.getPlayerSaveError || function(){ return null; };
+var clearPlayerSaveError = _SB.clearPlayerSaveError || function(){};
 var deleteGlobalPlayer = _SB.deleteGlobalPlayer || function(){ return Promise.resolve(false); };
 var uploadPlayerPhoto = _SB.uploadPlayerPhoto || function(){ return Promise.resolve(null); };
 var listPlayerPhotos = _SB.listPlayerPhotos || function(){ return Promise.resolve([]); };
@@ -1442,16 +1444,26 @@ function PlayerDBPage(p){
                     /* 배치 저장 + 삭제 처리 */
                     (async function() {
                       var batchSize = 100;
+                      var okCnt = 0, failCnt = 0, firstErr = null;
+                      clearPlayerSaveError();
                       for (var i = 0; i < np.length; i += batchSize) {
                         var batch = np.slice(i, i + batchSize);
-                        await saveGlobalPlayers(batch);
+                        var ok = await saveGlobalPlayers(batch);
+                        if (ok) { okCnt += batch.length; }
+                        else {
+                          failCnt += batch.length;
+                          if (!firstErr) firstErr = getPlayerSaveError();
+                          console.error('[가져오기] 배치 저장 실패 (' + i + '~' + (i + batch.length - 1) + ')', firstErr);
+                        }
                       }
                       /* 삭제는 한 건씩 (deleteGlobalPlayer는 단건 호출 함수) */
                       for (var j = 0; j < liveToDelete.length; j++) {
                         await deleteGlobalPlayer(liveToDelete[j].id);
                       }
-                      var msg = "완료! 추가:"+added2+"명 업데이트:"+updated2+"명";
+                      var msg = (failCnt ? "일부 실패" : "완료!") + " 추가:"+added2+"명 업데이트:"+updated2+"명";
                       if (liveToDelete.length > 0) msg += " 라이브삭제:"+liveToDelete.length+"명";
+                      msg += "\n\nDB 저장: 성공 " + okCnt + "건 / 실패 " + failCnt + "건";
+                      if (failCnt) msg += "\n오류: " + (firstErr || "알 수 없음") + "\n\n브라우저 콘솔(F12)에 자세한 내용이 있습니다.";
                       alert(msg);
                     })();
                   };

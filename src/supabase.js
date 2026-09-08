@@ -161,12 +161,37 @@ export async function saveGlobalPlayer(player) {
   return !r.error;
 }
 
+/* 마지막 저장 오류 — 호출부가 사용자에게 알려줄 수 있도록 남긴다.
+   값이 아니라 함수로 노출해야 window._SUPABASE 에 담아도 최신값이 읽힌다. */
+var lastPlayerSaveError = null;
+export function getPlayerSaveError() { return lastPlayerSaveError; }
+export function clearPlayerSaveError() { lastPlayerSaveError = null; }
+
+var CONFLICT_KEY = 'name,cardType,year,impactType,team';
+
+/* upsert 는 한 번의 요청 안에 같은 충돌 키가 두 번 들어오면
+   "cannot affect row a second time" 로 배치 전체가 실패한다.
+   양식에 중복 행이 있을 수 있으므로 미리 걷어낸다 (뒤엣것이 이긴다). */
+function dedupeByConflictKey(players) {
+  var seen = {};
+  players.forEach(function (p) {
+    var k = [p && p.name, p && p.cardType, p && p.year, p && p.impactType, p && p.team].join('');
+    seen[k] = p;
+  });
+  return Object.keys(seen).map(function (k) { return seen[k]; });
+}
+
 export async function saveGlobalPlayers(players) {
   if (!supabase || !players || !players.length) return false;
-  var r = await supabase.from('global_players').upsert(players, { onConflict: 'name,cardType,year,impactType,team' });
+  var rows = dedupeByConflictKey(players);
+  var r = await supabase.from('global_players').upsert(rows, { onConflict: CONFLICT_KEY });
   if (r.error) {
     console.warn('[global_players] 일괄 저장 실패 — 선택 컬럼을 빼고 재시도합니다.', r.error.message);
-    r = await supabase.from('global_players').upsert(players.map(stripOptional), { onConflict: 'name,cardType,year,impactType,team' });
+    r = await supabase.from('global_players').upsert(rows.map(stripOptional), { onConflict: CONFLICT_KEY });
+  }
+  if (r.error) {
+    lastPlayerSaveError = r.error.message || String(r.error);
+    console.error('[global_players] 일괄 저장 최종 실패:', r.error);
   }
   return !r.error;
 }
