@@ -5,7 +5,7 @@
 import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT,
-  potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone,
+  potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW,
 } from './calc-extract.mjs';
 
@@ -66,6 +66,16 @@ eq('공백 섞임', hz(' 파2 흰1 '), 12);
 /* 감점으로 이어지는지 */
 eq('파2흰1 감점 = -7.5', zonePenalty(parseHotColdZone('파2흰1')), -7.5);
 eq('흰3 감점 = -4.5', zonePenalty(parseHotColdZone('흰3')), -4.5);
+
+console.log('\n[양식 호환] 「핫콜존」 한 칸이든 「흰존」·「콜존」 두 칸이든 받는다');
+const zr = (row) => { const r = zonesFromRow(row); return r.whiteZone * 10 + r.coldZone; };
+eq('핫콜존 한 칸', zr({ '핫콜존': '파1흰2' }), 21);
+eq('흰존/콜존 두 칸', zr({ '흰존': 2, '콜존': 1 }), 21);
+eq('두 칸이 있으면 우선', zr({ '흰존': 3, '콜존': 0, '핫콜존': '파9흰9' }), 30);
+eq('흰존만 있어도 동작', zr({ '흰존': 4 }), 40);
+eq('콜존만 있어도 동작', zr({ '콜존': 2 }), 2);
+eq('둘 다 비면 핫콜존으로', zr({ '흰존': '', '콜존': '', '핫콜존': '흰1' }), 10);
+eq('아무것도 없으면 0', zr({}), 0);
 
 console.log('\n[흰존/콜존] 흰존 -1.5, 콜존 -3');
 eq('흰존 2 · 콜존 1', zonePenalty({ whiteZone: 2, coldZone: 1 }), -6);

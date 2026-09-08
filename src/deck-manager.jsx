@@ -220,6 +220,17 @@ function parseHotColdZone(v) {
   return { whiteZone: w ? parseInt(w[1], 10) : 0, coldZone: c ? parseInt(c[1], 10) : 0 };
 }
 
+/* 양식이 「핫콜존」 한 칸이든 「흰존」·「콜존」 두 칸이든 받는다.
+   두 칸이 있으면 그걸 쓰고, 없으면 핫콜존 문자열을 푼다. */
+function zonesFromRow(row) {
+  var hasSplit = (row["흰존"] !== undefined && row["흰존"] !== "") ||
+                 (row["콜존"] !== undefined && row["콜존"] !== "");
+  if (hasSplit) {
+    return { whiteZone: parseInt(row["흰존"]) || 0, coldZone: parseInt(row["콜존"]) || 0 };
+  }
+  return parseHotColdZone(row["핫콜존"]);
+}
+
 function launchAngleReq(la){ la=la||0; return la<13?null:Math.abs(16-la)*3+160; }
 function launchAngleBonus(la){
   la=la||0; if(la<13)return 0;
@@ -1398,7 +1409,7 @@ function PlayerDBPage(p){
                         /* 인내·발사각·핫콜존도 양식에 있다 — 점수에 쓰이므로 함께 가져온다 */
                         pl2.patience=parseInt(row["인내"])||0;
                         pl2.launchAngle=parseInt(row["발사각"])||0;
-                        var hz=parseHotColdZone(row["핫콜존"]);
+                        var hz=zonesFromRow(row);
                         pl2.whiteZone=hz.whiteZone; pl2.coldZone=hz.coldZone;
                       }
                       else{var pos=row["역할"]||"선발";if(pos==="중간계투")pos="중계";pl2.position=pos;pl2.subPosition=pl2.subPosition||"SP1";pl2.speed=parseInt(row["구속"])||0;pl2.change=parseInt(row["변화"])||0;pl2.stuff=parseInt(row["구위"])||0;}

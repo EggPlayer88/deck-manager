@@ -108,6 +108,14 @@ function parseHotColdZone(v) {
   var c = /파\s*(\d+)/.exec(t);
   return { whiteZone: w ? parseInt(w[1], 10) : 0, coldZone: c ? parseInt(c[1], 10) : 0 };
 }
+function zonesFromRow(row) {
+  var hasSplit = (row["흰존"] !== undefined && row["흰존"] !== "") ||
+                 (row["콜존"] !== undefined && row["콜존"] !== "");
+  if (hasSplit) {
+    return { whiteZone: parseInt(row["흰존"]) || 0, coldZone: parseInt(row["콜존"]) || 0 };
+  }
+  return parseHotColdZone(row["핫콜존"]);
+}
 function launchAngleReq(la){ la=la||0; return la<13?null:Math.abs(16-la)*3+160; }
 function launchAngleBonus(la){
   la=la||0; if(la<13)return 0;
@@ -207,4 +215,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
