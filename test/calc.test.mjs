@@ -191,7 +191,14 @@ const legacyStored = {
 };
 const resolved = resolveSkills(legacyStored);
 eq('스킬표가 새 값으로', resolved['타자']['정밀타격'][0], 20.7);
-eq('타자 스킬 수', Object.keys(resolved['타자']).length, 88);
+eq('타자 스킬 수', Object.keys(resolved['타자']).length, 91);
+eq('신규 스킬 반영', resolved['타자']['빈틈없는타선(타순O)'][1], 23.83);
+eq('국대 테이블세터', resolved['타자']['국대 테이블세터'][0], 14.97);
+eq('대타스페셜 점수 생김', resolved['타자']['대타스페셜'][5], 11.54);
+eq('매의눈 점수 생김', resolved['타자']['매의눈'][5], 6);
+eq('투수 신규 - 타순공략', resolved['선발']['타순공략'][1], 24.5);
+eq('투수 신규 - 위기탈출', resolved['중계']['위기탈출'][0], 19.9);
+eq('2레벨짜리는 Lv6 이 상한', maxSkillLv('빈틈없는타선(타순O)', '타자'), 6);
 eq('가중치도 새 값으로', resolved.weights.a, 0.85);
 eq('인내 가중치 포함', resolved.weights.n, 0.15);
 /* v3 부터는 잠재력 등급별 점수를 시트 기준으로 통일한다 — 예전 입력값은 덮인다 */
