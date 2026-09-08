@@ -101,6 +101,7 @@ function mergePl(userPl) {
     trainC: userPl.trainC||0, trainS: userPl.trainS||0,
     specPower: userPl.specPower||0, specAccuracy: userPl.specAccuracy||0, specEye: userPl.specEye||0, specPatience: userPl.specPatience||0,
     specChange: userPl.specChange||0, specStuff: userPl.specStuff||0,
+    sLvManual: !!userPl.sLvManual,
     skill1: userPl.skill1||"", s1Lv: userPl.s1Lv||0,
     skill2: userPl.skill2||"", s2Lv: userPl.s2Lv||0,
     skill3: userPl.skill3||"", s3Lv: userPl.s3Lv||0,
@@ -213,13 +214,38 @@ function launchAngleGain(la,finalPower){
 /* 흰존/콜존 감점 (라인업 기준: 흰존 -1.5, 콜존 -3) */
 function zonePenalty(pl){ return (pl.whiteZone||0)*-1.5 + (pl.coldZone||0)*-3; }
 
-/* 포지션 특훈 스킬 보너스: 지정된 스킬이면 레벨 +1 로 계산한다.
-   해당 레벨 데이터가 없어(0) 점수가 되레 낮아지는 스킬은 원래 레벨을 유지한다. */
-function skillScorePT(name, lv, pt, ptSkills){
-  var base = getSkillScore(name, lv, pt);
-  if(!name || !lv || !ptSkills || ptSkills.indexOf(name) < 0) return base;
-  var up = getSkillScore(name, Math.min(10, lv + 1), pt);
-  return up > base ? up : base;
+/* ── 스킬 레벨 자동 설정 ─────────────────────────────────────────
+   카드 종류별 기본 레벨에서 출발하고, 그 슬롯의 포지션 특훈 스킬 보너스에
+   걸리는 스킬이면 레벨을 1 올린다. 유저가 직접 고른 경우(sLvManual)는 그 값을 쓴다. */
+var CARD_SKILL_BASE_LV = { "골든글러브":[6,6,6], "라이브":[6,6,6], "올스타":[8,7,7] };
+var DEFAULT_SKILL_BASE_LV = [6,5,5];
+
+/* 스킬표에 값이 있는 가장 높은 레벨. 없으면 0.
+   황금세대처럼 Lv6 까지만 있는 스킬을 Lv7 로 올려 0점이 되는 것을 막는다. */
+function maxSkillLv(name, cat){
+  if(!name || !SKILL_DATA) return 0;
+  var t = SKILL_DATA[cat]; var a = t && t[name];
+  if(!a && t){ var al = SKILL_ALIAS[cat] && SKILL_ALIAS[cat][name]; if(al) a = t[al]; }
+  if(!a) return 0;
+  for(var i = a.length - 1; i >= 0; i--){
+    var e = a[i];
+    if(typeof e === "number" ? e : !!e) return 5 + i;
+  }
+  return 0;
+}
+
+function autoSkillLv(name, cardType, num, cat, ptSkills){
+  if(!name) return 0;
+  var base = (CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5;
+  if(ptSkills && ptSkills.indexOf(name) >= 0) base += 1;
+  var mx = maxSkillLv(name, cat);
+  return mx ? Math.min(base, mx) : base;
+}
+
+/* 실제 적용 레벨 */
+function effSkillLv(name, storedLv, manual, cardType, num, cat, ptSkills){
+  if(manual) return storedLv || 0;
+  return autoSkillLv(name, cardType, num, cat, ptSkills);
 }
 
 function calcBat(pl,lu,sdB){
@@ -232,7 +258,10 @@ function calcBat(pl,lu,sdB){
   /* 260814 시트: 인내 × 0.15 */
   var fN=(pl.patience||0)+getEnhVal(pl.cardType,"인내",lu.enhance||"")+(lu.trainN||0)+(pl.specPatience||0)+(sb.n||0)+faAdj;
   var pts=(sb.ptSkills)||[];
-  var ss=skillScorePT(lu.skill1,lu.s1Lv||0,"타자",pts)+skillScorePT(lu.skill2,lu.s2Lv||0,"타자",pts)+skillScorePT(lu.skill3,lu.s3Lv||0,"타자",pts);
+  var mn=!!pl.sLvManual;
+  var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mn,pl.cardType,1,"타자",pts),"타자")
+        +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mn,pl.cardType,2,"타자",pts),"타자")
+        +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mn,pl.cardType,3,"타자",pts),"타자");
   var t=fP*w.p+fA*w.a+fE*w.e+fN*(w.n||0)+ss;
   /* 260814 시트: 좌타 감점 / 흰존·콜존 감점 / 발사각 보너스 */
   if(pl.hand==="좌") t-=2.5;
@@ -257,7 +286,10 @@ function calcPit(pl,lu,sdB){
   var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s+faAdjP;
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
   var ptsP=(sb.ptSkills)||[];
-  var ss=skillScorePT(lu.skill1,lu.s1Lv||0,pt,ptsP)+skillScorePT(lu.skill2,lu.s2Lv||0,pt,ptsP)+skillScorePT(lu.skill3,lu.s3Lv||0,pt,ptsP);
+  var mnP=!!pl.sLvManual;
+  var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mnP,pl.cardType,1,pt,ptsP),pt)
+        +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mnP,pl.cardType,2,pt,ptsP),pt)
+        +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mnP,pl.cardType,3,pt,ptsP),pt);
   var t=fC*w.c+fS*w.s+ss;
   /* 260814 시트: 좌완 가산 */
   if(pl.hand==="좌") t+=1;
@@ -388,7 +420,12 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   }
 
   /* 주장 보너스 (라커룸에서 설정) */
-  if (isBat && pl.id === sdState.capBatId) { bp += sdState.capBatP || 0; ba += sdState.capBatA || 0; be += sdState.capBatE || 0; }
+  /* 주장(capBatId)은 타자·투수 누구나 지정할 수 있다. 고른 선수의 역할에 맞는 능력치가 오른다. */
+  if (pl.id === sdState.capBatId) {
+    if (isBat) { bp += sdState.capBatP || 0; ba += sdState.capBatA || 0; be += sdState.capBatE || 0; bn += sdState.capBatN || 0; }
+    else { pc += sdState.capBatC || 0; ps += sdState.capBatS || 0; }
+  }
+  /* 투수조장은 투수만 */
   if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
 
   /* POTM 자동 보너스 */
@@ -2472,9 +2509,11 @@ function LineupPage(p) {
               <span style={{ fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specPower || 0) + "/" + (pl.specAccuracy || 0) + "/" + (pl.specEye || 0) + "/" + (pl.specPatience || 0)}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {pl.skill1 && (<SkBadge name={pl.skill1} lv={pl.s1Lv} />)}
-              {pl.skill2 && (<SkBadge name={pl.skill2} lv={pl.s2Lv} />)}
-              {pl.skill3 && (<SkBadge name={pl.skill3} lv={pl.s3Lv} />)}
+              {[1,2,3].map(function(k){
+                var nm = pl["skill" + k]; if(!nm) return null;
+                var lv = effSkillLv(nm, pl["s"+k+"Lv"], !!pl.sLvManual, pl.cardType, k, "타자", (sdState["pts_" + slot] || []));
+                return (<SkBadge key={k} name={nm} lv={lv} />);
+              })}
             </div>
             {(function(){
               var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
@@ -2559,9 +2598,12 @@ function LineupPage(p) {
               <span style={{ fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specChange || 0) + "/" + (pl.specStuff || 0)}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {pl.skill1 && (<SkBadge name={pl.skill1} lv={pl.s1Lv} />)}
-              {pl.skill2 && (<SkBadge name={pl.skill2} lv={pl.s2Lv} />)}
-              {pl.skill3 && (<SkBadge name={pl.skill3} lv={pl.s3Lv} />)}
+              {[1,2,3].map(function(k){
+                var nm = pl["skill" + k]; if(!nm) return null;
+                var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
+                var lv = effSkillLv(nm, pl["s"+k+"Lv"], !!pl.sLvManual, pl.cardType, k, pcat, (sdState["pts_" + slot] || []));
+                return (<SkBadge key={k} name={nm} lv={lv} />);
+              })}
             </div>
             {(function(){
               var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
@@ -3680,7 +3722,7 @@ function EnhancePage(p){
 }
 
 /* ================================================================
-   LOCKER ROOM - 주장, 유니폼, POTM
+   LOCKER ROOM - 주장, 투수 주장, 유니폼, POTM
    ================================================================ */
 function LockerRoomPage(p) {
   var mob = p.mobile;
@@ -3710,6 +3752,7 @@ function LockerRoomPage(p) {
 
   var batCapId = sdState.capBatId || "";
   var pitCapId = sdState.capPitId || "";
+  var lineupAll = lineupBats.concat(lineupPits);
   var batCap = byId(batCapId);
   var pitCap = byId(pitCapId);
 
@@ -3824,24 +3867,35 @@ function LockerRoomPage(p) {
 
       {/* Captain selection + bonus */}
       <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 16 }}>
-        {/* 타자 주장 */}
+        {/* 주장 — 타자·투수 모두 지정 가능 */}
         <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
             <span style={{ fontSize: 16 }}>{"👑"}</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: "var(--acc)", fontFamily: "var(--h)" }}>{"타자 주장"}</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "var(--acc)", fontFamily: "var(--h)" }}>{"주장"}</span>
+            <span style={{ fontSize: 11, color: "var(--td)" }}>{"타자·투수 모두 가능"}</span>
           </div>
           <select value={batCapId} onChange={function(e) { upd("capBatId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
-            {lineupBats.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "")}</option>); })}
+            {lineupAll.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + " · " + (pl.role === "타자" ? (pl.subPosition || "타자") : (pl.position || "투수"))}</option>); })}
           </select>
           {batCap && (<div style={{ padding: "6px 8px", background: "var(--ta)", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={batCap.cardType} /><span style={{ fontWeight: 700, fontSize: 14, color: "var(--t1)" }}>{batCap.name}</span><span style={{ fontSize: 16, marginLeft: "auto" }}>{"👑"}</span></div>
           </div>)}
           <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)"}</div>
           <div style={{ display: "flex", gap: 6 }}>
-            {miniStat("파", "#EF5350", "capBatP", sdState.capBatP)}
-            {miniStat("정", "#42A5F5", "capBatA", sdState.capBatA)}
-            {miniStat("선", "#66BB6A", "capBatE", sdState.capBatE)}
+            {(!batCap || batCap.role === "타자") ? (
+              <React.Fragment>
+                {miniStat("파", "#EF5350", "capBatP", sdState.capBatP)}
+                {miniStat("정", "#42A5F5", "capBatA", sdState.capBatA)}
+                {miniStat("선", "#66BB6A", "capBatE", sdState.capBatE)}
+                {miniStat("인", "#FFA726", "capBatN", sdState.capBatN)}
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                {miniStat("변", "#AB47BC", "capBatC", sdState.capBatC)}
+                {miniStat("구", "#FF7043", "capBatS", sdState.capBatS)}
+              </React.Fragment>
+            )}
           </div>
         </div>
 
@@ -5169,6 +5223,16 @@ function MyPlayersPage(p) {
       return c;
     }));
   };
+  var updMany = function(id, obj) {
+    save(players.map(function(x) { return x.id === id ? Object.assign({}, x, obj) : x; }));
+  };
+  /* 이 선수가 배치된 슬롯의 포지션 특훈 스킬 보너스 목록 */
+  var ptSkillsFor = function(pl) {
+    var slot = null;
+    for (var k in lm) { if (lm[k] === pl.id) { slot = k; break; } }
+    if (!slot) return [];
+    return (sdState["pts_" + slot] || []).filter(Boolean);
+  };
 
   var mergedPlayers = players.map(function(x) {
     var m = mergePl(x) || x;
@@ -5192,7 +5256,12 @@ function MyPlayersPage(p) {
   var skillSel = function(pl, num) {
     var opts = getSkillOpts(pl);
     var nf = "skill" + num; var lf = "s" + num + "Lv";
-    var c = {8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[pl[lf]] || "var(--t2)";
+    var cat = getSkillCat(pl);
+    var pts = ptSkillsFor(pl);
+    var isManual = !!pl.sLvManual;
+    var autoLv = autoSkillLv(pl[nf], pl.cardType, num, cat, pts);
+    var shownLv = isManual ? (pl[lf] || 0) : autoLv;
+    var c = {10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[shownLv] || "var(--t2)";
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
         <SkillPicker
@@ -5202,9 +5271,22 @@ function MyPlayersPage(p) {
           fontSize={11}
           onChange={function(v) { upd(pl.id, nf, v); }}
         />
-        <select value={pl[lf] || 0} onChange={function(e) { upd(pl.id, lf, parseInt(e.target.value)); }}
-          style={{ width: 36, padding: "2px", fontSize: 11, background: "var(--inner)", border: "1px solid " + c + "44", borderRadius: 3, color: c, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }}>
-          {[0,5,6,7,8,9,10].map(function(v) { return (<option key={v} value={v}>{v === 0 ? "-" : "Lv" + v}</option>); })}
+        <select value={isManual ? String(pl[lf] || 0) : "auto"}
+          title={isManual ? "직접 지정" : "자동 (카드 종류 기본값 + 포지션 특훈 스킬 보너스)"}
+          onChange={function(e) {
+            var v = e.target.value;
+            if (v === "auto") { upd(pl.id, "sLvManual", false); return; }
+            if (!isManual) {
+              /* 수동으로 넘어가는 순간 현재 자동값을 세 칸 모두 고정해 값이 튀지 않게 한다 */
+              var o = { sLvManual: true };
+              [1,2,3].forEach(function(k){ o["s" + k + "Lv"] = autoSkillLv(pl["skill" + k], pl.cardType, k, cat, pts); });
+              o[lf] = parseInt(v);
+              updMany(pl.id, o);
+            } else { upd(pl.id, lf, parseInt(v)); }
+          }}
+          style={{ width: 52, padding: "2px", fontSize: 11, background: "var(--inner)", border: "1px solid " + c + "44", borderRadius: 3, color: c, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }}>
+          <option value="auto">{autoLv ? "자동 " + autoLv : "자동"}</option>
+          {[0,5,6,7,8,9,10].map(function(v) { return (<option key={v} value={String(v)}>{v === 0 ? "-" : "Lv" + v}</option>); })}
         </select>
       </div>
     );
@@ -5215,7 +5297,9 @@ function MyPlayersPage(p) {
     var slot = getSlot(pl.id);
     var isSel = selId === pl.id;
     var lu = { enhance: pl.enhance || "9각성", trainP: pl.trainP||0, trainA: pl.trainA||0, trainE: pl.trainE||0, trainN: pl.trainN||0, trainC: pl.trainC||0, trainS: pl.trainS||0, skill1: pl.skill1||"", s1Lv: pl.s1Lv||0, skill2: pl.skill2||"", s2Lv: pl.s2Lv||0, skill3: pl.skill3||"", s3Lv: pl.s3Lv||0 };
-    var calc = isBat ? calcBat(pl, lu) : calcPit(pl, lu);
+    /* 배치된 슬롯의 특훈 스킬 보너스를 넘겨야 배지에 보이는 레벨과 점수가 일치한다 */
+    var sdbMy = { p:0, a:0, e:0, n:0, c:0, s:0, ptSkills: ptSkillsFor(pl) };
+    var calc = isBat ? calcBat(pl, lu, sdbMy) : calcPit(pl, lu, sdbMy);
     var accentC = isBat ? "var(--acc)" : "var(--acp)";
 
     return (
@@ -5251,9 +5335,12 @@ function MyPlayersPage(p) {
             </div>
             {/* Skills - all 3 visible */}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {pl.skill1 ? (<SkBadge name={pl.skill1} lv={pl.s1Lv} />) : (<span style={{ fontSize: 11, color: "var(--td)" }}>{"-"}</span>)}
-              {pl.skill2 ? (<SkBadge name={pl.skill2} lv={pl.s2Lv} />) : null}
-              {pl.skill3 ? (<SkBadge name={pl.skill3} lv={pl.s3Lv} />) : null}
+              {!pl.skill1 && (<span style={{ fontSize: 11, color: "var(--td)" }}>{"-"}</span>)}
+              {[1,2,3].map(function(k){
+                var nm = pl["skill" + k]; if(!nm) return null;
+                var lv = effSkillLv(nm, pl["s"+k+"Lv"], !!pl.sLvManual, pl.cardType, k, getSkillCat(pl), ptSkillsFor(pl));
+                return (<SkBadge key={k} name={nm} lv={lv} />);
+              })}
             </div>
             {/* Potential */}
             <div style={{ fontSize: 14, color: "var(--td)", textAlign: "center" }}>{(pl.pot1 || "-") + "/" + (pl.pot2 || "-")}</div>

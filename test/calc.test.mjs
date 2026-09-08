@@ -5,7 +5,7 @@
 import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT,
-  potmKey, isPotmFor, getPotmBonus, skillScorePT,
+  potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW,
 } from './calc-extract.mjs';
 
@@ -191,18 +191,38 @@ eq('점수 지정 시 반영', getPotScoreByType('S', '좌투선호', { potScore
 eq('종류 없으면 0', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S' }, {}, null).total, 305);
 eq('등급 없으면 0', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', potType3: '좌투선호' }, {}, null).total, 305);
 
-console.log('\n[포지션 특훈 스킬 보너스] 지정 스킬은 레벨 +1 로 계산');
-eq('미지정이면 그대로', skillScorePT('정밀타격', 7, '타자', []), 28.48);
-eq('지정하면 Lv8 값', skillScorePT('정밀타격', 7, '타자', ['정밀타격']), 32.37);
-eq('Lv10 은 더 안 오름', skillScorePT('정밀타격', 10, '타자', ['정밀타격']), 40.15);
-/* 황금세대는 Lv6 까지만 값이 있다 — 올려서 0이 되면 원래 값을 지킨다 */
-eq('상위 레벨 데이터 없으면 유지', skillScorePT('황금세대', 6, '타자', ['황금세대']), 24.72);
-eq('스킬 없으면 0', skillScorePT('', 0, '타자', ['정밀타격']), 0);
-/* calcBat 경유: 305 + 정밀타격 Lv7(28.48) → 지정 시 Lv8(32.37) */
-const luSk = { skill1: '정밀타격', s1Lv: 7 };
-const plSk = { hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자' };
-eq('보너스 없음', calcBat(plSk, luSk, { p: 0, a: 0, e: 0, n: 0, ptSkills: [] }).total, 333.48);
-eq('보너스 적용', calcBat(plSk, luSk, { p: 0, a: 0, e: 0, n: 0, ptSkills: ['정밀타격'] }).total, 337.37);
+console.log('\n[스킬 레벨 자동 설정] 카드 종류 기본값 + 포지션 특훈 보너스');
+/* 기본값: 골글·라이브 6/6/6, 올스타 8/7/7, 그 외 6/5/5 */
+eq('골글 1번', autoSkillLv('정밀타격', '골든글러브', 1, '타자', []), 6);
+eq('골글 3번', autoSkillLv('정밀타격', '골든글러브', 3, '타자', []), 6);
+eq('라이브 2번', autoSkillLv('정밀타격', '라이브', 2, '타자', []), 6);
+eq('올스타 1번', autoSkillLv('정밀타격', '올스타', 1, '타자', []), 8);
+eq('올스타 2번', autoSkillLv('정밀타격', '올스타', 2, '타자', []), 7);
+eq('올스타 3번', autoSkillLv('정밀타격', '올스타', 3, '타자', []), 7);
+eq('시즌 1번', autoSkillLv('정밀타격', '시즌', 1, '타자', []), 6);
+eq('시즌 2번', autoSkillLv('정밀타격', '시즌', 2, '타자', []), 5);
+eq('임팩트 3번', autoSkillLv('정밀타격', '임팩트', 3, '타자', []), 5);
+/* 포지션 특훈 스킬 보너스 → +1 */
+eq('보너스 걸리면 +1', autoSkillLv('정밀타격', '시즌', 1, '타자', ['정밀타격']), 7);
+eq('다른 스킬이면 그대로', autoSkillLv('정밀타격', '시즌', 1, '타자', ['대도']), 6);
+/* 스킬 최고 레벨을 넘지 않는다 — 황금세대는 Lv6 까지만 값이 있다 */
+eq('황금세대 최고 레벨', maxSkillLv('황금세대', '타자'), 6);
+eq('정밀타격 최고 레벨', maxSkillLv('정밀타격', '타자'), 10);
+eq('올스타 황금세대는 6에서 멈춤', autoSkillLv('황금세대', '올스타', 1, '타자', []), 6);
+eq('보너스 있어도 6 초과 안 함', autoSkillLv('황금세대', '올스타', 1, '타자', ['황금세대']), 6);
+eq('스킬 없으면 0', autoSkillLv('', '올스타', 1, '타자', []), 0);
+/* 수동 지정이면 저장값을 그대로 쓴다 */
+eq('수동 우선', effSkillLv('정밀타격', 10, true, '시즌', 1, '타자', ['정밀타격']), 10);
+eq('자동이면 계산값', effSkillLv('정밀타격', 10, false, '시즌', 1, '타자', ['정밀타격']), 7);
+
+console.log('\n[자동 레벨이 점수에 반영]');
+const plAuto = { hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자' };
+const luAuto = { skill1: '정밀타격' };
+eq('보너스 없음 = 305 + Lv6(24.59)', calcBat(plAuto, luAuto, { p:0,a:0,e:0,n:0, ptSkills: [] }).total, 329.59);
+eq('보너스 있음 = 305 + Lv7(28.48)', calcBat(plAuto, luAuto, { p:0,a:0,e:0,n:0, ptSkills: ['정밀타격'] }).total, 333.48);
+const plMan = Object.assign({}, plAuto, { sLvManual: true });
+eq('수동은 저장값 유지', calcBat(plMan, { skill1: '정밀타격', s1Lv: 10 }, { p:0,a:0,e:0,n:0, ptSkills: ['정밀타격'] }).total, 345.15);
+
 
 console.log('\n[POTM] 전역 명단 + 덱별 사용자 설정');
 const potmPl = { name: '홍길동', team: '키움', cardType: '라이브', stars: 5 };

@@ -111,11 +111,29 @@ function launchAngleGain(la,finalPower){
   return (req!==null && finalPower>=req) ? launchAngleBonus(la) : 0;
 }
 function zonePenalty(pl){ return (pl.whiteZone||0)*-1.5 + (pl.coldZone||0)*-3; }
-function skillScorePT(name, lv, pt, ptSkills){
-  var base = getSkillScore(name, lv, pt);
-  if(!name || !lv || !ptSkills || ptSkills.indexOf(name) < 0) return base;
-  var up = getSkillScore(name, Math.min(10, lv + 1), pt);
-  return up > base ? up : base;
+var CARD_SKILL_BASE_LV = { "골든글러브":[6,6,6], "라이브":[6,6,6], "올스타":[8,7,7] };
+var DEFAULT_SKILL_BASE_LV = [6,5,5];
+function maxSkillLv(name, cat){
+  if(!name || !SKILL_DATA) return 0;
+  var t = SKILL_DATA[cat]; var a = t && t[name];
+  if(!a && t){ var al = SKILL_ALIAS[cat] && SKILL_ALIAS[cat][name]; if(al) a = t[al]; }
+  if(!a) return 0;
+  for(var i = a.length - 1; i >= 0; i--){
+    var e = a[i];
+    if(typeof e === "number" ? e : !!e) return 5 + i;
+  }
+  return 0;
+}
+function autoSkillLv(name, cardType, num, cat, ptSkills){
+  if(!name) return 0;
+  var base = (CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5;
+  if(ptSkills && ptSkills.indexOf(name) >= 0) base += 1;
+  var mx = maxSkillLv(name, cat);
+  return mx ? Math.min(base, mx) : base;
+}
+function effSkillLv(name, storedLv, manual, cardType, num, cat, ptSkills){
+  if(manual) return storedLv || 0;
+  return autoSkillLv(name, cardType, num, cat, ptSkills);
 }
 function calcBat(pl,lu,sdB){
   if(!pl||!lu)return{power:0,accuracy:0,eye:0,total:0,skillScore:0};
@@ -127,7 +145,10 @@ function calcBat(pl,lu,sdB){
   /* 260814 시트: 인내 × 0.15 */
   var fN=(pl.patience||0)+getEnhVal(pl.cardType,"인내",lu.enhance||"")+(lu.trainN||0)+(pl.specPatience||0)+(sb.n||0)+faAdj;
   var pts=(sb.ptSkills)||[];
-  var ss=skillScorePT(lu.skill1,lu.s1Lv||0,"타자",pts)+skillScorePT(lu.skill2,lu.s2Lv||0,"타자",pts)+skillScorePT(lu.skill3,lu.s3Lv||0,"타자",pts);
+  var mn=!!pl.sLvManual;
+  var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mn,pl.cardType,1,"타자",pts),"타자")
+        +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mn,pl.cardType,2,"타자",pts),"타자")
+        +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mn,pl.cardType,3,"타자",pts),"타자");
   var t=fP*w.p+fA*w.a+fE*w.e+fN*(w.n||0)+ss;
   /* 260814 시트: 좌타 감점 / 흰존·콜존 감점 / 발사각 보너스 */
   if(pl.hand==="좌") t-=2.5;
@@ -151,7 +172,10 @@ function calcPit(pl,lu,sdB){
   var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s+faAdjP;
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
   var ptsP=(sb.ptSkills)||[];
-  var ss=skillScorePT(lu.skill1,lu.s1Lv||0,pt,ptsP)+skillScorePT(lu.skill2,lu.s2Lv||0,pt,ptsP)+skillScorePT(lu.skill3,lu.s3Lv||0,pt,ptsP);
+  var mnP=!!pl.sLvManual;
+  var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mnP,pl.cardType,1,pt,ptsP),pt)
+        +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mnP,pl.cardType,2,pt,ptsP),pt)
+        +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mnP,pl.cardType,3,pt,ptsP),pt);
   var t=fC*w.c+fS*w.s+ss;
   /* 260814 시트: 좌완 가산 */
   if(pl.hand==="좌") t+=1;
@@ -169,4 +193,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT, potmKey, isPotmFor, getPotmBonus, skillScorePT, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
