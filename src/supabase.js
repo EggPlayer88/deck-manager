@@ -167,18 +167,25 @@ var lastPlayerSaveError = null;
 export function getPlayerSaveError() { return lastPlayerSaveError; }
 export function clearPlayerSaveError() { lastPlayerSaveError = null; }
 
-var CONFLICT_KEY = 'name,cardType,year,impactType,team';
+/* 충돌 판정은 기본키(id)로 한다.
+   자연키(name,cardType,year,impactType,team)로 걸면 impactType 이 NULL 인 카드
+   (임팩트 외 전부)에서 유니크 인덱스가 NULL 을 서로 다른 값으로 보아 매칭에
+   실패하고, INSERT 로 넘어가 이미 있는 id 와 부딪혀 global_players_pkey 위반이 난다.
+   가져오기는 기존 도감에서 id 를 찾아 물려주므로 id 기준이 맞다. */
+var CONFLICT_KEY = 'id';
 
-/* upsert 는 한 번의 요청 안에 같은 충돌 키가 두 번 들어오면
-   "cannot affect row a second time" 로 배치 전체가 실패한다.
-   양식에 중복 행이 있을 수 있으므로 미리 걷어낸다 (뒤엣것이 이긴다). */
+/* 한 요청 안에 같은 id 가 두 번 들어오면 배치 전체가 실패하므로 미리 걷어낸다
+   (뒤엣것이 이긴다). */
 function dedupeByConflictKey(players) {
   var seen = {};
+  var out = [];
   players.forEach(function (p) {
-    var k = [p && p.name, p && p.cardType, p && p.year, p && p.impactType, p && p.team].join('');
+    var k = p && p.id;
+    if (!k) { out.push(p); return; }
     seen[k] = p;
   });
-  return Object.keys(seen).map(function (k) { return seen[k]; });
+  Object.keys(seen).forEach(function (k) { out.push(seen[k]); });
+  return out;
 }
 
 export async function saveGlobalPlayers(players) {
