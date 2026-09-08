@@ -101,7 +101,9 @@ function mergePl(userPl) {
     trainC: userPl.trainC||0, trainS: userPl.trainS||0,
     specPower: userPl.specPower||0, specAccuracy: userPl.specAccuracy||0, specEye: userPl.specEye||0, specPatience: userPl.specPatience||0,
     specChange: userPl.specChange||0, specStuff: userPl.specStuff||0,
-    sLvManual: !!userPl.sLvManual,
+    /* 값이 없는 기존 선수는 저장된 레벨을 지키기 위해 수동으로 본다.
+       신규 선수는 생성 시 sLvManual:false 로 만들어져 자동이 된다. */
+    sLvManual: userPl.sLvManual === undefined ? true : !!userPl.sLvManual,
     skill1: userPl.skill1||"", s1Lv: userPl.s1Lv||0,
     skill2: userPl.skill2||"", s2Lv: userPl.s2Lv||0,
     skill3: userPl.skill3||"", s3Lv: userPl.s3Lv||0,
@@ -217,7 +219,7 @@ function zonePenalty(pl){ return (pl.whiteZone||0)*-1.5 + (pl.coldZone||0)*-3; }
 /* ── 스킬 레벨 자동 설정 ─────────────────────────────────────────
    카드 종류별 기본 레벨에서 출발하고, 그 슬롯의 포지션 특훈 스킬 보너스에
    걸리는 스킬이면 레벨을 1 올린다. 유저가 직접 고른 경우(sLvManual)는 그 값을 쓴다. */
-var CARD_SKILL_BASE_LV = { "골든글러브":[6,6,6], "라이브":[6,6,6], "올스타":[8,7,7] };
+var CARD_SKILL_BASE_LV = { "골든글러브":[6,6,6], "라이브":[7,7,7], "올스타":[8,7,7] };
 var DEFAULT_SKILL_BASE_LV = [6,5,5];
 
 /* 스킬표에 값이 있는 가장 높은 레벨. 없으면 0.
@@ -233,6 +235,12 @@ function maxSkillLv(name, cat){
   }
   return 0;
 }
+
+/* 스킬 레벨을 유저가 직접 지정했는가.
+   sLvManual 이 아예 없는 선수는 이 기능 이전에 만들어진 것이므로,
+   저장돼 있던 레벨을 지키기 위해 수동으로 본다.
+   신규 선수는 생성 시 sLvManual:false 가 박혀서 자동이 된다. */
+function isLvManual(pl){ return !pl || pl.sLvManual === undefined ? true : !!pl.sLvManual; }
 
 function autoSkillLv(name, cardType, num, cat, ptSkills){
   if(!name) return 0;
@@ -258,7 +266,7 @@ function calcBat(pl,lu,sdB){
   /* 260814 시트: 인내 × 0.15 */
   var fN=(pl.patience||0)+getEnhVal(pl.cardType,"인내",lu.enhance||"")+(lu.trainN||0)+(pl.specPatience||0)+(sb.n||0)+faAdj;
   var pts=(sb.ptSkills)||[];
-  var mn=!!pl.sLvManual;
+  var mn=isLvManual(pl);
   var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mn,pl.cardType,1,"타자",pts),"타자")
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mn,pl.cardType,2,"타자",pts),"타자")
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mn,pl.cardType,3,"타자",pts),"타자");
@@ -286,7 +294,7 @@ function calcPit(pl,lu,sdB){
   var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s+faAdjP;
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
   var ptsP=(sb.ptSkills)||[];
-  var mnP=!!pl.sLvManual;
+  var mnP=isLvManual(pl);
   var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mnP,pl.cardType,1,pt,ptsP),pt)
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mnP,pl.cardType,2,pt,ptsP),pt)
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mnP,pl.cardType,3,pt,ptsP),pt);
@@ -2481,7 +2489,7 @@ function LineupPage(p) {
           onDrop={function(e) { e.preventDefault(); if (dragSlot !== null && dragSlot !== idx) swapOrder(dragSlot, idx); }}
           onDragEnd={function() { setDragSlot(null); setDragOverSlot(null); }}
           onClick={function() { setSelId(isSel ? null : pl.id); }}
-          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,120px) minmax(0,104px) minmax(0,68px) minmax(0,110px) minmax(0,52px) minmax(0,46px)", alignItems: "center", gap: 22, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
+          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,120px) minmax(0,110px) minmax(0,86px) minmax(0,110px) minmax(0,52px) minmax(0,46px)", alignItems: "center", gap: 22, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acc)", fontFamily: "var(--h)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             {idx > 0 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx-1); }} style={{ fontSize: 12, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
             <span>{idx + 1}</span>
@@ -2500,18 +2508,18 @@ function LineupPage(p) {
                 return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 15, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
               })}
             </div>
-            <div style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+            <div style={{ textAlign: "center", whiteSpace: "nowrap", paddingRight: 2, overflow: "hidden" }}>
               <div style={{ fontSize: 13, color: pctColor((pl.trainP||0)*getW().p+(pl.trainA||0)*getW().a+(pl.trainE||0)*getW().e+(pl.trainN||0)*(getW().n||0), allBatTrainScores, "gold") }}>{"훈련"}</div>
               <span style={{ fontSize: 15, fontFamily: "var(--m)" }}><span style={{ color: "#EF5350" }}>{"+" + (pl.trainP || 0)}</span>{" "}<span style={{ color: "#42A5F5" }}>{"+" + (pl.trainA || 0)}</span>{" "}<span style={{ color: "#66BB6A" }}>{"+" + (pl.trainE || 0)}</span>{" "}<span style={{ color: "#FFA726" }}>{"+" + (pl.trainN || 0)}</span></span>
             </div>
-            <div style={{ textAlign: "center" }}>
+            <div style={{ textAlign: "center", paddingLeft: 18, borderLeft: "1px solid var(--bd)", overflow: "hidden" }}>
               <div style={{ fontSize: 13, color: "var(--td)" }}>{"특훈"}</div>
               <span style={{ fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specPower || 0) + "/" + (pl.specAccuracy || 0) + "/" + (pl.specEye || 0) + "/" + (pl.specPatience || 0)}</span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }}>
               {[1,2,3].map(function(k){
                 var nm = pl["skill" + k]; if(!nm) return null;
-                var lv = effSkillLv(nm, pl["s"+k+"Lv"], !!pl.sLvManual, pl.cardType, k, "타자", (sdState["pts_" + slot] || []));
+                var lv = effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), pl.cardType, k, "타자", (sdState["pts_" + slot] || []));
                 return (<SkBadge key={k} name={nm} lv={lv} />);
               })}
             </div>
@@ -2574,7 +2582,7 @@ function LineupPage(p) {
     var isSel = selId === pl.id;
     return (
       <React.Fragment key={pl.id}>
-        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,96px) minmax(0,68px) minmax(0,46px) minmax(0,110px) minmax(0,52px) minmax(0,46px)", alignItems: "center", gap: 22, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
+        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,96px) minmax(0,74px) minmax(0,64px) minmax(0,110px) minmax(0,52px) minmax(0,46px)", alignItems: "center", gap: 22, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
@@ -2593,15 +2601,15 @@ function LineupPage(p) {
               <div style={{ fontSize: 13, color: pctColor((pl.trainC||0)*getW().c+(pl.trainS||0)*getW().s, allPitTrainScores, "gold") }}>{"훈련"}</div>
               <span style={{ fontSize: 15, fontFamily: "var(--m)" }}><span style={{ color: "#AB47BC" }}>{"+" + (pl.trainC || 0)}</span>{" "}<span style={{ color: "#FF7043" }}>{"+" + (pl.trainS || 0)}</span></span>
             </div>
-            <div style={{ textAlign: "center" }}>
+            <div style={{ textAlign: "center", paddingLeft: 18, borderLeft: "1px solid var(--bd)", overflow: "hidden" }}>
               <div style={{ fontSize: 13, color: "var(--td)" }}>{"특훈"}</div>
               <span style={{ fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specChange || 0) + "/" + (pl.specStuff || 0)}</span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }}>
               {[1,2,3].map(function(k){
                 var nm = pl["skill" + k]; if(!nm) return null;
                 var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
-                var lv = effSkillLv(nm, pl["s"+k+"Lv"], !!pl.sLvManual, pl.cardType, k, pcat, (sdState["pts_" + slot] || []));
+                var lv = effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), pl.cardType, k, pcat, (sdState["pts_" + slot] || []));
                 return (<SkBadge key={k} name={nm} lv={lv} />);
               })}
             </div>
@@ -4913,6 +4921,7 @@ function BulkScanModal(p) {
           role: seed.role, position: seed.position || '',
           year: seed.year || '', team: seed.team || '',
           liveType: seed.liveType || "",
+          sLvManual:false,  /* 신규 선수는 스킬 레벨 자동 */
           trainP:0, trainA:0, trainE:0, trainN:0, trainC:0, trainS:0,
           specPower:0, specAccuracy:0, specEye:0, specPatience:0, specChange:0, specStuff:0,
           skill1: skRes.s1.name, s1Lv: skRes.s1.lv,
@@ -5258,7 +5267,7 @@ function MyPlayersPage(p) {
     var nf = "skill" + num; var lf = "s" + num + "Lv";
     var cat = getSkillCat(pl);
     var pts = ptSkillsFor(pl);
-    var isManual = !!pl.sLvManual;
+    var isManual = isLvManual(pl);
     var autoLv = autoSkillLv(pl[nf], pl.cardType, num, cat, pts);
     var shownLv = isManual ? (pl[lf] || 0) : autoLv;
     var c = {10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[shownLv] || "var(--t2)";
@@ -5338,7 +5347,7 @@ function MyPlayersPage(p) {
               {!pl.skill1 && (<span style={{ fontSize: 11, color: "var(--td)" }}>{"-"}</span>)}
               {[1,2,3].map(function(k){
                 var nm = pl["skill" + k]; if(!nm) return null;
-                var lv = effSkillLv(nm, pl["s"+k+"Lv"], !!pl.sLvManual, pl.cardType, k, getSkillCat(pl), ptSkillsFor(pl));
+                var lv = effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), pl.cardType, k, getSkillCat(pl), ptSkillsFor(pl));
                 return (<SkBadge key={k} name={nm} lv={lv} />);
               })}
             </div>
@@ -5522,6 +5531,7 @@ function MyPlayersPage(p) {
             subPosition: src.subPosition || defaultSubPos,
             year: src.year || "", team: src.team || "",
             liveType: src.liveType || "",
+            sLvManual: false,  /* 신규 선수는 스킬 레벨 자동 */
             trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0,
             specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0,
             skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,

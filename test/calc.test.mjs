@@ -5,7 +5,7 @@
 import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT,
-  potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv,
+  potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW,
 } from './calc-extract.mjs';
 
@@ -195,7 +195,9 @@ console.log('\n[스킬 레벨 자동 설정] 카드 종류 기본값 + 포지션
 /* 기본값: 골글·라이브 6/6/6, 올스타 8/7/7, 그 외 6/5/5 */
 eq('골글 1번', autoSkillLv('정밀타격', '골든글러브', 1, '타자', []), 6);
 eq('골글 3번', autoSkillLv('정밀타격', '골든글러브', 3, '타자', []), 6);
-eq('라이브 2번', autoSkillLv('정밀타격', '라이브', 2, '타자', []), 6);
+eq('라이브 2번', autoSkillLv('정밀타격', '라이브', 2, '타자', []), 7);
+eq('라이브 1번', autoSkillLv('정밀타격', '라이브', 1, '타자', []), 7);
+eq('라이브 3번', autoSkillLv('정밀타격', '라이브', 3, '타자', []), 7);
 eq('올스타 1번', autoSkillLv('정밀타격', '올스타', 1, '타자', []), 8);
 eq('올스타 2번', autoSkillLv('정밀타격', '올스타', 2, '타자', []), 7);
 eq('올스타 3번', autoSkillLv('정밀타격', '올스타', 3, '타자', []), 7);
@@ -215,8 +217,17 @@ eq('스킬 없으면 0', autoSkillLv('', '올스타', 1, '타자', []), 0);
 eq('수동 우선', effSkillLv('정밀타격', 10, true, '시즌', 1, '타자', ['정밀타격']), 10);
 eq('자동이면 계산값', effSkillLv('정밀타격', 10, false, '시즌', 1, '타자', ['정밀타격']), 7);
 
+console.log('\n[기존 선수 보존] sLvManual 이 없으면 수동으로 본다');
+eq('필드 없으면 수동', isLvManual({ cardType: '시즌' }) ? 1 : 0, 1);
+eq('false 면 자동', isLvManual({ sLvManual: false }) ? 1 : 0, 0);
+eq('true 면 수동', isLvManual({ sLvManual: true }) ? 1 : 0, 1);
+/* 기존 선수(필드 없음)는 특훈 보너스가 걸려도 저장된 Lv8 을 지킨다 */
+const plLegacy = { hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자' };
+eq('기존 선수는 저장값 유지',
+   calcBat(plLegacy, { skill1: '정밀타격', s1Lv: 8 }, { p:0,a:0,e:0,n:0, ptSkills: ['정밀타격'] }).total, 337.37);
+
 console.log('\n[자동 레벨이 점수에 반영]');
-const plAuto = { hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자' };
+const plAuto = { hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', sLvManual: false };
 const luAuto = { skill1: '정밀타격' };
 eq('보너스 없음 = 305 + Lv6(24.59)', calcBat(plAuto, luAuto, { p:0,a:0,e:0,n:0, ptSkills: [] }).total, 329.59);
 eq('보너스 있음 = 305 + Lv7(28.48)', calcBat(plAuto, luAuto, { p:0,a:0,e:0,n:0, ptSkills: ['정밀타격'] }).total, 333.48);

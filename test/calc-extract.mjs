@@ -111,7 +111,7 @@ function launchAngleGain(la,finalPower){
   return (req!==null && finalPower>=req) ? launchAngleBonus(la) : 0;
 }
 function zonePenalty(pl){ return (pl.whiteZone||0)*-1.5 + (pl.coldZone||0)*-3; }
-var CARD_SKILL_BASE_LV = { "골든글러브":[6,6,6], "라이브":[6,6,6], "올스타":[8,7,7] };
+var CARD_SKILL_BASE_LV = { "골든글러브":[6,6,6], "라이브":[7,7,7], "올스타":[8,7,7] };
 var DEFAULT_SKILL_BASE_LV = [6,5,5];
 function maxSkillLv(name, cat){
   if(!name || !SKILL_DATA) return 0;
@@ -124,6 +124,7 @@ function maxSkillLv(name, cat){
   }
   return 0;
 }
+function isLvManual(pl){ return !pl || pl.sLvManual === undefined ? true : !!pl.sLvManual; }
 function autoSkillLv(name, cardType, num, cat, ptSkills){
   if(!name) return 0;
   var base = (CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5;
@@ -145,7 +146,7 @@ function calcBat(pl,lu,sdB){
   /* 260814 시트: 인내 × 0.15 */
   var fN=(pl.patience||0)+getEnhVal(pl.cardType,"인내",lu.enhance||"")+(lu.trainN||0)+(pl.specPatience||0)+(sb.n||0)+faAdj;
   var pts=(sb.ptSkills)||[];
-  var mn=!!pl.sLvManual;
+  var mn=isLvManual(pl);
   var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mn,pl.cardType,1,"타자",pts),"타자")
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mn,pl.cardType,2,"타자",pts),"타자")
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mn,pl.cardType,3,"타자",pts),"타자");
@@ -172,7 +173,7 @@ function calcPit(pl,lu,sdB){
   var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s+faAdjP;
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
   var ptsP=(sb.ptSkills)||[];
-  var mnP=!!pl.sLvManual;
+  var mnP=isLvManual(pl);
   var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mnP,pl.cardType,1,pt,ptsP),pt)
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mnP,pl.cardType,2,pt,ptsP),pt)
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mnP,pl.cardType,3,pt,ptsP),pt);
@@ -193,4 +194,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, gamTypesFor, POT_GRADES_GAM, POT_TYPES_GAM_BAT, POT_TYPES_GAM_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
