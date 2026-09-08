@@ -231,6 +231,10 @@ eq('투수 종류도 같은 표', getPotScoreByType('S', '변화구연마', null
 eq('총점에 반영', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S', potType3: '좌투선호' }, {}, null).total, 315);
 
 console.log('\n[잠재력 등급별 점수] 종류마다 표가 다르다');
+eq('풀스윙 C 는 감점', getPotScoreByType('C', '풀스윙', null), -5);
+eq('침착 C 는 -3', getPotScoreByType('C', '침착', null), -3);
+eq('등급 미입력은 0', getPotScoreByType('', '풀스윙', null), 0);
+eq('각성 C 는 3 유지', getPotScoreByType('C', '좌투선호', null), 3);
 eq('풀스윙 C+', getPotScoreByType('C+', '풀스윙', null), 1);
 eq('풀스윙 A+', getPotScoreByType('A+', '풀스윙', null), 2);
 eq('풀스윙 S', getPotScoreByType('S', '풀스윙', null), 5);
