@@ -354,6 +354,81 @@ function calcPit(pl,lu,sdB){
 }
 
 /* Set deck bonus calculator for a single player */
+/* 라인업 슬롯 목록 — 여러 화면이 함께 쓰므로 모듈 최상단에 둔다 */
+var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
+var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
+var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
+
+/* 라인업 편성에서 세트덱 계산에 필요한 값을 구한다.
+   pick(slot) 은 그 슬롯의 (병합된) 선수를 돌려주는 함수.
+   sdState 에 파생값(_synCounts, _autoNatBat 등)을 채우고 총 세트덱 점수를 돌려준다.
+   라인업과 내 선수가 같은 판정을 쓰도록 한 곳에 모아둔다.
+   — 발사각 보너스는 세트덱까지 반영된 최종 파워로 판정해야 하므로
+     내 선수 화면에서도 이 값이 필요하다. */
+function computeLineupSetDeck(pick, sdState) {
+    var calcSetPoint = function() {
+      var total = 0;
+      var potmList = GLOBAL_POTM_LIST;
+      var teamName = sdState.teamName || "";
+      /* POTM 세트덱 보너스 — 정책: 팀 일치 시에만 적용
+         - 라이브: 세트덱 점수 10까지 끌어올림 (이미 10 이상이면 +1)
+         - 올스타: 동일
+         - 스페셜 POTM (그 외): +1
+         팀 불일치 시 모두 0 */
+      var getPotmSetDelta = function(pl) {
+        if (!potmList.length || !pl) return 0;
+        var isPotm = potmList.some(function(p) { return p.name === (pl.name||"") && p.team === (pl.team||""); });
+        if (!isPotm) return 0;
+        /* 팀 일치 필수 */
+        if (!teamName || !pl.team || pl.team !== teamName) return 0;
+        var ct = pl.cardType;
+        var isLive = ct === "라이브";
+        var isOlstar = ct === "올스타";
+        /* 올스타 별5 외에는 효과 없음 */
+        if (isOlstar && (pl.stars||5) !== 5) return 0;
+        var baseScore = isLive ? (pl.setScore || 0) : (SET_POINTS[ct] || 0);
+        if (pl.isFa && ct==="시그니처") baseScore = Math.max(0, baseScore - 1);
+        if (pl.isFa && ct==="임팩트") baseScore = Math.max(0, baseScore - 2);
+        if (isLive || isOlstar) {
+          /* 10까지 끌어올리되, 이미 10 이상이면 +1 */
+          return baseScore >= 10 ? 1 : (10 - baseScore);
+        }
+        /* 스페셜 POTM */
+        return 1;
+      };
+      var allSlots = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP"]);
+      allSlots.forEach(function(slot) {
+        var pl = pick(slot);
+        if (!pl) return;
+        var sc = pl.cardType === "라이브" ? (pl.setScore || 0) : (SET_POINTS[pl.cardType] || 0);
+        if (pl.isFa && pl.cardType==="시그니처") sc = Math.max(0, sc - 1);
+        if (pl.isFa && pl.cardType==="임팩트") sc = Math.max(0, sc - 2);
+        sc += getPotmSetDelta(pl);
+        total += sc;
+      });
+      for (var bn = 1; bn <= 6; bn++) {
+        var bnPl = pick("BN" + bn);
+        if (!bnPl) continue;
+        var bnSc = bnPl.cardType === "라이브" ? (bnPl.setScore || 0) : (SET_POINTS[bnPl.cardType] || 0);
+        if (bnPl.isFa && bnPl.cardType==="시그니처") bnSc = Math.max(0, bnSc - 1);
+        if (bnPl.isFa && bnPl.cardType==="임팩트") bnSc = Math.max(0, bnSc - 2);
+        bnSc += getPotmSetDelta(bnPl);
+        total += bnSc;
+      }
+      return total;
+    };
+    /* Compute card type counts for synergy */
+    var synCounts = {};
+    var allSlotsForSyn = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP","BN1","BN2","BN3","BN4","BN5","BN6"]);
+    allSlotsForSyn.forEach(function(sl) { var pl2 = pick(sl); if (pl2) { synCounts[pl2.cardType] = (synCounts[pl2.cardType]||0) + 1; } });
+    sdState._synCounts = synCounts;
+    /* Auto-detect special skills */
+    var autoNB="없음",autoNP="없음",autoCC="없음";
+    allSlotsForSyn.forEach(function(sl){var pl4=pick(sl);if(!pl4)return;var sks=[pl4.skill1,pl4.skill2,pl4.skill3],lvs=[pl4.s1Lv||0,pl4.s2Lv||0,pl4.s3Lv||0];for(var i=0;i<3;i++){if(!sks[i])continue;if(sks[i].indexOf("국대에이스")>=0&&lvs[i]>=5){var lv=lvs[i]+"렙";if(pl4.role==="타자"){if(lvs[i]>parseInt(autoNB)||autoNB==="없음")autoNB=lv;}else{if(lvs[i]>parseInt(autoNP)||autoNP==="없음")autoNP=lv;}}if(sks[i].indexOf("포수리드")>=0&&lvs[i]>=5){var lv2=lvs[i]+"렙";if(lvs[i]>parseInt(autoCC)||autoCC==="없음")autoCC=lv2;}}});
+    sdState._autoNatBat=autoNB;sdState._autoNatPit=autoNP;sdState._autoCatch=autoCC;
+      return calcSetPoint() + (sdState.liveSetPo || 0);
+}
+
 function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!pl) return {p:0,a:0,e:0,n:0,c:0,s:0};
   var isBat = pl.role === "타자";
@@ -2338,9 +2413,6 @@ function LineupPage(p) {
     }
     setPickerSlot(null);
   };
-  var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
-  var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
-  var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
 
   /* batOrder: 타순 배열 (포지션 슬롯 순서). 기본값은 BAT_SLOTS 순서 */
   var batOrder = (sdState.batOrder && sdState.batOrder.length === 9) ? sdState.batOrder : BAT_SLOTS.slice();
@@ -2372,68 +2444,9 @@ function LineupPage(p) {
   BAT_SLOTS.forEach(function(s) { var pl = pick(s); if (pl) batSlotMap[s] = pl; });
 
   /* Auto-calculate set points from lineup card types */
-  var calcSetPoint = function() {
-    var total = 0;
-    var potmList = GLOBAL_POTM_LIST;
-    var teamName = sdState.teamName || "";
-    /* POTM 세트덱 보너스 — 정책: 팀 일치 시에만 적용
-       - 라이브: 세트덱 점수 10까지 끌어올림 (이미 10 이상이면 +1)
-       - 올스타: 동일
-       - 스페셜 POTM (그 외): +1
-       팀 불일치 시 모두 0 */
-    var getPotmSetDelta = function(pl) {
-      if (!potmList.length || !pl) return 0;
-      var isPotm = potmList.some(function(p) { return p.name === (pl.name||"") && p.team === (pl.team||""); });
-      if (!isPotm) return 0;
-      /* 팀 일치 필수 */
-      if (!teamName || !pl.team || pl.team !== teamName) return 0;
-      var ct = pl.cardType;
-      var isLive = ct === "라이브";
-      var isOlstar = ct === "올스타";
-      /* 올스타 별5 외에는 효과 없음 */
-      if (isOlstar && (pl.stars||5) !== 5) return 0;
-      var baseScore = isLive ? (pl.setScore || 0) : (SET_POINTS[ct] || 0);
-      if (pl.isFa && ct==="시그니처") baseScore = Math.max(0, baseScore - 1);
-      if (pl.isFa && ct==="임팩트") baseScore = Math.max(0, baseScore - 2);
-      if (isLive || isOlstar) {
-        /* 10까지 끌어올리되, 이미 10 이상이면 +1 */
-        return baseScore >= 10 ? 1 : (10 - baseScore);
-      }
-      /* 스페셜 POTM */
-      return 1;
-    };
-    var allSlots = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP"]);
-    allSlots.forEach(function(slot) {
-      var pl = pick(slot);
-      if (!pl) return;
-      var sc = pl.cardType === "라이브" ? (pl.setScore || 0) : (SET_POINTS[pl.cardType] || 0);
-      if (pl.isFa && pl.cardType==="시그니처") sc = Math.max(0, sc - 1);
-      if (pl.isFa && pl.cardType==="임팩트") sc = Math.max(0, sc - 2);
-      sc += getPotmSetDelta(pl);
-      total += sc;
-    });
-    for (var bn = 1; bn <= 6; bn++) {
-      var bnPl = pick("BN" + bn);
-      if (!bnPl) continue;
-      var bnSc = bnPl.cardType === "라이브" ? (bnPl.setScore || 0) : (SET_POINTS[bnPl.cardType] || 0);
-      if (bnPl.isFa && bnPl.cardType==="시그니처") bnSc = Math.max(0, bnSc - 1);
-      if (bnPl.isFa && bnPl.cardType==="임팩트") bnSc = Math.max(0, bnSc - 2);
-      bnSc += getPotmSetDelta(bnPl);
-      total += bnSc;
-    }
-    return total;
-  };
-  /* Compute card type counts for synergy */
-  var synCounts = {};
-  var allSlotsForSyn = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP","BN1","BN2","BN3","BN4","BN5","BN6"]);
-  allSlotsForSyn.forEach(function(sl) { var pl2 = pick(sl); if (pl2) { synCounts[pl2.cardType] = (synCounts[pl2.cardType]||0) + 1; } });
-  sdState._synCounts = synCounts;
-  /* Auto-detect special skills */
-  var autoNB="없음",autoNP="없음",autoCC="없음";
-  allSlotsForSyn.forEach(function(sl){var pl4=pick(sl);if(!pl4)return;var sks=[pl4.skill1,pl4.skill2,pl4.skill3],lvs=[pl4.s1Lv||0,pl4.s2Lv||0,pl4.s3Lv||0];for(var i=0;i<3;i++){if(!sks[i])continue;if(sks[i].indexOf("국대에이스")>=0&&lvs[i]>=5){var lv=lvs[i]+"렙";if(pl4.role==="타자"){if(lvs[i]>parseInt(autoNB)||autoNB==="없음")autoNB=lv;}else{if(lvs[i]>parseInt(autoNP)||autoNP==="없음")autoNP=lv;}}if(sks[i].indexOf("포수리드")>=0&&lvs[i]>=5){var lv2=lvs[i]+"렙";if(lvs[i]>parseInt(autoCC)||autoCC==="없음")autoCC=lv2;}}});
-  sdState._autoNatBat=autoNB;sdState._autoNatPit=autoNP;sdState._autoCatch=autoCC;
-  var setPoint = calcSetPoint();
-  var totalSP = setPoint + (sdState.liveSetPo || 0);
+  var totalSP = computeLineupSetDeck(pick, sdState);
+  /* 세트덱 패널 표시용 — 라이브 추가분을 뺀 순수 세트덱 점수 */
+  var setPoint = totalSP - (sdState.liveSetPo || 0);
 
   /* Helper: build lu + calc with SD bonus */
   var mkLuB = function(pl) { return { enhance: pl.enhance || "9각성", trainP: pl.trainP || 0, trainA: pl.trainA || 0, trainE: pl.trainE || 0, trainN: pl.trainN || 0, trainC: pl.trainC || 0, trainS: pl.trainS || 0, skill1: pl.skill1 || "", s1Lv: pl.s1Lv || 0, skill2: pl.skill2 || "", s2Lv: pl.s2Lv || 0, skill3: pl.skill3 || "", s3Lv: pl.s3Lv || 0 }; };
@@ -5297,12 +5310,34 @@ function MyPlayersPage(p) {
   var updMany = function(id, obj) {
     save(players.map(function(x) { return x.id === id ? Object.assign({}, x, obj) : x; }));
   };
+  /* 이 선수가 라인업에서 어느 슬롯에 있는지 */
+  var slotOf = function(pl) {
+    for (var k in lm) { if (lm[k] === pl.id) return k; }
+    return null;
+  };
   /* 이 선수가 배치된 슬롯의 포지션 특훈 스킬 보너스 목록 */
   var ptSkillsFor = function(pl) {
-    var slot = null;
-    for (var k in lm) { if (lm[k] === pl.id) { slot = k; break; } }
+    var slot = slotOf(pl);
     if (!slot) return [];
     return (sdState["pts_" + slot] || []).filter(Boolean);
+  };
+  /* 라인업과 똑같은 세트덱 계산 — 발사각 보너스는 세트덱까지 반영된
+     최종 파워로 판정해야 하므로 여기서도 같은 값을 써야 한다. */
+  var lineupPick = function(slot) {
+    var id = lm[slot]; if (!id) return null;
+    for (var i = 0; i < players.length; i++) { if (players[i].id === id) return mergePl(players[i]); }
+    return null;
+  };
+  var myTotalSP = computeLineupSetDeck(lineupPick, sdState);
+  var myBatOrder = (sdState.batOrder && sdState.batOrder.length === 9) ? sdState.batOrder : BAT_SLOTS.slice();
+  /* 라인업에 있으면 그 슬롯 기준 세트덱 보너스, 없으면 0 */
+  var sdBonusFor = function(pl) {
+    var slot = slotOf(pl);
+    if (!slot) return { p:0, a:0, e:0, n:0, c:0, s:0, ptSkills: [], inLineup: false };
+    var oi = myBatOrder.indexOf(slot);
+    var b = calcSDBonus(pl, slot, sdState, myTotalSP, oi >= 0 ? oi : undefined);
+    b.inLineup = true;
+    return b;
   };
 
   var mergedPlayers = players.map(function(x) {
@@ -5374,8 +5409,9 @@ function MyPlayersPage(p) {
     var slot = getSlot(pl.id);
     var isSel = selId === pl.id;
     var lu = { enhance: pl.enhance || "9각성", trainP: pl.trainP||0, trainA: pl.trainA||0, trainE: pl.trainE||0, trainN: pl.trainN||0, trainC: pl.trainC||0, trainS: pl.trainS||0, skill1: pl.skill1||"", s1Lv: pl.s1Lv||0, skill2: pl.skill2||"", s2Lv: pl.s2Lv||0, skill3: pl.skill3||"", s3Lv: pl.s3Lv||0 };
-    /* 배치된 슬롯의 특훈 스킬 보너스를 넘겨야 배지에 보이는 레벨과 점수가 일치한다 */
-    var sdbMy = { p:0, a:0, e:0, n:0, c:0, s:0, ptSkills: ptSkillsFor(pl) };
+    /* 라인업과 동일한 세트덱·특훈 보너스를 넘긴다.
+       그래야 배지 레벨과 발사각 달성 여부가 라인업 판정과 어긋나지 않는다. */
+    var sdbMy = sdBonusFor(pl);
     var calc = isBat ? calcBat(pl, lu, sdbMy) : calcPit(pl, lu, sdbMy);
     var accentC = isBat ? "var(--acc)" : "var(--acp)";
 
@@ -5561,14 +5597,19 @@ function MyPlayersPage(p) {
                   ) : calc.laReq === null ? (
                     <span style={{ fontSize: 12, color: "var(--td)" }}>{"발사각 " + pl.launchAngle + "° · 13° 미만은 대상 아님"}</span>
                   ) : (
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, fontFamily: "var(--m)" }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, fontFamily: "var(--m)", flexWrap: "wrap" }}>
                       <span style={{ color: "var(--td)" }}>{pl.launchAngle + "°"}</span>
                       <span style={{ color: "var(--td)" }}>{"필요파워 " + calc.laReq}</span>
+                      <span style={{ color: "var(--td)" }}>{"현재파워 " + calc.power}</span>
                       <span style={{ color: calc.laGain ? "#66BB6A" : "#EF5350", fontWeight: 800 }}>
                         {calc.laGain
-                          ? "달성 +" + calc.laBonus + " (파워 여유 " + (calc.power - calc.laReq) + ")"
+                          ? "달성 +" + calc.laBonus + " (여유 " + (calc.power - calc.laReq) + ")"
                           : "미달 " + (calc.laReq - calc.power) + " 부족"}
                       </span>
+                      {!sdbMy.inLineup && (
+                        <span title="세트덱 효과는 라인업에 배치해야 붙습니다. 배치하면 파워가 올라가 달성될 수 있습니다."
+                          style={{ color: "#FFA726", fontSize: 11 }}>{"※ 라인업 미배치 (세트덱 효과 제외)"}</span>
+                      )}
                     </div>
                   )}
                 </div>
