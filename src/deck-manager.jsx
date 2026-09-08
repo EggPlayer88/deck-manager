@@ -69,7 +69,9 @@ var POT_TYPES_GAM_BAT = ["좌투선호","우투선호","속구대처","변화구
 var POT_TYPES_GAM_PIT = ["좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
 /* 땅볼형·뜬공형은 타자/투수가 이름을 공유한다 — 점수도 함께 쓴다 */
 var POT_TYPES_GAM_ALL = ["좌투선호","우투선호","속구대처","변화구대처","좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
-var DEFAULT_GAM_SCORES = {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6};
+/* 감성 잠재력 점수는 아직 산정 전이라 전부 0 으로 둔다.
+   값이 정해지면 어드민 「잠재력 등급별 점수」에서 채우거나 이 표를 고친다. */
+var DEFAULT_GAM_SCORES = {"C":0,"C+":0,"B":0,"B+":0,"A":0,"A+":0,"S":0};
 POT_TYPES_GAM_ALL.forEach(function(t){
   if(!DEFAULT_POT_SCORES_BY_TYPE[t]) DEFAULT_POT_SCORES_BY_TYPE[t] = Object.assign({}, DEFAULT_GAM_SCORES);
 });
@@ -2442,7 +2444,7 @@ function LineupPage(p) {
           onDrop={function(e) { e.preventDefault(); if (dragSlot !== null && dragSlot !== idx) swapOrder(dragSlot, idx); }}
           onDragEnd={function() { setDragSlot(null); setDragOverSlot(null); }}
           onClick={function() { setSelId(isSel ? null : pl.id); }}
-          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "32px 68px minmax(100px,1fr) 80px 120px 75px 46px 110px 40px 46px", alignItems: "center", gap: 28, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
+          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,120px) minmax(0,104px) minmax(0,68px) minmax(0,110px) minmax(0,52px) minmax(0,46px)", alignItems: "center", gap: 22, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acc)", fontFamily: "var(--h)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             {idx > 0 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx-1); }} style={{ fontSize: 12, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
             <span>{idx + 1}</span>
@@ -2457,7 +2459,7 @@ function LineupPage(p) {
           {!mob && (<React.Fragment>
             <div style={{ textAlign: "left" }}><GS val={calc.total.toFixed(1)} size={28} /></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: 40 }}>
-              {[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"]].map(function(it) {
+              {[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]].map(function(it) {
                 return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 15, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
               })}
             </div>
@@ -2475,7 +2477,7 @@ function LineupPage(p) {
               {pl.skill3 && (<SkBadge name={pl.skill3} lv={pl.s3Lv} />)}
             </div>
             {(function(){
-              var skSc=Math.round((getSkillScore(pl.skill1,pl.s1Lv||0,"타자")+getSkillScore(pl.skill2,pl.s2Lv||0,"타자")+getSkillScore(pl.skill3,pl.s3Lv||0,"타자"))*100)/100;
+              var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
               return (<div style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: pctColor(skSc, allBatSkillScores, "gold"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
             })()}
             <div style={{ textAlign: "center" }}>
@@ -2533,7 +2535,7 @@ function LineupPage(p) {
     var isSel = selId === pl.id;
     return (
       <React.Fragment key={pl.id}>
-        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "32px 68px minmax(100px,1fr) 80px 96px 68px 46px 110px 40px 46px", alignItems: "center", gap: 28, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
+        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,96px) minmax(0,68px) minmax(0,46px) minmax(0,110px) minmax(0,52px) minmax(0,46px)", alignItems: "center", gap: 22, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
@@ -2562,8 +2564,7 @@ function LineupPage(p) {
               {pl.skill3 && (<SkBadge name={pl.skill3} lv={pl.s3Lv} />)}
             </div>
             {(function(){
-              var pt2=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
-              var skSc=Math.round((getSkillScore(pl.skill1,pl.s1Lv||0,pt2)+getSkillScore(pl.skill2,pl.s2Lv||0,pt2)+getSkillScore(pl.skill3,pl.s3Lv||0,pt2))*100)/100;
+              var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
               return (<div style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: pctColor(skSc, allPitSkillScores, "blue"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
             })()}
             <div style={{ textAlign: "center" }}>
@@ -2621,7 +2622,7 @@ function LineupPage(p) {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <DeckDropdown decks={p.decks||[]} curDeckId={p.curDeckId} onSwitch={p.onSwitchDeck} onAdd={p.onAddDeck} onDelete={p.onDeleteDeck}/>
           </div>
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--td)" }}>{"가중치: 파워 " + LIVE_WEIGHTS.p + " / 정확 " + LIVE_WEIGHTS.a + " / 선구 " + LIVE_WEIGHTS.e + " / 변화 " + LIVE_WEIGHTS.c + " / 구위 " + LIVE_WEIGHTS.s}</p>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--td)" }}>{"가중치: 파워 " + getW().p + " / 정확 " + getW().a + " / 선구 " + getW().e + " / 인내 " + getW().n + " / 변화 " + getW().c + " / 구위 " + getW().s}</p>
         </div>
         <div style={{ textAlign: mob ? "left" : "right" }}>
           <div style={{ fontSize: 11, color: "var(--td)", letterSpacing: 1 }}>{"TOTAL SCORE"}</div>

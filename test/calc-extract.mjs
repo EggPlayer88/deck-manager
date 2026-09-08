@@ -24,7 +24,9 @@ var POT_TYPES_GAM_BAT = ["좌투선호","우투선호","속구대처","변화구
 var POT_TYPES_GAM_PIT = ["좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
 /* 땅볼형·뜬공형은 타자/투수가 이름을 공유한다 — 점수도 함께 쓴다 */
 var POT_TYPES_GAM_ALL = ["좌투선호","우투선호","속구대처","변화구대처","좌타선호","우타선호","속구연마","변화구연마","땅볼형","뜬공형"];
-var DEFAULT_GAM_SCORES = {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6};
+/* 감성 잠재력 점수는 아직 산정 전이라 전부 0 으로 둔다.
+   값이 정해지면 어드민 「잠재력 등급별 점수」에서 채우거나 이 표를 고친다. */
+var DEFAULT_GAM_SCORES = {"C":0,"C+":0,"B":0,"B+":0,"A":0,"A+":0,"S":0};
 POT_TYPES_GAM_ALL.forEach(function(t){
   if(!DEFAULT_POT_SCORES_BY_TYPE[t]) DEFAULT_POT_SCORES_BY_TYPE[t] = Object.assign({}, DEFAULT_GAM_SCORES);
 });

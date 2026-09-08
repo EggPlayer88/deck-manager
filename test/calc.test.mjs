@@ -182,10 +182,12 @@ eq('타자는 좌투선호', gamTypesFor('타자').indexOf('좌투선호') >= 0 
 eq('투수는 좌타선호', gamTypesFor('투수').indexOf('좌타선호') >= 0 ? 1 : 0, 1);
 eq('타자에 좌타선호 없음', gamTypesFor('타자').indexOf('좌타선호') < 0 ? 1 : 0, 1);
 eq('땅볼형은 양쪽 공용', (POT_TYPES_GAM_BAT.indexOf('땅볼형') >= 0 && POT_TYPES_GAM_PIT.indexOf('땅볼형') >= 0) ? 1 : 0, 1);
-eq('S 점수', getPotScoreByType('S', '좌투선호', null), 6);
+/* 점수는 아직 산정 전이라 전 등급 0 — 값이 정해지면 이 기대값을 바꾼다 */
+eq('S 점수(미산정)', getPotScoreByType('S', '좌투선호', null), 0);
 eq('C 점수', getPotScoreByType('C', '속구대처', null), 0);
-/* 점수 반영: 파워200 정확100 선구50 = 305, 감성 S(+6) */
-eq('감성 반영', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S', potType3: '좌투선호' }, {}, null).total, 311);
+eq('점수 미산정이라 총점 영향 없음', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S', potType3: '좌투선호' }, {}, null).total, 305);
+/* 어드민이 점수를 채우면 곧바로 반영된다 */
+eq('점수 지정 시 반영', getPotScoreByType('S', '좌투선호', { potScoresByType: { '좌투선호': { 'S': 4 } } }), 4);
 eq('종류 없으면 0', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', pot3: 'S' }, {}, null).total, 305);
 eq('등급 없으면 0', calcBat({ hand: '우', power: 200, accuracy: 100, eye: 50, cardType: '시즌', role: '타자', potType3: '좌투선호' }, {}, null).total, 305);
 
