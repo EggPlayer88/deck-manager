@@ -531,6 +531,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   bp += (sdState.uniP || 0);
   ba += (sdState.uniA || 0);
   be += (sdState.uniE || 0);
+  bn += (sdState.uniN || 0);
   pc += (sdState.uniC || 0);
   ps += (sdState.uniS || 0);
 
@@ -543,6 +544,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
       var ptP = ptEntry["파워"]; bp += (ptP && ptLv < ptP.length ? ptP[ptLv] : 0) + (ptData ? ptData.r0 || 0 : 0);
       var ptA = ptEntry["정확"]; ba += (ptA && ptLv < ptA.length ? ptA[ptLv] : 0) + (ptData ? ptData.r1 || 0 : 0);
       var ptE = ptEntry["선구"]; be += (ptE && ptLv < ptE.length ? ptE[ptLv] : 0) + (ptData ? ptData.r2 || 0 : 0);
+      var ptN = ptEntry["인내"]; bn += (ptN && ptLv < ptN.length ? ptN[ptLv] : 0) + (ptData ? ptData.r3 || 0 : 0);
     } else {
       var ptC = ptEntry["변화"]; pc += (ptC && ptLv < ptC.length ? ptC[ptLv] : 0) + (ptData ? ptData.r0 || 0 : 0);
       var ptS = ptEntry["구위"]; ps += (ptS && ptLv < ptS.length ? ptS[ptLv] : 0) + (ptData ? ptData.r1 || 0 : 0);
@@ -2862,15 +2864,15 @@ function LineupPage(p) {
 
 /* Position training: cumulative stat gains per level (from Excel) */
 var POS_TRAIN = {
-  "C":  {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,3,3,4,4,4,5,5,7],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,6,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4]},
-  "1B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,4,4,4,4,5,6,6,8],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,5,6,6,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,4,5,5,6,7,7]},
-  "2B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,5,5,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
-  "3B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,4,4,4,4,5,6,6,8],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,5,6,6,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,4,5,5,6,7,7]},
-  "SS": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,5,5,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
-  "LF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,3,3,3,3,3,3,4,4,5,5,7],"정확":[0,0,0,0,0,0,1,1,2,2,2,2,2,3,3,4,4,5,5,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,4,5,5,6,6]},
-  "CF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,2,2,2,3,3,4],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,5,5,5,6,6]},
-  "RF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,6,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,4,4,5,5,5,6,7]},
-  "DH": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,7],"정확":[0,1,1,1,1,1,1,1,2,2,3,3,3,3,4,5,5,6,7,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,2,3,3,3,5,5,5,7,7]},
+  "C":  {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,3,3,4,4,4,5,5,7],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,6,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,4,4,6,6,7,7]},
+  "1B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,4,4,4,4,5,6,6,8],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,5,6,6,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,4,5,5,6,7,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,4,4,4,5,5,6,6]},
+  "2B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,5,5,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6],"인내":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,4,4,4,6,6,7,7]},
+  "3B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,4,4,4,4,5,6,6,8],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,5,6,6,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,4,5,5,6,7,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,4,4,4,5,5,6,6]},
+  "SS": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,5,5,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6],"인내":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,4,4,4,6,6,7,7]},
+  "LF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,3,3,3,3,3,3,4,4,5,5,7],"정확":[0,0,0,0,0,0,1,1,2,2,2,2,2,3,3,4,4,5,5,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,4,5,5,6,6],"인내":[0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,4,5,6,7,7]},
+  "CF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,2,2,2,3,3,4],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,5,5,5,6,6],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,3,3,4,4,5,5]},
+  "RF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,6,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,4,4,5,5,5,6,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,3,3,4,4,5,5]},
+  "DH": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,7],"정확":[0,1,1,1,1,1,1,1,2,2,3,3,3,3,4,5,5,6,7,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,2,3,3,3,5,5,5,7,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,4,6,6,7,7]},
   "SP1":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,5,5,5,6,6,8,8]},
   "SP2":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,4,4,5,5,6,7]},
   "SP3":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,3,3,3,3,3,3,4,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,4,6,6,7,7]},
@@ -2880,8 +2882,8 @@ var POS_TRAIN = {
   "RP2":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,6,7],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,4,4,5,6,6,7,7]},
   "RP3":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,4,4,4,5,5,7,7]},
   "RP4":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,5,5,6,6,7,8]},
-  "RP5":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,6,7,7]},
-  "RP6":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,6,7,7]},
+  "RP5":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7]},
+  "RP6":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7]},
   "CP": {mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,6,7,8,8]},
 };
 var RS_OPTS = ["0","1","2","3","4","5","6"];
@@ -2895,9 +2897,10 @@ function PosTrainRow(rp) {
   var mx = pt.mx;
   var lvOpts = []; for (var _i = 0; _i <= mx; _i++) lvOpts.push(String(_i));
   var lv = Math.min(d.level, mx);
-  var colTpl = "70px 56px " + stats.map(function() { return "1fr"; }).join(" ");
+  var colTpl = "70px 56px " + stats.map(function() { return "minmax(74px,1fr)"; }).join(" ");
+  /* 좁은 화면에서는 카드가 가로로 스크롤된다 — 헤더와 열 폭을 맞추려면 여기도 같은 최소폭 */
   return (
-    <div style={{ display: "grid", gridTemplateColumns: colTpl, gap: 6, padding: "6px 14px", alignItems: "center", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)" }}>
+    <div style={{ display: "grid", gridTemplateColumns: colTpl, gap: 6, padding: "6px 14px", alignItems: "center", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)", minWidth: "max-content" }}>
       <div style={{ fontWeight: 700, color: "var(--t1)", fontSize: 13 }}>{pos}</div>
       <div style={{ textAlign: "center" }}>
         <select value={String(lv)} onChange={function(e) { upd(pos, "level", parseInt(e.target.value)); }} style={{ width: 50, padding: "4px 2px", textAlign: "center", background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", fontSize: 14, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
@@ -2952,7 +2955,7 @@ function PosTrainPage(p) {
   var sdState = p.sdState || {};
   var setSdState = p.setSdState;
   var groups = [
-    { label: "타자", cat: "타자", poss: ["C","1B","2B","3B","SS","LF","CF","RF","DH"], stats: ["파워","정확","선구"], colors: ["#EF5350","#42A5F5","#66BB6A"] },
+    { label: "타자", cat: "타자", poss: ["C","1B","2B","3B","SS","LF","CF","RF","DH"], stats: ["파워","정확","선구","인내"], colors: ["#EF5350","#42A5F5","#66BB6A","#FFA726"] },
     { label: "선발", cat: "선발", poss: ["SP1","SP2","SP3","SP4","SP5"], stats: ["변화","구위"], colors: ["#AB47BC","#FF7043"] },
     { label: "중계", cat: "중계", poss: ["RP1","RP2","RP3","RP4","RP5","RP6"], stats: ["변화","구위"], colors: ["#AB47BC","#FF7043"] },
     { label: "마무리", cat: "마무리", poss: ["CP"], stats: ["변화","구위"], colors: ["#AB47BC","#FF7043"] },
@@ -2962,7 +2965,7 @@ function PosTrainPage(p) {
   var getPT = function(pos) {
     var d = sdState[ptKey(pos)];
     if (d) return d;
-    return { level: POS_TRAIN[pos].mx, r0: 0, r1: 0, r2: 0 };
+    return { level: POS_TRAIN[pos].mx, r0: 0, r1: 0, r2: 0, r3: 0 };
   };
   var upd = function(pos, field, val) {
     setSdState(function(prev) {
@@ -3003,10 +3006,11 @@ function PosTrainPage(p) {
             <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--bd)", background: "rgba(255,213,79,0.02)" }}>
               <span style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", letterSpacing: 1 }}>{grp.label}</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "70px 56px " + grp.stats.map(function() { return "1fr"; }).join(" "), gap: 6, padding: "6px 14px", borderBottom: "1px solid var(--bd)", fontSize: 11, fontWeight: 700, color: "var(--td)" }}>
+            <div style={{ overflowX: "auto" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "70px 56px " + grp.stats.map(function() { return "minmax(74px,1fr)"; }).join(" "), gap: 6, padding: "6px 14px", borderBottom: "1px solid var(--bd)", fontSize: 11, fontWeight: 700, color: "var(--td)", minWidth: "max-content" }}>
               <div>{"포지션"}</div>
               <div style={{ textAlign: "center" }}>{"레벨"}</div>
-              {grp.stats.map(function(s, i) { return (<div key={s} style={{ textAlign: "center", color: grp.colors[i] }}>{s + " (기본+재설정)"}</div>); })}
+              {grp.stats.map(function(s, i) { return (<div key={s} style={{ textAlign: "center", color: grp.colors[i], whiteSpace: "nowrap" }}>{s + (mob ? "" : " (기본+재설정)")}</div>); })}
             </div>
             {grp.poss.map(function(pos, idx) {
               var catSk = skills[grp.cat] || {};
@@ -3015,6 +3019,7 @@ function PosTrainPage(p) {
                         skillOptions={Object.keys(catSk)}
                         majorOptions={Object.keys((skills._major && skills._major[grp.cat]) || {})} />);
             })}
+            </div>
           </div>
         );
       })}
@@ -4019,7 +4024,7 @@ function LockerRoomPage(p) {
           <span style={{ fontSize: 11, color: "var(--td)", marginLeft: 4 }}>{"(모든 선수 적용)"}</span>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {[{k:"uniP",l:"파워",c:"#EF5350"},{k:"uniA",l:"정확",c:"#42A5F5"},{k:"uniE",l:"선구",c:"#66BB6A"},{k:"uniC",l:"변화",c:"#AB47BC"},{k:"uniS",l:"구위",c:"#FF7043"}].map(function(s) {
+          {[{k:"uniP",l:"파워",c:"#EF5350"},{k:"uniA",l:"정확",c:"#42A5F5"},{k:"uniE",l:"선구",c:"#66BB6A"},{k:"uniN",l:"인내",c:"#FFA726"},{k:"uniC",l:"변화",c:"#AB47BC"},{k:"uniS",l:"구위",c:"#FF7043"}].map(function(s) {
             return (
               <div key={s.k} style={{ background: "var(--inner)", borderRadius: 6, padding: "8px 10px", border: "1px solid " + s.c + "22", textAlign: "center" }}>
                 <div style={{ fontSize: 11, color: s.c, fontWeight: 700, marginBottom: 4 }}>{s.l}</div>
