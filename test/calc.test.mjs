@@ -3,6 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
+  calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -304,6 +305,53 @@ eq('보너스 있음 = 305 + Lv7(28.48)', calcBat(plAuto, luAuto, { p:0,a:0,e:0,
 const plMan = Object.assign({}, plAuto, { sLvManual: true });
 eq('수동은 저장값 유지', calcBat(plMan, { skill1: '정밀타격', s1Lv: 10 }, { p:0,a:0,e:0,n:0, ptSkills: ['정밀타격'] }).total, 345.15);
 
+
+console.log('\n[세트덱 인내] "타자 +1" 은 파·정·선·인 넷 다 오른다');
+var sdBat = function(sp, side, extra){
+  var st = {}; if (side) st["s" + sp] = side;
+  if (extra) for (var k in extra) st[k] = extra[k];
+  return calcSDBonus({ role:"타자", cardType:"시즌", stars:5, year:"2020" }, "DH", st, sp, 8);
+};
+var sdPit = function(sp, side){
+  var st = {}; if (side) st["s" + sp] = side;
+  return calcSDBonus({ role:"투수", cardType:"시즌", stars:5, position:"선발" }, "SP1", st, sp);
+};
+/* 포지션 특훈·유니폼 등이 같이 들어오므로 "고른 것과 안 고른 것의 차이"로 본다 */
+eq('40 좌 - 인내도 +1', sdBat(40, "L").n - sdBat(40, "").n, 1);
+eq('40 좌 - 파워도 +1', sdBat(40, "L").p - sdBat(40, "").p, 1);
+eq('200 좌 - 인내 +2', sdBat(200, "L").n - sdBat(200, "").n, 2);
+var atSP = function(sp){ return calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "DH", {}, sp, 8); };
+eq('30 자동 - 인내 +1', atSP(30).n - atSP(29).n, 1);
+eq('90 자동 - 인내 +2', atSP(90).n - atSP(89).n, 2);
+eq('110 자동 - 인내 +1', atSP(110).n - atSP(109).n, 1);
+eq('150 자동 - 인내 +2', atSP(150).n - atSP(149).n, 2);
+eq('170 자동 - 인내 +1', atSP(170).n - atSP(169).n, 1);
+eq('투수는 인내 없음', sdPit(40, "R").n === undefined ? 1 : 0, 1);
+
+console.log('\n[세트덱 95·125] 자동에서 좌우 선택으로');
+eq('저장값 없으면 95 는 예전대로 우', sdPick({}, 95) === "R" ? 1 : 0, 1);
+eq('저장값 없으면 125 는 예전대로 좌', sdPick({}, 125) === "L" ? 1 : 0, 1);
+eq('고르면 그 값', sdPick({ s95:"L" }, 95) === "L" ? 1 : 0, 1);
+eq('빈 문자열이면 아무것도 안 켠다', sdPick({ s95:"" }, 95) === "" ? 1 : 0, 1);
+/* 95 좌 = 내야+포수 인내 +2, 우 = 외야+지명 선구 +2 */
+var in95 = calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "SS", { s95:"L" }, 95, 0);
+var of95 = calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "RF", { s95:"L" }, 95, 0);
+eq('95 좌 - 내야는 인내 +2', in95.n - calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "SS", { s95:"" }, 95, 0).n, 2);
+eq('95 좌 - 외야는 안 받음', of95.n - calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "RF", { s95:"" }, 95, 0).n, 0);
+eq('95 우 - 외야 선구 +2', calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "RF", { s95:"R" }, 95, 0).e
+   - calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "RF", { s95:"" }, 95, 0).e, 2);
+/* 125 좌 = 4성 타자 정·선·인 +2, 우 = 5성 타자 인내 +1 */
+var b4 = { role:"타자", cardType:"시즌", stars:4 }, b5 = { role:"타자", cardType:"시즌", stars:5 };
+eq('125 좌 - 4성 인내 +2', calcSDBonus(b4, "DH", { s125:"L", s95:"" }, 125, 8).n - calcSDBonus(b4, "DH", { s125:"", s95:"" }, 125, 8).n, 2);
+eq('125 우 - 5성 인내 +1', calcSDBonus(b5, "DH", { s125:"R", s95:"" }, 125, 8).n - calcSDBonus(b5, "DH", { s125:"", s95:"" }, 125, 8).n, 1);
+eq('125 우 - 4성은 안 받음', calcSDBonus(b4, "DH", { s125:"R", s95:"" }, 125, 8).n - calcSDBonus(b4, "DH", { s125:"", s95:"" }, 125, 8).n, 0);
+/* 65 우 = 4성 타자 정확 +2 · 인내 +2 */
+eq('65 우 - 4성 타자 정확 +2', calcSDBonus(b4, "DH", { s65:"R", s95:"" }, 65, 8).a - calcSDBonus(b4, "DH", { s65:"", s95:"" }, 65, 8).a, 2);
+eq('65 우 - 4성 타자 인내 +2', calcSDBonus(b4, "DH", { s65:"R", s95:"" }, 65, 8).n - calcSDBonus(b4, "DH", { s65:"", s95:"" }, 65, 8).n, 2);
+/* 155 = 1~2번 파·선·인 +2 / 175 = 타자 파·선·인 +1 */
+eq('155 좌 - 1번타자 인내 +2', calcSDBonus(b5, "C", { s155:"L", s95:"" }, 155, 0).n - calcSDBonus(b5, "C", { s155:"", s95:"" }, 155, 0).n, 2);
+eq('155 좌 - 3번타자는 안 받음', calcSDBonus(b5, "C", { s155:"L", s95:"" }, 155, 2).n - calcSDBonus(b5, "C", { s155:"", s95:"" }, 155, 2).n, 0);
+eq('175 좌 - 타자 인내 +1', calcSDBonus(b5, "DH", { s175:"L", s95:"" }, 175, 8).n - calcSDBonus(b5, "DH", { s175:"", s95:"" }, 175, 8).n, 1);
 
 console.log('\n[POTM] 전역 명단 + 덱별 사용자 설정');
 const potmPl = { name: '홍길동', team: '키움', cardType: '라이브', stars: 5 };

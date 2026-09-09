@@ -163,6 +163,168 @@ function effSkillLv(name, storedLv, manual, cardType, num, cat, ptSkills){
   var mx = maxSkillLv(name, cat);
   return mx ? Math.min(base, mx) : base;
 }
+var POS_TRAIN = {
+  "C":  {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,3,3,4,4,4,5,5,7],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,6,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,4,4,6,6,7,7]},
+  "1B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,4,4,4,4,5,6,6,8],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,5,6,6,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,4,5,5,6,7,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,4,4,4,5,5,6,6]},
+  "2B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,5,5,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6],"인내":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,4,4,4,6,6,7,7]},
+  "3B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,4,4,4,4,5,6,6,8],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,5,6,6,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,4,5,5,6,7,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,4,4,4,5,5,6,6]},
+  "SS": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,5,5,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6],"인내":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,4,4,4,6,6,7,7]},
+  "LF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,3,3,3,3,3,3,4,4,5,5,7],"정확":[0,0,0,0,0,0,1,1,2,2,2,2,2,3,3,4,4,5,5,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,4,5,5,6,6],"인내":[0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,4,5,6,7,7]},
+  "CF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,2,2,2,3,3,4],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,5,5,5,6,6],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,3,3,4,4,5,5]},
+  "RF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,6,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,4,4,5,5,5,6,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,3,3,4,4,5,5]},
+  "DH": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,7],"정확":[0,1,1,1,1,1,1,1,2,2,3,3,3,3,4,5,5,6,7,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,2,3,3,3,5,5,5,7,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,4,6,6,7,7]},
+  "SP1":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,5,5,5,6,6,8,8]},
+  "SP2":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,4,4,5,5,6,7]},
+  "SP3":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,3,3,3,3,3,3,4,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,4,6,6,7,7]},
+  "SP4":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,3,4,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,7,7]},
+  "SP5":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,4,4,4,4,6,6,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,4,4,6,6,7,7]},
+  "RP1":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,4,4,6],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,5,5,5,6,7,8,8]},
+  "RP2":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,6,7],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,4,4,5,6,6,7,7]},
+  "RP3":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,4,4,4,5,5,7,7]},
+  "RP4":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,5,5,6,6,7,8]},
+  "RP5":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7]},
+  "RP6":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7]},
+  "CP": {mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,6,7,8,8]},
+};
+var SD_LEGACY_AUTO = { "s95": "R", "s125": "L" };
+function sdPick(sdState, sp) { var k = "s" + sp; var x = sdState[k]; return (x === undefined || x === null) ? (SD_LEGACY_AUTO[k] || "") : x; }
+function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
+  if (!pl) return {p:0,a:0,e:0,n:0,c:0,s:0};
+  var isBat = pl.role === "타자";
+  var ct = pl.cardType;
+  var stars = pl.stars || 5;
+  var isGold = ct === "골든글러브" || ct === "시그니처" || ct === "임팩트" || ct === "국가대표";
+  var isLive = ct === "시즌" || ct === "라이브";
+  var isSP = (pl.position === "선발");
+  var isRP = (pl.position === "중계");
+  var isCP = (pl.position === "마무리");
+  var batSlots = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
+  /* 타순 인덱스: batOrderIdx가 있으면 사용, 없으면 포지션 기준 (하위 호환) */
+  var batIdx = (batOrderIdx !== undefined) ? batOrderIdx : batSlots.indexOf(slot);
+  var is12 = (batIdx === 0 || batIdx === 1);
+  var is35 = (batIdx >= 2 && batIdx <= 4);
+  var is69 = (batIdx >= 5 && batIdx <= 8);
+  var isOF = (slot === "RF" || slot === "CF" || slot === "LF" || slot === "DH");
+  /* 인내(bn)도 다른 능력치와 똑같이 오른다 — "타자 +1" 은 파·정·선·인 넷 다 +1 이다.
+     인내에 가중치가 생기기 전에 만든 코드라 인내만 빠져 있었다. */
+  var bp = 0, ba = 0, be = 0, bn = 0, pc = 0, ps = 0;
+  var v = function(k) { return sdPick(sdState, k); };
+  var act = function(sp) { return totalSP >= sp; };
+  var yr = pl.year;
+
+  /* AUTO bonuses */
+  if (act(30)) { bp++; ba++; be++; bn++; pc++; ps++; }
+  if (act(90)) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; }
+  if (act(110)) { bp++; ba++; be++; bn++; pc++; ps++; }
+
+  /* L/R selection bonuses */
+  if (act(40)) { if (v(40)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(40)==="R" && !isBat) { pc++; ps++; } }
+  if (act(50)) { if (v(50)==="L" && isLive) { bp++; ba++; be++; bn++; pc++; ps++; } if (v(50)==="R" && isGold) { bp++; ba++; be++; bn++; pc++; ps++; } }
+  if (act(55)) { var y55=v(55); if (y55 && !isBat) { if (ct==="임팩트") pc+=2; else if (String(yr)===y55) pc+=2; } }
+  if (act(60)) { if (v(60)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(60)==="R" && !isBat) { pc++; ps++; } }
+  if (act(65)) { if (v(65)==="L" && stars===3) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; } if (v(65)==="R" && stars===4 && isBat) { ba+=2; bn+=2; } }
+  if (act(70)) { if (v(70)==="L" && !isBat && !isRP && !isCP) { pc++; ps++; } if (v(70)==="R" && (isRP||isCP)) { pc+=2; ps+=2; } }
+  if (act(75)) {
+    var v75=v(75); var side75=v75&&v75[0]; var yr75=v75&&v75.indexOf(":")>0?v75.split(":")[1]:"";
+    if (side75==="L" && isBat) { var m75=(ct==="임팩트"||String(yr)===yr75); if(m75){bp+=3;ba+=3;} }
+    if (side75==="R" && !isBat) { var m75b=(ct==="임팩트"||String(yr)===yr75); if(m75b) ps+=3; }
+  }
+  if (act(80)) { if (v(80)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(80)==="R" && !isBat) { pc++; ps++; } }
+  if (act(85)) { if (v(85)==="L" && stars===4) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; } if (v(85)==="R" && stars===5) { bp++; ps++; } }
+  if (act(95)) { if (v(95)==="L" && isBat && !isOF) bn+=2; if (v(95)==="R" && isBat && isOF) be+=2; }
+  if (act(100)) { if (v(100)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(100)==="R" && !isBat) { pc++; ps++; } }
+  if (act(105)) { if (v(105)==="L" && stars===3) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; } if (v(105)==="R" && stars===4) { if(isBat){bp+=2;be+=2;} if(!isBat){pc+=2;ps+=2;} } }
+  if (act(115)) { if (v(115)==="L" && isBat && is69) ba+=2; if (v(115)==="R" && (isRP||isCP)) ps+=2; }
+  if (act(120)) { if (v(120)==="L" && isBat && is35) { bp+=2; ba+=2; be+=2; bn+=2; } if (v(120)==="R" && !isBat) { pc++; ps++; } }
+  if (act(125)) {
+    if (v(125)==="L" && stars===4) { if(isBat){ba+=2;be+=2;bn+=2;} else{pc+=2;} }
+    /* 우: 5성 타자 인내+1 / 투수 제구+1 — 제구는 점수 모델에 없어 투수는 변화 없음 */
+    if (v(125)==="R" && stars===5 && isBat) bn++;
+  }
+  if (act(130)) { if (v(130)==="L" && isLive) { bp++; ba++; be++; bn++; pc++; ps++; } if (v(130)==="R" && isGold) { bp++; ba++; be++; bn++; pc++; ps++; } }
+  if (act(135)) { if (v(135)==="L" && isBat && is35) ba+=2; if (v(135)==="R" && isSP) ps++; }
+  if (act(140)) { if (v(140)==="L" && isBat && is69) { bp++; ba++; be++; bn++; } if (v(140)==="R" && (isRP||isCP)) { pc++; ps++; } }
+  if (act(145)) { if (v(145)==="L" && isBat && is12) { ba+=2; be+=2; } if (v(145)==="R" && isSP) ps++; }
+  if (act(150)) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; }
+  if (act(155)) { if (v(155)==="L" && isBat && is12) { bp+=2; be+=2; bn+=2; } if (v(155)==="R" && isSP) pc++; }
+  if (act(160)) { if (v(160)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(160)==="R" && !isBat) { pc++; ps++; } }
+  if (act(165)) { if (v(165)==="L" && isBat) ba++; if (v(165)==="R" && !isBat) pc++; }
+  if (act(170)) { bp++; ba++; be++; bn++; pc++; ps++; }
+  if (act(175)) { if (v(175)==="L" && isBat) { bp++; be++; bn++; } if (v(175)==="R" && !isBat) ps++; }
+  if (act(180)) {
+    var v180=v(180);
+    if (v180==="L" && ct==="라이브") { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; }
+    if (typeof v180==="string"&&v180.startsWith("R:")) { var yr180=v180.split(":")[1]; if(isBat){if(ct==="임팩트"){bp++;ba++;be++;bn++;}else if(String(yr)===yr180){bp++;ba++;be++;bn++;}} else{if(ct==="임팩트"){pc++;ps++;}else if(String(yr)===yr180){pc++;ps++;}} }
+  }
+  if (act(185)) {
+    var v185=v(185);
+    if (v185==="L" && isBat && is12) bp+=2;
+    if (typeof v185==="string"&&v185.startsWith("R:")) { var yr185=v185.split(":")[1]; if(isBat){if(ct==="임팩트"){bp++;ba++;be++;bn++;}else if(String(yr)===yr185){bp++;ba++;be++;bn++;}} }
+  }
+  if (act(190)) {
+    var v190=v(190);
+    if (v190==="L" && isSP) ps++;
+    if (typeof v190==="string"&&v190.startsWith("R:")) { var yr190=v190.split(":")[1]; if(!isBat){if(ct==="임팩트"){pc++;ps++;}else if(String(yr)===yr190){pc++;ps++;}} }
+  }
+  if (act(195)) { if (v(195)==="L" && (ct==="라이브"||ct==="국가대표")) { bp++; ba++; be++; bn++; pc++; ps++; } if (v(195)==="R" && ct==="시그니처") { bp++; ba++; be++; bn++; pc++; ps++; } }
+  if (act(200)) { if (v(200)==="L" && isBat) { bp+=2; ba+=2; be+=2; bn+=2; } if (v(200)==="R" && !isBat) { pc+=2; ps+=2; } }
+
+  /* Synergy */
+  var synCounts = sdState._synCounts || {};
+  var autoLive = (synCounts["라이브"]||0) + (synCounts["국가대표"]||0) >= 7;
+  var autoImp = (synCounts["임팩트"]||0) >= 5;
+  var autoSig = (synCounts["시그니처"]||0) >= 5;
+  var synLive = sdState.synLive !== undefined ? sdState.synLive : autoLive;
+  var synImp = sdState.synImpact !== undefined ? sdState.synImpact : autoImp;
+  var synSig = sdState.synSig !== undefined ? sdState.synSig : autoSig;
+  if (synLive) { bp++; ba++; be++; bn++; pc++; ps++; }
+  if (synImp && isBat) { bp++; ba++; be++; bn++; }
+  if (synSig && !isBat) { pc++; ps++; }
+
+  /* 국대에이스/포수리드: 종합점수에만 반영 (calcBat/calcPit에서 처리) */
+
+  /* 유니폼 효과 (기본 +1) */
+  bp += (sdState.uniP || 0);
+  ba += (sdState.uniA || 0);
+  be += (sdState.uniE || 0);
+  bn += (sdState.uniN || 0);
+  pc += (sdState.uniC || 0);
+  ps += (sdState.uniS || 0);
+
+  /* 포지션 특훈 (POS_TRAIN 테이블 참조) */
+  var ptData = sdState["pt_" + slot];
+  var ptEntry = POS_TRAIN[slot];
+  if (ptEntry) {
+    var ptLv = ptData ? Math.min(ptData.level || ptEntry.mx, ptEntry.mx) : ptEntry.mx;
+    if (isBat) {
+      var ptP = ptEntry["파워"]; bp += (ptP && ptLv < ptP.length ? ptP[ptLv] : 0) + (ptData ? ptData.r0 || 0 : 0);
+      var ptA = ptEntry["정확"]; ba += (ptA && ptLv < ptA.length ? ptA[ptLv] : 0) + (ptData ? ptData.r1 || 0 : 0);
+      var ptE = ptEntry["선구"]; be += (ptE && ptLv < ptE.length ? ptE[ptLv] : 0) + (ptData ? ptData.r2 || 0 : 0);
+      var ptN = ptEntry["인내"]; bn += (ptN && ptLv < ptN.length ? ptN[ptLv] : 0) + (ptData ? ptData.r3 || 0 : 0);
+    } else {
+      var ptC = ptEntry["변화"]; pc += (ptC && ptLv < ptC.length ? ptC[ptLv] : 0) + (ptData ? ptData.r0 || 0 : 0);
+      var ptS = ptEntry["구위"]; ps += (ptS && ptLv < ptS.length ? ptS[ptLv] : 0) + (ptData ? ptData.r1 || 0 : 0);
+    }
+  }
+
+  /* 주장 보너스 (라커룸에서 설정) */
+  /* 주장(capBatId)은 타자·투수 누구나 지정할 수 있다. 고른 선수의 역할에 맞는 능력치가 오른다. */
+  if (pl.id === sdState.capBatId) {
+    if (isBat) { bp += sdState.capBatP || 0; ba += sdState.capBatA || 0; be += sdState.capBatE || 0; bn += sdState.capBatN || 0; }
+    else { pc += sdState.capBatC || 0; ps += sdState.capBatS || 0; }
+  }
+  /* 투수조장은 투수만 */
+  if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
+
+  /* POTM 자동 보너스 */
+  var potmB = getPotmBonus(pl, sdState);
+  if (isBat) { bp += potmB; ba += potmB; be += potmB; }
+  else { pc += potmB; ps += potmB; }
+
+  var ptSkillList = (sdState["pts_" + slot] || []).filter(function(x){ return !!x; });
+  return isBat ? {p:bp,a:ba,e:be,n:bn,ptSkills:ptSkillList,_sdState:sdState}
+               : {c:pc,s:ps,ptSkills:ptSkillList,_sdState:sdState};
+}
 function calcBat(pl,lu,sdB){
   if(!pl||!lu)return{power:0,accuracy:0,eye:0,total:0,skillScore:0};
   var w=getW();var sb=sdB||{p:0,a:0,e:0,n:0};
@@ -221,4 +383,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
