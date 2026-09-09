@@ -2002,6 +2002,307 @@ var CARD_STARS = {"골든글러브":5,"시그니처":5,"임팩트":4,"국가대�
 var CARD_STARS_SELECTABLE = {"골든글러브":true,"라이브":true};
 
 /* Complete set deck rules: L/R radio selection */
+/* ═══ 덱 보정 관리기 시트 가져오기 ═══
+   시트의 보관함·라인업·팀정보를 읽어 앱 데이터로 바꾼다.
+   좌표를 박지 않고 "타자DB" "투수DB" "팀 정보" 앵커로 위치를 잡으므로 행이 밀려도 읽는다. */
+
+var CARD_CODE = {
+  "골글": ["골든글러브"],
+  "시그": ["시그니처"],
+  "임팩": ["임팩트"],
+  "국대": ["국가대표"],
+  "라올": ["올스타", "라이브"],   /* 올스타 먼저 찾고 없으면 라이브 */
+};
+var LOW_POT = { "-": "C", "E": "C", "D": "C", "D+": "C" };  /* 앱은 C 가 최저 등급 */
+var AWK_TYPE_BAT = "뜬공형", AWK_TYPE_PIT = "뜬공형";
+
+function miTxt(v) { return v == null ? "" : String(v).trim(); }
+function miNum(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+
+/* "시그(F)" -> { types:["시그니처"], isFa:true } */
+function parseCardCode(raw) {
+  var t = miTxt(raw), fa = false;
+  if (/\(F\)\s*$/i.test(t)) { fa = true; t = t.replace(/\(F\)\s*$/i, "").trim(); }
+  var types = CARD_CODE[t];
+  return types ? { types: types, isFa: fa, code: miTxt(raw) } : null;
+}
+function parseEnhance(raw) {
+  var t = miTxt(raw);
+  if (!t) return "";
+  if (/^\d+강$/.test(t)) return t;
+  var m = /^(\d+)각(성)?$/.exec(t);
+  return m ? m[1] + "각성" : t;
+}
+function parsePot(raw) {
+  var t = miTxt(raw);
+  if (!t || t === "0") return "";
+  return LOW_POT[t] || t;
+}
+
+/* ── 시트 위치 잡기 ───────────────────────────────────────── */
+function toGrid(ws) { return window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: true }); }
+/* SheetJS 격자의 0번은 시트 1행이 아니다 — 앞이 비면 !ref 가 A4 처럼 잘린다.
+   유저에게 "몇 행이 문제" 라고 말하려면 이 시작 행을 더해야 한다. */
+function sheetOrigin(ws) {
+  var m = /^[A-Z]+(\d+)/.exec(String((ws && ws["!ref"]) || "A1"));
+  return m ? parseInt(m[1], 10) : 1;
+}
+
+function findAnchor(grid, label) {
+  for (var r = 0; r < grid.length; r++) {
+    if (miTxt((grid[r] || [])[0]) === label) return r;
+  }
+  return -1;
+}
+/* 앵커 아래에서 A열이 "셋포75" 인 행 = 헤더 */
+function findHeader(grid, from) {
+  for (var r = from; r < Math.min(from + 10, grid.length); r++) {
+    if (miTxt((grid[r] || [])[0]) === "셋포75") return r;
+  }
+  return -1;
+}
+/* 헤더행 + 윗행을 겹쳐 읽는다. 숨은 열은 (윗행 스탯명, 헤더 기본/훈련/특훈) 2단이다. */
+function buildCols(grid, hdr) {
+  var above = grid[hdr - 1] || [], row = grid[hdr] || [];
+  var cols = {}, pair = {}, cur = null;
+  var n = Math.max(above.length, row.length);
+  for (var c = 0; c < n; c++) {
+    var a = miTxt(above[c]), v = miTxt(row[c]);
+    if (a) cur = a;
+    if (!v) continue;
+    if (v === "기본" || v === "훈련" || v === "특훈") { if (cur) pair[cur + "/" + v] = c; }
+    else if (cols[v] === undefined) cols[v] = c;
+  }
+  return { cols: cols, pair: pair };
+}
+
+/* ── 보관함 한 블록 읽기 ──────────────────────────────────── */
+function readStore(grid, hdr, isBat, origin) {
+  var m = buildCols(grid, hdr), C = m.cols, P = m.pair;
+  var statNames = isBat ? ["파워", "정확", "선구", "인내"] : ["변화", "구위"];
+  var out = [];
+  for (var r = hdr + 1; r < grid.length; r++) {
+    var row = grid[r] || [];
+    /* A열이 비면 블록 끝 (체크박스 FALSE 가 채워져 있다) */
+    if (row[0] == null && miTxt(row[C["이름"]]) === "") break;
+    var name = miTxt(row[C["이름"]]);
+    if (!name) continue;
+    var card = parseCardCode(row[C["종류"]]);
+    var e = {
+      row: r + origin, name: name, cardCode: miTxt(row[C["종류"]]),
+      types: card ? card.types : [], isFa: card ? card.isFa : false,
+      position: miTxt(row[C["포지션"]]), enhance: parseEnhance(row[C["각성"]]),
+      year: miTxt(row[C["연도"]]), role: isBat ? "타자" : "투수",
+      pot1: parsePot(row[C[isBat ? "풀" : "장"]]),
+      pot2: parsePot(row[C[isBat ? "클" : "침"]]),
+      pot3: parsePot(row[C["각잠"]]),
+      base: {}, train: {}, spec: {}, skills: [],
+    };
+    for (var i = 0; i < statNames.length; i++) {
+      var s = statNames[i];
+      e.base[s] = miNum(row[P[s + "/기본"]]);
+      e.train[s] = miNum(row[P[s + "/훈련"]]);
+      e.spec[s] = miNum(row[P[s + "/특훈"]]);
+    }
+    for (var k = 1; k <= 3; k++) {
+      var ci = C["스킬" + k];
+      if (ci === undefined) continue;
+      var sn = miTxt(row[ci]);
+      if (sn) e.skills.push({ name: sn, lv: miNum(row[ci + 1]) });
+      else e.skills.push(null);
+    }
+    if (isBat) {
+      var h = miTxt(row[C["유형"]]);
+      e.hand = (h === "좌" || h === "우" || h === "양") ? h : "우";
+      e.launchAngle = miNum(row[C["발사각"]]);
+      e.whiteZone = miNum(row[C["흰존"]]);
+      e.coldZone = miNum(row[C["콜존"]]);
+    } else {
+      e.hand = miTxt(row[C["좌완"]]) === "O" ? "좌" : "우";
+    }
+    out.push(e);
+  }
+  return out;
+}
+
+/* ── 라인업 ──────────────────────────────────────────────── */
+function readLineup(grid) {
+  var bat = [], pit = [];
+  var hb = findAnchor(grid, "라인업");
+  for (var r = 0; r < grid.length; r++) {
+    var row = grid[r] || [];
+    if (miTxt(row[2]) === "구분" && miTxt(row[8]) === "이름") {
+      var isBat = miTxt(row[3]) === "타순";
+      for (var k = r + 1; k < grid.length; k++) {
+        var rr = grid[k] || [], slot = miTxt(rr[4]), nm = miTxt(rr[8]);
+        if (!slot) break;
+        (isBat ? bat : pit).push({ slot: slot, order: miNum(rr[3]), name: nm });
+      }
+    }
+    if (bat.length && pit.length) break;
+  }
+  return { bat: bat, pit: pit };
+}
+
+/* ── 도감 매칭 ───────────────────────────────────────────── */
+function statKey(rec, isBat) {
+  return isBat ? [rec.power, rec.accuracy, rec.eye, rec.patience].join("/")
+               : [rec.change, rec.stuff].join("/");
+}
+function entryStatKey(e) {
+  return e.role === "타자"
+    ? [e.base["파워"], e.base["정확"], e.base["선구"], e.base["인내"]].join("/")
+    : [e.base["변화"], e.base["구위"]].join("/");
+}
+
+/* 스탯 차이 합. 도감이 갱신됐거나 한두 자리 오타가 났을 때 근사로 붙이기 위한 것. */
+function statDist(rec, e, isBat) {
+  var a = isBat ? [rec.power, rec.accuracy, rec.eye, rec.patience] : [rec.change, rec.stuff];
+  var b = isBat ? [e.base["파워"], e.base["정확"], e.base["선구"], e.base["인내"]]
+                : [e.base["변화"], e.base["구위"]];
+  var d = 0;
+  for (var i = 0; i < a.length; i++) d += Math.abs((a[i] || 0) - (b[i] || 0));
+  return d;
+}
+/* 스탯이 안 맞으면 도감 오류가 아니라 시트 작성자의 오타일 가능성이 높다.
+   추측해서 붙이지 않는다 — 가까운 순으로 정렬한 후보만 돌려주고 유저가 고르게 한다. */
+function miRanked(byName, e, isBat) {
+  return byName.map(function (r) { return { rec: r, d: statDist(r, e, isBat) }; })
+               .sort(function (x, y) { return x.d - y.d; })
+               .map(function (x) { return x.rec; });
+}
+
+function matchOne(e, index) {
+  var isBat = e.role === "타자";
+  for (var t = 0; t < e.types.length; t++) {
+    var ct = e.types[t];
+    var byName = index[ct + "|" + e.name] || [];
+    if (!byName.length) continue;
+
+    if (ct === "임팩트") {
+      var want = entryStatKey(e);
+      var hit = byName.filter(function (r) { return statKey(r, isBat) === want; });
+      if (hit.length === 1) return { rec: hit[0], how: "스탯일치" };
+      if (hit.length > 1) return { rec: hit[0], how: "스탯동일-임의배정", candidates: hit };
+      return { rec: null, how: "스탯불일치-직접선택", candidates: miRanked(byName, e, isBat), needsPick: true };
+    }
+    var yr = byName.filter(function (r) { return miTxt(r.year) === e.year; });
+    if (yr.length === 1) return { rec: yr[0], how: "이름+연도" };
+    if (yr.length > 1) return { rec: null, how: "연도까지 같은 카드 여럿-직접선택", candidates: miRanked(yr, e, isBat), needsPick: true };
+    /* 라이브·올스타는 연도가 한 종류뿐이라 연도가 어긋나도 이름으로 붙인다 */
+    if (byName.length === 1) return { rec: byName[0], how: "이름만(연도 무시)" };
+    if (byName.length > 1) {
+      var want2 = entryStatKey(e);
+      var hit2 = byName.filter(function (r) { return statKey(r, isBat) === want2; });
+      if (hit2.length >= 1) return { rec: hit2[0], how: "스탯으로 좁힘", candidates: hit2 };
+      return { rec: null, how: "후보 여럿-직접선택", candidates: miRanked(byName, e, isBat), needsPick: true };
+    }
+  }
+  return { rec: null, how: "도감에 없음" };
+}
+
+function buildIndex(dogam) {
+  var ix = {};
+  for (var i = 0; i < dogam.length; i++) {
+    var r = dogam[i], k = r.cardType + "|" + r.name;
+    (ix[k] || (ix[k] = [])).push(r);
+  }
+  return ix;
+}
+
+/* ── 팀 정보 · 세트덱 ─────────────────────────────────────── */
+/* 시트의 세트덱 좌/우 칸. 라벨은 (U,V) (W,X) (Y,Z) 3쌍이 5~10행에 있다.
+   앱은 sdState["s40"] = "L"/"R" 로 들고 있어서 그대로 옮겨진다. */
+var SD_CELL = [
+  [22, 40], [22, 60], [22, 70], [22, 75], [22, 80], [22, 95],       /* V5~V10 */
+  [24, 100], [24, 115], [24, 120], [24, 135], [24, 140], [24, 145], /* X5~X10 */
+  [26, 155], [26, 160], [26, 165], [26, 175], [26, 180], [26, 200], /* Z5~Z10 */
+];
+
+function readTeam(grid, origin) {
+  /* A열에 "팀 정보" 가 있는 행 기준으로 잡는다 */
+  var top = findAnchor(grid, "팀 정보");
+  if (top < 0) return null;
+  /* "팀 정보" 는 원본 시트의 1행이다. 시트가 밀려도 이 앵커 기준으로 잡으면 그대로 맞는다.
+     at(시트행, 시트열) 둘 다 1부터 센다. */
+  var at = function (row, col) {
+    var r = grid[top + row - 1] || [];
+    return miTxt(r[col - 1]);
+  };
+  var out = { sd: {}, warn: [] };
+
+  /* 라커룸(내실) M4:M9 / 주장 N4:N9 / 투수조장 O8:O9 — 팀정보 첫 행이 시트 r3 이므로 +1 부터 */
+  var UNI = ["uniP", "uniA", "uniE", "uniN", "uniC", "uniS"];
+  var CAP = ["capBatP", "capBatA", "capBatE", "capBatN", "capBatC", "capBatS"];
+  for (var i = 0; i < 6; i++) {
+    var m = parseFloat(at(4 + i, 13)); if (isFinite(m) && m) out.sd[UNI[i]] = m;
+    var c = parseFloat(at(4 + i, 14)); if (isFinite(c) && c) out.sd[CAP[i]] = c;
+  }
+  var pc = parseFloat(at(8, 15)); if (isFinite(pc) && pc) out.sd.capPitC = pc;
+  var ps = parseFloat(at(9, 15)); if (isFinite(ps) && ps) out.sd.capPitS = ps;
+  out.capBatName = at(9, 10);    /* J9 주장 이름 */
+  out.capPitName = at(10, 10);   /* J10 투수조장 이름 */
+
+  /* 국대에이스 / 포수리드 — 시트는 "X" 를 없음으로 쓴다 */
+  var lv = function (v) { return (!v || v === "X") ? "없음" : v; };
+  out.sd.natBat = lv(at(3, 10));    /* J3 */
+  out.sd.natPit = lv(at(4, 10));    /* J4 */
+  out.sd.catchLead = lv(at(5, 10)); /* J5 */
+
+  /* 불펜 배치 J6 : '114 -> "1/1/4" */
+  var bp = at(6, 10).replace(/^'/, "");
+  if (bp && bp.length === 3) {
+    var lab = bp[0] + "/" + bp[1] + "/" + bp[2];
+    var bi = -1; for (var bj = 0; bj < BPC.length; bj++) { if (BPC[bj].label === lab) { bi = bj; break; } }
+    if (bi >= 0) out.sd.bpcIdx = bi; else out.warn.push("불펜 배치 '" + bp + "' 를 앱에서 못 찾음");
+  }
+  /* 승리조 전술 J7 — 분업만 앱에 있다 */
+  var tac = at(7, 10);
+  if (tac === "분업") out.sd.isWinSplit = true;
+  else if (tac === "적극") out.warn.push("중계 전술 '적극' 은 앱에 아직 없어 넘어감");
+  if (at(8, 10) === "적극") out.warn.push("추격조 '적극' 은 앱에 아직 없어 넘어감");
+
+  /* 연도 W4 / Y4 */
+  var yBat = at(4, 23), yPit = at(4, 25);
+  out.yearBat = yBat; out.yearPit = yPit;
+
+  /* 세트덱 좌/우 */
+  for (var k = 0; k < SD_CELL.length; k++) {
+    var col = SD_CELL[k][0], sp = SD_CELL[k][1];
+    var side = at(5 + (k % 6), col);   /* 세트덱 좌/우는 5~10행 */
+    if (side !== "좌" && side !== "우") continue;
+    if (sp === 75) out.sd.s75 = (side === "좌" ? "L:" + yBat : "R:" + yPit);
+    else if (sp === 180) out.sd.s180 = "R:" + (side === "좌" ? yBat : yPit);
+    else out.sd["s" + sp] = (side === "좌" ? "L" : "R");
+  }
+  /* V4 라이브/올스타 기용 여부 — 앱에 대응이 아직 없다 */
+  var v4 = at(4, 22);
+  if (v4 && parseFloat(v4)) out.warn.push("[라이브/올스타] 기용 여부 " + v4 + " 는 앱에 대응 항목이 없어 넘어감");
+  return out;
+}
+
+/* ── 진입점 ──────────────────────────────────────────────── */
+function parseManagerWorkbook(wb) {
+  var sn = wb.SheetNames.filter(function (n) { return n.indexOf("관리기") >= 0; })[0];
+  if (!sn) throw new Error("관리기 시트를 찾지 못했습니다.");
+  var grid = toGrid(wb.Sheets[sn]);
+
+  var aB = findAnchor(grid, "타자DB"), aP = findAnchor(grid, "투수DB");
+  if (aB < 0 || aP < 0) throw new Error("보관함(타자DB/투수DB)을 찾지 못했습니다.");
+  var hB = findHeader(grid, aB), hP = findHeader(grid, aP);
+  if (hB < 0 || hP < 0) throw new Error("보관함 헤더를 찾지 못했습니다.");
+
+  var origin = sheetOrigin(wb.Sheets[sn]);
+  var entries = readStore(grid, hB, true, origin).concat(readStore(grid, hP, false, origin));
+  var index = buildIndex(SEED_PLAYERS);
+  entries.forEach(function (e) {
+    var m = matchOne(e, index);
+    e.match = m.rec; e.how = m.how; e.candidates = m.candidates || null;
+  });
+  var team = readTeam(grid, origin);
+  return { team: team, sheet: sn, headerRows: { bat: hB + origin, pit: hP + origin }, entries: entries, lineup: readLineup(grid) };
+}
+
 var SD_ROWS = [
   {sp:30,type:"auto",desc:"모두 +1"},
   {sp:40,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
@@ -5298,12 +5599,154 @@ function MyPlayersPage(p) {
   var saveLM = p.saveLineupMap || function(){};
   var skillsDB = p.skills || {};
   var sdState = p.sdState || {};
+  var setSdState = p.setSdState || function(){};
+  var saveSdState = p.saveSdState || function(){};
   var _sel = useState(null); var selId = _sel[0]; var setSelId = _sel[1];
   var _filter = useState("타자"); var filter = _filter[0]; var setFilter = _filter[1];
   var _addOpen = useState(false); var addOpen = _addOpen[0]; var setAddOpen = _addOpen[1];
   var _addQuery = useState(""); var addQuery = _addQuery[0]; var setAddQuery = _addQuery[1];
   var _scanOpen = useState(false); var scanOpen = _scanOpen[0]; var setScanOpen = _scanOpen[1];
+  /* 관리기 시트 가져오기 — 파싱 결과를 먼저 보여주고, 확정할 때만 저장한다 */
+  var _imp = useState(null); var impPrev = _imp[0]; var setImpPrev = _imp[1];
+  var _impMode = useState("merge"); var impMode = _impMode[0]; var setImpMode = _impMode[1];
+  var _impBusy = useState(false); var impBusy = _impBusy[0]; var setImpBusy = _impBusy[1];
   
+
+  /* ── 관리기 시트 가져오기 ─────────────────────────────── */
+  var onImportFile = function(e) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!window.XLSX) { alert("엑셀 모듈을 불러오는 중입니다. 잠시 후 다시 시도해 주세요."); return; }
+    setImpBusy(true);
+    var rd = new FileReader();
+    rd.onerror = function() { setImpBusy(false); alert("파일을 읽지 못했습니다."); };
+    rd.onload = function(ev) {
+      try {
+        var wb = window.XLSX.read(new Uint8Array(ev.target.result), { type: "array" });
+        var R = parseManagerWorkbook(wb);
+        /* 자동으로 붙은 것은 그대로, 못 붙은 것은 빈칸으로 두고 유저가 고르게 한다 */
+        R.picks = {};
+        R.entries.forEach(function(en) { R.picks[en.row] = en.match ? en.match.id : ""; });
+        setImpPrev(R);
+      } catch (err) {
+        alert("시트를 읽지 못했습니다.\n" + ((err && err.message) || err));
+      }
+      setImpBusy(false);
+    };
+    rd.readAsArrayBuffer(f);
+  };
+
+  var impPick = function(row, dbId) {
+    setImpPrev(function(prev) {
+      if (!prev) return prev;
+      var pk = Object.assign({}, prev.picks); pk[row] = dbId;
+      return Object.assign({}, prev, { picks: pk });
+    });
+  };
+
+  var applyImport = function() {
+    var R = impPrev; if (!R) return;
+    var byId = {}; SEED_PLAYERS.forEach(function(sp) { byId[sp.id] = sp; });
+    var made = [], nameToId = {}, stamp = Date.now();
+    R.entries.forEach(function(en, idx) {
+      var dbId = R.picks[en.row] || "";
+      var src = dbId ? byId[dbId] : null;
+      var isBat = en.role === "타자";
+      var pos = src ? (src.position || "") :
+        (isBat ? "" : (en.position === "CP" ? "마무리" : en.position === "RP" ? "중계" : "선발"));
+      var np = {
+        id: "imp" + stamp + "_" + idx, dbId: dbId,
+        name: src ? src.name : en.name,
+        cardType: src ? src.cardType : (en.types[0] || ""),
+        role: src ? (src.role || en.role) : en.role,
+        position: pos,
+        subPosition: src ? (src.subPosition || en.position) : en.position,
+        year: src ? (src.year || "") : en.year,
+        team: src ? (src.team || "") : "",
+        liveType: src ? (src.liveType || "") : "",
+        stars: src ? (src.stars || 5) : 5,
+        impactType: src ? (src.impactType || "") : "",
+        hand: en.hand,
+        isFa: !!en.isFa,
+        enhance: en.enhance || "9각성",
+        /* 시트에 레벨이 적혀 있으므로 자동 계산으로 덮지 않는다 */
+        sLvManual: true,
+        trainP: isBat ? en.train["파워"] : 0, trainA: isBat ? en.train["정확"] : 0,
+        trainE: isBat ? en.train["선구"] : 0, trainN: isBat ? en.train["인내"] : 0,
+        trainC: isBat ? 0 : en.train["변화"], trainS: isBat ? 0 : en.train["구위"],
+        specPower: isBat ? en.spec["파워"] : 0, specAccuracy: isBat ? en.spec["정확"] : 0,
+        specEye: isBat ? en.spec["선구"] : 0, specPatience: isBat ? en.spec["인내"] : 0,
+        specChange: isBat ? 0 : en.spec["변화"], specStuff: isBat ? 0 : en.spec["구위"],
+        pot1: en.pot1, pot2: en.pot2, pot3: en.pot3,
+        potType1: isBat ? "풀스윙" : "장타억제",
+        potType2: isBat ? "클러치" : "침착",
+        potType3: en.pot3 ? "뜬공형" : "",
+        skill1: (en.skills[0] && en.skills[0].name) || "", s1Lv: (en.skills[0] && en.skills[0].lv) || 0,
+        skill2: (en.skills[1] && en.skills[1].name) || "", s2Lv: (en.skills[1] && en.skills[1].lv) || 0,
+        skill3: (en.skills[2] && en.skills[2].name) || "", s3Lv: (en.skills[2] && en.skills[2].lv) || 0,
+      };
+      if (isBat) {
+        /* 흰존·콜존은 유저 입력이 도감보다 우선한다 (mergePl 규칙) */
+        np.whiteZone = en.whiteZone; np.coldZone = en.coldZone;
+        /* 도감에 못 붙은 선수는 시트의 기본 스탯으로 계산해야 한다 */
+        if (!src) {
+          np.power = en.base["파워"]; np.accuracy = en.base["정확"];
+          np.eye = en.base["선구"]; np.patience = en.base["인내"];
+          np.launchAngle = en.launchAngle;
+        }
+      } else if (!src) {
+        np.change = en.base["변화"]; np.stuff = en.base["구위"];
+      }
+      made.push(np);
+      nameToId[en.name] = np.id;
+    });
+
+    /* 병합이면 시트에 없는 기존 선수만 남긴다 */
+    var next = made;
+    if (impMode === "merge") {
+      var sheetNames = {}; R.entries.forEach(function(en) { sheetNames[en.name] = 1; });
+      next = players.filter(function(pl) { return !sheetNames[pl.name]; }).concat(made);
+    }
+    save(next);
+
+    /* 라인업 */
+    var newLM = {};
+    var PIT_MAP = { "1SP":"SP1","2SP":"SP2","3SP":"SP3","4SP":"SP4","5SP":"SP5",
+                    "1RP":"RP1","2RP":"RP2","3RP":"RP3","4RP":"RP4","5RP":"RP5","6RP":"RP6","CP":"CP" };
+    var ordered = [];
+    (R.lineup.bat || []).forEach(function(b) {
+      if (!b.name || !nameToId[b.name]) return;
+      if (BAT_SLOTS.indexOf(b.slot) < 0) return;
+      newLM[b.slot] = nameToId[b.name];
+      ordered.push({ slot: b.slot, order: b.order || 99 });
+    });
+    (R.lineup.pit || []).forEach(function(q) {
+      var sl = PIT_MAP[q.slot];
+      if (!sl || !q.name || !nameToId[q.name]) return;
+      newLM[sl] = nameToId[q.name];
+    });
+    saveLM(newLM);
+
+    /* 팀 정보 · 세트덱 */
+    var nsd = Object.assign({}, sdState);
+    if (R.team) {
+      Object.keys(R.team.sd).forEach(function(k) { nsd[k] = R.team.sd[k]; });
+      if (R.team.capBatName && nameToId[R.team.capBatName]) nsd.capBatId = nameToId[R.team.capBatName];
+      if (R.team.capPitName && nameToId[R.team.capPitName]) nsd.capPitId = nameToId[R.team.capPitName];
+    }
+    /* 타순: 시트의 타순 번호 순서대로 포지션 슬롯을 늘어놓는다 */
+    if (ordered.length === 9) {
+      ordered.sort(function(a, b) { return a.order - b.order; });
+      nsd.batOrder = ordered.map(function(x) { return x.slot; });
+    }
+    setSdState(nsd);
+    if (saveSdState) saveSdState(nsd);
+
+    setImpPrev(null);
+    alert("가져왔습니다.\n선수 " + made.length + "명, 라인업 " + Object.keys(newLM).length + "칸" +
+          (R.team ? ", 세트덱·팀 설정 반영" : ""));
+  };
 
   var getSlot = function(plId) {
     for (var k in lm) { if (lm[k] === plId) return k; }
@@ -5663,8 +6106,101 @@ function MyPlayersPage(p) {
           })}
           <button onClick={function() { setAddOpen(true); setAddQuery(""); }} style={{ padding: "5px 12px", fontSize: 12, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 5, color: "#1a1100", cursor: "pointer", marginLeft: 4 }}>{"+ 추가"}</button>
           <button onClick={function() { setScanOpen(true); }} style={{ padding: "5px 12px", fontSize: 12, fontWeight: 700, background: "linear-gradient(135deg,#4ade80,#22c55e)", border: "none", borderRadius: 5, color: "#0a0a0a", cursor: "pointer", marginLeft: 4 }}>{"📸 일괄 업데이트"}</button>
+          <label title="덱 보정 관리기 엑셀을 올리면 보관함·라인업·세트덱을 채웁니다" style={{ padding: "5px 12px", fontSize: 12, fontWeight: 700, background: impBusy ? "var(--inner)" : "linear-gradient(135deg,#60a5fa,#3b82f6)", border: "none", borderRadius: 5, color: impBusy ? "var(--td)" : "#0a0a0a", cursor: impBusy ? "default" : "pointer", marginLeft: 4 }}>
+            {impBusy ? "읽는 중..." : "📗 시트 가져오기"}
+            <input type="file" accept=".xlsx,.xls" disabled={impBusy} style={{ display: "none" }} onChange={onImportFile} />
+          </label>
         </div>
       </div>
+
+      {/* 관리기 시트 가져오기 — 미리보기 */}
+      {impPrev && (function() {
+        var ents = impPrev.entries || [];
+        var needPick = ents.filter(function(e) { return !impPrev.picks[e.row]; });
+        var okCnt = ents.length - needPick.length;
+        var imps = ents.filter(function(e) { return e.match && e.match.cardType === "임팩트"; });
+        var byId = {}; SEED_PLAYERS.forEach(function(sp) { byId[sp.id] = sp; });
+        var label = function(r) {
+          return r.cardType + " " + (r.year || "-") + (r.impactType ? " " + r.impactType : "") +
+                 " (" + (r.role === "타자" ? [r.power, r.accuracy, r.eye, r.patience].join("/") : [r.change, r.stuff].join("/")) + ")";
+        };
+        return (
+        <div onClick={function() { setImpPrev(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+          <div onClick={function(e) { e.stopPropagation(); }} style={{ background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 12, width: "100%", maxWidth: 620, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--bd)" }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: "var(--t1)", fontFamily: "var(--h)" }}>{"관리기 시트 가져오기"}</div>
+              <div style={{ fontSize: 12, color: "var(--td)", marginTop: 3 }}>{"확인하고 「가져오기」를 눌러야 반영됩니다"}</div>
+            </div>
+
+            <div style={{ padding: "12px 16px", overflowY: "auto", flex: 1 }}>
+              <div style={{ fontSize: 13, color: "var(--t2)", lineHeight: 1.8, marginBottom: 12 }}>
+                {"읽은 선수 "}<b style={{ color: "var(--t1)" }}>{ents.length + "명"}</b>
+                {" (타자 " + ents.filter(function(e) { return e.role === "타자"; }).length + " / 투수 " + ents.filter(function(e) { return e.role !== "타자"; }).length + ")"}
+                <br />
+                {"도감 연결 "}<b style={{ color: "#4ade80" }}>{okCnt + "명"}</b>
+                {needPick.length > 0 && (<span>{" · 직접 선택 필요 "}<b style={{ color: "#FFA726" }}>{needPick.length + "명"}</b></span>)}
+                <br />
+                {"라인업 타자 " + (impPrev.lineup.bat || []).filter(function(b) { return b.name; }).length + "칸 / 투수 " + (impPrev.lineup.pit || []).filter(function(b) { return b.name; }).length + "칸"}
+                {impPrev.team && (<span>{" · 세트덱·팀 설정 포함"}</span>)}
+              </div>
+
+              {needPick.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "#FFA726", marginBottom: 6 }}>{"직접 골라주세요 — 스탯이 도감과 달라 카드를 특정하지 못했습니다"}</div>
+                  {needPick.map(function(e) {
+                    return (
+                      <div key={e.row} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid var(--bd)" }}>
+                        <span style={{ fontSize: 12, color: "var(--td)", width: 34, flexShrink: 0, fontFamily: "var(--m)" }}>{"r" + e.row}</span>
+                        <span style={{ fontSize: 13, color: "var(--t1)", width: 78, flexShrink: 0 }}>{e.name}</span>
+                        <select value={impPrev.picks[e.row] || ""} onChange={function(ev) { impPick(e.row, ev.target.value); }}
+                          style={{ flex: 1, minWidth: 0, padding: "4px 6px", background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", fontSize: 12, outline: "none" }}>
+                          <option value="">{"도감 없이 시트값 그대로 (" + e.cardCode + ")"}</option>
+                          {(e.candidates || []).map(function(c) { return (<option key={c.id} value={c.id}>{label(c)}</option>); })}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {imps.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--t2)", marginBottom: 4 }}>{"임팩트 배정 확인 (" + imps.length + "장)"}</div>
+                  <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 6 }}>{"스탯이 한 자리 틀리면 옆 카드에 붙을 수 있습니다. 종류가 맞는지 훑어봐 주세요."}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {imps.map(function(e) {
+                      return (<span key={e.row} style={{ fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, padding: "3px 7px", color: "var(--t2)" }}>
+                        {e.name + " → " + (e.match.impactType || "?")}
+                      </span>);
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ background: "var(--inner)", borderRadius: 6, padding: "8px 10px", fontSize: 11, color: "var(--td)", lineHeight: 1.7 }}>
+                {"가져오지 않는 항목: 선수별 셋포 체크·포틈, 연도 세트덱, 송/변 잠재, 중계 전술 '적극'"}
+                {(impPrev.team && impPrev.team.warn.length > 0) && impPrev.team.warn.map(function(w, i) { return (<div key={i} style={{ color: "#FFA726" }}>{"· " + w}</div>); })}
+              </div>
+            </div>
+
+            <div style={{ padding: "10px 16px", borderTop: "1px solid var(--bd)" }}>
+              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                {[{ k: "merge", l: "이름 기준 병합", d: "시트에 없는 기존 선수는 그대로 둡니다" },
+                  { k: "replace", l: "내 선수 전체 교체", d: "기존 선수를 모두 지웁니다" }].map(function(m) {
+                  var on = impMode === m.k;
+                  return (<button key={m.k} onClick={function() { setImpMode(m.k); }} title={m.d}
+                    style={{ flex: 1, padding: "7px 6px", fontSize: 12, fontWeight: on ? 800 : 400, background: on ? "var(--ta)" : "var(--inner)", color: on ? "var(--acc)" : "var(--t2)", border: "1px solid " + (on ? "var(--acc)" : "var(--bd)"), borderRadius: 6, cursor: "pointer" }}>{m.l}</button>);
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={function() { setImpPrev(null); }} style={{ flex: 1, padding: "9px", fontSize: 13, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t2)", cursor: "pointer" }}>{"취소"}</button>
+                <button onClick={applyImport} style={{ flex: 2, padding: "9px", fontSize: 13, fontWeight: 800, background: "linear-gradient(135deg,#4ade80,#22c55e)", border: "none", borderRadius: 6, color: "#0a0a0a", cursor: "pointer" }}>{"가져오기"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
 
       {/* Bulk Scan Modal */}
       {scanOpen && React.createElement(BulkScanModal, {
@@ -7511,7 +8047,7 @@ export default function App(){
 
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} userId={userId}/>);
-  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam}/>);
+  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} potmList={store.potmList} setPotmList={store.savePotmList} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
