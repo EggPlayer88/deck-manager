@@ -295,7 +295,10 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   var ptData = sdState["pt_" + slot];
   var ptEntry = POS_TRAIN[slot];
   if (ptEntry) {
-    var ptLv = ptData ? Math.min(ptData.level || ptEntry.mx, ptEntry.mx) : ptEntry.mx;
+    /* 레벨 0 을 고른 것과 아직 안 정한 것은 다르다.
+       || 로 걸러면 0 이 만렙으로 둔갑한다 — 저장값이 없을 때만 만렙으로 본다. */
+    var ptLvRaw = (!ptData || ptData.level === undefined || ptData.level === null) ? ptEntry.mx : ptData.level;
+    var ptLv = Math.min(ptLvRaw, ptEntry.mx);
     if (isBat) {
       var ptP = ptEntry["파워"]; bp += (ptP && ptLv < ptP.length ? ptP[ptLv] : 0) + (ptData ? ptData.r0 || 0 : 0);
       var ptA = ptEntry["정확"]; ba += (ptA && ptLv < ptA.length ? ptA[ptLv] : 0) + (ptData ? ptData.r1 || 0 : 0);

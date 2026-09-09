@@ -351,6 +351,13 @@ eq('65 우 - 4성 타자 인내 +2', calcSDBonus(b4, "DH", { s65:"R", s95:"" }, 
 /* 155 = 1~2번 파·선·인 +2 / 175 = 타자 파·선·인 +1 */
 eq('155 좌 - 1번타자 인내 +2', calcSDBonus(b5, "C", { s155:"L", s95:"" }, 155, 0).n - calcSDBonus(b5, "C", { s155:"", s95:"" }, 155, 0).n, 2);
 eq('155 좌 - 3번타자는 안 받음', calcSDBonus(b5, "C", { s155:"L", s95:"" }, 155, 2).n - calcSDBonus(b5, "C", { s155:"", s95:"" }, 155, 2).n, 0);
+/* 포지션 특훈 레벨 0 = 보너스 없음. 예전엔 || 때문에 만렙으로 둔갑했다 */
+var ptAt = function(lv){ var st = { s95:"", s125:"" }; if (lv !== null) st.pt_DH = { level: lv, r0:0, r1:0, r2:0, r3:0 };
+  return calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "DH", st, 0, 8); };
+eq('포특 레벨 0 이면 파워 보너스 없음', ptAt(0).p, 0);
+eq('포특 레벨 0 이면 인내 보너스 없음', ptAt(0).n, 0);
+eq('포특 레벨 안 정했으면 만렙', ptAt(null).p, ptAt(20).p);
+eq('포특 만렙 DH 인내 +7', ptAt(20).n, 7);
 eq('175 좌 - 타자 인내 +1', calcSDBonus(b5, "DH", { s175:"L", s95:"" }, 175, 8).n - calcSDBonus(b5, "DH", { s175:"", s95:"" }, 175, 8).n, 1);
 
 console.log('\n[POTM] 전역 명단 + 덱별 사용자 설정');
