@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  calcSDBonus, sdPick,
+  isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -354,6 +354,33 @@ eq('155 좌 - 3번타자는 안 받음', calcSDBonus(b5, "C", { s155:"L", s95:""
 /* 포지션 특훈 레벨 0 = 보너스 없음. 예전엔 || 때문에 만렙으로 둔갑했다 */
 var ptAt = function(lv){ var st = { s95:"", s125:"" }; if (lv !== null) st.pt_DH = { level: lv, r0:0, r1:0, r2:0, r3:0 };
   return calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "DH", st, 0, 8); };
+console.log('\n[국가대표 전용 스킬] 표에 Lv7 이상 값이 없으면 국대 전용이다');
+eq('황금세대는 Lv6 상한', maxSkillLv('황금세대', '타자'), 6);
+eq('빈틈없는타선도 국대 전용', isNatOnlySkill('빈틈없는타선(타순O)', '타자') ? 1 : 0, 1);
+eq('타순공략(투수)도 국대 전용', isNatOnlySkill('타순공략', '선발') ? 1 : 0, 1);
+eq('정밀타격은 아니다', isNatOnlySkill('정밀타격', '타자') ? 1 : 0, 0);
+/* 포지션 특훈 +1 이 상한을 넘기지 못한다 */
+eq('국대 스킬은 보너스를 받아도 6', effSkillLv('황금세대', 6, true, '국가대표', 1, '타자', ['황금세대']), 6);
+eq('일반 스킬은 보너스로 7', effSkillLv('정밀타격', 6, true, '국가대표', 1, '타자', ['정밀타격']), 7);
+
+console.log('\n[포지션 제한 스킬] 해당 포지션에만 뜬다');
+eq('포수리드는 포수만', skillAllowedAt('포수리드(버프포함)', '타자', false) ? 1 : 0, 0);
+eq('포수면 뜬다', skillAllowedAt('포수리드(버프포함)', '타자', true) ? 1 : 0, 1);
+eq('마당쇠는 선발에 안 뜬다', skillAllowedAt('마당쇠(불펜)', '선발', false) ? 1 : 0, 0);
+eq('마당쇠는 중계에 뜬다', skillAllowedAt('마당쇠(불펜)', '중계', false) ? 1 : 0, 1);
+eq('집념은 선발만', skillAllowedAt('집념', '중계', false) ? 1 : 0, 0);
+eq('라이징스타는 마무리에 안 뜬다', skillAllowedAt('라이징스타(추격조)', '마무리', false) ? 1 : 0, 0);
+eq('국민계투는 선발에 안 뜬다', skillAllowedAt('국민계투', '선발', false) ? 1 : 0, 0);
+eq('제한 없는 스킬은 어디서나', skillAllowedAt('정밀타격', '타자', false) ? 1 : 0, 1);
+
+console.log('\n[메이저 분류] 확정본');
+eq('타자 메이저 76개', Object.keys(DEFAULT_MAJOR['타자']).length, 76);
+eq('스위치히터(양타) 메이저', DEFAULT_MAJOR['타자']['스위치히터(양타)'] ? 1 : 0, 1);
+eq('포수리드(버프포함) 메이저', DEFAULT_MAJOR['타자']['포수리드(버프포함)'] ? 1 : 0, 1);
+eq('타선연결은 비메이저', DEFAULT_MAJOR['타자']['타선연결'] ? 1 : 0, 0);
+eq('투수 타순공략 메이저', DEFAULT_MAJOR['선발']['타순공략'] ? 1 : 0, 1);
+eq('투수 평정심은 비메이저', DEFAULT_MAJOR['선발']['평정심'] ? 1 : 0, 0);
+
 eq('포특 레벨 0 이면 파워 보너스 없음', ptAt(0).p, 0);
 eq('포특 레벨 0 이면 인내 보너스 없음', ptAt(0).n, 0);
 eq('포특 레벨 안 정했으면 만렙', ptAt(null).p, ptAt(20).p);
