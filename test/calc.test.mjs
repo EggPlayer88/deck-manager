@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -402,18 +402,20 @@ eq('도전정신은 5성', variantAllowed('도전정신(5성)', cB('우')) ? 1 :
 eq('타자 임팩 패기', pickPaegi('타자', '임팩트') === '패기(임팩)' ? 1 : 0, 1);
 eq('중계 임팩 패기는 불펜', pickPaegi('중계', '임팩트') === '패기(임팩불펜)' ? 1 : 0, 1);
 eq('선발 시그 패기', pickPaegi('선발', '시그니처') === '패기(시그/올스타선발)' ? 1 : 0, 1);
-/* 포수리드 버프 */
-eq('포수리드는 버프포함으로 고정', variantAllowed('포수리드(버프포함)', cB('우')) ? 1 : 0, 1);
-eq('일반 포수리드는 제외', variantAllowed('포수리드', cB('우')) ? 1 : 0, 0);
+/* 포수리드는 이름으로 고정하지 않는다 — 버프 포함 여부는 getSkillScore 의 withBuff 가 정한다.
+   목록에서는 skillPickable 이 버프포함본을 숨기므로 뽑기 풀에는 '포수리드' 하나만 남는다 */
+eq('포수리드는 이름 고정 안 함', variantAllowed('포수리드', cB('우')) ? 1 : 0, 1);
+eq('버프포함본은 목록에서 숨김', skillPickable('포수리드(버프포함)', '타자') ? 1 : 0, 0);
 eq('조건 없는 스킬은 통과', variantAllowed('정밀타격', cB('우')) ? 1 : 0, 1);
 
 console.log('\n[분포 조회] 미리 구운 분위수에서 상위 % 를 뽑는다');
 /* 0,1,2,...,100 을 101개 분위점으로 둔 배열 — 값 v 의 상위 % 는 100-v 여야 한다 */
 var d101 = []; for (var _i = 0; _i <= 100; _i++) d101.push(_i);
 eq('중앙값은 상위 50%', pctFromDist(d101, 50), 50);
-eq('최댓값은 상위 0%', pctFromDist(d101, 100), 0);
+/* "상위 0%" 는 말이 안 되므로 바닥을 0.1 로 둔다 */
+eq('최댓값은 상위 0.1%', pctFromDist(d101, 100), 0.1);
 eq('최솟값은 상위 100%', pctFromDist(d101, 0), 100);
-eq('범위를 넘으면 0%', pctFromDist(d101, 999), 0);
+eq('범위를 넘으면 0.1%', pctFromDist(d101, 999), 0.1);
 eq('범위 아래면 100%', pctFromDist(d101, -5), 100);
 eq('사이값은 보간', pctFromDist(d101, 90), 10);
 eq('빈 배열이면 null', pctFromDist([], 5) === null ? 1 : 0, 1);
@@ -506,6 +508,32 @@ eq('임팩트', getPotmBonus({ name: 'A', team: '키움', cardType: '임팩트' 
 eq('골든글러브', getPotmBonus({ name: 'A', team: '키움', cardType: '골든글러브' }, { teamName: '키움', potmOn: ['A|키움'] }), 1);
 eq('라이브 4성', getPotmBonus({ name: 'A', team: '키움', cardType: '라이브', stars: 4 }, { teamName: '키움', potmOn: ['A|키움'] }), 12);
 __setGlobalPotm([]);
+
+
+console.log('\n[팀 버프 스킬] 라인업은 버프 뺀 값, 데이터센터는 넣은 값');
+eq('포수리드 버프X', getSkillScore('포수리드', 5, '타자'), 5);
+eq('포수리드 버프O', getSkillScore('포수리드', 5, '타자', true), 13.51);
+/* 어느 쪽 이름이 저장돼 있든 결과가 같아야 마이그레이션이 필요 없다 */
+eq('구 이름도 버프X 로', getSkillScore('포수리드(버프포함)', 5, '타자'), 5);
+eq('구 이름도 버프O 로', getSkillScore('포수리드(버프포함)', 5, '타자', true), 13.51);
+eq('Lv10 버프O', getSkillScore('포수리드', 10, '타자', true), 46.46);
+/* 버프포함 항목은 고를 수 있는 선택지가 아니다 */
+eq('버프포함은 목록에서 숨김', skillPickable('포수리드(버프포함)', '타자') ? 1 : 0, 0);
+eq('포수리드는 고를 수 있다', skillPickable('포수리드', '타자') ? 1 : 0, 1);
+eq('다른 스킬은 그대로', skillPickable('정밀타격', '타자') ? 1 : 0, 1);
+eq('버프 없는 스킬은 양쪽 같음',
+   getSkillScore('정밀타격', 7, '타자', true) - getSkillScore('정밀타격', 7, '타자'), 0);
+
+console.log('\n[패기(임팩)] Lv9/10 이 채워졌다');
+eq('Lv8', getSkillScore('패기(임팩)', 8, '타자'), 14.4);
+eq('Lv9', getSkillScore('패기(임팩)', 9, '타자'), 15.84);
+eq('Lv10', getSkillScore('패기(임팩)', 10, '타자'), 17.28);
+eq('이제 국대로 오인 안 함', isNatOnlySkill('패기(임팩)', '타자') ? 1 : 0, 0);
+
+console.log('\n[국대 오배치 경고]');
+eq('시그에 황금세대는 경고', natSkillMismatch('황금세대', '타자', '시그니처') ? 1 : 0, 1);
+eq('국대면 경고 없음', natSkillMismatch('황금세대', '타자', '국가대표') ? 1 : 0, 0);
+eq('일반 스킬은 경고 없음', natSkillMismatch('정밀타격', '타자', '시그니처') ? 1 : 0, 0);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
