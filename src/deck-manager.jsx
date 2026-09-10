@@ -6318,6 +6318,26 @@ function LineupAnalysis(p) {
     }
     return t;
   };
+
+  /* 점수에 무엇이 얼마씩 들어갔는지 — 툴팁으로 보여준다.
+     버프 스킬이 버프 포함으로 들어갔는지, 표에 없는 이름인지, 레벨이 비었는지가 여기서 다 드러난다 */
+  var skillParts = function(pl, cat, slot) {
+    var mn = isLvManual(pl);
+    var pts = (sdState["pts_" + slot] || []);
+    var out = [];
+    for (var k = 1; k <= 3; k++) {
+      var nm = pl["skill" + k];
+      if (!nm) { out.push(k + ". (비어 있음)"); continue; }
+      var lv = effSkillLv(nm, pl["s" + k + "Lv"], mn, pl.cardType, k, cat, pts);
+      if (!lv) { out.push(k + ". " + nm + " — 레벨이 비어 있어 0점으로 처리"); continue; }
+      var raw = Math.round(getSkillScore(nm, lv, cat) * 100) / 100;
+      var buf = Math.round(getSkillScore(nm, lv, cat, true) * 100) / 100;
+      if (!buf) { out.push(k + ". " + nm + " Lv" + lv + " — 스킬표에 없는 이름이라 0점"); continue; }
+      out.push(k + ". " + nm + " Lv" + lv + " = " + buf
+               + (buf !== raw ? "  (팀 버프 포함. 라인업 개인 점수로는 " + raw + ")" : ""));
+    }
+    return out.join(String.fromCharCode(10));
+  };
   var trainBat = function(pl) { return (pl.trainP||0)*w.p+(pl.trainA||0)*w.a+(pl.trainE||0)*w.e+(pl.trainN||0)*(w.n||0); };
   var trainPit = function(pl) { return (pl.trainC||0)*w.c+(pl.trainS||0)*w.s; };
   var specBat = function(pl) { return (pl.specPower||0)*w.p+(pl.specAccuracy||0)*w.a+(pl.specEye||0)*w.e+(pl.specPatience||0)*(w.n||0); };
@@ -6420,8 +6440,9 @@ function LineupAnalysis(p) {
         <div style={{flex:1,display:"flex",flexDirection:"column",gap:4,width:"100%",minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
             <span style={{fontSize:12,color:"var(--td)",width:36,flexShrink:0}}>스킬</span>
-            <span style={{fontSize:12,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}
-              title={fixedFirst ? "1옵션을 고정하는 카드라 순위는 2·3옵션 " + cmpSc + " 으로 비교합니다" : ""}>
+            <span style={{fontSize:12,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0,cursor:"help",textDecoration:"underline dotted var(--bd)"}}
+              title={skillParts(pl, cat, slot)
+                     + (fixedFirst ? String.fromCharCode(10,10) + "1옵션을 고정하는 카드라 순위는 2·3옵션 " + cmpSc + " 으로 비교합니다" : "")}>
               {skSc}{fixedFirst ? "*" : ""}</span>
             {pctBar(skPct, "#CE93D8")}
           </div>
