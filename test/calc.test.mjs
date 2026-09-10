@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -554,6 +554,35 @@ eq('국대 판정도', isNatOnlySkill('황금 세대', '타자') ? 1 : 0, 1);
 /* 없는 이름은 여전히 0 이어야 한다 — 아무 이름이나 붙는 일은 없어야 */
 eq('없는 이름은 그대로 0', getSkillScore('없는스킬입니다', 6, '타자'), 0);
 eq('정확히 있는 이름은 그대로', canonSkillName('정밀타격', '타자') === '정밀타격' ? 1 : 0, 1);
+
+
+console.log('\n[중계 전술 적극] 켜면 승리조만 능력치 +1');
+var rp = { role:"투수", position:"중계", cardType:"시즌", stars:5 };
+/* 2/2/2 편성(bpcIdx 4) → RP1,RP2 가 승리조 */
+var off = { bpcIdx:4, s95:"", s125:"" };
+var on  = { bpcIdx:4, s95:"", s125:"", rpActive:true };
+eq('승리조 RP1 변화 +1', calcSDBonus(rp,"RP1",on,0).c - calcSDBonus(rp,"RP1",off,0).c, 1);
+eq('승리조 RP1 구위 +1', calcSDBonus(rp,"RP1",on,0).s - calcSDBonus(rp,"RP1",off,0).s, 1);
+eq('승리조 RP2 도 오름', calcSDBonus(rp,"RP2",on,0).s - calcSDBonus(rp,"RP2",off,0).s, 1);
+eq('패전조 RP3 은 그대로', calcSDBonus(rp,"RP3",on,0).s - calcSDBonus(rp,"RP3",off,0).s, 0);
+eq('롱릴리프 RP5 도 그대로', calcSDBonus(rp,"RP5",on,0).s - calcSDBonus(rp,"RP5",off,0).s, 0);
+var cp = { role:"투수", position:"마무리", cardType:"시즌", stars:5 };
+eq('마무리는 안 받음', calcSDBonus(cp,"CP",on,0).s - calcSDBonus(cp,"CP",off,0).s, 0);
+var sp = { role:"투수", position:"선발", cardType:"시즌", stars:5 };
+eq('선발도 안 받음', calcSDBonus(sp,"SP1",on,0).s - calcSDBonus(sp,"SP1",off,0).s, 0);
+var bat = { role:"타자", cardType:"시즌", stars:5 };
+eq('타자는 무관', calcSDBonus(bat,"C",on,0,0).p - calcSDBonus(bat,"C",off,0,0).p, 0);
+/* 편성이 바뀌면 승리조 자리도 바뀐다 — 3/1/2(bpcIdx 6) 이면 RP3 까지 승리조 */
+var on3 = { bpcIdx:6, s95:"", s125:"", rpActive:true };
+var off3 = { bpcIdx:6, s95:"", s125:"" };
+eq('3/1/2 면 RP3 도 승리조', calcSDBonus(rp,"RP3",on3,0).s - calcSDBonus(rp,"RP3",off3,0).s, 1);
+eq('3/1/2 의 RP4 는 아님', calcSDBonus(rp,"RP4",on3,0).s - calcSDBonus(rp,"RP4",off3,0).s, 0);
+/* 분업과 무관하게 같은 자리에 붙는다 */
+var onSplit = { bpcIdx:6, s95:"", s125:"", rpActive:true, isWinSplit:true };
+eq('분업 켜도 승리조 자리는 같다', calcSDBonus(rp,"RP1",onSplit,0).s - calcSDBonus(rp,"RP1",off3,0).s, 1);
+eq('승리조 판정 자체', isWinGroupSlot("RP1", 4) ? 1 : 0, 1);
+eq('RP3 은 2/2/2 에서 승리조 아님', isWinGroupSlot("RP3", 4) ? 1 : 0, 0);
+eq('CP 는 승리조 아님', isWinGroupSlot("CP", 4) ? 1 : 0, 0);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);

@@ -336,6 +336,12 @@ var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
 var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
 var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1}];
+function isWinGroupSlot(slot, bpcIdx) {
+  var si = RP_SLOTS.indexOf(slot);
+  if (si < 0) return false;
+  var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
+  return si < cfg.w;
+}
 function slotGroupOf(slot, bpcIdx, isWinSplit) {
   if (!slot) return "";
   if (slot === "CP") return "마무리";
@@ -737,6 +743,11 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   /* 투수조장은 투수만 */
   if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
 
+  /* 중계 전술 '적극' — 켜면 승리조 능력치가 1씩 오른다.
+     인게임 화면 수치로는 안 보이지만 실제로는 오르므로 점수에는 넣는다.
+     분업은 승리조가 3명일 때만 켤 수 있지만 적극은 편성과 상관없이 켤 수 있다. */
+  if (!isBat && sdState.rpActive && isWinGroupSlot(slot, sdState.bpcIdx)) { pc += 1; ps += 1; }
+
   /* POTM 자동 보너스 */
   var potmB = getPotmBonus(pl, sdState);
   if (isBat) { bp += potmB; ba += potmB; be += potmB; }
@@ -804,4 +815,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };

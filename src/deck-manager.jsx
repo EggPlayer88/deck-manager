@@ -709,6 +709,11 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   /* 투수조장은 투수만 */
   if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
 
+  /* 중계 전술 '적극' — 켜면 승리조 능력치가 1씩 오른다.
+     인게임 화면 수치로는 안 보이지만 실제로는 오르므로 점수에는 넣는다.
+     분업은 승리조가 3명일 때만 켤 수 있지만 적극은 편성과 상관없이 켤 수 있다. */
+  if (!isBat && sdState.rpActive && isWinGroupSlot(slot, sdState.bpcIdx)) { pc += 1; ps += 1; }
+
   /* POTM 자동 보너스 */
   var potmB = getPotmBonus(pl, sdState);
   if (isBat) { bp += potmB; ba += potmB; be += potmB; }
@@ -1924,6 +1929,8 @@ function BullpenLayout(p) {
   var setIdx = p.setBpcIdx || function(){};
   var isWinSplit = p.isWinSplit || false;
   var setIsWinSplit = p.setIsWinSplit || function(){};
+  var rpActive = p.rpActive || false;
+  var setRpActive = p.setRpActive || function(){};
   var _o = useState(false); var open = _o[0]; var setOpen = _o[1];
   var cfg = BPC[idx];
   var cs = { flex: 1, minWidth: 0, background: "var(--inner)", borderRadius: 6, padding: "6px 2px", border: "1px solid var(--bd)" };
@@ -1946,8 +1953,9 @@ function BullpenLayout(p) {
           )}
         </div>
         {cfg.w === 3 && (
-          <button onClick={function() { setIsWinSplit(!isWinSplit); }} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
+          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명을 셋업으로 나눠 씁니다" style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
         )}
+        <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명의 능력치가 1씩 오릅니다. 인게임 화면 수치로는 안 보이지만 실제로는 올라 점수에 반영합니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
         {[
@@ -1982,6 +1990,14 @@ function BullpenLayout(p) {
    ================================================================ */
 /* 슬롯이 실제로 어느 자리인가. 앱의 "패전조" 가 스킬 이름의 "추격조" 다.
    분업을 켜면 승리조 자리가 셋업이 된다. */
+/* 승리조 자리인가 — 분업으로 '셋업' 이라 불리게 돼도 같은 자리다.
+   중계 전술 '적극' 은 이 자리들에만 붙는다. */
+function isWinGroupSlot(slot, bpcIdx) {
+  var si = RP_SLOTS.indexOf(slot);
+  if (si < 0) return false;
+  var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
+  return si < cfg.w;
+}
 function slotGroupOf(slot, bpcIdx, isWinSplit) {
   if (!slot) return "";
   if (slot === "CP") return "마무리";
@@ -2450,7 +2466,7 @@ function readTeam(grid, origin) {
   /* 승리조 전술 J7 — 분업만 앱에 있다 */
   var tac = at(7, 10);
   if (tac === "분업") out.sd.isWinSplit = true;
-  else if (tac === "적극") out.warn.push("중계 전술 '적극' 은 앱에 아직 없어 넘어감");
+  else if (tac === "적극") out.sd.rpActive = true;
   if (at(8, 10) === "적극") out.warn.push("추격조 '적극' 은 앱에 아직 없어 넘어감");
 
   /* 연도 W4 / Y4 */
@@ -2888,6 +2904,8 @@ function LineupPage(p) {
   var isWinSplit = sdState.isWinSplit || false;
   var setBpcIdx = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { bpcIdx: typeof v === "function" ? v(prev.bpcIdx !== undefined ? prev.bpcIdx : 4) : v }); }); };
   var setIsWinSplit = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { isWinSplit: typeof v === "function" ? v(!!prev.isWinSplit) : v }); }); };
+  var rpActive = sdState.rpActive || false;
+  var setRpActive = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { rpActive: typeof v === "function" ? v(!!prev.rpActive) : v }); }); };
   var skillsDB = p.skills || {};
 
   /* Skill category for position */
@@ -3298,7 +3316,7 @@ function LineupPage(p) {
               {SP_SLOTS.map(function(pos) { var pl = pick(pos); return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} /></div>) : (<div key={pos} onClick={function() { setPickerSlot(pos); }} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--re)" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{pos}</span></div>); })}
             </div>
           </div>
-          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} />
+          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} rpActive={rpActive} setRpActive={setRpActive} />
         </div>
       </div>
 
@@ -6096,7 +6114,6 @@ function DataCenterPage(p) {
    - 훈련 분포 (파+정+선, 변+구)
    - 특훈 분포 (파+정+선, 변+구) */
 
-var DIST_CACHE = null;
 
 /* ────────────────────────────────────────────────────────────────
    하드코딩된 분포 (관리자가 "분포 내보내기" 버튼으로 생성한 JSON을 붙여넣기)
@@ -6246,71 +6263,11 @@ function LineupAnalysis(p) {
   var sdState = p.sdState || {};
   var w = getW();
 
-  var _dist = React.useState(null); var dist = _dist[0]; var setDist = _dist[1];
-  var _building = React.useState(false); var building = _building[0]; var setBuilding = _building[1];
   var _role = React.useState("타자"); var role = _role[0]; var setRole = _role[1];
 
-  /* 분포 로드/빌드
-     forceBuild=true: 런타임에서 5만회 시뮬레이션 새로 실행 (관리자 "분포 빌드" 용)
-     기본값: PREBUILT_DIST(하드코딩)를 사용. 비어있으면 런타임 빌드로 fallback */
-  var buildAndSet = React.useCallback(async function(forceBuild) {
-    setBuilding(true);
-    await new Promise(function(r){ setTimeout(r, 50); });
-    var d;
-    if (!forceBuild && PREBUILT_DIST && Object.keys(PREBUILT_DIST).length > 0) {
-      d = PREBUILT_DIST;                                /* 하드코딩 분포 사용 */
-    } else {
-      var raw = buildDist(skills, 50000);
-      d = compressDist(raw, 1000);                      /* 5만 → 1000 포인트 압축 */
-    }
-    DIST_CACHE = d;
-    setDist(d);
-    setBuilding(false);
-  }, [skills]);
-
-  /* 분포 내보내기: 현재 skills로 5만회 시뮬레이션 → 1000 포인트 압축 → JSON 다운로드
-     이 파일 내용을 PREBUILT_DIST에 하드코딩하면 모든 사용자가 즉시 사용 */
-  var exportDist = React.useCallback(async function() {
-    setBuilding(true);
-    await new Promise(function(r){ setTimeout(r, 50); });
-    var raw = buildDist(skills, 50000);
-    var d = compressDist(raw, 1000);
-    var json = JSON.stringify(d);
-    try {
-      var blob = new Blob([json], {type:"application/json"});
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement("a");
-      a.href = url;
-      a.download = "prebuilt_dist_" + new Date().toISOString().slice(0,10) + ".json";
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch(e) {
-      /* 다운로드 실패 시 콘솔 출력 (수동 복사용) */
-      try { console.log("PREBUILT_DIST JSON:", json); } catch(_) {}
-      try { window.prompt("분포 JSON (복사해서 PREBUILT_DIST에 붙여넣기):", json); } catch(_) {}
-    }
-    setBuilding(false);
-  }, [skills]);
-
-  React.useEffect(function(){
-    /* 1순위: 캐시 재사용 (탭 이동 후 재진입) */
-    if (DIST_CACHE) { setDist(DIST_CACHE); return; }
-    /* 2순위: 하드코딩된 PREBUILT_DIST 즉시 사용 (일반 사용자 기본 경로) */
-    if (PREBUILT_DIST && Object.keys(PREBUILT_DIST).length > 0) {
-      DIST_CACHE = PREBUILT_DIST;
-      setDist(PREBUILT_DIST);
-      return;
-    }
-    /* 3순위: PREBUILT_DIST 비어있음 → skills 로드 대기 후 런타임 빌드 (최초 개발 상태) */
-    var hasSkills = skills && (
-      (skills["타자"] && Object.keys(skills["타자"]).length > 0) ||
-      (skills["선발"] && Object.keys(skills["선발"]).length > 0) ||
-      (skills["중계"] && Object.keys(skills["중계"]).length > 0) ||
-      (skills["마무리"] && Object.keys(skills["마무리"]).length > 0)
-    );
-    if (!hasSkills) return;
-    buildAndSet();
-  }, [skills]);
+  /* 훈련·특훈 분포는 오프라인에서 구워 박아둔 것을 그대로 쓴다.
+     웹에서 다시 굽는 경로는 두지 않는다 — data/gendist2.mjs 로 구워 PREBUILT_DIST 에 붙인다. */
+  var dist = PREBUILT_DIST;
 
   /* 라인업 선수 추출 */
   var allSlots = Object.keys(lineupMap);
@@ -6491,32 +6448,13 @@ function LineupAnalysis(p) {
     );
   };
 
-  if (building) return (
-    <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:40,textAlign:"center"}}>
-      <div style={{fontSize:15,color:"var(--td)",marginBottom:8}}>{"분포 계산 중..."}</div>
-      <div style={{fontSize:13,color:"var(--td)"}}>{"분포 데이터 로딩 중..."}</div>
-    </div>
-  );
-
   return (
     <div>
       <div style={{display:"flex",gap:6,marginBottom:12,alignItems:"center",flexWrap:"wrap"}}>
         {["타자","투수"].map(function(r){ var a=r===role; return (
           <button key={r} onClick={function(){setRole(r);}} style={{padding:"6px 16px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{r}</button>
         );})}
-        {p.isAdmin && (<React.Fragment>
-          <button onClick={function(){buildAndSet(true);}} style={{marginLeft:"auto",padding:"5px 10px",fontSize:12,background:"var(--inner)",border:"1px solid var(--acc)",borderRadius:6,color:"var(--acc)",cursor:"pointer"}} title="훈련·특훈 분포를 5만회 시뮬레이션해 현재 세션에만 적용. 스킬 분포는 스킬 계산기 표를 공유하므로 여기서 굽지 않는다">{"🔄 훈련·특훈 재빌드"}</button>
-          <button onClick={function(){exportDist();}} style={{padding:"5px 10px",fontSize:12,background:"var(--inner)",border:"1px solid var(--acc)",borderRadius:6,color:"var(--acc)",cursor:"pointer"}} title="훈련·특훈 분포 5만회 → 1000포인트 압축 → JSON 다운로드 (PREBUILT_DIST 에 붙여넣기)">{"📤 훈련·특훈 내보내기"}</button>
-        </React.Fragment>)}
       </div>
-      {p.isAdmin && (
-        <div style={{padding:"6px 10px",background:"var(--inner)",borderRadius:6,fontSize:11,color:"var(--td)",marginBottom:10,lineHeight:1.5}}>
-          {"👑 관리자 도구 — 스킬은 스킬 계산기와 같은 표(PREBUILT_SKILL_DIST) 사용. 훈련·특훈 "}
-          {PREBUILT_DIST && Object.keys(PREBUILT_DIST).length > 0
-            ? <span style={{color:"#66BB6A"}}>{"✓ 하드코딩 분포 사용 중 ("+Object.keys(PREBUILT_DIST).length+"개 키)"}</span>
-            : <span style={{color:"#FF9800"}}>{"⚠ PREBUILT_DIST 비어있음 → 런타임 빌드 중. 내보내기 후 소스에 하드코딩하세요"}</span>}
-        </div>
-      )}
 
       <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",overflow:"hidden",marginBottom:6}}>
         <div style={{padding:"8px 12px",background:"var(--inner)",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",gap:6}}>
@@ -7103,12 +7041,10 @@ function SkillCalculator(p) {
   var runSim = function() {
     var hand = pos === "타자" ? batHand : pitHand;
     var key = skillDistKey(cat, cardType, hand, isCatcher);
+    /* 미리 구운 분포만 쓴다. 그 자리에서 만들면 누를 때마다 답이 달라진다 —
+       스킬표를 손대면 data/genskill.mjs 로 다시 구워 PREBUILT_SKILL_DIST 에 박는다. */
     var arr = PREBUILT_SKILL_DIST[key];
-    if (!arr || !arr.length) {
-      /* 미리 구운 값이 없으면(스킬표를 손댄 직후 등) 그 자리에서 만든다 */
-      arr = sampleSkillScores(skills, cat, cardType, hand, isCatcher, 30000);
-    }
-    if (!arr || !arr.length) { alert("분포를 만들 수 없습니다. 스킬표를 확인해 주세요."); return; }
+    if (!arr || !arr.length) { alert("이 조건(" + key + ")의 분포가 아직 없습니다. 관리자에게 알려주세요."); return; }
     var lvs = DEFAULT_LV[cardType] || [6,5,5];
     var fixedFirst = (cardType === "임팩트" || cardType === "올스타");
     /* 고정형은 1옵션을 뺀 2·3옵션 합으로 비교한다 */
