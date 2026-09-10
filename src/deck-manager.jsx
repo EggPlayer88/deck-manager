@@ -2840,7 +2840,9 @@ function LineupPage(p) {
   var getSkillOpts = function(pl) {
     var cat = getSkillCat(pl);
     var t = skillsDB[cat] || {};
-    return Object.keys(t);
+    /* 국가대표 전용 스킬은 국가대표 카드에만 붙는다 */
+    var isNat = pl && pl.cardType === "국가대표";
+    return Object.keys(t).filter(function(n) { return isNat || !isNatOnlySkill(n, cat); });
   };
 
   /* Lookup player by id */
@@ -2969,13 +2971,21 @@ function LineupPage(p) {
   var updatePl = function(id, key, val) {
     save(players.map(function(x) { if (x.id !== id) return x; var c = Object.assign({}, x); c[key] = val; return c; }));
   };
+  /* 스킬 이름과 레벨을 한 번에 — 두 번 save 하면 앞의 변경이 덮인다 */
+  var updatePl2 = function(id, k1, v1, k2, v2) {
+    save(players.map(function(x) { if (x.id !== id) return x; var c = Object.assign({}, x); c[k1] = v1; c[k2] = v2; return c; }));
+  };
   var miniIn = function(id, field, val, color, max) {
     return (<input type="number" value={val || 0} onChange={function(e) { var v = parseInt(e.target.value) || 0; if (max) v = Math.min(max, Math.max(0, v)); updatePl(id, field, v); }} style={{ width: 34, padding: "2px 1px", textAlign: "center", background: "var(--inner)", border: "1px solid " + (color || "var(--bd)") + "44", borderRadius: 3, color: color || "var(--t1)", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />);
   };
   var skillInput = function(pl, num) {
     var opts = getSkillOpts(pl);
     var nameField = "skill" + num; var lvField = "s" + num + "Lv";
-    var c = {8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[pl[lvField]]||"var(--t2)";
+    var skCat = getSkillCat(pl);
+    /* 국가대표 전용 스킬은 인게임 규칙상 6레벨이 상한이다 */
+    var lvCap = isNatOnlySkill(pl[nameField], skCat) ? 6 : 0;
+    var lvShown = lvCap ? Math.min(pl[lvField] || 0, lvCap) : (pl[lvField] || 0);
+    var c = {8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[lvShown]||"var(--t2)";
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
         <SkillPicker
@@ -2983,11 +2993,16 @@ function LineupPage(p) {
           options={opts}
           width={90}
           fontSize={11}
-          onChange={function(v) { updatePl(pl.id, nameField, v); }}
+          onChange={function(v) {
+            var cap = isNatOnlySkill(v, skCat) ? 6 : 0;
+            if (cap && (pl[lvField] || 0) > cap) updatePl2(pl.id, nameField, v, lvField, cap);
+            else updatePl(pl.id, nameField, v);
+          }}
         />
-        <select value={pl[lvField] || 0} onChange={function(e) { updatePl(pl.id, lvField, parseInt(e.target.value)); }}
+        <select value={lvShown} onChange={function(e) { updatePl(pl.id, lvField, parseInt(e.target.value)); }}
           style={{ width: 38, padding: "3px 1px", fontSize: 12, background: "#1e293b", border: "1px solid " + c + "88", borderRadius: 3, color: c, fontFamily: "var(--m)", fontWeight: 700, outline: "none", textAlign: "center" }}>
-          {[0,5,6,7,8,9,10].map(function(v) { return (<option key={v} value={v} style={{background:"#1e293b",color:v===0?"#94a3b8":c}}>{v === 0 ? "-" : "Lv" + v}</option>); })}
+          {[0,5,6,7,8,9,10].filter(function(v) { return v === 0 || !lvCap || v <= lvCap; })
+            .map(function(v) { return (<option key={v} value={v} style={{background:"#1e293b",color:v===0?"#94a3b8":c}}>{v === 0 ? "-" : "Lv" + v}</option>); })}
         </select>
       </div>
     );
@@ -3462,7 +3477,7 @@ function PosTrainPage(p) {
               var catSk = skills[grp.cat] || {};
               return (<PosTrainRow key={pos} pos={pos} d={getPT(pos)} upd={upd} colors={grp.colors} stats={grp.stats} idx={idx} mobile={mob}
                         ptSkills={getPTS(pos)} updSkill={updSkill} slots={PT_SKILL_SLOTS}
-                        skillOptions={Object.keys(catSk)}
+                        skillOptions={Object.keys(catSk).filter(function(n){ return !isNatOnlySkill(n, grp.cat); })}
                         majorOptions={Object.keys((skills._major && skills._major[grp.cat]) || {})} />);
             })}
             </div>
@@ -5054,6 +5069,12 @@ function MyPlayersPage(p) {
       } else if (!src) {
         np.change = en.base["변화"]; np.stuff = en.base["구위"];
       }
+      /* 국가대표 전용 스킬은 인게임 규칙상 6레벨이 상한 — 시트 값이 넘으면 내려서 저장한다 */
+      var natCat = getSkillCat(np);
+      [1, 2, 3].forEach(function(k) {
+        var nm = np["skill" + k];
+        if (nm && isNatOnlySkill(nm, natCat) && np["s" + k + "Lv"] > 6) np["s" + k + "Lv"] = 6;
+      });
       made.push(np);
       nameToId[en.name] = np.id;
     });
@@ -5116,8 +5137,11 @@ function MyPlayersPage(p) {
     return "중계";
   };
   var getSkillOpts = function(pl) {
-    var t = skillsDB[getSkillCat(pl)] || {};
-    return Object.keys(t);
+    var cat = getSkillCat(pl);
+    var t = skillsDB[cat] || {};
+    /* 국가대표 전용 스킬은 국가대표 카드에만 붙는다 */
+    var isNat = pl && pl.cardType === "국가대표";
+    return Object.keys(t).filter(function(n) { return isNat || !isNatOnlySkill(n, cat); });
   };
 
   var upd = function(id, key, val, key2, val2) {
@@ -5191,6 +5215,8 @@ function MyPlayersPage(p) {
     /* 보너스 적용 전 레벨과 적용 후 레벨 — 차이가 나면 화면에 표시한다 */
     var baseLv = isManual ? (pl[lf] || 0) : autoSkillLv(pl[nf], pl.cardType, num, cat, []);
     var effLv = effSkillLv(pl[nf], pl[lf], isManual, pl.cardType, num, cat, pts);
+    /* 국가대표 전용 스킬만 6레벨 상한. 그 외에는 표 값이 비어있는 경우가 있어 제한하지 않는다 */
+    var skLvCap = isNatOnlySkill(pl[nf], cat) ? 6 : 0;
     var ptApplied = !!pl[nf] && effLv > baseLv;
     var shownLv = effLv;
     var c = {10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[shownLv] || "var(--t2)";
@@ -5205,14 +5231,19 @@ function MyPlayersPage(p) {
           options={opts}
           width={88}
           fontSize={11}
-          onChange={function(v) { upd(pl.id, nf, v); }}
+          onChange={function(v) {
+            /* 국대 스킬로 바꾸면 7~10 으로 잡혀 있던 레벨을 6 으로 내린다 */
+            var cap = isNatOnlySkill(v, cat) ? 6 : 0;
+            if (cap && isManual && (pl[lf] || 0) > cap) upd(pl.id, nf, v, lf, cap);
+            else upd(pl.id, nf, v);
+          }}
         />
         {hintName && (
           <span title={grpNow + " 자리에는 「" + hintName + "」 가 맞습니다. 눌러서 바꾸기"}
             onClick={function(){ upd(pl.id, nf, hintName); }}
             style={{ fontSize: 11, color: "#FFA726", cursor: "pointer", flexShrink: 0 }}>{"⚠"}</span>
         )}
-        <select value={isManual ? String(pl[lf] || 0) : "auto"}
+        <select value={isManual ? String(skLvCap ? Math.min(pl[lf] || 0, skLvCap) : (pl[lf] || 0)) : "auto"}
           title={isManual ? "직접 지정" : "자동 (카드 종류 기본값 + 포지션 특훈 스킬 보너스)"}
           onChange={function(e) {
             var v = e.target.value;
@@ -5227,7 +5258,8 @@ function MyPlayersPage(p) {
           }}
           style={{ width: 52, padding: "2px", fontSize: 11, background: "var(--inner)", border: "1px solid " + c + "44", borderRadius: 3, color: c, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }}>
           <option value="auto">{autoLv ? "자동 " + autoLv : "자동"}</option>
-          {[0,5,6,7,8,9,10].map(function(v) { return (<option key={v} value={String(v)}>{v === 0 ? "-" : "Lv" + v}</option>); })}
+          {[0,5,6,7,8,9,10].filter(function(v) { return v === 0 || !skLvCap || v <= skLvCap; })
+            .map(function(v) { return (<option key={v} value={String(v)}>{v === 0 ? "-" : "Lv" + v}</option>); })}
         </select>
         {ptApplied && (<span title={"포지션 특훈 스킬 보너스 +1 → Lv" + effLv}
           style={{ fontSize: 10, fontWeight: 800, color: "#FFA726", whiteSpace: "nowrap" }}>{"→" + effLv}</span>)}
@@ -5495,6 +5527,17 @@ function MyPlayersPage(p) {
         var okCnt = ents.length - needPick.length;
         var imps = ents.filter(function(e) { return e.match && e.match.cardType === "임팩트"; });
         var byId = {}; SEED_PLAYERS.forEach(function(sp) { byId[sp.id] = sp; });
+        var byIdEnt = function(e) { return byId[impPrev.picks[e.row]] || e.match || null; };
+        /* 국가대표 전용 스킬이 국대가 아닌 카드에 적혀 있으면 시트 쪽 실수다 — 지우지 않고 알려만 준다 */
+        var natBad = [];
+        ents.forEach(function(e) {
+          var ct = (impPrev.picks[e.row] && byIdEnt(e) ? byIdEnt(e).cardType : (e.types && e.types[0])) || "";
+          if (ct === "국가대표") return;
+          var c2 = e.role === "타자" ? "타자" : (e.position === "CP" ? "마무리" : e.position === "RP" ? "중계" : "선발");
+          (e.skills || []).forEach(function(sk) {
+            if (sk && sk.name && isNatOnlySkill(sk.name, c2)) natBad.push(e.name + " · " + sk.name);
+          });
+        });
         var label = function(r) {
           return r.cardType + " " + (r.year || "-") + (r.impactType ? " " + r.impactType : "") +
                  " (" + (r.role === "타자" ? [r.power, r.accuracy, r.eye, r.patience].join("/") : [r.change, r.stuff].join("/")) + ")";
@@ -5555,6 +5598,9 @@ function MyPlayersPage(p) {
               <div style={{ background: "var(--inner)", borderRadius: 6, padding: "8px 10px", fontSize: 11, color: "var(--td)", lineHeight: 1.7 }}>
                 {"가져오지 않는 항목: 선수별 셋포 체크·포틈, 연도 세트덱, 송/변 잠재, 중계 전술 '적극'"}
                 {(impPrev.team && impPrev.team.warn.length > 0) && impPrev.team.warn.map(function(w, i) { return (<div key={i} style={{ color: "#FFA726" }}>{"· " + w}</div>); })}
+                {natBad.length > 0 && (<div style={{ color: "#FFA726", marginTop: 4 }}>
+                  {"· 국가대표 전용 스킬이 국대가 아닌 카드에 적혀 있습니다 — " + natBad.slice(0, 6).join(", ") + (natBad.length > 6 ? " 외 " + (natBad.length - 6) + "건" : "")}
+                </div>)}
               </div>
             </div>
 
