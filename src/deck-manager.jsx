@@ -6560,6 +6560,63 @@ function SkillPhotoScan(p) {
 var MAJOR_RATE_PREMIUM = 0.14;  /* 고급스킬변경권 — 골글·시그·국대·라이브 */
 var MAJOR_RATE_NORMAL  = 0.07;  /* 일반스킬변경권 — 1옵션을 고정하는 임팩트·올스타 */
 
+/* 조건에 따라 갈리는 스킬은 "그 선수에게 실제로 뜨는 변형" 하나만 뽑기 풀에 넣는다.
+   1/3 확률로 뭉개면 좌투 투수의 좌승사자 기대값이 실제의 절반이 되어 백분위가 망가진다.
+
+   고정 가정 (2026-09-10 결정)
+     · 주루·지구력 : 위에서 두 번째 구간
+     · 타순·선발   : 배치한 것으로 본다
+     · 성급        : 5성
+   나머지(타석 좌우양, 투구 손)는 cond 로 받는다. */
+var SKILL_FIXED_VARIANT = {
+  "5툴플레이어": "5툴플레이어(267274)",
+  "철완": "철완(134139)",
+  "선봉장": "선봉장(타순배치,주루130~141)",
+  "컨택트히터": "컨택트히터(타순배치)",
+  "공포의하위타선": "공포의하위타선(타순O)",
+  "핵타선": "핵타선(타순O)",
+  "수비안정성": "수비안정성(타순O)",
+  "리드오프": "리드오프(타순O)",
+  "빈틈없는타선": "빈틈없는타선(타순O)",
+  "원투펀치": "원투펀치(배치O)",
+  "도전정신": "도전정신(5성)",
+};
+/* 타석/투구 손으로 갈리는 계열 — cond.hand 는 "좌"|"우"|"양" */
+var SKILL_HAND_VARIANT = {
+  "스위치히터": { "양": "스위치히터(양타)", "좌": "스위치히터(좌타)", "우": "스위치히터(우타)" },
+  "좌타해결사": { "좌": "좌타해결사(좌타)", "양": "좌타해결사(양타)", "우": "좌타해결사(우타)" },
+  "좌승사자": { "좌": "좌승사자(좌투)", "우": "좌승사자(우투)" },
+  "우타킬러": { "좌": "우타킬러(좌투)", "우": "우타킬러(우투)" },
+  "좌타킬러": { "좌": "좌타킬러(좌투)", "우": "좌타킬러(우투)" },
+};
+/* 카드 종류로 갈리는 패기 */
+function pickPaegi(cat, cardType) {
+  if (cat === "타자") {
+    if (cardType === "임팩트") return "패기(임팩)";
+    if (cardType === "국가대표") return "패기(국대)";
+    if (cardType === "골든글러브") return "패기(골글)";
+    return "패기(시그/올스타)";
+  }
+  var bullpen = cat === "중계" || cat === "마무리";
+  if (cardType === "임팩트") return bullpen ? "패기(임팩불펜)" : "패기(임팩선발)";
+  if (cardType === "골든글러브") return "패기(골글)";
+  return bullpen ? "패기(시그/올스타불펜)" : "패기(시그/올스타선발)";
+}
+/* 뽑기 풀에 이 변형을 넣어도 되는가. cond = {hand, cardType, cat, catchBuff} */
+function variantAllowed(name, cond) {
+  var b = skillBaseName(name);
+  var fixed = SKILL_FIXED_VARIANT[b];
+  if (fixed) return name === fixed;
+  var hm = SKILL_HAND_VARIANT[b];
+  if (hm) {
+    var want = hm[cond.hand] || hm["우"];
+    return name === want;
+  }
+  if (b === "패기") return name === pickPaegi(cond.cat, cond.cardType);
+  if (b === "포수리드") return name === (cond.catchBuff ? "포수리드(버프포함)" : "포수리드");
+  return true;
+}
+
 function SkillCalculator(p) {
   var skills = p.skills || {};
   var mob = p.mobile;
@@ -6574,6 +6631,10 @@ function SkillCalculator(p) {
   var _card = React.useState("골든글러브"); var cardType = _card[0]; var setCardType = _card[1];
   /* 포수리드는 포수에게만 붙는다 — 타자일 때만 의미가 있다 */
   var _catcher = React.useState(false); var isCatcher = _catcher[0]; var setIsCatcher = _catcher[1];
+  /* 조건으로 갈리는 스킬 때문에 필요한 값 — 도감에 있는 정보지만 계산기엔 선수 선택이 없어 직접 받는다 */
+  var _bh = React.useState("우"); var batHand = _bh[0]; var setBatHand = _bh[1];   /* 좌|우|양 */
+  var _ph = React.useState("우"); var pitHand = _ph[0]; var setPitHand = _ph[1];   /* 좌|우 */
+  var _cb = React.useState(true); var catchBuff = _cb[0]; var setCatchBuff = _cb[1];
   var _pos  = React.useState("타자");       var pos = _pos[0];      var setPos  = _pos[1];
   var _sk   = React.useState([{name:"",lv:6,locked:false},{name:"",lv:5,locked:false},{name:"",lv:5,locked:false}]);
   var sks = _sk[0]; var setSks = _sk[1];
@@ -6589,9 +6650,12 @@ function SkillCalculator(p) {
      1) 국가대표 전용 스킬 — 국대 카드가 아니면 붙지 않는다
      2) 이 포지션에 안 뜨는 스킬 — 마당쇠는 불펜에만, 집념은 선발에만 하는 식 */
   var isNatCard = cardType === "국가대표";
+  var condHand = pos === "타자" ? batHand : pitHand;
+  var varCond = { hand: condHand, cardType: cardType, cat: cat, catchBuff: isCatcher && catchBuff };
   var allSkillNames = Object.keys(catSkills).filter(function(n) {
     if (!isNatCard && isNatOnlySkill(n, cat)) return false;
-    return skillAllowedAt(n, pos, isCatcher);
+    if (!skillAllowedAt(n, pos, isCatcher)) return false;
+    return variantAllowed(n, varCond);
   });
 
   /* 괄호 제거 기본명 */
@@ -6763,6 +6827,23 @@ function SkillCalculator(p) {
               {"포수" + (isCatcher?" ON":"")}
             </button>
           )}
+        </div>
+        {/* 조건으로 갈리는 스킬 — 해당 조건의 변형만 뽑기 풀에 넣는다 */}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px solid var(--bd)"}}>
+          <span style={{fontSize:12,color:"var(--td)",fontWeight:700,marginRight:2}}>{pos==="타자"?"타석":"투구"}</span>
+          {(pos==="타자" ? ["우","좌","양"] : ["우","좌"]).map(function(h){
+            var cur = pos==="타자" ? batHand : pitHand;
+            var a = cur===h;
+            return (<button key={h} onClick={function(){ (pos==="타자"?setBatHand:setPitHand)(h); setResult(null); }}
+              style={{padding:"4px 10px",fontSize:12,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:"1px solid "+(a?"var(--acc)":"var(--bd)"),borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>
+              {h + (pos==="타자"?"타":"투")}</button>);
+          })}
+          {pos==="타자" && isCatcher && (
+            <button onClick={function(){setCatchBuff(!catchBuff);setResult(null);}}
+              style={{padding:"4px 10px",fontSize:12,fontWeight:catchBuff?800:500,background:catchBuff?"var(--ta)":"var(--inner)",border:"1px solid "+(catchBuff?"var(--acc)":"var(--bd)"),borderRadius:6,color:catchBuff?"var(--acc)":"var(--t2)",cursor:"pointer",marginLeft:6}}>
+              {"포수리드 버프" + (catchBuff?" 포함":" 없음")}</button>
+          )}
+          <span style={{fontSize:11,color:"var(--td)",marginLeft:"auto"}}>{"주루·지구력 2구간 / 타순·선발 배치 가정"}</span>
         </div>
       </div>
 

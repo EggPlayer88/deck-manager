@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -372,6 +372,32 @@ eq('집념은 선발만', skillAllowedAt('집념', '중계', false) ? 1 : 0, 0);
 eq('라이징스타는 마무리에 안 뜬다', skillAllowedAt('라이징스타(추격조)', '마무리', false) ? 1 : 0, 0);
 eq('국민계투는 선발에 안 뜬다', skillAllowedAt('국민계투', '선발', false) ? 1 : 0, 0);
 eq('제한 없는 스킬은 어디서나', skillAllowedAt('정밀타격', '타자', false) ? 1 : 0, 1);
+
+console.log('%s[조건부 변형] 그 선수에게 실제로 뜨는 하나만 풀에 넣는다');
+var cB = function(h, buff){ return { hand:h, cardType:"골든글러브", cat:"타자", catchBuff:!!buff }; };
+var cP = function(h, ct, cat){ return { hand:h, cardType:ct||"골든글러브", cat:cat||"선발" }; };
+eq('우타는 스위치히터(우타)만', variantAllowed('스위치히터(우타)', cB('우')) ? 1 : 0, 1);
+eq('우타에 양타는 안 뜬다', variantAllowed('스위치히터(양타)', cB('우')) ? 1 : 0, 0);
+eq('양타는 양타만', variantAllowed('스위치히터(양타)', cB('양')) ? 1 : 0, 1);
+eq('좌투는 좌승사자(좌투)', variantAllowed('좌승사자(좌투)', cP('좌')) ? 1 : 0, 1);
+eq('우투에 좌승사자(좌투) 안 뜬다', variantAllowed('좌승사자(좌투)', cP('우')) ? 1 : 0, 0);
+/* 고정 가정 — 주루·지구력 2구간, 타순·선발 배치, 5성 */
+eq('5툴플레이어는 267274 만', variantAllowed('5툴플레이어(267274)', cB('우')) ? 1 : 0, 1);
+eq('5툴플레이어 275299 는 제외', variantAllowed('5툴플레이어(275299)', cB('우')) ? 1 : 0, 0);
+eq('철완은 134139 만', variantAllowed('철완(134139)', cP('우')) ? 1 : 0, 1);
+eq('선봉장은 타순배치+주루2구간', variantAllowed('선봉장(타순배치,주루130~141)', cB('우')) ? 1 : 0, 1);
+eq('선봉장 미배치는 제외', variantAllowed('선봉장(타순배치X,주루142+)', cB('우')) ? 1 : 0, 0);
+eq('핵타선은 타순O', variantAllowed('핵타선(타순O)', cB('우')) ? 1 : 0, 1);
+eq('원투펀치는 배치O', variantAllowed('원투펀치(배치O)', cP('우')) ? 1 : 0, 1);
+eq('도전정신은 5성', variantAllowed('도전정신(5성)', cB('우')) ? 1 : 0, 1);
+/* 패기는 카드종류·역할로 갈린다 */
+eq('타자 임팩 패기', pickPaegi('타자', '임팩트') === '패기(임팩)' ? 1 : 0, 1);
+eq('중계 임팩 패기는 불펜', pickPaegi('중계', '임팩트') === '패기(임팩불펜)' ? 1 : 0, 1);
+eq('선발 시그 패기', pickPaegi('선발', '시그니처') === '패기(시그/올스타선발)' ? 1 : 0, 1);
+/* 포수리드 버프 */
+eq('버프 포함', variantAllowed('포수리드(버프포함)', cB('우', true)) ? 1 : 0, 1);
+eq('버프 없으면 기본', variantAllowed('포수리드', cB('우', false)) ? 1 : 0, 1);
+eq('조건 없는 스킬은 통과', variantAllowed('정밀타격', cB('우')) ? 1 : 0, 1);
 
 console.log('\n[메이저 분류] 확정본');
 eq('타자 메이저 76개', Object.keys(DEFAULT_MAJOR['타자']).length, 76);
