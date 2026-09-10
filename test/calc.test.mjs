@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -399,7 +399,26 @@ eq('포수리드는 버프포함으로 고정', variantAllowed('포수리드(버
 eq('일반 포수리드는 제외', variantAllowed('포수리드', cB('우')) ? 1 : 0, 0);
 eq('조건 없는 스킬은 통과', variantAllowed('정밀타격', cB('우')) ? 1 : 0, 1);
 
-console.log(' + NL + [배치 자리별 변형] 포지션마다 대표 자리 하나로 고정한다');
+console.log('\n[슬롯 자리 판정] 앱의 패전조 = 스킬의 추격조');
+eq('2/2/2 RP1 은 승리조', slotGroupOf('RP1', 4, false) === '승리조' ? 1 : 0, 1);
+eq('2/2/2 RP3 은 패전조', slotGroupOf('RP3', 4, false) === '패전조' ? 1 : 0, 1);
+eq('2/2/2 RP5 은 롱릴리프', slotGroupOf('RP5', 4, false) === '롱릴리프' ? 1 : 0, 1);
+eq('CP 는 마무리', slotGroupOf('CP', 4, false) === '마무리' ? 1 : 0, 1);
+eq('SP1 은 선발', slotGroupOf('SP1', 4, false) === '선발' ? 1 : 0, 1);
+eq('3/3/0 분업이면 RP1 은 셋업', slotGroupOf('RP1', 8, true) === '셋업' ? 1 : 0, 1);
+eq('분업 꺼져 있으면 승리조', slotGroupOf('RP1', 8, false) === '승리조' ? 1 : 0, 1);
+
+console.log('\n[자리 불일치] 라인업을 옮기면 조용히 틀어지는 것을 잡는다');
+eq('승리조에 긴급투입(추격조)', skillSlotHint('긴급투입(추격조)', '승리조', '중계') === '긴급투입(필승조/마무리)' ? 1 : 0, 1);
+eq('패전조면 맞다', skillSlotHint('긴급투입(추격조)', '패전조', '중계') === '' ? 1 : 0, 1);
+eq('승리조에 수호신(셋업2)', skillSlotHint('수호신(셋업2)', '승리조', '중계') === '수호신(승리조)' ? 1 : 0, 1);
+eq('셋업에 수호신(승리조)', skillSlotHint('수호신(승리조)', '셋업', '중계') === '수호신(셋업2)' ? 1 : 0, 1);
+eq('불펜에 마당쇠(선발)', skillSlotHint('마당쇠(선발)', '패전조', '중계') === '마당쇠(불펜)' ? 1 : 0, 1);
+eq('조건 괄호는 자리가 아니다', skillSlotHint('철완(134139)', '승리조', '중계') === '' ? 1 : 0, 1);
+eq('괄호 없는 스킬도 통과', skillSlotHint('파이어볼', '승리조', '중계') === '' ? 1 : 0, 1);
+eq('타자는 검사하지 않는다', skillSlotHint('컨택트히터(타순배치)', '타자', '타자') === '' ? 1 : 0, 1);
+
+console.log('\n[배치 자리별 변형] 포지션마다 대표 자리 하나로 고정한다');
 var vc = function(cat){ return { hand:"우", cardType:"골든글러브", cat:cat }; };
 eq('중계 수호신은 승리조', variantAllowed('수호신(승리조)', vc('중계')) ? 1 : 0, 1);
 eq('중계 수호신 셋업2는 제외', variantAllowed('수호신(셋업2)', vc('중계')) ? 1 : 0, 0);

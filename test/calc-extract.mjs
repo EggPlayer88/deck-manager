@@ -289,6 +289,55 @@ var POS_TRAIN = {
 };
 var SD_LEGACY_AUTO = { "s95": "R", "s125": "L" };
 function sdPick(sdState, sp) { var k = "s" + sp; var x = sdState[k]; return (x === undefined || x === null) ? (SD_LEGACY_AUTO[k] || "") : x; }
+var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
+var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
+var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
+var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1}];
+function slotGroupOf(slot, bpcIdx, isWinSplit) {
+  if (!slot) return "";
+  if (slot === "CP") return "마무리";
+  if (SP_SLOTS.indexOf(slot) >= 0) return "선발";
+  var si = RP_SLOTS.indexOf(slot);
+  if (si < 0) return "타자";
+  var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
+  if (si < cfg.w) return isWinSplit ? "셋업" : "승리조";
+  if (si < cfg.w + cfg.l) return "패전조";
+  return "롱릴리프";
+}
+var SKILL_SLOT_OK = {
+  "선발": ["선발"], "배치O": ["선발"], "배치X": ["선발"], "3~5선발": ["선발"],
+  "불펜": ["승리조", "셋업", "패전조", "롱릴리프", "마무리"],
+  "중계": ["승리조", "셋업", "패전조", "롱릴리프"],
+  "마무리": ["마무리"],
+  "승리조": ["승리조"], "필승조": ["승리조"],
+  "셋업1": ["셋업"], "셋업2": ["셋업"],
+  "셋업/마무리": ["셋업", "마무리"],
+  "필승조/마무리": ["승리조", "셋업", "마무리"],
+  "셋업제외중계": ["승리조", "패전조", "롱릴리프"],
+  "셋업제외불펜": ["승리조", "패전조", "롱릴리프", "마무리"],
+  "추격조": ["패전조"], "롱릴리프": ["롱릴리프"],
+  "추격조/롱릴리프": ["패전조", "롱릴리프"],
+};
+function skillSlotHint(name, group, cat) {
+  if (!name || !group || group === "타자") return "";
+  var m = /\(([^)]*)\)/.exec(name);
+  if (!m) return "";
+  var q = m[1].replace("시그/올스타", "").replace("임팩", "").replace("골글", "").trim();
+  var ok = SKILL_SLOT_OK[q];
+  if (!ok || ok.indexOf(group) >= 0) return "";
+  /* 같은 계열에서 이 자리에 맞는 변형을 찾아 알려준다 */
+  var base = skillBaseName(name);
+  var tbl = (SKILL_DATA && SKILL_DATA[cat]) || {};
+  for (var k in tbl) {
+    if (skillBaseName(k) !== base) continue;
+    var m2 = /\(([^)]*)\)/.exec(k);
+    if (!m2) continue;
+    var q2 = m2[1].replace("시그/올스타", "").replace("임팩", "").replace("골글", "").trim();
+    var ok2 = SKILL_SLOT_OK[q2];
+    if (ok2 && ok2.indexOf(group) >= 0) return k;
+  }
+  return "";
+}
 function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!pl) return {p:0,a:0,e:0,n:0,c:0,s:0};
   var isBat = pl.role === "타자";
@@ -487,4 +536,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };

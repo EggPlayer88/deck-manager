@@ -1898,6 +1898,56 @@ function BullpenLayout(p) {
    라인업/내선수 페이지에서 200+ 스킬 중 검색하여 고르기 위함
    props: value, onChange, options(스킬명 배열), width, fontSize
    ================================================================ */
+/* 슬롯이 실제로 어느 자리인가. 앱의 "패전조" 가 스킬 이름의 "추격조" 다.
+   분업을 켜면 승리조 자리가 셋업이 된다. */
+function slotGroupOf(slot, bpcIdx, isWinSplit) {
+  if (!slot) return "";
+  if (slot === "CP") return "마무리";
+  if (SP_SLOTS.indexOf(slot) >= 0) return "선발";
+  var si = RP_SLOTS.indexOf(slot);
+  if (si < 0) return "타자";
+  var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
+  if (si < cfg.w) return isWinSplit ? "셋업" : "승리조";
+  if (si < cfg.w + cfg.l) return "패전조";
+  return "롱릴리프";
+}
+/* 괄호 안 자리 표기 -> 그 변형이 유효한 자리들 */
+var SKILL_SLOT_OK = {
+  "선발": ["선발"], "배치O": ["선발"], "배치X": ["선발"], "3~5선발": ["선발"],
+  "불펜": ["승리조", "셋업", "패전조", "롱릴리프", "마무리"],
+  "중계": ["승리조", "셋업", "패전조", "롱릴리프"],
+  "마무리": ["마무리"],
+  "승리조": ["승리조"], "필승조": ["승리조"],
+  "셋업1": ["셋업"], "셋업2": ["셋업"],
+  "셋업/마무리": ["셋업", "마무리"],
+  "필승조/마무리": ["승리조", "셋업", "마무리"],
+  "셋업제외중계": ["승리조", "패전조", "롱릴리프"],
+  "셋업제외불펜": ["승리조", "패전조", "롱릴리프", "마무리"],
+  "추격조": ["패전조"], "롱릴리프": ["롱릴리프"],
+  "추격조/롱릴리프": ["패전조", "롱릴리프"],
+};
+/* 배치한 자리와 안 맞는 변형이면 그 자리에 맞는 변형 이름을 돌려준다. 맞으면 "". */
+function skillSlotHint(name, group, cat) {
+  if (!name || !group || group === "타자") return "";
+  var m = /\(([^)]*)\)/.exec(name);
+  if (!m) return "";
+  var q = m[1].replace("시그/올스타", "").replace("임팩", "").replace("골글", "").trim();
+  var ok = SKILL_SLOT_OK[q];
+  if (!ok || ok.indexOf(group) >= 0) return "";
+  /* 같은 계열에서 이 자리에 맞는 변형을 찾아 알려준다 */
+  var base = skillBaseName(name);
+  var tbl = (SKILL_DATA && SKILL_DATA[cat]) || {};
+  for (var k in tbl) {
+    if (skillBaseName(k) !== base) continue;
+    var m2 = /\(([^)]*)\)/.exec(k);
+    if (!m2) continue;
+    var q2 = m2[1].replace("시그/올스타", "").replace("임팩", "").replace("골글", "").trim();
+    var ok2 = SKILL_SLOT_OK[q2];
+    if (ok2 && ok2.indexOf(group) >= 0) return k;
+  }
+  return "";
+}
+
 function SkillPicker(p) {
   var _o = useState(false); var open = _o[0]; var setOpen = _o[1];
   var _q = useState(""); var q = _q[0]; var setQ = _q[1];
@@ -5095,6 +5145,10 @@ function MyPlayersPage(p) {
     var ptApplied = !!pl[nf] && effLv > baseLv;
     var shownLv = effLv;
     var c = {10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[shownLv] || "var(--t2)";
+    /* 배치한 자리와 스킬 변형이 어긋나면 알려준다 — 라인업을 옮기면 조용히 틀어진다 */
+    var slotNow = getSlot(pl.id);
+    var grpNow = slotGroupOf(slotNow, sdState.bpcIdx, sdState.isWinSplit);
+    var hintName = skillSlotHint(pl[nf], grpNow, cat);
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
         <SkillPicker
@@ -5104,6 +5158,11 @@ function MyPlayersPage(p) {
           fontSize={11}
           onChange={function(v) { upd(pl.id, nf, v); }}
         />
+        {hintName && (
+          <span title={grpNow + " 자리에는 「" + hintName + "」 가 맞습니다. 눌러서 바꾸기"}
+            onClick={function(){ upd(pl.id, nf, hintName); }}
+            style={{ fontSize: 11, color: "#FFA726", cursor: "pointer", flexShrink: 0 }}>{"⚠"}</span>
+        )}
         <select value={isManual ? String(pl[lf] || 0) : "auto"}
           title={isManual ? "직접 지정" : "자동 (카드 종류 기본값 + 포지션 특훈 스킬 보너스)"}
           onChange={function(e) {
