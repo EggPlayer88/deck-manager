@@ -212,11 +212,39 @@ var SKILL_POS_LIMIT = {
 var CATCHER_ONLY_SKILLS = ["포수리드"];
 function skillBaseName(n) { return String(n || "").replace(/\(.*?\)/g, "").trim(); }
 /* pos 는 계산기의 타자/선발/중계/마무리. isCatcher 는 타자일 때만 의미가 있다. */
+/* 괄호 안에 역할이 박힌 변형은 그 역할에서만 뜬다.
+   기선제압(선발) / 기선제압(셋업/마무리) / 기선제압(셋업제외불펜) 처럼
+   같은 스킬이 어디에 배치했느냐로 갈리는 것들이다.
+   역할이 아닌 괄호(우투·4성·지구력 구간 등)는 null 을 돌려 어디서나 통과시킨다. */
+function skillRoleOf(name) {
+  var m = /\(([^)]*)\)/.exec(String(name || ""));
+  if (!m) return null;
+  var q = m[1];
+  /* 앞에 붙는 카드 종류는 역할이 아니다 */
+  q = q.replace("시그/올스타", "").replace("임팩", "").replace("골글", "").trim();
+  if (!q) return null;
+  var r = {};
+  if (q.indexOf("선발") >= 0 || q.indexOf("배치") >= 0) r["선발"] = 1;
+  if (q.indexOf("불펜") >= 0) { r["중계"] = 1; r["마무리"] = 1; }
+  if (q.indexOf("중계") >= 0) r["중계"] = 1;
+  if (q.indexOf("마무리") >= 0) r["마무리"] = 1;
+  if (/셋업|승리조|필승조|추격조|롱릴리프/.test(q)) r["중계"] = 1;
+  /* "셋업제외불펜" 은 글자만 보면 마무리까지 걸리지만, 마무리는 (셋업/마무리) 변형이
+     따로 담당한다. 둘 다 풀에 넣으면 한 선수가 두 변형을 갖는 셈이라 중계로만 본다. */
+  if (q.indexOf("셋업제외") >= 0) { delete r["마무리"]; r["중계"] = 1; }
+  var keys = Object.keys(r);
+  return keys.length ? keys : null;
+}
+
 function skillAllowedAt(name, pos, isCatcher) {
   var b = skillBaseName(name);
   if (CATCHER_ONLY_SKILLS.indexOf(b) >= 0 && !isCatcher) return false;
   var lim = SKILL_POS_LIMIT[b];
-  return !lim || lim.indexOf(pos) >= 0;
+  if (lim && lim.indexOf(pos) < 0) return false;
+  /* 타자 쪽 괄호는 타순·주루 조건이라 역할로 보면 안 된다 */
+  if (pos === "타자") return true;
+  var roles = skillRoleOf(name);
+  return !roles || roles.indexOf(pos) >= 0;
 }
 
 var SKILL_DATA_VERSION = 7; /* 7 = 메이저 분류 확정 (6 = 잠재력 C 등급 감점) */

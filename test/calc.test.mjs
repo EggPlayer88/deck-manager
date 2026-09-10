@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -398,6 +398,24 @@ eq('선발 시그 패기', pickPaegi('선발', '시그니처') === '패기(시�
 eq('버프 포함', variantAllowed('포수리드(버프포함)', cB('우', true)) ? 1 : 0, 1);
 eq('버프 없으면 기본', variantAllowed('포수리드', cB('우', false)) ? 1 : 0, 1);
 eq('조건 없는 스킬은 통과', variantAllowed('정밀타격', cB('우')) ? 1 : 0, 1);
+
+console.log('%s[역할별 변형] 포지션을 고르면 그 역할 변형만 남는다');
+var pool = function(names, pos){ return names.filter(function(n){ return skillAllowedAt(n, pos, false); }); };
+var 기선 = ['기선제압(선발)','기선제압(셋업/마무리)','기선제압(셋업제외불펜)'];
+eq('선발은 (선발) 하나', pool(기선, '선발').join('|') === '기선제압(선발)' ? 1 : 0, 1);
+eq('마무리는 (셋업/마무리) 하나', pool(기선, '마무리').join('|') === '기선제압(셋업/마무리)' ? 1 : 0, 1);
+eq('중계는 둘 — 셋업 여부로 갈린다', pool(기선, '중계').length, 2);
+var 수호 = ['수호신(선발)','수호신(셋업1)','수호신(셋업2)','수호신(승리조)','수호신(추격조/롱릴리프)','수호신(마무리)'];
+eq('수호신 선발은 1개', pool(수호, '선발').length, 1);
+eq('수호신 마무리는 1개', pool(수호, '마무리').length, 1);
+eq('수호신 중계는 4개', pool(수호, '중계').length, 4);
+eq('긴급투입 추격조는 선발에 안 뜬다', skillAllowedAt('긴급투입(추격조)', '선발', false) ? 1 : 0, 0);
+/* 역할이 아닌 괄호는 걸러지면 안 된다 */
+eq('철완 구간은 역할이 아니다', skillRoleOf('철완(134139)') === null ? 1 : 0, 1);
+eq('좌투는 역할이 아니다', skillRoleOf('좌승사자(좌투)') === null ? 1 : 0, 1);
+eq('4성도 역할이 아니다', skillRoleOf('도전정신(4성)') === null ? 1 : 0, 1);
+eq('카드종류 접두는 떼고 본다', skillRoleOf('패기(임팩불펜)').join(',').indexOf('중계') >= 0 ? 1 : 0, 1);
+eq('타자 괄호는 역할 취급 안 함', skillAllowedAt('컨택트히터(타순배치)', '타자', false) ? 1 : 0, 1);
 
 console.log('\n[메이저 분류] 확정본');
 eq('타자 메이저 76개', Object.keys(DEFAULT_MAJOR['타자']).length, 76);
