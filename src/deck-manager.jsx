@@ -6556,6 +6556,10 @@ function SkillPhotoScan(p) {
   );
 }
 
+/* 스킬변경권 종류별 메이저 등장 확률 (2·3옵션 각각) */
+var MAJOR_RATE_PREMIUM = 0.14;  /* 고급스킬변경권 — 골글·시그·국대·라이브 */
+var MAJOR_RATE_NORMAL  = 0.07;  /* 일반스킬변경권 — 1옵션을 고정하는 임팩트·올스타 */
+
 function SkillCalculator(p) {
   var skills = p.skills || {};
   var mob = p.mobile;
@@ -6661,8 +6665,9 @@ function SkillCalculator(p) {
 
         /* 나머지 스킬 뽑기: 기본명 기준으로 중복 없이 선택 */
         for (var slot = startIdx; slot < 3; slot++) {
-          /* 스킬1은 무조건 메이저, 스킬2/3는 14% 확률 */
-          var isMajor = (slot === 0) ? true : Math.random() < 0.14;
+          /* 고급스킬변경권: 1옵션은 확정 메이저, 2·3옵션은 각 14%.
+             임팩트·올스타는 1옵션을 고정해 두고 일반스킬변경권으로 돌리므로 2·3옵션 각 7%. */
+          var isMajor = (slot === 0) ? true : Math.random() < (fixedFirst ? MAJOR_RATE_NORMAL : MAJOR_RATE_PREMIUM);
           /* 이미 선택된 기본명 제외 */
           var chosenBases = chosen.map(function(n){return baseName(n);});
           var basePool = (isMajor ? majorBaseNames : minorBaseNames).filter(function(b){return chosenBases.indexOf(b)<0;});
