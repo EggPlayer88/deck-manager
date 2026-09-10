@@ -474,7 +474,14 @@ eq('카드종류 접두는 떼고 본다', skillRoleOf('패기(임팩불펜)').j
 eq('타자 괄호는 역할 취급 안 함', skillAllowedAt('컨택트히터(타순배치)', '타자', false) ? 1 : 0, 1);
 
 console.log('\n[메이저 분류] 확정본');
-eq('타자 메이저 76개', Object.keys(DEFAULT_MAJOR['타자']).length, 76);
+eq('타자 메이저 75개', Object.keys(DEFAULT_MAJOR['타자']).length, 75);
+eq('선발 메이저 59개', Object.keys(DEFAULT_MAJOR['선발']).length, 59);
+/* 검토에서 잡힌 두 건 — 킬러 계열은 전부 일반, 흐름끊기는 역할 전부 메이저 */
+eq('우완킬러 일반', DEFAULT_MAJOR['타자']['우완킬러'] ? 1 : 0, 0);
+eq('좌완킬러도 일반', DEFAULT_MAJOR['타자']['좌완킬러'] ? 1 : 0, 0);
+eq('우타킬러(좌투) 일반', DEFAULT_MAJOR['선발']['우타킬러(좌투)'] ? 1 : 0, 0);
+eq('흐름끊기(선발) 메이저', DEFAULT_MAJOR['선발']['흐름끊기(선발)'] ? 1 : 0, 1);
+eq('흐름끊기(셋업/마무리) 메이저', DEFAULT_MAJOR['중계']['흐름끊기(셋업/마무리)'] ? 1 : 0, 1);
 eq('스위치히터(양타) 메이저', DEFAULT_MAJOR['타자']['스위치히터(양타)'] ? 1 : 0, 1);
 eq('포수리드(버프포함) 메이저', DEFAULT_MAJOR['타자']['포수리드(버프포함)'] ? 1 : 0, 1);
 eq('타선연결은 비메이저', DEFAULT_MAJOR['타자']['타선연결'] ? 1 : 0, 0);
