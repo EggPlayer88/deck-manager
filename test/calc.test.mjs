@@ -395,11 +395,22 @@ eq('타자 임팩 패기', pickPaegi('타자', '임팩트') === '패기(임팩)'
 eq('중계 임팩 패기는 불펜', pickPaegi('중계', '임팩트') === '패기(임팩불펜)' ? 1 : 0, 1);
 eq('선발 시그 패기', pickPaegi('선발', '시그니처') === '패기(시그/올스타선발)' ? 1 : 0, 1);
 /* 포수리드 버프 */
-eq('버프 포함', variantAllowed('포수리드(버프포함)', cB('우', true)) ? 1 : 0, 1);
-eq('버프 없으면 기본', variantAllowed('포수리드', cB('우', false)) ? 1 : 0, 1);
+eq('포수리드는 버프포함으로 고정', variantAllowed('포수리드(버프포함)', cB('우')) ? 1 : 0, 1);
+eq('일반 포수리드는 제외', variantAllowed('포수리드', cB('우')) ? 1 : 0, 0);
 eq('조건 없는 스킬은 통과', variantAllowed('정밀타격', cB('우')) ? 1 : 0, 1);
 
-console.log('%s[역할별 변형] 포지션을 고르면 그 역할 변형만 남는다');
+console.log(' + NL + [배치 자리별 변형] 포지션마다 대표 자리 하나로 고정한다');
+var vc = function(cat){ return { hand:"우", cardType:"골든글러브", cat:cat }; };
+eq('중계 수호신은 승리조', variantAllowed('수호신(승리조)', vc('중계')) ? 1 : 0, 1);
+eq('중계 수호신 셋업2는 제외', variantAllowed('수호신(셋업2)', vc('중계')) ? 1 : 0, 0);
+eq('중계 긴급투입은 추격조', variantAllowed('긴급투입(추격조)', vc('중계')) ? 1 : 0, 1);
+eq('중계 승리의함성은 필승조', variantAllowed('승리의함성(필승조)', vc('중계')) ? 1 : 0, 1);
+eq('중계 기선제압은 셋업제외', variantAllowed('기선제압(셋업제외불펜)', vc('중계')) ? 1 : 0, 1);
+eq('선발 라이징스타는 3~5선발', variantAllowed('라이징스타(3~5선발)', vc('선발')) ? 1 : 0, 1);
+eq('마무리 타선지원은 (마무리)', variantAllowed('타선지원(마무리)', vc('마무리')) ? 1 : 0, 1);
+eq('마무리 수호신은 그대로', variantAllowed('수호신(마무리)', vc('마무리')) ? 1 : 0, 1);
+
+console.log('\n[역할별 변형] 포지션을 고르면 그 역할 변형만 남는다');
 var pool = function(names, pos){ return names.filter(function(n){ return skillAllowedAt(n, pos, false); }); };
 var 기선 = ['기선제압(선발)','기선제압(셋업/마무리)','기선제압(셋업제외불펜)'];
 eq('선발은 (선발) 하나', pool(기선, '선발').join('|') === '기선제압(선발)' ? 1 : 0, 1);

@@ -6630,9 +6630,28 @@ function pickPaegi(cat, cardType) {
   if (cardType === "골든글러브") return "패기(골글)";
   return bullpen ? "패기(시그/올스타불펜)" : "패기(시그/올스타선발)";
 }
-/* 뽑기 풀에 이 변형을 넣어도 되는가. cond = {hand, cardType, cat, catchBuff} */
+/* 뽑기 풀에 이 변형을 넣어도 되는가. cond = {hand, cardType, cat} */
+/* 같은 포지션 안에서도 배치 자리에 따라 갈리는 변형은 대표 자리 하나로 고정한다.
+   확률 계산에서는 수많은 메이저 스킬 중 하나일 뿐이라 모든 경우를 나눌 필요가 없고,
+   토글만 늘어난다. 기준은 "분업을 켜지 않은 기본 편성의 대표 자리". */
+var SKILL_FIXED_BY_POS = {
+  "선발": { "라이징스타": "라이징스타(3~5선발)" },
+  "중계": {
+    "수호신": "수호신(승리조)",
+    "긴급투입": "긴급투입(추격조)",
+    "승리의함성": "승리의함성(필승조)",
+    "원포인트릴리프": "원포인트릴리프(셋업제외중계)",
+    "얼리스타트": "얼리스타트(셋업제외중계)",
+    "흐름끊기": "흐름끊기(셋업제외불펜)",
+    "기선제압": "기선제압(셋업제외불펜)",
+  },
+  "마무리": { "타선지원": "타선지원(마무리)" },
+};
+
 function variantAllowed(name, cond) {
   var b = skillBaseName(name);
+  var byPos = SKILL_FIXED_BY_POS[cond.cat];
+  if (byPos && byPos[b]) return name === byPos[b];
   var fixed = SKILL_FIXED_VARIANT[b];
   if (fixed) return name === fixed;
   var hm = SKILL_HAND_VARIANT[b];
@@ -6641,7 +6660,8 @@ function variantAllowed(name, cond) {
     return name === want;
   }
   if (b === "패기") return name === pickPaegi(cond.cat, cond.cardType);
-  if (b === "포수리드") return name === (cond.catchBuff ? "포수리드(버프포함)" : "포수리드");
+  /* 포수리드는 버프 포함본으로 고정한다 — 토글을 늘리지 않는다 */
+  if (b === "포수리드") return name === "포수리드(버프포함)";
   return true;
 }
 
@@ -6662,7 +6682,6 @@ function SkillCalculator(p) {
   /* 조건으로 갈리는 스킬 때문에 필요한 값 — 도감에 있는 정보지만 계산기엔 선수 선택이 없어 직접 받는다 */
   var _bh = React.useState("우"); var batHand = _bh[0]; var setBatHand = _bh[1];   /* 좌|우|양 */
   var _ph = React.useState("우"); var pitHand = _ph[0]; var setPitHand = _ph[1];   /* 좌|우 */
-  var _cb = React.useState(true); var catchBuff = _cb[0]; var setCatchBuff = _cb[1];
   var _pos  = React.useState("타자");       var pos = _pos[0];      var setPos  = _pos[1];
   var _sk   = React.useState([{name:"",lv:6,locked:false},{name:"",lv:5,locked:false},{name:"",lv:5,locked:false}]);
   var sks = _sk[0]; var setSks = _sk[1];
@@ -6679,7 +6698,7 @@ function SkillCalculator(p) {
      2) 이 포지션에 안 뜨는 스킬 — 마당쇠는 불펜에만, 집념은 선발에만 하는 식 */
   var isNatCard = cardType === "국가대표";
   var condHand = pos === "타자" ? batHand : pitHand;
-  var varCond = { hand: condHand, cardType: cardType, cat: cat, catchBuff: isCatcher && catchBuff };
+  var varCond = { hand: condHand, cardType: cardType, cat: cat };
   var allSkillNames = Object.keys(catSkills).filter(function(n) {
     if (!isNatCard && isNatOnlySkill(n, cat)) return false;
     if (!skillAllowedAt(n, pos, isCatcher)) return false;
@@ -6866,11 +6885,6 @@ function SkillCalculator(p) {
               style={{padding:"4px 10px",fontSize:12,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:"1px solid "+(a?"var(--acc)":"var(--bd)"),borderRadius:6,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>
               {h + (pos==="타자"?"타":"투")}</button>);
           })}
-          {pos==="타자" && isCatcher && (
-            <button onClick={function(){setCatchBuff(!catchBuff);setResult(null);}}
-              style={{padding:"4px 10px",fontSize:12,fontWeight:catchBuff?800:500,background:catchBuff?"var(--ta)":"var(--inner)",border:"1px solid "+(catchBuff?"var(--acc)":"var(--bd)"),borderRadius:6,color:catchBuff?"var(--acc)":"var(--t2)",cursor:"pointer",marginLeft:6}}>
-              {"포수리드 버프" + (catchBuff?" 포함":" 없음")}</button>
-          )}
           <span style={{fontSize:11,color:"var(--td)",marginLeft:"auto"}}>{"주루·지구력 2구간 / 타순·선발 배치 가정"}</span>
         </div>
       </div>
