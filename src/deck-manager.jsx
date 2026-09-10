@@ -268,6 +268,23 @@ var DEFAULT_SKILLS = {"타자":{"스위치히터(양타)":[21.9,25.65,30.2,35.3,
 async function sGet(k){try{var r=await window.storage.get(k);return r?JSON.parse(r.value):null;}catch(e){return null;}}
 async function sSet(k,d){try{await window.storage.set(k,JSON.stringify(d));return true;}catch(e){return false;}}
 
+/* 되돌리기용 스냅샷 — 시트 가져오기처럼 한 번에 많이 갈아엎는 작업 직전에 남긴다.
+   덱마다 마지막 하나만 들고 있으면 충분하다. 브라우저에만 저장한다. */
+function snapKey(deckId){ return "deck-snapshot-" + deckId; }
+async function saveDeckSnapshot(deckId, label, data){
+  if(!deckId) return false;
+  return await sSet(snapKey(deckId), { ts: Date.now(), label: label || "", data: data });
+}
+async function loadDeckSnapshot(deckId){ return deckId ? await sGet(snapKey(deckId)) : null; }
+async function clearDeckSnapshot(deckId){ if(deckId) await sSet(snapKey(deckId), null); }
+function snapAgo(ts){
+  var m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return "방금";
+  if (m < 60) return m + "분 전";
+  var h = Math.floor(m / 60);
+  return h < 24 ? h + "시간 전" : Math.floor(h / 24) + "일 전";
+}
+
 /* ================================================================
    CALCULATION
    ================================================================ */
@@ -1009,6 +1026,7 @@ function SkBadge(p){var c={10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#
   <div style={{display:"inline-flex",alignItems:"center",gap:3,background:"var(--inner)",borderRadius:3,padding:"2px 5px",border:"1px solid "+c+"33",fontSize:12,lineHeight:1.3}}>
     <span style={{background:c,color:"#000",borderRadius:2,padding:"0 3px",fontWeight:800,fontSize:11,fontFamily:"var(--m)",flexShrink:0}}>{"Lv."+p.lv}</span>
     <span style={{color:"var(--t2)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:80}}>{p.name}</span>
+    {p.warn && (<span title={"이 자리에는 「"+p.warn+"」 가 맞습니다"} style={{color:"#FFA726",fontSize:11,flexShrink:0}}>{"⚠"}</span>)}
   </div>
 );}
 
@@ -1324,7 +1342,7 @@ function PlayerDBPage(p){
 
   return(
     <div style={{padding:mob?12:18,maxWidth:1000,paddingBottom:mob?80:18}}>
-      <h2 style={{fontSize:mob?16:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 4px"}}>{"선수 도감"}</h2>
+      <h2 style={{fontSize:mob?16:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 4px"}}>{"선수도감"}</h2>
       <p style={{fontSize:12,color:"var(--td)",margin:"0 0 12px"}}>{"관리자 전용 - 선수 기본 데이터를 등록/수정합니다"}</p>
 
       {/* 탭 선택 */}
@@ -3114,7 +3132,9 @@ function LineupPage(p) {
                 var nm = pl["skill" + k]; if(!nm) return null;
                 var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
                 var lv = effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), pl.cardType, k, pcat, (sdState["pts_" + slot] || []));
-                return (<SkBadge key={k} name={nm} lv={lv} />);
+                /* 자리를 옮기면 변형이 안 맞게 된다 — 옮긴 자리에서 바로 보이게 */
+                var hint = skillSlotHint(nm, slotGroupOf(slot, sdState.bpcIdx, sdState.isWinSplit), pcat);
+                return (<SkBadge key={k} name={nm} lv={lv} warn={hint} />);
               })}
             </div>
             {(function(){
@@ -3259,14 +3279,15 @@ function LineupPage(p) {
       {/* Set Deck Toggle Arrow */}
       <button onClick={function() { setSdOpen(!sdOpen); }} style={{
         position: "fixed", right: sdOpen ? (mob ? 260 : 300) : 0, top: "50%", transform: "translateY(-50%)",
-        width: 28, height: 56, borderRadius: "8px 0 0 8px", zIndex: 191,
+        width: 34, height: 84, borderRadius: "10px 0 0 10px", zIndex: 191,
         background: "linear-gradient(180deg,rgba(255,213,79,0.15),rgba(255,143,0,0.1))",
         border: "1px solid rgba(255,213,79,0.2)", borderRight: "none",
-        color: "var(--acc)", cursor: "pointer", fontSize: 16, fontWeight: 700,
-        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "var(--acc)", cursor: "pointer", fontSize: 15, fontWeight: 700, lineHeight: 1.15,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
         transition: "right 0.3s ease", boxShadow: "-2px 0 12px rgba(0,0,0,0.3)"
       }}>
-        {sdOpen ? "▶" : "◀"}
+        <span>{sdOpen ? "▶" : "◀"}</span>
+        {!sdOpen && (<span style={{ fontSize: 9, letterSpacing: 0, writingMode: "vertical-rl" }}>{"세트덱"}</span>)}
       </button>
 
       {/* Set Deck Panel */}
@@ -3318,7 +3339,8 @@ function PosTrainRow(rp) {
   var mx = pt.mx;
   var lvOpts = []; for (var _i = 0; _i <= mx; _i++) lvOpts.push(String(_i));
   var lv = Math.min(d.level, mx);
-  var colTpl = "70px 56px " + stats.map(function() { return "minmax(74px,1fr)"; }).join(" ");
+  var narrow = rp.mobile;
+  var colTpl = (narrow ? "54px 44px " : "70px 56px ") + stats.map(function() { return "minmax(74px,1fr)"; }).join(" ");
   /* 좁은 화면에서는 카드가 가로로 스크롤된다 — 헤더와 열 폭을 맞추려면 여기도 같은 최소폭 */
   return (
     <div style={{ display: "grid", gridTemplateColumns: colTpl, gap: 6, padding: "6px 14px", alignItems: "center", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)", minWidth: "max-content" }}>
@@ -3428,14 +3450,14 @@ function PosTrainPage(p) {
               <span style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", letterSpacing: 1 }}>{grp.label}</span>
             </div>
             <div style={{ overflowX: "auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "70px 56px " + grp.stats.map(function() { return "minmax(74px,1fr)"; }).join(" "), gap: 6, padding: "6px 14px", borderBottom: "1px solid var(--bd)", fontSize: 11, fontWeight: 700, color: "var(--td)", minWidth: "max-content" }}>
+            <div style={{ display: "grid", gridTemplateColumns: (mob ? "54px 44px " : "70px 56px ") + grp.stats.map(function() { return "minmax(74px,1fr)"; }).join(" "), gap: 6, padding: "6px 14px", borderBottom: "1px solid var(--bd)", fontSize: 11, fontWeight: 700, color: "var(--td)", minWidth: "max-content" }}>
               <div>{"포지션"}</div>
               <div style={{ textAlign: "center" }}>{"레벨"}</div>
               {grp.stats.map(function(s, i) { return (<div key={s} style={{ textAlign: "center", color: grp.colors[i], whiteSpace: "nowrap" }}>{s + (mob ? "" : " (기본+재설정)")}</div>); })}
             </div>
             {grp.poss.map(function(pos, idx) {
               var catSk = skills[grp.cat] || {};
-              return (<PosTrainRow key={pos} pos={pos} d={getPT(pos)} upd={upd} colors={grp.colors} stats={grp.stats} idx={idx}
+              return (<PosTrainRow key={pos} pos={pos} d={getPT(pos)} upd={upd} colors={grp.colors} stats={grp.stats} idx={idx} mobile={mob}
                         ptSkills={getPTS(pos)} updSkill={updSkill} slots={PT_SKILL_SLOTS}
                         skillOptions={Object.keys(catSk)}
                         majorOptions={Object.keys((skills._major && skills._major[grp.cat]) || {})} />);
@@ -4146,8 +4168,8 @@ function DeckDropdown(p){
 
 function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
-  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",icon:"👥"},{id:"postrain",label:"포지션 특훈",icon:"🏋️"},{id:"locker",label:"라커룸",icon:"🏠"},{id:"datacenter",label:"데이터센터",icon:"📊"},{id:"clublounge",label:"클럽라운지",icon:"🎙️"}];
-  if(p.isAdmin){tabs.splice(4,0,{id:"db",label:"선수 도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
+  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",icon:"👥"},{id:"postrain",label:"포지션 특훈",icon:"🏋️"},{id:"locker",label:"라커룸",icon:"🏠"},{id:"datacenter",label:"데이터센터",icon:"📊"},{id:"clublounge",label:"클럽라운지",icon:"🎙️",soon:true}];
+  if(p.isAdmin){tabs.splice(4,0,{id:"db",label:"선수도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
   var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck};
 
   if(p.mobile){return(
@@ -4158,7 +4180,7 @@ function Nav(p){
         <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px"}}>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18}}>{t.icon}</span><span style={{fontSize:11,fontWeight:p.tab===t.id?700:500}}>{t.label}</span></button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18}}>{t.icon}</span><span style={{fontSize:11,fontWeight:p.tab===t.id?700:500,display:"flex",alignItems:"center"}}>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}</span></button>);})}
       </div>
     </React.Fragment>
   );}
@@ -4169,7 +4191,7 @@ function Nav(p){
       {open&&(<div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:150}}/>)}
       <div style={{position:"fixed",left:open?0:-260,top:0,bottom:0,width:240,background:"var(--side)",borderRight:"1px solid var(--bd)",zIndex:160,transition:"left 0.25s ease",display:"flex",flexDirection:"column",padding:"14px 0 16px"}}>
         <div style={{padding:"0 14px 12px"}}><DeckDropdown {...deckProps}/></div>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}</button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}</button>);})}
         <div style={{marginTop:"auto",padding:"12px 16px",borderTop:"1px solid var(--bd)"}}>
           {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
           <button onClick={p.toggleTheme} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:6}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
@@ -4186,7 +4208,7 @@ function Nav(p){
         <DeckDropdown {...deckProps}/>
       </div>
       <div style={{flex:1}}>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:13,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40}}><span style={{fontSize:15}}>{t.icon}</span>{t.label}</button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:13,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40}}><span style={{fontSize:15}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}</button>);})}
       </div>
       <div style={{padding:"10px 14px",borderTop:"1px solid var(--bd)"}}>
         {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
@@ -4910,6 +4932,7 @@ function MyPlayersPage(p) {
   var sdState = p.sdState || {};
   var setSdState = p.setSdState || function(){};
   var saveSdState = p.saveSdState || function(){};
+  var curDeckId = p.curDeckId;
   var _sel = useState(null); var selId = _sel[0]; var setSelId = _sel[1];
   var _filter = useState("타자"); var filter = _filter[0]; var setFilter = _filter[1];
   var _addOpen = useState(false); var addOpen = _addOpen[0]; var setAddOpen = _addOpen[1];
@@ -4918,6 +4941,12 @@ function MyPlayersPage(p) {
   var _imp = useState(null); var impPrev = _imp[0]; var setImpPrev = _imp[1];
   var _impMode = useState("merge"); var impMode = _impMode[0]; var setImpMode = _impMode[1];
   var _impBusy = useState(false); var impBusy = _impBusy[0]; var setImpBusy = _impBusy[1];
+  /* 직전 상태로 되돌리기 */
+  var _snap = useState(null); var snap = _snap[0]; var setSnap = _snap[1];
+  useEffect(function(){ var alive = true;
+    (async function(){ var v = await loadDeckSnapshot(curDeckId); if(alive) setSnap(v && v.data ? v : null); })();
+    return function(){ alive = false; };
+  }, [curDeckId]);
   
 
   /* ── 관리기 시트 가져오기 ─────────────────────────────── */
@@ -4945,6 +4974,18 @@ function MyPlayersPage(p) {
     rd.readAsArrayBuffer(f);
   };
 
+  var restoreSnapshot = async function() {
+    if (!snap || !snap.data) return;
+    if (!window.confirm("지금 덱을 " + snapAgo(snap.ts) + " 상태(" + (snap.label || "직전") + ")로 되돌립니다.\n지금 내용은 사라집니다. 계속할까요?")) return;
+    var d = snap.data;
+    save(d.players || []);
+    saveLM(d.lineupMap || {});
+    if (d.sdState) { setSdState(d.sdState); if (saveSdState) saveSdState(d.sdState); }
+    await clearDeckSnapshot(curDeckId);
+    setSnap(null);
+    alert("되돌렸습니다.");
+  };
+
   var impPick = function(row, dbId) {
     setImpPrev(function(prev) {
       if (!prev) return prev;
@@ -4953,8 +4994,12 @@ function MyPlayersPage(p) {
     });
   };
 
-  var applyImport = function() {
+  var applyImport = async function() {
     var R = impPrev; if (!R) return;
+    /* 되돌릴 수 있게 지금 상태를 먼저 남긴다 */
+    var snapData = { players: players, lineupMap: lm, sdState: sdState };
+    await saveDeckSnapshot(curDeckId, "시트 가져오기 전", snapData);
+    setSnap({ ts: Date.now(), label: "시트 가져오기 전", data: snapData });
     var byId = {}; SEED_PLAYERS.forEach(function(sp) { byId[sp.id] = sp; });
     var made = [], nameToId = {}, stamp = Date.now();
     R.entries.forEach(function(en, idx) {
@@ -5426,7 +5471,18 @@ function MyPlayersPage(p) {
             {impBusy ? "읽는 중..." : "📗 시트 가져오기"}
             <input type="file" accept=".xlsx,.xls" disabled={impBusy} style={{ display: "none" }} onChange={onImportFile} />
           </label>
+          {snap && (
+            <button onClick={restoreSnapshot}
+              title={(snap.label || "직전") + " 상태로 되돌립니다 (" + snapAgo(snap.ts) + ")"}
+              style={{ padding: "5px 10px", fontSize: 12, fontWeight: 700, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 5, color: "var(--t2)", cursor: "pointer", marginLeft: 4 }}>
+              {"↩ 되돌리기"}
+            </button>
+          )}
         </div>
+      </div>
+      {/* 시트 가져오기가 무엇을 받는지 버튼 옆 툴팁만으로는 알기 어렵다 */}
+      <div style={{ fontSize: 11, color: "var(--td)", margin: "-6px 0 10px", lineHeight: 1.6 }}>
+        {"📗 시트 가져오기 — 「덱 보정 관리기」 엑셀을 올리면 보관함·라인업·세트덱 설정이 한 번에 들어옵니다. 가져오기 전에 내용을 먼저 보여드립니다."}
       </div>
 
       {/* 관리기 시트 가져오기 — 미리보기 */}
@@ -7485,7 +7541,7 @@ export default function App(){
 
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} userId={userId}/>);
-  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState}/>);
+  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} potmList={store.potmList} setPotmList={store.savePotmList} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
