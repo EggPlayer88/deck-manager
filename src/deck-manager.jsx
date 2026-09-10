@@ -3223,7 +3223,8 @@ function LineupPage(p) {
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="후보선수" icon="🪑" count={[1,2,3,4,5,6].filter(function(n) { return pick("BN" + n); }).length + "/6"} color="#78909C" />
         <div style={{ padding: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+          {/* 6칸을 한 줄에 밀어 넣으면 좁은 화면에서 5·6번이 잘려 나간다 — 들어가는 만큼만 놓고 접는다 */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(56px, 1fr))", gap: 8 }}>
             {[1,2,3,4,5,6].map(function(n) {
               var bnSlot = "BN" + n;
               var bnPl = pick(bnSlot);
@@ -6953,7 +6954,8 @@ function SkillCalculator(p) {
         <div style={{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:10}}>{"스킬 입력"+(majorSkills.length===0?" (⚠️ 스킬관리에서 ★메이저 스킬을 설정해주세요)":"")}</div>
         {sks.map(function(sk,i){
           var lvs = DEFAULT_LV[cardType]||[6,5,5];
-          var isLocked = cardType==="임팩트"&&i===0;
+          /* 임팩트·올스타는 1옵션을 골라 고정할 수 있다 — 확률 계산에서 빠지는 자리다 */
+          var isLocked = (cardType==="임팩트"||cardType==="올스타")&&i===0;
           return (
             <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
               <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(255,213,79,0.15)",border:"1px solid rgba(255,213,79,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#FFD54F",flexShrink:0}}>{i+1}</div>
