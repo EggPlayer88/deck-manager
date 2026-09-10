@@ -178,7 +178,7 @@ function getSkillScore(name,lv,pt,withBuff){
   if(!name||lv<5||!SKILL_DATA)return 0;
   /* 버프 쓰는 자리면 버프포함 값으로, 아니면 버프 뺀 값으로 바꿜 넣는다.
      어느 쪽 이름이 저장돼 있든 같은 결과가 나오므로 데이터 마이그레이션이 필요 없다 */
-  name = buffName(name, pt, withBuff);
+  name = buffName(canonSkillName(name, pt), pt, withBuff);
   var t=SKILL_DATA[pt];if(!t)return 0;
   var s=t[name];
   /* 260814 시트 개명 대응: 구 스킬명이면 신 이름으로 바꿔 재조회 */
@@ -251,8 +251,35 @@ function launchAngleGain(la,finalPower){
 function zonePenalty(pl){ return (pl.whiteZone||0)*-1.5 + (pl.coldZone||0)*-3; }
 var CARD_SKILL_BASE_LV = { "골든글러브":[6,6,6], "라이브":[7,7,7], "올스타":[8,7,7] };
 var DEFAULT_SKILL_BASE_LV = [6,5,5];
+var SKILL_CATS = ["타자", "선발", "중계", "마무리"];
+var _canonIdx = null, _canonSrc = null;
+function canonSkillName(name, cat) {
+  if (!name || !SKILL_DATA) return name;
+  var t = SKILL_DATA[cat];
+  if (t && t[name]) return name;
+  if (_canonSrc !== SKILL_DATA) {
+    _canonIdx = {};
+    for (var ci = 0; ci < SKILL_CATS.length; ci++) {
+      var c = SKILL_CATS[ci], tbl = SKILL_DATA[c];
+      var m = _canonIdx[c] = {};
+      if (!tbl) continue;
+      for (var n in tbl) m[n.replace(/\s+/g, "")] = n;
+    }
+    _canonSrc = SKILL_DATA;
+  }
+  var key = String(name).replace(/\s+/g, "");
+  var mine = _canonIdx[cat];
+  if (mine && mine[key]) return mine[key];
+  /* 역할 표가 달라도 찾아본다 — getSkillScore 의 교차 조회와 같은 취지 */
+  for (var ci2 = 0; ci2 < SKILL_CATS.length; ci2++) {
+    var mm = _canonIdx[SKILL_CATS[ci2]];
+    if (mm && mm[key]) return mm[key];
+  }
+  return name;
+}
 function maxSkillLv(name, cat){
   if(!name || !SKILL_DATA) return 0;
+  name = canonSkillName(name, cat);
   var t = SKILL_DATA[cat]; var a = t && t[name];
   if(!a && t){ var al = SKILL_ALIAS[cat] && SKILL_ALIAS[cat][name]; if(al) a = t[al]; }
   if(!a) return 0;
@@ -777,4 +804,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };

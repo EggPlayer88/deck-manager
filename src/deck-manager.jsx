@@ -157,7 +157,7 @@ function getSkillScore(name,lv,pt,withBuff){
   if(!name||lv<5||!SKILL_DATA)return 0;
   /* 버프 쓰는 자리면 버프포함 값으로, 아니면 버프 뺀 값으로 바꿜 넣는다.
      어느 쪽 이름이 저장돼 있든 같은 결과가 나오므로 데이터 마이그레이션이 필요 없다 */
-  name = buffName(name, pt, withBuff);
+  name = buffName(canonSkillName(name, pt), pt, withBuff);
   var t=SKILL_DATA[pt];if(!t)return 0;
   var s=t[name];
   /* 260814 시트 개명 대응: 구 스킬명이면 신 이름으로 바꿔 재조회 */
@@ -367,8 +367,38 @@ var DEFAULT_SKILL_BASE_LV = [6,5,5];
 
 /* 스킬표에 값이 있는 가장 높은 레벨. 없으면 0.
    황금세대처럼 Lv6 까지만 있는 스킬을 Lv7 로 올려 0점이 되는 것을 막는다. */
+/* 예전에 저장된 이름이 "포수 리드" 처럼 띄어쓰기만 다른 경우가 있다. 그대로 두면
+   표에서 못 찾아 조용히 0점이 되고, 화면에는 스킬 이름이 멀쩡히 보여서 아무도 눈치채지 못한다.
+   정확히 일치하는 이름이 있으면 그대로 쓰고, 없을 때만 공백을 지워 맞춰본다. */
+var SKILL_CATS = ["타자", "선발", "중계", "마무리"];
+var _canonIdx = null, _canonSrc = null;
+function canonSkillName(name, cat) {
+  if (!name || !SKILL_DATA) return name;
+  var t = SKILL_DATA[cat];
+  if (t && t[name]) return name;
+  if (_canonSrc !== SKILL_DATA) {
+    _canonIdx = {};
+    for (var ci = 0; ci < SKILL_CATS.length; ci++) {
+      var c = SKILL_CATS[ci], tbl = SKILL_DATA[c];
+      var m = _canonIdx[c] = {};
+      if (!tbl) continue;
+      for (var n in tbl) m[n.replace(/\s+/g, "")] = n;
+    }
+    _canonSrc = SKILL_DATA;
+  }
+  var key = String(name).replace(/\s+/g, "");
+  var mine = _canonIdx[cat];
+  if (mine && mine[key]) return mine[key];
+  /* 역할 표가 달라도 찾아본다 — getSkillScore 의 교차 조회와 같은 취지 */
+  for (var ci2 = 0; ci2 < SKILL_CATS.length; ci2++) {
+    var mm = _canonIdx[SKILL_CATS[ci2]];
+    if (mm && mm[key]) return mm[key];
+  }
+  return name;
+}
 function maxSkillLv(name, cat){
   if(!name || !SKILL_DATA) return 0;
+  name = canonSkillName(name, cat);
   var t = SKILL_DATA[cat]; var a = t && t[name];
   if(!a && t){ var al = SKILL_ALIAS[cat] && SKILL_ALIAS[cat][name]; if(al) a = t[al]; }
   if(!a) return 0;

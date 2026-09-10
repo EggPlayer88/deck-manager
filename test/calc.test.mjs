@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -534,6 +534,19 @@ console.log('\n[국대 오배치 경고]');
 eq('시그에 황금세대는 경고', natSkillMismatch('황금세대', '타자', '시그니처') ? 1 : 0, 1);
 eq('국대면 경고 없음', natSkillMismatch('황금세대', '타자', '국가대표') ? 1 : 0, 0);
 eq('일반 스킬은 경고 없음', natSkillMismatch('정밀타격', '타자', '시그니처') ? 1 : 0, 0);
+
+
+console.log('\n[띄어쓰기 다른 옛 이름] 표에서 못 찾아 0점 되던 것을 맞춰준다');
+eq('"포수 리드" 도 찾는다', getSkillScore('포수 리드', 6, '타자'), 6);
+eq('버프도 같이 돈다', getSkillScore('포수 리드', 6, '타자', true), 25.44);
+eq('공백 여러 개도', getSkillScore('포 수 리 드', 6, '타자'), 6);
+eq('반대로 붙여 쓴 것도', getSkillScore('국대테이블세터', 6, '타자'), 22.9);
+eq('역할별 표기가 갈린 것도', getSkillScore('약속의8회', 6, '선발'), 15.12);
+eq('maxSkillLv 도', maxSkillLv('포수 리드', '타자'), 10);
+eq('국대 판정도', isNatOnlySkill('황금 세대', '타자') ? 1 : 0, 1);
+/* 없는 이름은 여전히 0 이어야 한다 — 아무 이름이나 붙는 일은 없어야 */
+eq('없는 이름은 그대로 0', getSkillScore('없는스킬입니다', 6, '타자'), 0);
+eq('정확히 있는 이름은 그대로', canonSkillName('정밀타격', '타자') === '정밀타격' ? 1 : 0, 1);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
