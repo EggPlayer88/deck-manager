@@ -6530,8 +6530,14 @@ function SkillPhotoScan(p) {
       var res = resolveSkillName(raw, cat, null, skills, null);
       var candidates = (res.candidates && res.candidates.length > 1) ? res.candidates
                      : res.name ? [res.name] : [];
-      var selected = res.name || "";
-      return { rawName: raw, lv: lv, candidates: candidates, selected: selected, missing: res.missing };
+      /* 국가대표 전용 스킬은 국대 카드에만 붙는다 — 직접 입력 쪽과 기준을 맞춘다 */
+      if (p.cardType !== "국가대표") {
+        candidates = candidates.filter(function(n) { return !isNatOnlySkill(n, cat); });
+      }
+      var selected = (candidates.indexOf(res.name) >= 0) ? res.name : (candidates[0] || "");
+      /* 국대 스킬이라 걸러졌으면 미매칭으로 보이게 둔다 */
+      var missing = res.missing || (!!res.name && !selected);
+      return { rawName: raw, lv: lv, candidates: candidates, selected: selected, missing: missing };
     });
   };
 
