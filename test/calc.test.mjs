@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -398,6 +398,22 @@ eq('선발 시그 패기', pickPaegi('선발', '시그니처') === '패기(시�
 eq('포수리드는 버프포함으로 고정', variantAllowed('포수리드(버프포함)', cB('우')) ? 1 : 0, 1);
 eq('일반 포수리드는 제외', variantAllowed('포수리드', cB('우')) ? 1 : 0, 0);
 eq('조건 없는 스킬은 통과', variantAllowed('정밀타격', cB('우')) ? 1 : 0, 1);
+
+console.log('\n[분포 조회] 미리 구운 분위수에서 상위 % 를 뽑는다');
+/* 0,1,2,...,100 을 101개 분위점으로 둔 배열 — 값 v 의 상위 % 는 100-v 여야 한다 */
+var d101 = []; for (var _i = 0; _i <= 100; _i++) d101.push(_i);
+eq('중앙값은 상위 50%', pctFromDist(d101, 50), 50);
+eq('최댓값은 상위 0%', pctFromDist(d101, 100), 0);
+eq('최솟값은 상위 100%', pctFromDist(d101, 0), 100);
+eq('범위를 넘으면 0%', pctFromDist(d101, 999), 0);
+eq('범위 아래면 100%', pctFromDist(d101, -5), 100);
+eq('사이값은 보간', pctFromDist(d101, 90), 10);
+eq('빈 배열이면 null', pctFromDist([], 5) === null ? 1 : 0, 1);
+eq('히스토그램 20구간', histFromDist(d101, 20).length, 20);
+eq('히스토그램 합 = 100%', Math.round(histFromDist(d101, 20).reduce(function(a,b){return a+b.pct;},0)), 100);
+eq('분포 키', skillDistKey('타자','임팩트','좌',false) === '타자|임팩트|좌|-' ? 1 : 0, 1);
+eq('포수는 키가 다르다', skillDistKey('타자','임팩트','좌',true) === '타자|임팩트|좌|포수' ? 1 : 0, 1);
+eq('투수는 포수 구분 없음', skillDistKey('선발','임팩트','좌',true) === '선발|임팩트|좌|-' ? 1 : 0, 1);
 
 console.log('\n[슬롯 자리 판정] 앱의 패전조 = 스킬의 추격조');
 eq('2/2/2 RP1 은 승리조', slotGroupOf('RP1', 4, false) === '승리조' ? 1 : 0, 1);
