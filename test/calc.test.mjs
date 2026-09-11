@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -583,6 +583,42 @@ eq('분업 켜도 승리조 자리는 같다', calcSDBonus(rp,"RP1",onSplit,0).s
 eq('승리조 판정 자체', isWinGroupSlot("RP1", 4) ? 1 : 0, 1);
 eq('RP3 은 2/2/2 에서 승리조 아님', isWinGroupSlot("RP3", 4) ? 1 : 0, 0);
 eq('CP 는 승리조 아님', isWinGroupSlot("CP", 4) ? 1 : 0, 0);
+
+
+console.log('\n[투수 가중치] 총합 10 · 마무리 0.8 고정 · 선발이 깎인 만큼 중계가 가져간다');
+var RPS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
+var sumSP = function(t){ var a=SP_MULT[t], s=0; for(var i=0;i<a.length;i++) s+=a[i]; return s; };
+var sumRP = function(i,t){ var s=0; RPS.forEach(function(sl){ s+=getRPWeight(i,sl,t); }); return s; };
+eq('선발 기본 합 7.00', sumSP('기본'), 7);
+eq('선발 적극 합 6.66', sumSP('적극'), 6.66);
+eq('선발 분업 합 6.331', sumSP('분업'), 6.331);
+eq('중계 기본 몫', rpBudget('기본'), 2.2);
+eq('중계 적극 몫', rpBudget('적극'), 2.54);
+eq('중계 분업 몫', rpBudget('분업'), 2.869);
+/* 편성 11종 어디서나 총합이 예산과 맞아야 한다 */
+for (var bi = 0; bi < 11; bi++) {
+  eq('편성 ' + bi + ' 기본 합', Math.round(sumRP(bi,'기본')*1000)/1000, 2.2);
+  eq('편성 ' + bi + ' 적극 합', Math.round(sumRP(bi,'적극')*1000)/1000, 2.54);
+}
+/* 투수 전체 합 = 10 */
+eq('투수 총합 기본', Math.round((sumSP('기본') + sumRP(4,'기본') + 0.8)*1000)/1000, 10);
+eq('투수 총합 적극', Math.round((sumSP('적극') + sumRP(4,'적극') + 0.8)*1000)/1000, 10);
+eq('투수 총합 분업', Math.round((sumSP('분업') + sumRP(6,'분업') + 0.8)*1000)/1000, 10);
+/* 적극/분업은 패전조·롱릴을 건드리지 않고 승리조만 키운다 */
+eq('2/2/2 패전조는 그대로', getRPWeight(4,'RP3','적극') - getRPWeight(4,'RP3','기본'), 0);
+eq('2/2/2 롱릴도 그대로', getRPWeight(4,'RP5','적극') - getRPWeight(4,'RP5','기본'), 0);
+eq('2/2/2 승리조는 커짐', getRPWeight(4,'RP1','적극') > getRPWeight(4,'RP1','기본') ? 1 : 0, 1);
+/* 분업은 승리조 순서가 뒤집힌다 (셋업 배치) */
+eq('분업이면 3번째 승리조가 가장 큼', getRPWeight(6,'RP3','분업') > getRPWeight(6,'RP1','분업') ? 1 : 0, 1);
+eq('기본이면 1번째가 가장 큼', getRPWeight(6,'RP1','기본') > getRPWeight(6,'RP3','기본') ? 1 : 0, 1);
+/* 전술 판정 */
+eq('아무것도 아니면 기본', rpTactic({}) === '기본' ? 1 : 0, 1);
+eq('rpActive 면 적극', rpTactic({rpActive:true}) === '적극' ? 1 : 0, 1);
+eq('isWinSplit 이면 분업', rpTactic({isWinSplit:true}) === '분업' ? 1 : 0, 1);
+eq('분업이 적극보다 우선', rpTactic({isWinSplit:true, rpActive:true}) === '분업' ? 1 : 0, 1);
+/* 선발 배율 */
+eq('1선발 기본', spMult('기본',0), 1.5);
+eq('5선발 분업', spMult('분업',4), 1.18);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);

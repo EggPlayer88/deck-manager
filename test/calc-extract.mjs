@@ -336,6 +336,58 @@ var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
 var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
 var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1}];
+var RP_WEIGHTS = [
+  {w:[1.30],          l:[1.10],                   r:[0.40,0.10,0.08,0.02]},
+  {w:[1.20],          l:[0.80,0.60],              r:[0.20,0.12,0.08]},
+  {w:[1.20],          l:[0.80,0.50,0.10],         r:[0.30,0.10]},
+  {w:[0.90,0.60],     l:[1.00],                   r:[0.30,0.12,0.08]},
+  {w:[0.90,0.60],     l:[0.70,0.40],              r:[0.30,0.10]},
+  {w:[0.90,0.60],     l:[0.70,0.30,0.10],         r:[0.40]},
+  {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[1.00],          r:[0.30,0.10]},
+  {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[0.60,0.40],     r:[0.40]},
+  {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[0.70,0.50,0.20],r:[]},
+  {w:[0.90,0.60],     l:[0.80,0.50,0.15,0.05],   r:[]},
+  {w:[1.20],          l:[0.80,0.50,0.08,0.02],   r:[0.40]},
+];
+var SP_MULT = {
+  "기본": [1.5,   1.4,   1.4,   1.4,   1.3  ],   /* 합 7.000 */
+  "적극": [1.425, 1.33,  1.33,  1.33,  1.245],   /* 합 6.660 */
+  "분업": [1.35,  1.267, 1.267, 1.267, 1.18 ],   /* 합 6.331 */
+};
+var CP_MULT = 0.8;
+var PIT_TOTAL = 10;
+function rpTactic(sdState) {
+  if (!sdState) return "기본";
+  if (sdState.isWinSplit) return "분업";
+  if (sdState.rpActive) return "적극";
+  return "기본";
+}
+function spMult(tactic, i) { var a = SP_MULT[tactic] || SP_MULT["기본"]; return a[i] || a[a.length - 1]; }
+function rpBudget(tactic) {
+  var a = SP_MULT[tactic] || SP_MULT["기본"];
+  var sp = 0; for (var i = 0; i < a.length; i++) sp += a[i];
+  return Math.round((PIT_TOTAL - sp - CP_MULT) * 1000) / 1000;
+}
+function rpWeightSet(bpcIdx, tactic) {
+  var cfg = BPC[bpcIdx]; var wts = RP_WEIGHTS[bpcIdx];
+  if (!cfg || !wts) return null;
+  var sum = function(a) { var t = 0; for (var i = 0; i < (a || []).length; i++) t += a[i]; return t; };
+  var k = rpBudget("기본") / (sum(wts.w) + sum(wts.l) + sum(wts.r));
+  var l = (wts.l || []).map(function(v) { return v * k; });
+  var r = (wts.r || []).map(function(v) { return v * k; });
+  var shape = (tactic === "분업" && wts.wSplit) ? wts.wSplit : wts.w;
+  var kw = (rpBudget(tactic) - sum(l) - sum(r)) / sum(shape);
+  return { w: shape.map(function(v) { return v * kw; }), l: l, r: r };
+}
+function getRPWeight(bpcIdx, slot, tactic) {
+  var cfg = BPC[bpcIdx]; var set = rpWeightSet(bpcIdx, tactic);
+  if (!cfg || !set) return 0;
+  var rpSlots = ["RP1","RP2","RP3","RP4","RP5","RP6"];
+  var si = rpSlots.indexOf(slot); if (si < 0) return 0;
+  if (si < cfg.w) return set.w[si] || 0;
+  if (si < cfg.w + cfg.l) return set.l[si - cfg.w] || 0;
+  return set.r[si - cfg.w - cfg.l] || 0;
+}
 function isWinGroupSlot(slot, bpcIdx) {
   var si = RP_SLOTS.indexOf(slot);
   if (si < 0) return false;
@@ -815,4 +867,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, getRPWeight, rpTactic, spMult, rpBudget, rpWeightSet, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };

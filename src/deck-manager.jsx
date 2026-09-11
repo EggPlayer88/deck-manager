@@ -1909,14 +1909,53 @@ var RP_WEIGHTS = [
   {w:[0.90,0.60],     l:[0.80,0.50,0.15,0.05],   r:[]},
   {w:[1.20],          l:[0.80,0.50,0.08,0.02],   r:[0.40]},
 ];
-function getRPWeight(bpcIdx, slot, isWinSplit) {
+/* 투수 가중치 총합은 10 이다 (타자와 같은 눈금).
+   마무리가 0.8 로 고정이고, 선발 배율이 중계 전술에 따라 달라지므로
+   중계 몫 = 10 - 선발합 - 0.8 이 된다.
+   적극·분업을 켜면 선발이 깎이고 그만큼 중계가 커진다. 그래서 전술을 켠다고
+   무조건 점수가 오르지 않는다 — 선발이 좋은 덱은 오히려 손해를 볼 수 있다. */
+var SP_MULT = {
+  "기본": [1.5,   1.4,   1.4,   1.4,   1.3  ],   /* 합 7.000 */
+  "적극": [1.425, 1.33,  1.33,  1.33,  1.245],   /* 합 6.660 */
+  "분업": [1.35,  1.267, 1.267, 1.267, 1.18 ],   /* 합 6.331 */
+};
+var CP_MULT = 0.8;
+var PIT_TOTAL = 10;
+/* 저장된 값은 그대로 두고(구덱 호환) 여기서 하나로 읽는다. 둘은 함께 켜지지 않는다 */
+function rpTactic(sdState) {
+  if (!sdState) return "기본";
+  if (sdState.isWinSplit) return "분업";
+  if (sdState.rpActive) return "적극";
+  return "기본";
+}
+function spMult(tactic, i) { var a = SP_MULT[tactic] || SP_MULT["기본"]; return a[i] || a[a.length - 1]; }
+function rpBudget(tactic) {
+  var a = SP_MULT[tactic] || SP_MULT["기본"];
+  var sp = 0; for (var i = 0; i < a.length; i++) sp += a[i];
+  return Math.round((PIT_TOTAL - sp - CP_MULT) * 1000) / 1000;
+}
+/* RP_WEIGHTS 는 11종의 상대비만 담는다(합 3.00). 실제 값은 전술별 예산에 맞춰 늘린다.
+   패전조·롱릴리프는 기본 전술의 값으로 두고, 늘어난 몫은 승리조가 가져간다.
+   적극·분업은 승리조를 더 쓰는 전술이므로 그쪽에 실리는 것이 맞다. */
+function rpWeightSet(bpcIdx, tactic) {
   var cfg = BPC[bpcIdx]; var wts = RP_WEIGHTS[bpcIdx];
-  if (!cfg || !wts) return 0;
+  if (!cfg || !wts) return null;
+  var sum = function(a) { var t = 0; for (var i = 0; i < (a || []).length; i++) t += a[i]; return t; };
+  var k = rpBudget("기본") / (sum(wts.w) + sum(wts.l) + sum(wts.r));
+  var l = (wts.l || []).map(function(v) { return v * k; });
+  var r = (wts.r || []).map(function(v) { return v * k; });
+  var shape = (tactic === "분업" && wts.wSplit) ? wts.wSplit : wts.w;
+  var kw = (rpBudget(tactic) - sum(l) - sum(r)) / sum(shape);
+  return { w: shape.map(function(v) { return v * kw; }), l: l, r: r };
+}
+function getRPWeight(bpcIdx, slot, tactic) {
+  var cfg = BPC[bpcIdx]; var set = rpWeightSet(bpcIdx, tactic);
+  if (!cfg || !set) return 0;
   var rpSlots = ["RP1","RP2","RP3","RP4","RP5","RP6"];
   var si = rpSlots.indexOf(slot); if (si < 0) return 0;
-  if (si < cfg.w) { var wArr = (isWinSplit && wts.wSplit) ? wts.wSplit : wts.w; return wArr[si] || 0; }
-  if (si < cfg.w + cfg.l) return wts.l[si - cfg.w] || 0;
-  return (wts.r[si - cfg.w - cfg.l] || 0);
+  if (si < cfg.w) return set.w[si] || 0;
+  if (si < cfg.w + cfg.l) return set.l[si - cfg.w] || 0;
+  return set.r[si - cfg.w - cfg.l] || 0;
 }
 
 function BullpenLayout(p) {
@@ -1953,9 +1992,9 @@ function BullpenLayout(p) {
           )}
         </div>
         {cfg.w === 3 && (
-          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명을 셋업으로 나눠 씁니다" style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
+          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명을 셋업으로 나눠 씁니다. 선발 배율이 7.00 에서 6.33 으로 깎이고 그만큼 중계 몫이 커집니다. 적극과는 함께 켤 수 없습니다." style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
         )}
-        <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명의 능력치가 1씩 오릅니다. 인게임 화면 수치로는 안 보이지만 실제로는 올라 점수에 반영합니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
+        <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명의 능력치가 1씩 오릅니다. 대신 선발 배율이 7.00 에서 6.66 으로 깎이고 그만큼 중계 몫이 커집니다. 분업과는 함께 켤 수 없습니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
         {[
@@ -2465,8 +2504,9 @@ function readTeam(grid, origin) {
   }
   /* 승리조 전술 J7 — 분업만 앱에 있다 */
   var tac = at(7, 10);
-  if (tac === "분업") out.sd.isWinSplit = true;
-  else if (tac === "적극") out.sd.rpActive = true;
+  if (tac === "분업") { out.sd.isWinSplit = true; out.sd.rpActive = false; }
+  else if (tac === "적극") { out.sd.rpActive = true; out.sd.isWinSplit = false; }
+  else { out.sd.isWinSplit = false; out.sd.rpActive = false; }
   if (at(8, 10) === "적극") out.warn.push("추격조 '적극' 은 앱에 아직 없어 넘어감");
 
   /* 연도 W4 / Y4 */
@@ -2903,9 +2943,16 @@ function LineupPage(p) {
   var bpcIdx = sdState.bpcIdx !== undefined ? sdState.bpcIdx : 4;
   var isWinSplit = sdState.isWinSplit || false;
   var setBpcIdx = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { bpcIdx: typeof v === "function" ? v(prev.bpcIdx !== undefined ? prev.bpcIdx : 4) : v }); }); };
-  var setIsWinSplit = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { isWinSplit: typeof v === "function" ? v(!!prev.isWinSplit) : v }); }); };
+  /* 승리조 전술은 시트에서도 칸이 하나다 — 분업과 적극은 같이 켜지지 않는다 */
+  var setIsWinSplit = function(v) { setSdState(function(prev) {
+    var on = typeof v === "function" ? v(!!prev.isWinSplit) : v;
+    return Object.assign({}, prev, { isWinSplit: on, rpActive: on ? false : prev.rpActive });
+  }); };
   var rpActive = sdState.rpActive || false;
-  var setRpActive = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { rpActive: typeof v === "function" ? v(!!prev.rpActive) : v }); }); };
+  var setRpActive = function(v) { setSdState(function(prev) {
+    var on = typeof v === "function" ? v(!!prev.rpActive) : v;
+    return Object.assign({}, prev, { rpActive: on, isWinSplit: on ? false : prev.isWinSplit });
+  }); };
   var skillsDB = p.skills || {};
 
   /* Skill category for position */
@@ -3032,11 +3079,13 @@ function LineupPage(p) {
       t += calc.total * mult;
     });
     /* 선발 — 1선발 1.4 / 2~4선발 1.3 / 5선발 1.2 */
-    lSP.forEach(function(x, i) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * (i === 0 ? 1.4 : i <= 3 ? 1.3 : 1.2); });
-    /* 중계 — 불펜 편성(11종)별 슬롯 가중치를 그대로 쓴다 (시트보다 세분화돼 있음) */
-    lRP.forEach(function(x) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * getRPWeight(bpcIdx, x.slot, isWinSplit); });
-    /* 마무리 0.8 */
-    if (lCP.pl) t += calcPitSD(lCP.pl, "CP").total * 0.8;
+    /* 선발 — 중계 전술에 따라 배율이 달라진다 (기본 7.00 / 적극 6.66 / 분업 6.33) */
+    var tac = rpTactic(sdState);
+    lSP.forEach(function(x, i) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * spMult(tac, i); });
+    /* 중계 — 편성(11종)별 상대비에 전술별 예산을 맞춘 값 */
+    lRP.forEach(function(x) { if (!x.pl) return; t += calcPitSD(x.pl, x.slot).total * getRPWeight(bpcIdx, x.slot, tac); });
+    /* 마무리는 항상 0.8 */
+    if (lCP.pl) t += calcPitSD(lCP.pl, "CP").total * CP_MULT;
     return Math.round(t * 100) / 100;
   };
   var totalScore = calcTotal();
