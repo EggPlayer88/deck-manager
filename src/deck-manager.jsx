@@ -3153,6 +3153,23 @@ function LineupPage(p) {
   };
 
   /* Batter row */
+  /* 이 자리가 총점에 곱해지는 배율. 선수 점수는 본연의 값이라 배치를 바꿔도 그대로이므로,
+     실제로 총점에 얼마로 들어가는지는 따로 적어준다. */
+  var slotWeight = function(slot, idx, isBat) {
+    if (isBat) return batMult(idx);
+    if (slot === "CP") return CP_MULT;
+    if (RP_SLOTS.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTactic(sdState));
+    return spMult(rpTactic(sdState), idx);
+  };
+  var fmtWt = function(w) { var t = w.toFixed(3); return t.charAt(t.length - 1) === "0" ? t.slice(0, -1) : t; };
+  var wtTag = function(slot, idx, isBat, total, center) {
+    var w = slotWeight(slot, idx, isBat);
+    if (!w) return null;
+    return (<div title={"이 자리의 배율은 " + fmtWt(w) + " 입니다. 총점에는 " + total.toFixed(1) + " x " + fmtWt(w) + " = " + (total * w).toFixed(1) + " 로 들어갑니다."}
+      style={{ fontSize: 11, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, textAlign: center ? "center" : "left", cursor: "help" }}>
+      {"×" + fmtWt(w)}</div>);
+  };
+
   var batRow = function(slot, pl, idx) {
     if (!pl) return (
       <div key={slot} onClick={function() { setPickerSlot(slot); }} style={{ display: "grid", gridTemplateColumns: "32px 68px 1fr", alignItems: "center", gap: 6, padding: "8px 10px", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)", cursor: "pointer" }}>
@@ -3183,9 +3200,9 @@ function LineupPage(p) {
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
           </div>
-          {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} /></div>) : null}
+          {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} />{wtTag(slot, idx, true, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
-            <div style={{ textAlign: "left" }}><GS val={calc.total.toFixed(1)} size={28} /></div>
+            <div style={{ textAlign: "left" }}><GS val={calc.total.toFixed(1)} size={28} />{wtTag(slot, idx, true, calc.total, false)}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: 40 }}>
               {[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]].map(function(it) {
                 return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 15, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
@@ -3255,7 +3272,7 @@ function LineupPage(p) {
   };
 
   /* Pitcher row */
-  var pitRow = function(slot, pl, idx, showWt) {
+  var pitRow = function(slot, pl, idx) {
     if (!pl) return (
       <div key={slot} onClick={function() { setPickerSlot(slot); }} style={{ display: "grid", gridTemplateColumns: "32px 68px 1fr", alignItems: "center", gap: 6, padding: "8px 10px", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)", cursor: "pointer" }}>
         <div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--td)", fontFamily: "var(--m)" }}>{slot}</div>
@@ -3274,9 +3291,9 @@ function LineupPage(p) {
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
           </div>
-          {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" /></div>) : null}
+          {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
-            <div style={{ textAlign: "left" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" /></div>
+            <div style={{ textAlign: "left" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, false)}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 3, marginLeft: 40 }}>
               {[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"]].map(function(it) {
                 return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 15, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
@@ -3392,15 +3409,15 @@ function LineupPage(p) {
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="선발 로테이션" icon="🔥" count={spPl.length + "/5"} color="#AB47BC" />
-        <div style={{ overflowX: "auto" }}>{lSP.map(function(x, i) { return pitRow(x.slot, x.pl, i, false); })}</div>
+        <div style={{ overflowX: "auto" }}>{lSP.map(function(x, i) { return pitRow(x.slot, x.pl, i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="중계진" icon="💪" count={rpPl.length + "/6"} color="#42A5F5" />
-        <div style={{ overflowX: "auto" }}>{lRP.map(function(x, i) { return pitRow(x.slot, x.pl, i, true); })}</div>
+        <div style={{ overflowX: "auto" }}>{lRP.map(function(x, i) { return pitRow(x.slot, x.pl, i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="마무리" icon="🔒" count={cpPl.length + "/1"} color="#EF5350" />
-        <div style={{ overflowX: "auto" }}>{pitRow("CP", lCP.pl, 0, false)}</div>
+        <div style={{ overflowX: "auto" }}>{pitRow("CP", lCP.pl, 0)}</div>
       </div>
 
       {/* 후보선수 */}
