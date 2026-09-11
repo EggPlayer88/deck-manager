@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -556,7 +556,7 @@ eq('없는 이름은 그대로 0', getSkillScore('없는스킬입니다', 6, '�
 eq('정확히 있는 이름은 그대로', canonSkillName('정밀타격', '타자') === '정밀타격' ? 1 : 0, 1);
 
 
-console.log('\n[중계 전술 적극] 켜면 승리조만 능력치 +1');
+console.log('\n[중계 전술] 적극 = 승리조·추격조 +1 / 분업 = 승리조만 +2');
 var rp = { role:"투수", position:"중계", cardType:"시즌", stars:5 };
 /* 2/2/2 편성(bpcIdx 4) → RP1,RP2 가 승리조 */
 var off = { bpcIdx:4, s95:"", s125:"" };
@@ -564,8 +564,8 @@ var on  = { bpcIdx:4, s95:"", s125:"", rpActive:true };
 eq('승리조 RP1 변화 +1', calcSDBonus(rp,"RP1",on,0).c - calcSDBonus(rp,"RP1",off,0).c, 1);
 eq('승리조 RP1 구위 +1', calcSDBonus(rp,"RP1",on,0).s - calcSDBonus(rp,"RP1",off,0).s, 1);
 eq('승리조 RP2 도 오름', calcSDBonus(rp,"RP2",on,0).s - calcSDBonus(rp,"RP2",off,0).s, 1);
-eq('패전조 RP3 은 그대로', calcSDBonus(rp,"RP3",on,0).s - calcSDBonus(rp,"RP3",off,0).s, 0);
-eq('롱릴리프 RP5 도 그대로', calcSDBonus(rp,"RP5",on,0).s - calcSDBonus(rp,"RP5",off,0).s, 0);
+eq('추격조 RP3 도 +1', calcSDBonus(rp,"RP3",on,0).s - calcSDBonus(rp,"RP3",off,0).s, 1);
+eq('롱릴리프 RP5 는 안 받음', calcSDBonus(rp,"RP5",on,0).s - calcSDBonus(rp,"RP5",off,0).s, 0);
 var cp = { role:"투수", position:"마무리", cardType:"시즌", stars:5 };
 eq('마무리는 안 받음', calcSDBonus(cp,"CP",on,0).s - calcSDBonus(cp,"CP",off,0).s, 0);
 var sp = { role:"투수", position:"선발", cardType:"시즌", stars:5 };
@@ -576,13 +576,27 @@ eq('타자는 무관', calcSDBonus(bat,"C",on,0,0).p - calcSDBonus(bat,"C",off,0
 var on3 = { bpcIdx:6, s95:"", s125:"", rpActive:true };
 var off3 = { bpcIdx:6, s95:"", s125:"" };
 eq('3/1/2 면 RP3 도 승리조', calcSDBonus(rp,"RP3",on3,0).s - calcSDBonus(rp,"RP3",off3,0).s, 1);
-eq('3/1/2 의 RP4 는 아님', calcSDBonus(rp,"RP4",on3,0).s - calcSDBonus(rp,"RP4",off3,0).s, 0);
-/* 분업과 무관하게 같은 자리에 붙는다 */
-var onSplit = { bpcIdx:6, s95:"", s125:"", rpActive:true, isWinSplit:true };
-eq('분업 켜도 승리조 자리는 같다', calcSDBonus(rp,"RP1",onSplit,0).s - calcSDBonus(rp,"RP1",off3,0).s, 1);
+eq('3/1/2 의 RP4 는 추격조라 +1', calcSDBonus(rp,"RP4",on3,0).s - calcSDBonus(rp,"RP4",off3,0).s, 1);
+eq('3/1/2 의 RP5 는 롱릴이라 0', calcSDBonus(rp,"RP5",on3,0).s - calcSDBonus(rp,"RP5",off3,0).s, 0);
+/* 분업 — 승리조만 +2. 추격조·롱릴·마무리는 받지 않는다 */
+var onSplit = { bpcIdx:6, s95:"", s125:"", isWinSplit:true };
+eq('분업이면 승리조 +2', calcSDBonus(rp,"RP1",onSplit,0).s - calcSDBonus(rp,"RP1",off3,0).s, 2);
+eq('분업이면 3번째 승리조도 +2', calcSDBonus(rp,"RP3",onSplit,0).s - calcSDBonus(rp,"RP3",off3,0).s, 2);
+eq('분업은 추격조를 안 올린다', calcSDBonus(rp,"RP4",onSplit,0).s - calcSDBonus(rp,"RP4",off3,0).s, 0);
+eq('분업은 마무리도 안 올린다', calcSDBonus(cp,"CP",onSplit,0).s - calcSDBonus(cp,"CP",off3,0).s, 0);
 eq('승리조 판정 자체', isWinGroupSlot("RP1", 4) ? 1 : 0, 1);
 eq('RP3 은 2/2/2 에서 승리조 아님', isWinGroupSlot("RP3", 4) ? 1 : 0, 0);
 eq('CP 는 승리조 아님', isWinGroupSlot("CP", 4) ? 1 : 0, 0);
+eq('RP4 는 3/1/2 에서 패전조', rpGroupOf("RP4", 6) === "패전조" ? 1 : 0, 1);
+eq('RP5 는 3/1/2 에서 롱릴리프', rpGroupOf("RP5", 6) === "롱릴리프" ? 1 : 0, 1);
+eq('CP 는 불펜조가 아님', rpGroupOf("CP", 6) === "" ? 1 : 0, 1);
+
+console.log('\n[타순 가중치] 투수와 같은 10 눈금');
+eq('1~3번 1.33', batMult(0) + batMult(1) + batMult(2), 3.99);
+eq('4~5번 1.15', batMult(3), 1.15);
+eq('6~7번 1.0', batMult(5), 1);
+eq('8~9번 0.85', batMult(8), 0.85);
+eq('타순 가중치 합', Math.round(BAT_MULT.reduce(function(a,b){return a+b;},0)*100)/100, 9.99);
 
 
 console.log('\n[투수 가중치] 총합 10 · 마무리 0.8 고정 · 선발이 깎인 만큼 중계가 가져간다');

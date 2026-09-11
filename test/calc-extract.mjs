@@ -349,6 +349,8 @@ var RP_WEIGHTS = [
   {w:[0.90,0.60],     l:[0.80,0.50,0.15,0.05],   r:[]},
   {w:[1.20],          l:[0.80,0.50,0.08,0.02],   r:[0.40]},
 ];
+var BAT_MULT = [1.33, 1.33, 1.33, 1.15, 1.15, 1.0, 1.0, 0.85, 0.85];
+function batMult(orderIdx) { return BAT_MULT[orderIdx] !== undefined ? BAT_MULT[orderIdx] : BAT_MULT[BAT_MULT.length - 1]; }
 var SP_MULT = {
   "기본": [1.5,   1.4,   1.4,   1.4,   1.3  ],   /* 합 7.000 */
   "적극": [1.425, 1.33,  1.33,  1.33,  1.245],   /* 합 6.660 */
@@ -388,12 +390,15 @@ function getRPWeight(bpcIdx, slot, tactic) {
   if (si < cfg.w + cfg.l) return set.l[si - cfg.w] || 0;
   return set.r[si - cfg.w - cfg.l] || 0;
 }
-function isWinGroupSlot(slot, bpcIdx) {
+function rpGroupOf(slot, bpcIdx) {
   var si = RP_SLOTS.indexOf(slot);
-  if (si < 0) return false;
+  if (si < 0) return "";
   var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
-  return si < cfg.w;
+  if (si < cfg.w) return "승리조";
+  if (si < cfg.w + cfg.l) return "패전조";
+  return "롱릴리프";
 }
+function isWinGroupSlot(slot, bpcIdx) { return rpGroupOf(slot, bpcIdx) === "승리조"; }
 function slotGroupOf(slot, bpcIdx, isWinSplit) {
   if (!slot) return "";
   if (slot === "CP") return "마무리";
@@ -795,10 +800,20 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   /* 투수조장은 투수만 */
   if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
 
-  /* 중계 전술 '적극' — 켜면 승리조 능력치가 1씩 오른다.
-     인게임 화면 수치로는 안 보이지만 실제로는 오르므로 점수에는 넣는다.
-     분업은 승리조가 3명일 때만 켤 수 있지만 적극은 편성과 상관없이 켤 수 있다. */
-  if (!isBat && sdState.rpActive && isWinGroupSlot(slot, sdState.bpcIdx)) { pc += 1; ps += 1; }
+  /* 중계 전술 능력치 보너스 — 인게임 화면 수치로는 안 보이지만 실제로는 오른다.
+       적극 : 승리조와 추격조 모두 +1 (편성과 상관없이 켤 수 있다)
+       분업 : 승리조만 +2 (승리조가 3명일 때만 켤 수 있다)
+     롱릴리프와 마무리는 어느 쪽에서도 받지 않는다. */
+  if (!isBat) {
+    var rpTac = rpTactic(sdState);
+    if (rpTac !== "기본") {
+      var rpGrp = rpGroupOf(slot, sdState.bpcIdx);
+      var rpB = 0;
+      if (rpTac === "적극" && (rpGrp === "승리조" || rpGrp === "패전조")) rpB = 1;
+      else if (rpTac === "분업" && rpGrp === "승리조") rpB = 2;
+      if (rpB) { pc += rpB; ps += rpB; }
+    }
+  }
 
   /* POTM 자동 보너스 */
   var potmB = getPotmBonus(pl, sdState);
@@ -867,4 +882,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, getRPWeight, rpTactic, spMult, rpBudget, rpWeightSet, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, getRPWeight, rpTactic, spMult, rpBudget, rpWeightSet, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };

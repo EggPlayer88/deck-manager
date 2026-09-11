@@ -709,10 +709,20 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   /* 투수조장은 투수만 */
   if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
 
-  /* 중계 전술 '적극' — 켜면 승리조 능력치가 1씩 오른다.
-     인게임 화면 수치로는 안 보이지만 실제로는 오르므로 점수에는 넣는다.
-     분업은 승리조가 3명일 때만 켤 수 있지만 적극은 편성과 상관없이 켤 수 있다. */
-  if (!isBat && sdState.rpActive && isWinGroupSlot(slot, sdState.bpcIdx)) { pc += 1; ps += 1; }
+  /* 중계 전술 능력치 보너스 — 인게임 화면 수치로는 안 보이지만 실제로는 오른다.
+       적극 : 승리조와 추격조 모두 +1 (편성과 상관없이 켤 수 있다)
+       분업 : 승리조만 +2 (승리조가 3명일 때만 켤 수 있다)
+     롱릴리프와 마무리는 어느 쪽에서도 받지 않는다. */
+  if (!isBat) {
+    var rpTac = rpTactic(sdState);
+    if (rpTac !== "기본") {
+      var rpGrp = rpGroupOf(slot, sdState.bpcIdx);
+      var rpB = 0;
+      if (rpTac === "적극" && (rpGrp === "승리조" || rpGrp === "패전조")) rpB = 1;
+      else if (rpTac === "분업" && rpGrp === "승리조") rpB = 2;
+      if (rpB) { pc += rpB; ps += rpB; }
+    }
+  }
 
   /* POTM 자동 보너스 */
   var potmB = getPotmBonus(pl, sdState);
@@ -1914,6 +1924,9 @@ var RP_WEIGHTS = [
    중계 몫 = 10 - 선발합 - 0.8 이 된다.
    적극·분업을 켜면 선발이 깎이고 그만큼 중계가 커진다. 그래서 전술을 켠다고
    무조건 점수가 오르지 않는다 — 선발이 좋은 덱은 오히려 손해를 볼 수 있다. */
+/* 타순 가중치 — 1~3번 / 4~5번 / 6~7번 / 8~9번. 합 9.99 로 투수(10)와 같은 눈금이다 */
+var BAT_MULT = [1.33, 1.33, 1.33, 1.15, 1.15, 1.0, 1.0, 0.85, 0.85];
+function batMult(orderIdx) { return BAT_MULT[orderIdx] !== undefined ? BAT_MULT[orderIdx] : BAT_MULT[BAT_MULT.length - 1]; }
 var SP_MULT = {
   "기본": [1.5,   1.4,   1.4,   1.4,   1.3  ],   /* 합 7.000 */
   "적극": [1.425, 1.33,  1.33,  1.33,  1.245],   /* 합 6.660 */
@@ -1992,9 +2005,9 @@ function BullpenLayout(p) {
           )}
         </div>
         {cfg.w === 3 && (
-          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명을 셋업으로 나눠 씁니다. 선발 배율이 7.00 에서 6.33 으로 깎이고 그만큼 중계 몫이 커집니다. 적극과는 함께 켤 수 없습니다." style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
+          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명을 셋업으로 나눠 쓰고 능력치가 2씩 오릅니다. 대신 선발 배율이 7.00 에서 6.33 으로 깎이고 그만큼 중계 몫이 커집니다. 적극과는 함께 켤 수 없습니다." style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
         )}
-        <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명의 능력치가 1씩 오릅니다. 대신 선발 배율이 7.00 에서 6.66 으로 깎이고 그만큼 중계 몫이 커집니다. 분업과는 함께 켤 수 없습니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
+        <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명과 추격조 " + cfg.l + "명의 능력치가 1씩 오릅니다. 대신 선발 배율이 7.00 에서 6.66 으로 깎이고 그만큼 중계 몫이 커집니다. 분업과는 함께 켤 수 없습니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
         {[
@@ -2029,14 +2042,17 @@ function BullpenLayout(p) {
    ================================================================ */
 /* 슬롯이 실제로 어느 자리인가. 앱의 "패전조" 가 스킬 이름의 "추격조" 다.
    분업을 켜면 승리조 자리가 셋업이 된다. */
-/* 승리조 자리인가 — 분업으로 '셋업' 이라 불리게 돼도 같은 자리다.
-   중계 전술 '적극' 은 이 자리들에만 붙는다. */
-function isWinGroupSlot(slot, bpcIdx) {
+/* 불펜 자리가 어느 조인가 — 분업으로 '셋업' 이라 불리게 돼도 자리 자체는 그대로다.
+   전술 보너스는 이 판정을 따른다. */
+function rpGroupOf(slot, bpcIdx) {
   var si = RP_SLOTS.indexOf(slot);
-  if (si < 0) return false;
+  if (si < 0) return "";
   var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
-  return si < cfg.w;
+  if (si < cfg.w) return "승리조";
+  if (si < cfg.w + cfg.l) return "패전조";
+  return "롱릴리프";
 }
+function isWinGroupSlot(slot, bpcIdx) { return rpGroupOf(slot, bpcIdx) === "승리조"; }
 function slotGroupOf(slot, bpcIdx, isWinSplit) {
   if (!slot) return "";
   if (slot === "CP") return "마무리";
@@ -3073,9 +3089,9 @@ function LineupPage(p) {
     lBats.forEach(function(x, i) {
       if (!x.pl) return;
       var calc = calcBatSD(x.pl, x.slot);
-      /* 덱 보정 시트 기준 — 타순으로 구분한다.
-         1~2번 상위 1.15 / 3~5번 코어 1.3 / 6~7번 중위 1.0 / 8~9번 하위 0.75 */
-      var mult = i <= 1 ? 1.15 : i <= 4 ? 1.3 : i <= 6 ? 1.0 : 0.75;
+      /* 타순 가중치 — 투수와 같은 10 눈금이다 (합 9.99).
+         1~3번 1.33 / 4~5번 1.15 / 6~7번 1.0 / 8~9번 0.85 */
+      var mult = batMult(i);
       t += calc.total * mult;
     });
     /* 선발 — 1선발 1.4 / 2~4선발 1.3 / 5선발 1.2 */
