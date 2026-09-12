@@ -1906,26 +1906,43 @@ function getPotmInfo(pl, sdState) {
 }
 
 var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1}];
+/* 중계 가중치 — 편성 11종 x 전술 3가지의 자리값을 그대로 적어 둔다.
+   합: 기본 2.200 / 적극 2.540 / 분업 2.870.
+   분업은 승리조가 3명인 편성에서만 켤 수 있어 나머지는 null 이다. */
 var RP_WEIGHTS = [
-  {w:[1.30],          l:[1.10],                   r:[0.40,0.10,0.08,0.02]},
-  {w:[1.20],          l:[0.80,0.60],              r:[0.20,0.12,0.08]},
-  {w:[1.20],          l:[0.80,0.50,0.10],         r:[0.30,0.10]},
-  {w:[0.90,0.60],     l:[1.00],                   r:[0.30,0.12,0.08]},
-  {w:[0.90,0.60],     l:[0.70,0.40],              r:[0.30,0.10]},
-  {w:[0.90,0.60],     l:[0.70,0.30,0.10],         r:[0.40]},
-  {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[1.00],          r:[0.30,0.10]},
-  {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[0.60,0.40],     r:[0.40]},
-  {w:[0.80,0.60,0.20],wSplit:[0.20,0.50,0.90],l:[0.70,0.50,0.20],r:[]},
-  {w:[0.90,0.60],     l:[0.80,0.50,0.15,0.05],   r:[]},
-  {w:[1.20],          l:[0.80,0.50,0.08,0.02],   r:[0.40]},
+  /* 1/1/4 */ { "기본":[0.900,0.675,0.450,0.125,0.050,0.000], "적극":[0.850,0.740,0.600,0.300,0.050,0.000], "분업":null },
+  /* 1/2/3 */ { "기본":[0.900,0.650,0.150,0.450,0.050,0.000], "적극":[0.850,0.700,0.265,0.500,0.225,0.000], "분업":null },
+  /* 1/3/2 */ { "기본":[0.900,0.650,0.150,0.000,0.450,0.050], "적극":[0.850,0.700,0.240,0.050,0.500,0.200], "분업":null },
+  /* 2/1/3 */ { "기본":[0.850,0.300,0.550,0.450,0.050,0.000], "적극":[0.800,0.550,0.650,0.400,0.140,0.000], "분업":null },
+  /* 2/2/2 */ { "기본":[0.850,0.300,0.500,0.150,0.350,0.050], "적극":[0.800,0.550,0.600,0.150,0.400,0.040], "분업":null },
+  /* 2/3/1 */ { "기본":[0.850,0.300,0.500,0.150,0.000,0.400], "적극":[0.800,0.550,0.600,0.150,0.000,0.440], "분업":null },
+  /* 3/1/2 */ { "기본":[0.850,0.300,0.050,0.600,0.400,0.000], "적극":[0.800,0.500,0.100,0.700,0.400,0.040], "분업":[0.350,0.700,0.750,0.700,0.350,0.020] },
+  /* 3/2/1 */ { "기본":[0.850,0.300,0.050,0.550,0.050,0.400], "적극":[0.800,0.500,0.100,0.650,0.090,0.400], "분업":[0.350,0.700,0.750,0.650,0.070,0.350] },
+  /* 3/3/0 */ { "기본":[0.850,0.350,0.050,0.700,0.250,0.000], "적극":[0.800,0.500,0.100,0.750,0.340,0.050], "분업":[0.350,0.700,0.750,0.725,0.295,0.050] },
+  /* 2/4/0 */ { "기본":[0.850,0.300,0.650,0.350,0.050,0.000], "적극":[0.800,0.550,0.750,0.350,0.090,0.000], "분업":null },
+  /* 1/4/1 */ { "기본":[0.900,0.650,0.200,0.050,0.000,0.400], "적극":[0.850,0.650,0.300,0.140,0.000,0.600], "분업":null },
 ];
 /* 투수 가중치 총합은 10 이다 (타자와 같은 눈금).
    마무리가 0.8 로 고정이고, 선발 배율이 중계 전술에 따라 달라지므로
    중계 몫 = 10 - 선발합 - 0.8 이 된다.
    적극·분업을 켜면 선발이 깎이고 그만큼 중계가 커진다. 그래서 전술을 켠다고
    무조건 점수가 오르지 않는다 — 선발이 좋은 덱은 오히려 손해를 볼 수 있다. */
-/* 타순 가중치 — 1~3번 / 4~5번 / 6~7번 / 8~9번. 합 9.99 로 투수(10)와 같은 눈금이다 */
-var BAT_MULT = [1.33, 1.33, 1.33, 1.15, 1.15, 1.0, 1.0, 0.85, 0.85];
+/* 타순 가중치 — 자리의 값어치. 3~5번 클린업이 정점이고 6번부터 뚝 떨어진다. 합 9.00 */
+var BAT_MULT = [1.10, 1.10, 1.20, 1.20, 1.10, 0.85, 0.85, 0.80, 0.80];
+/* 강함 가중치 — 그 라인업 안에서 점수가 높은 순서(1~9위)로 곱한다. 합 9.20
+   타순은 '자리'의 성질이고 이쪽은 '선수'의 성질이라 둘은 곱해진다.
+   같은 타자라도 팀에서 몇 번째로 강하냐에 따라 값어치가 달라진다. */
+var STR_MULT = [1.20, 1.20, 1.10, 1.10, 1.00, 1.00, 0.90, 0.90, 0.80];
+function strMult(rankIdx) { return STR_MULT[rankIdx] !== undefined ? STR_MULT[rankIdx] : STR_MULT[STR_MULT.length - 1]; }
+/* 점수 배열을 받아 각 자리의 강함 순위(0부터)를 돌려준다.
+   점수가 같으면 앞선 자리를 위로 친다 — 순위가 흔들리지 않게 한다. */
+function strRanks(scores) {
+  var idx = scores.map(function(v, i) { return i; });
+  idx.sort(function(a, b) { return (scores[b] - scores[a]) || (a - b); });
+  var out = new Array(scores.length);
+  idx.forEach(function(orig, r) { out[orig] = r; });
+  return out;
+}
 function batMult(orderIdx) { return BAT_MULT[orderIdx] !== undefined ? BAT_MULT[orderIdx] : BAT_MULT[BAT_MULT.length - 1]; }
 var SP_MULT = {
   "기본": [1.5,   1.4,   1.4,   1.4,   1.3  ],   /* 합 7.000 */
@@ -1950,25 +1967,11 @@ function rpBudget(tactic) {
 /* RP_WEIGHTS 는 11종의 상대비만 담는다(합 3.00). 실제 값은 전술별 예산에 맞춰 늘린다.
    패전조·롱릴리프는 기본 전술의 값으로 두고, 늘어난 몫은 승리조가 가져간다.
    적극·분업은 승리조를 더 쓰는 전술이므로 그쪽에 실리는 것이 맞다. */
-function rpWeightSet(bpcIdx, tactic) {
-  var cfg = BPC[bpcIdx]; var wts = RP_WEIGHTS[bpcIdx];
-  if (!cfg || !wts) return null;
-  var sum = function(a) { var t = 0; for (var i = 0; i < (a || []).length; i++) t += a[i]; return t; };
-  var k = rpBudget("기본") / (sum(wts.w) + sum(wts.l) + sum(wts.r));
-  var l = (wts.l || []).map(function(v) { return v * k; });
-  var r = (wts.r || []).map(function(v) { return v * k; });
-  var shape = (tactic === "분업" && wts.wSplit) ? wts.wSplit : wts.w;
-  var kw = (rpBudget(tactic) - sum(l) - sum(r)) / sum(shape);
-  return { w: shape.map(function(v) { return v * kw; }), l: l, r: r };
-}
 function getRPWeight(bpcIdx, slot, tactic) {
-  var cfg = BPC[bpcIdx]; var set = rpWeightSet(bpcIdx, tactic);
-  if (!cfg || !set) return 0;
-  var rpSlots = ["RP1","RP2","RP3","RP4","RP5","RP6"];
-  var si = rpSlots.indexOf(slot); if (si < 0) return 0;
-  if (si < cfg.w) return set.w[si] || 0;
-  if (si < cfg.w + cfg.l) return set.l[si - cfg.w] || 0;
-  return set.r[si - cfg.w - cfg.l] || 0;
+  var set = RP_WEIGHTS[bpcIdx]; if (!set) return 0;
+  var a = set[tactic] || set["기본"]; if (!a) return 0;
+  var si = ["RP1","RP2","RP3","RP4","RP5","RP6"].indexOf(slot);
+  return si < 0 ? 0 : (a[si] || 0);
 }
 
 function BullpenLayout(p) {
@@ -3084,15 +3087,19 @@ function LineupPage(p) {
   }).filter(function(v){return v!==null;});
 
   /* Calculate total score */
+  /* 라인업에 선 타자들의 강함 순위 — 배치가 바뀌면 여기부터 다시 계산된다.
+     빈 자리는 0점으로 두어 항상 꼴찌가 되게 한다. */
+  var batRanks = React.useMemo(function() {
+    return strRanks(lBats.map(function(x) { return x.pl ? calcBatSD(x.pl, x.slot).total : 0; }));
+  }, [lBats, sdState, players]);
+
   var calcTotal = function() {
     var t = 0;
     lBats.forEach(function(x, i) {
       if (!x.pl) return;
       var calc = calcBatSD(x.pl, x.slot);
-      /* 타순 가중치 — 투수와 같은 10 눈금이다 (합 9.99).
-         1~3번 1.33 / 4~5번 1.15 / 6~7번 1.0 / 8~9번 0.85 */
-      var mult = batMult(i);
-      t += calc.total * mult;
+      /* 자리의 값(타순) x 선수의 값(그 라인업 안에서의 강함 순위) */
+      t += calc.total * batMult(i) * strMult(batRanks[i]);
     });
     /* 선발 — 1선발 1.4 / 2~4선발 1.3 / 5선발 1.2 */
     /* 선발 — 중계 전술에 따라 배율이 달라진다 (기본 7.00 / 적극 6.66 / 분업 6.33) */
@@ -3156,7 +3163,7 @@ function LineupPage(p) {
   /* 이 자리가 총점에 곱해지는 배율. 선수 점수는 본연의 값이라 배치를 바꿔도 그대로이므로,
      실제로 총점에 얼마로 들어가는지는 따로 적어준다. */
   var slotWeight = function(slot, idx, isBat) {
-    if (isBat) return batMult(idx);
+    if (isBat) return batMult(idx) * strMult(batRanks[idx]);
     if (slot === "CP") return CP_MULT;
     if (RP_SLOTS.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTactic(sdState));
     return spMult(rpTactic(sdState), idx);
@@ -3165,7 +3172,11 @@ function LineupPage(p) {
   var wtTag = function(slot, idx, isBat, total, center) {
     var w = slotWeight(slot, idx, isBat);
     if (!w) return null;
-    return (<div title={"이 자리의 배율은 " + fmtWt(w) + " 입니다. 총점에는 " + total.toFixed(1) + " x " + fmtWt(w) + " = " + (total * w).toFixed(1) + " 로 들어갑니다."}
+    var why = isBat
+      ? "타순 " + fmtWt(batMult(idx)) + " x 강함 " + fmtWt(strMult(batRanks[idx]))
+        + " (이 라인업에서 " + (batRanks[idx] + 1) + "번째로 강함) = " + fmtWt(w)
+      : "이 자리의 배율은 " + fmtWt(w);
+    return (<div title={why + ". 총점에는 " + total.toFixed(1) + " x " + fmtWt(w) + " = " + (total * w).toFixed(1) + " 로 들어갑니다."}
       style={{ fontSize: 11, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, textAlign: center ? "center" : "left", cursor: "help" }}>
       {"×" + fmtWt(w)}</div>);
   };

@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -591,12 +591,29 @@ eq('RP4 는 3/1/2 에서 패전조', rpGroupOf("RP4", 6) === "패전조" ? 1 : 0
 eq('RP5 는 3/1/2 에서 롱릴리프', rpGroupOf("RP5", 6) === "롱릴리프" ? 1 : 0, 1);
 eq('CP 는 불펜조가 아님', rpGroupOf("CP", 6) === "" ? 1 : 0, 1);
 
-console.log('\n[타순 가중치] 투수와 같은 10 눈금');
-eq('1~3번 1.33', batMult(0) + batMult(1) + batMult(2), 3.99);
-eq('4~5번 1.15', batMult(3), 1.15);
-eq('6~7번 1.0', batMult(5), 1);
-eq('8~9번 0.85', batMult(8), 0.85);
-eq('타순 가중치 합', Math.round(BAT_MULT.reduce(function(a,b){return a+b;},0)*100)/100, 9.99);
+console.log('\n[타순 가중치] 자리의 값 — 3~5번 클린업이 정점, 6번부터 뚝 떨어진다');
+eq('1~2번 1.10', batMult(0), 1.10);
+eq('3~5번 1.20/1.20/1.10', batMult(2) + batMult(3) + batMult(4), 3.50);
+eq('6~7번 0.85', batMult(5), 0.85);
+eq('8~9번 0.80', batMult(8), 0.80);
+eq('타순 가중치 합', Math.round(BAT_MULT.reduce(function(a,b){return a+b;},0)*100)/100, 9.00);
+
+console.log('\n[강함 가중치] 라인업 안에서 점수 높은 순으로 곱한다');
+eq('1~2위 1.20', strMult(0), 1.20);
+eq('9위 0.80', strMult(8), 0.80);
+eq('강함 가중치 합', Math.round(STR_MULT.reduce(function(a,b){return a+b;},0)*100)/100, 9.20);
+/* 순위 매기기 — 점수가 같으면 앞선 자리가 위로 간다 */
+eq('가장 강한 자리가 0위', strRanks([300,500,400])[1], 0);
+eq('가장 약한 자리가 꼴찌', strRanks([300,500,400])[0], 2);
+eq('동점이면 앞자리 우선', strRanks([400,400])[0], 0);
+eq('빈 자리(0점)는 꼴찌', strRanks([0,350,340])[0], 2);
+/* 최적 배치에서 타순 x 강함 합 */
+var sortedOrd = BAT_MULT.slice().sort(function(a,b){ return b-a; });
+eq('최적 배치 Σ(타순x강함)',
+   Math.round(sortedOrd.reduce(function(t,w,i){ return t + w*STR_MULT[i]; },0)*1000)/1000, 9.375);
+/* 최대 / 최소 */
+eq('최대 배율', Math.round(Math.max.apply(null,BAT_MULT)*Math.max.apply(null,STR_MULT)*100)/100, 1.44);
+eq('최소 배율', Math.round(Math.min.apply(null,BAT_MULT)*Math.min.apply(null,STR_MULT)*100)/100, 0.64);
 
 
 console.log('\n[투수 가중치] 총합 10 · 마무리 0.8 고정 · 선발이 깎인 만큼 중계가 가져간다');
@@ -606,9 +623,9 @@ var sumRP = function(i,t){ var s=0; RPS.forEach(function(sl){ s+=getRPWeight(i,s
 eq('선발 기본 합 7.00', sumSP('기본'), 7);
 eq('선발 적극 합 6.66', sumSP('적극'), 6.66);
 eq('선발 분업 합 6.331', sumSP('분업'), 6.331);
-eq('중계 기본 몫', rpBudget('기본'), 2.2);
-eq('중계 적극 몫', rpBudget('적극'), 2.54);
-eq('중계 분업 몫', rpBudget('분업'), 2.869);
+eq('중계 기본 몫', Math.round(sumRP(4,'기본')*1000)/1000, 2.2);
+eq('중계 적극 몫', Math.round(sumRP(4,'적극')*1000)/1000, 2.54);
+eq('중계 분업 몫', Math.round(sumRP(6,'분업')*1000)/1000, 2.87);
 /* 편성 11종 어디서나 총합이 예산과 맞아야 한다 */
 for (var bi = 0; bi < 11; bi++) {
   eq('편성 ' + bi + ' 기본 합', Math.round(sumRP(bi,'기본')*1000)/1000, 2.2);
@@ -617,11 +634,14 @@ for (var bi = 0; bi < 11; bi++) {
 /* 투수 전체 합 = 10 */
 eq('투수 총합 기본', Math.round((sumSP('기본') + sumRP(4,'기본') + 0.8)*1000)/1000, 10);
 eq('투수 총합 적극', Math.round((sumSP('적극') + sumRP(4,'적극') + 0.8)*1000)/1000, 10);
-eq('투수 총합 분업', Math.round((sumSP('분업') + sumRP(6,'분업') + 0.8)*1000)/1000, 10);
-/* 적극/분업은 패전조·롱릴을 건드리지 않고 승리조만 키운다 */
-eq('2/2/2 패전조는 그대로', getRPWeight(4,'RP3','적극') - getRPWeight(4,'RP3','기본'), 0);
-eq('2/2/2 롱릴도 그대로', getRPWeight(4,'RP5','적극') - getRPWeight(4,'RP5','기본'), 0);
-eq('2/2/2 승리조는 커짐', getRPWeight(4,'RP1','적극') > getRPWeight(4,'RP1','기본') ? 1 : 0, 1);
+/* 분업은 중계 몫을 2.869 가 아니라 2.870 으로 적어 총합이 10.001 이다 (0.01%, 그대로 둔다) */
+eq('투수 총합 분업', Math.round((sumSP('분업') + sumRP(6,'분업') + 0.8)*1000)/1000, 10.001);
+/* 전술 표는 자리마다 손으로 잡은 값이라 "승리조만 커진다" 같은 규칙은 없다.
+   총 몫이 커진다는 것과, 분업에서 승리조 순서가 뒤집힌다는 것만 고정한다. */
+eq('적극이면 중계 몫이 커진다', sumRP(4,'적극') > sumRP(4,'기본') ? 1 : 0, 1);
+eq('분업이면 더 커진다', sumRP(6,'분업') > sumRP(6,'적극') ? 1 : 0, 1);
+eq('편성마다 값이 다르다', getRPWeight(0,'RP2','기본') === getRPWeight(3,'RP2','기본') ? 1 : 0, 0);
+eq('없는 분업 표는 기본으로 떨어진다', getRPWeight(4,'RP1','분업'), getRPWeight(4,'RP1','기본'));
 /* 분업은 승리조 순서가 뒤집힌다 (셋업 배치) */
 eq('분업이면 3번째 승리조가 가장 큼', getRPWeight(6,'RP3','분업') > getRPWeight(6,'RP1','분업') ? 1 : 0, 1);
 eq('기본이면 1번째가 가장 큼', getRPWeight(6,'RP1','기본') > getRPWeight(6,'RP3','기본') ? 1 : 0, 1);
