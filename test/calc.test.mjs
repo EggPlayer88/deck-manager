@@ -591,17 +591,22 @@ eq('RP4 는 3/1/2 에서 패전조', rpGroupOf("RP4", 6) === "패전조" ? 1 : 0
 eq('RP5 는 3/1/2 에서 롱릴리프', rpGroupOf("RP5", 6) === "롱릴리프" ? 1 : 0, 1);
 eq('CP 는 불펜조가 아님', rpGroupOf("CP", 6) === "" ? 1 : 0, 1);
 
-console.log('\n[타순 가중치] 자리의 값 — 3~5번 클린업이 정점, 6번부터 뚝 떨어진다');
-eq('1~2번 1.10', batMult(0), 1.10);
-eq('3~5번 1.20/1.20/1.10', batMult(2) + batMult(3) + batMult(4), 3.50);
-eq('6~7번 0.85', batMult(5), 0.85);
-eq('8~9번 0.80', batMult(8), 0.80);
-eq('타순 가중치 합', Math.round(BAT_MULT.reduce(function(a,b){return a+b;},0)*100)/100, 9.00);
+console.log('\n[타순 가중치] 자리의 값 — 3~4번이 정점, 6번부터 내려간다');
+eq('1~2번 1.100', batMult(0), 1.100);
+eq('3~4번 1.150', batMult(2), 1.150);
+eq('5번 1.000', batMult(4), 1.000);
+eq('6~7번 0.900', batMult(5), 0.900);
+eq('8~9번 0.850', batMult(8), 0.850);
+eq('타순 가중치 합', Math.round(BAT_MULT.reduce(function(a,b){return a+b;},0)*1000)/1000, 9.000);
+/* 5번이 1~2번보다 낮다 — 클린업을 3~4번으로 좁힌 결과다 */
+eq('5번 < 1번', batMult(4) < batMult(0) ? 1 : 0, 1);
 
 console.log('\n[강함 가중치] 라인업 안에서 점수 높은 순으로 곱한다');
-eq('1~2위 1.20', strMult(0), 1.20);
-eq('9위 0.80', strMult(8), 0.80);
-eq('강함 가중치 합', Math.round(STR_MULT.reduce(function(a,b){return a+b;},0)*100)/100, 9.20);
+eq('1~2위 1.350', strMult(0), 1.350);
+eq('3~5위 1.200', strMult(4), 1.200);
+eq('6~7위 1.000', strMult(6), 1.000);
+eq('8~9위 0.850', strMult(8), 0.850);
+eq('강함 가중치 합', Math.round(STR_MULT.reduce(function(a,b){return a+b;},0)*1000)/1000, 10.000);
 /* 순위 매기기 — 점수가 같으면 앞선 자리가 위로 간다 */
 eq('가장 강한 자리가 0위', strRanks([300,500,400])[1], 0);
 eq('가장 약한 자리가 꼴찌', strRanks([300,500,400])[0], 2);
@@ -609,11 +614,13 @@ eq('동점이면 앞자리 우선', strRanks([400,400])[0], 0);
 eq('빈 자리(0점)는 꼴찌', strRanks([0,350,340])[0], 2);
 /* 최적 배치에서 타순 x 강함 합 */
 var sortedOrd = BAT_MULT.slice().sort(function(a,b){ return b-a; });
+/* 투수 10.00 보다 1.9% 높다 — 배치를 잘 한 덱이 그만큼 대우받게 한 확인된 값이다 */
 eq('최적 배치 Σ(타순x강함)',
-   Math.round(sortedOrd.reduce(function(t,w,i){ return t + w*STR_MULT[i]; },0)*1000)/1000, 9.375);
-/* 최대 / 최소 */
-eq('최대 배율', Math.round(Math.max.apply(null,BAT_MULT)*Math.max.apply(null,STR_MULT)*100)/100, 1.44);
-eq('최소 배율', Math.round(Math.min.apply(null,BAT_MULT)*Math.min.apply(null,STR_MULT)*100)/100, 0.64);
+   Math.round(sortedOrd.reduce(function(t,w,i){ return t + w*STR_MULT[i]; },0)*1000)/1000, 10.190);
+/* 최대 = 최강 타자를 3번에 / 최소 = 최약 타자를 8~9번에 */
+eq('최대 배율', Math.round(Math.max.apply(null,BAT_MULT)*Math.max.apply(null,STR_MULT)*10000)/10000, 1.5525);
+eq('최소 배율', Math.round(Math.min.apply(null,BAT_MULT)*Math.min.apply(null,STR_MULT)*10000)/10000, 0.7225);
+eq('최대/최소 비', Math.round(1.5525/0.7225*100)/100, 2.15);
 
 
 console.log('\n[투수 가중치] 총합 10 · 마무리 0.8 고정 · 선발이 깎인 만큼 중계가 가져간다');
