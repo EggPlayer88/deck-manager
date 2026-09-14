@@ -1664,8 +1664,14 @@ function PlayerDBPage(p){
                         pl2.launchAngle=parseInt(row["발사각"])||0;
                         var hz=zonesFromRow(row);
                         pl2.whiteZone=hz.whiteZone; pl2.coldZone=hz.coldZone;
+                        /* 주루·수비는 점수에 안 쓰이지만 스킬 구간 판정(선봉장 주루142+ 등)의
+                           재료라 양식에 있는 값을 그대로 받아 둔다 */
+                        pl2.running=parseInt(row["주루"])||0;
+                        pl2.defense=parseInt(row["수비"])||0;
                       }
-                      else{var pos=row["역할"]||"선발";if(pos==="중간계투")pos="중계";pl2.position=pos;pl2.subPosition=pl2.subPosition||"SP1";pl2.speed=parseInt(row["구속"])||0;pl2.change=parseInt(row["변화"])||0;pl2.stuff=parseInt(row["구위"])||0;}
+                      else{var pos=row["역할"]||"선발";if(pos==="중간계투")pos="중계";pl2.position=pos;pl2.subPosition=pl2.subPosition||"SP1";pl2.speed=parseInt(row["구속"])||0;pl2.change=parseInt(row["변화"])||0;pl2.stuff=parseInt(row["구위"])||0;
+                        /* 제구·지구력·수비도 점수 밖이지만 같은 이유로 받아 둔다 */
+                        pl2.control=parseInt(row["제구"])||0;pl2.stamina=parseInt(row["지구력"])||0;pl2.defense=parseInt(row["수비"])||0;}
                       if(ct2==="임팩트")pl2.impactType=row["임팩트종류"]||"";
                       if(ct2==="라이브"){pl2.setScore=parseInt(row["세트덱스코어"])||0;pl2.liveType=row["라이브종류"]||"";}
                       if(ex!==null){np[ex]=pl2;updated2++;}else{np.push(pl2);added2++;}
