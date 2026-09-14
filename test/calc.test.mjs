@@ -655,8 +655,24 @@ eq('기본이면 1번째가 가장 큼', getRPWeight(6,'RP1','기본') > getRPWe
 /* 전술 판정 */
 eq('아무것도 아니면 기본', rpTactic({}) === '기본' ? 1 : 0, 1);
 eq('rpActive 면 적극', rpTactic({rpActive:true}) === '적극' ? 1 : 0, 1);
-eq('isWinSplit 이면 분업', rpTactic({isWinSplit:true}) === '분업' ? 1 : 0, 1);
-eq('분업이 적극보다 우선', rpTactic({isWinSplit:true, rpActive:true}) === '분업' ? 1 : 0, 1);
+/* 분업은 승리조 3명 편성(6,7,8 = 3/1/2, 3/2/1, 3/3/0)에서만 성립한다 */
+eq('3/1/2 + isWinSplit 이면 분업', rpTactic({isWinSplit:true, bpcIdx:6}) === '분업' ? 1 : 0, 1);
+eq('분업이 적극보다 우선', rpTactic({isWinSplit:true, rpActive:true, bpcIdx:6}) === '분업' ? 1 : 0, 1);
+/* 시트 가져오기가 2/4/0 + 분업 같은 조합을 넣어도 편성이 이기게 한다.
+   안 걸러내면 선발만 분업 배율(6.331)을 쓰고 중계는 기본(2.200)으로 떨어져
+   투수 합이 9.331 이 된다. */
+eq('2/4/0 + isWinSplit 이면 기본', rpTactic({isWinSplit:true, bpcIdx:9}) === '기본' ? 1 : 0, 1);
+eq('2/4/0 + 분업 + 적극이면 적극', rpTactic({isWinSplit:true, rpActive:true, bpcIdx:9}) === '적극' ? 1 : 0, 1);
+/* 어떤 편성/전술 조합이 와도 투수 합은 10 근처여야 한다 */
+for (var bpc = 0; bpc < 11; bpc++) {
+  for (var fl = 0; fl < 4; fl++) {
+    var st = { bpcIdx: bpc, isWinSplit: !!(fl & 1), rpActive: !!(fl & 2) };
+    var tac = rpTactic(st);
+    var tot = sumSP(tac) + sumRP(bpc, tac) + 0.8;
+    eq('편성' + bpc + ' 분업' + (fl&1?'O':'X') + ' 적극' + (fl&2?'O':'X') + ' 합',
+       Math.round(tot * 10) / 10, 10);
+  }
+}
 /* 선발 배율 */
 eq('1선발 기본', spMult('기본',0), 1.5);
 eq('5선발 분업', spMult('분업',4), 1.18);

@@ -1929,7 +1929,7 @@ var RP_WEIGHTS = [
    무조건 점수가 오르지 않는다 — 선발이 좋은 덱은 오히려 손해를 볼 수 있다. */
 /* 타순 가중치 — 자리의 값어치. 3~4번이 정점이고 6번부터 내려간다. 합 9.00 */
 var BAT_MULT = [1.100, 1.100, 1.150, 1.150, 1.000, 0.900, 0.900, 0.850, 0.850];
-/* 강함 가중치 — 그 라인업 안에서 점수가 높은 순서(1~9위)로 곱한다. 합 9.20
+/* 강함 가중치 — 그 라인업 안에서 점수가 높은 순서(1~9위)로 곱한다. 합 10.00
    타순은 '자리'의 성질이고 이쪽은 '선수'의 성질이라 둘은 곱해진다.
    같은 타자라도 팀에서 몇 번째로 강하냐에 따라 값어치가 달라진다.
    최적 배치에서 Σ(타순 x 강함) = 10.190. 투수 10.00 보다 1.9% 높은데
@@ -1955,9 +1955,16 @@ var SP_MULT = {
 var CP_MULT = 0.8;
 var PIT_TOTAL = 10;
 /* 저장된 값은 그대로 두고(구덱 호환) 여기서 하나로 읽는다. 둘은 함께 켜지지 않는다 */
+/* 지금 실제로 걸려 있는 중계 전술.
+   분업은 승리조가 3명인 편성에서만 성립한다. 화면은 버튼을 숨겨서 막지만
+   시트 가져오기는 편성과 전술을 따로 읽어오기 때문에 2/4/0 + 분업 같은
+   조합이 들어올 수 있다. 그대로 두면 선발은 분업 배율(6.331)을 쓰는데
+   중계는 분업 표가 없어 기본(2.200)으로 떨어져 투수 합이 9.331 이 된다.
+   그래서 여기서 한 번 걸러 편성에 맞는 전술만 돌려준다. */
 function rpTactic(sdState) {
   if (!sdState) return "기본";
-  if (sdState.isWinSplit) return "분업";
+  var cfg = BPC[sdState.bpcIdx === undefined ? 4 : sdState.bpcIdx] || BPC[4];
+  if (sdState.isWinSplit && cfg.w === 3) return "분업";
   if (sdState.rpActive) return "적극";
   return "기본";
 }
@@ -5290,9 +5297,14 @@ function MyPlayersPage(p) {
       if (R.team.capPitName && nameToId[R.team.capPitName]) nsd.capPitId = nameToId[R.team.capPitName];
     }
     /* 타순: 시트의 타순 번호 순서대로 포지션 슬롯을 늘어놓는다 */
-    if (ordered.length === 9) {
+    /* 9칸이 다 차지 않아도 시트 순서는 살린다. 전에는 하나라도 비면 통째로
+       무시해서 예전 타순이 그대로 남았고, 타순 가중치가 엉뚱한 자리에 붙었다.
+       시트에 있는 자리를 타순 번호대로 앞에 놓고, 빠진 자리는 뒤에 채운다. */
+    if (ordered.length > 0) {
       ordered.sort(function(a, b) { return a.order - b.order; });
-      nsd.batOrder = ordered.map(function(x) { return x.slot; });
+      var bo = ordered.map(function(x) { return x.slot; });
+      BAT_SLOTS.forEach(function(sl) { if (bo.indexOf(sl) < 0) bo.push(sl); });
+      nsd.batOrder = bo;
     }
     setSdState(nsd);
     if (saveSdState) saveSdState(nsd);

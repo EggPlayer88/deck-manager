@@ -369,7 +369,8 @@ var CP_MULT = 0.8;
 var PIT_TOTAL = 10;
 function rpTactic(sdState) {
   if (!sdState) return "기본";
-  if (sdState.isWinSplit) return "분업";
+  var cfg = BPC[sdState.bpcIdx === undefined ? 4 : sdState.bpcIdx] || BPC[4];
+  if (sdState.isWinSplit && cfg.w === 3) return "분업";
   if (sdState.rpActive) return "적극";
   return "기본";
 }
