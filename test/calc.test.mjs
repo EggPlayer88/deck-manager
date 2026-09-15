@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -676,6 +676,18 @@ for (var bpc = 0; bpc < 11; bpc++) {
 /* 선발 배율 */
 eq('1선발 기본', spMult('기본',0), 1.5);
 eq('5선발 분업', spMult('분업',4), 1.18);
+
+
+console.log('\n[선수 개명] 옛 이름으로 적힌 시트·도감도 같은 선수로 본다');
+eq('벤릭 → 벤자민', canonPlayerName('벤릭') === '벤자민' ? 1 : 0, 1);
+eq('로우먼 → 로건S', canonPlayerName('로우먼') === '로건S' ? 1 : 0, 1);
+eq('새 이름은 그대로', canonPlayerName('벤자민') === '벤자민' ? 1 : 0, 1);
+eq('앞뒤 공백 제거', canonPlayerName('  벤릭 ') === '벤자민' ? 1 : 0, 1);
+eq('상관없는 이름은 그대로', canonPlayerName('김도영') === '김도영' ? 1 : 0, 1);
+eq('빈 값은 빈 값', canonPlayerName('') === '' ? 1 : 0, 1);
+eq('null 도 안전', canonPlayerName(null) === '' ? 1 : 0, 1);
+/* 비슷한 이름을 잘못 끌어오지 않는지 — 로건B 는 다른 선수다 */
+eq('로건B 는 건드리지 않는다', canonPlayerName('로건B') === '로건B' ? 1 : 0, 1);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);

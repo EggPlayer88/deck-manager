@@ -1272,6 +1272,14 @@ function Inp(p){
    PLAYER DB (Admin only)
    ================================================================ */
 var CARD_TYPES=["골든글러브","시그니처","임팩트","국가대표","라이브","시즌","올스타"];
+/* 게임에서 이름이 바뀐 선수들. 왼쪽이 옛 이름, 오른쪽이 지금 이름이다.
+   도감 업로드가 같은 카드로 알아보게 하고(안 그러면 이름만 다른 카드가 새로 생긴다),
+   시트 가져오기도 옛 이름이 적힌 엑셀을 계속 읽을 수 있게 한다. */
+var PLAYER_RENAME = { "벤릭": "벤자민", "로우먼": "로건S" };
+function canonPlayerName(n) {
+  var t = String(n || "").trim();
+  return PLAYER_RENAME[t] || t;
+}
 var BAT_POS=["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var PIT_POS_MAP={"선발":["SP1","SP2","SP3","SP4","SP5"],"중계":["RP1","RP2","RP3","RP4","RP5","RP6"],"마무리":["CP"]};
 
@@ -1647,11 +1655,11 @@ function PlayerDBPage(p){
 
                   wb2.SheetNames.forEach(function(sn2) { if (sn2==="안내"||sn2==="임팩트종류") return; var ct2=cm[sn2]; if(!ct2)return; var iB=sn2.indexOf("타자")>=0;
                     XL.utils.sheet_to_json(wb2.Sheets[sn2],{defval:""}).forEach(function(row) {
-                      var nm=String(row["이름"]||"").trim(); if(!nm)return;
+                      var nm=canonPlayerName(row["이름"]); if(!nm)return;
                       var yr=String(row["연도"]||""); var it=String(row["임팩트종류"]||""); var tm=String(row["팀"]||""); var ex=null;
                       for(var i=0;i<np.length;i++){
                         var sp=np[i];
-                        if((sp.name||"")!==nm||sp.cardType!==ct2)continue;
+                        if(canonPlayerName(sp.name)!==nm||sp.cardType!==ct2)continue;
                         if(ct2==="임팩트"){if((sp.impactType||"")===it&&(sp.team||"")===tm){ex=i;break;}}
                         else if(ct2==="라이브"){var lt2=String(row["라이브종류"]||"");if(String(sp.year||"")===yr&&(sp.liveType||"")===lt2&&(sp.team||"")===tm){ex=i;break;}}
                         else{if(String(sp.year||"")===yr&&(sp.team||"")===tm){ex=i;break;}}
@@ -2366,7 +2374,7 @@ function readStore(grid, hdr, isBat, origin) {
     var row = grid[r] || [];
     /* A열이 비면 블록 끝 (체크박스 FALSE 가 채워져 있다) */
     if (row[0] == null && miTxt(row[C["이름"]]) === "") break;
-    var name = miTxt(row[C["이름"]]);
+    var name = canonPlayerName(miTxt(row[C["이름"]]));
     if (!name) continue;
     var card = parseCardCode(row[C["종류"]]);
     var e = {
@@ -2417,7 +2425,7 @@ function readLineup(grid) {
       for (var k = r + 1; k < grid.length; k++) {
         var rr = grid[k] || [], slot = miTxt(rr[4]), nm = miTxt(rr[8]);
         if (!slot) break;
-        (isBat ? bat : pit).push({ slot: slot, order: miNum(rr[3]), name: nm });
+        (isBat ? bat : pit).push({ slot: slot, order: miNum(rr[3]), name: canonPlayerName(nm) });
       }
     }
     if (bat.length && pit.length) break;
