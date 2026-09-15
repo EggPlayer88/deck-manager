@@ -1275,10 +1275,36 @@ var CARD_TYPES=["골든글러브","시그니처","임팩트","국가대표","라
 /* 게임에서 이름이 바뀐 선수들. 왼쪽이 옛 이름, 오른쪽이 지금 이름이다.
    도감 업로드가 같은 카드로 알아보게 하고(안 그러면 이름만 다른 카드가 새로 생긴다),
    시트 가져오기도 옛 이름이 적힌 엑셀을 계속 읽을 수 있게 한다. */
-var PLAYER_RENAME = { "벤릭": "벤자민", "로우먼": "로건S" };
-function canonPlayerName(n) {
+var PLAYER_RENAME = {
+  "벤릭": "벤자민",
+  "로우먼": "로건S",
+  "조용호": "조용호S",
+  "레이예스": "레이예스S",
+  "이진영": "이진영B",
+};
+/* 옛 이름 하나가 동명이인 둘로 갈라진 경우. 팀으로만 구분된다.
+   이진영 — 한화 쪽이 이진영S(우타), 나머지(SSG·LG·KT)가 이진영B(좌타). */
+var PLAYER_RENAME_BY_TEAM = { "이진영": { "한화": "이진영S" } };
+/* 갈라져 나온 이름끼리 묶어 둔다. 팀이 안 적힌 시트에서 온 이름은
+   어느 쪽인지 모르니 이 무리를 다 후보로 본다 (그 뒤 스탯으로 좁힌다). */
+var PLAYER_NAME_GROUPS = [["이진영B", "이진영S"]];
+
+function canonPlayerName(n, team) {
   var t = String(n || "").trim();
+  var byTeam = PLAYER_RENAME_BY_TEAM[t];
+  if (byTeam) {
+    var tm = String(team || "").trim();
+    if (byTeam[tm]) return byTeam[tm];
+  }
   return PLAYER_RENAME[t] || t;
+}
+/* 이 이름과 같은 선수일 수 있는 이름 전부. 보통은 자기 자신 하나뿐이다. */
+function playerNameGroup(n) {
+  var t = String(n || "").trim();
+  for (var i = 0; i < PLAYER_NAME_GROUPS.length; i++) {
+    if (PLAYER_NAME_GROUPS[i].indexOf(t) >= 0) return PLAYER_NAME_GROUPS[i];
+  }
+  return [t];
 }
 var BAT_POS=["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var PIT_POS_MAP={"선발":["SP1","SP2","SP3","SP4","SP5"],"중계":["RP1","RP2","RP3","RP4","RP5","RP6"],"마무리":["CP"]};
@@ -1655,11 +1681,11 @@ function PlayerDBPage(p){
 
                   wb2.SheetNames.forEach(function(sn2) { if (sn2==="안내"||sn2==="임팩트종류") return; var ct2=cm[sn2]; if(!ct2)return; var iB=sn2.indexOf("타자")>=0;
                     XL.utils.sheet_to_json(wb2.Sheets[sn2],{defval:""}).forEach(function(row) {
-                      var nm=canonPlayerName(row["이름"]); if(!nm)return;
+                      var nm=canonPlayerName(row["이름"], row["팀"]); if(!nm)return;
                       var yr=String(row["연도"]||""); var it=String(row["임팩트종류"]||""); var tm=String(row["팀"]||""); var ex=null;
                       for(var i=0;i<np.length;i++){
                         var sp=np[i];
-                        if(canonPlayerName(sp.name)!==nm||sp.cardType!==ct2)continue;
+                        if(canonPlayerName(sp.name, sp.team)!==nm||sp.cardType!==ct2)continue;
                         if(ct2==="임팩트"){if((sp.impactType||"")===it&&(sp.team||"")===tm){ex=i;break;}}
                         else if(ct2==="라이브"){var lt2=String(row["라이브종류"]||"");if(String(sp.year||"")===yr&&(sp.liveType||"")===lt2&&(sp.team||"")===tm){ex=i;break;}}
                         else{if(String(sp.year||"")===yr&&(sp.team||"")===tm){ex=i;break;}}
@@ -2465,7 +2491,13 @@ function matchOne(e, index) {
   var isBat = e.role === "타자";
   for (var t = 0; t < e.types.length; t++) {
     var ct = e.types[t];
-    var byName = index[ct + "|" + e.name] || [];
+    /* 동명이인이라 이름이 갈라진 선수는 시트만 보고는 어느 쪽인지 모른다.
+       무리 전체를 후보로 모은 뒤 아래에서 스탯으로 좁힌다. */
+    var group = playerNameGroup(e.name), byName = [];
+    for (var g = 0; g < group.length; g++) {
+      var lst = index[ct + "|" + group[g]];
+      if (lst) byName = byName.concat(lst);
+    }
     if (!byName.length) continue;
 
     if (ct === "임팩트") {

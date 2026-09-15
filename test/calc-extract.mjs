@@ -253,10 +253,30 @@ var CARD_SKILL_BASE_LV = { "골든글러브":[6,6,6], "라이브":[7,7,7], "올�
 var DEFAULT_SKILL_BASE_LV = [6,5,5];
 var SKILL_CATS = ["타자", "선발", "중계", "마무리"];
 var _canonIdx = null, _canonSrc = null;
-var PLAYER_RENAME = { "벤릭": "벤자민", "로우먼": "로건S" };
-function canonPlayerName(n) {
+var PLAYER_RENAME = {
+  "벤릭": "벤자민",
+  "로우먼": "로건S",
+  "조용호": "조용호S",
+  "레이예스": "레이예스S",
+  "이진영": "이진영B",
+};
+var PLAYER_RENAME_BY_TEAM = { "이진영": { "한화": "이진영S" } };
+var PLAYER_NAME_GROUPS = [["이진영B", "이진영S"]];
+function canonPlayerName(n, team) {
   var t = String(n || "").trim();
+  var byTeam = PLAYER_RENAME_BY_TEAM[t];
+  if (byTeam) {
+    var tm = String(team || "").trim();
+    if (byTeam[tm]) return byTeam[tm];
+  }
   return PLAYER_RENAME[t] || t;
+}
+function playerNameGroup(n) {
+  var t = String(n || "").trim();
+  for (var i = 0; i < PLAYER_NAME_GROUPS.length; i++) {
+    if (PLAYER_NAME_GROUPS[i].indexOf(t) >= 0) return PLAYER_NAME_GROUPS[i];
+  }
+  return [t];
 }
 function canonSkillName(name, cat) {
   if (!name || !SKILL_DATA) return name;
@@ -883,4 +903,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, PLAYER_RENAME, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };

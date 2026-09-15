@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -688,6 +688,29 @@ eq('빈 값은 빈 값', canonPlayerName('') === '' ? 1 : 0, 1);
 eq('null 도 안전', canonPlayerName(null) === '' ? 1 : 0, 1);
 /* 비슷한 이름을 잘못 끌어오지 않는지 — 로건B 는 다른 선수다 */
 eq('로건B 는 건드리지 않는다', canonPlayerName('로건B') === '로건B' ? 1 : 0, 1);
+
+/* 2026-09 개명 — 같은 선수는 어느 카드에서든 이름이 하나여야 한다 */
+eq('조용호 → 조용호S', canonPlayerName('조용호') === '조용호S' ? 1 : 0, 1);
+eq('조용호S 는 그대로', canonPlayerName('조용호S') === '조용호S' ? 1 : 0, 1);
+eq('레이예스 → 레이예스S', canonPlayerName('레이예스') === '레이예스S' ? 1 : 0, 1);
+eq('레이예스S 는 그대로', canonPlayerName('레이예스S') === '레이예스S' ? 1 : 0, 1);
+
+/* 이진영은 동명이인이라 팀으로 갈린다 — 한화가 S, 나머지가 B */
+eq('이진영 + 한화 → 이진영S', canonPlayerName('이진영', '한화') === '이진영S' ? 1 : 0, 1);
+eq('이진영 + SSG → 이진영B', canonPlayerName('이진영', 'SSG') === '이진영B' ? 1 : 0, 1);
+eq('이진영 + LG → 이진영B', canonPlayerName('이진영', 'LG') === '이진영B' ? 1 : 0, 1);
+eq('이진영 + KT → 이진영B', canonPlayerName('이진영', 'KT') === '이진영B' ? 1 : 0, 1);
+eq('팀을 모르면 이진영B', canonPlayerName('이진영') === '이진영B' ? 1 : 0, 1);
+eq('이진영B 는 팀을 줘도 그대로', canonPlayerName('이진영B', '한화') === '이진영B' ? 1 : 0, 1);
+eq('이진영S 는 팀을 줘도 그대로', canonPlayerName('이진영S', 'SSG') === '이진영S' ? 1 : 0, 1);
+/* 팀 인자는 다른 이름에 영향이 없어야 한다 */
+eq('팀 인자가 벤릭을 흔들지 않는다', canonPlayerName('벤릭', '한화') === '벤자민' ? 1 : 0, 1);
+
+/* 팀이 안 적힌 보관함 시트는 두 이진영을 다 후보로 봐야 한다 */
+eq('이진영B 무리는 둘', playerNameGroup('이진영B').length, 2);
+eq('이진영S 도 같은 무리', playerNameGroup('이진영S').join('|') === '이진영B|이진영S' ? 1 : 0, 1);
+eq('보통 선수는 무리가 자기 하나', playerNameGroup('김도영').join('|') === '김도영' ? 1 : 0, 1);
+eq('개명한 선수도 무리는 자기 하나', playerNameGroup('벤자민').length, 1);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
