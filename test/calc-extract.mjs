@@ -663,7 +663,7 @@ function histFromDist(arr, bins) {
   }
   return h;
 }
-var TRAIN_POINTS = {"골든글러브":75,"시그니처":75,"라이브":75,"올스타":90,"국가대표":65,"임팩트":54};
+var TRAIN_POINTS = {"골든글러브":75,"시그니처":75,"라이브":75,"올스타":90,"국가대표":66,"임팩트":54};
 function compressDist(d, N) {
   N = N || 1000;
   var out = {};
