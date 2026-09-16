@@ -114,8 +114,12 @@ export async function loadGlobalPlayers() {
     var ok = true;
     allData = [];
     for (var page = 0; ; page++) {
+      /* id 까지 정렬해야 페이지 경계가 고정된다.
+         (cardType, name) 만으로는 동순위 행이 많아 — 송지만 시그니처만 9장이다 —
+         페이지마다 순서가 달라질 수 있고, 그러면 경계에 걸친 행이 통째로 빠진다.
+         빠진 행은 도감 업로드에서 "없는 카드" 로 보여 중복이 새로 생긴다. */
       var r = await supabase.from('global_players').select(cols)
-        .order('cardType').order('name')
+        .order('cardType').order('name').order('id')
         .range(page * pageSize, (page + 1) * pageSize - 1);
       if (r.error) {
         if (tier < COL_TIERS.length - 1) {
