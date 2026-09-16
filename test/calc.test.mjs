@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -867,6 +867,18 @@ eq('훈련 포인트는 전부 3 단위', Object.values(TRAIN_POINTS).every(v =>
   eq('올스타 특훈 분포 없음', D['spec_bat_올스타'] === undefined ? 1 : 0, 1);
   eq('국대 특훈 분포 있음', Array.isArray(D['spec_bat_국가대표']) ? 1 : 0, 1);
 }
+
+console.log('\n[훈재분 계산기 — 내 입력 판정]');
+eq('타자 입력칸 = 파워·정확·선구·인내', TRAIN_MY_STATS['타자'].join(',') === '파워,정확,선구,인내' ? 1 : 0, 1);
+eq('투수 입력칸 = 변화·구위', TRAIN_MY_STATS['투수'].join(',') === '변화,구위' ? 1 : 0, 1);
+eq('타자 값만 있으면 투수는 미입력', hasTrainInput({ 파워: 12, 정확: 12, 선구: 12, 인내: 12 }, '투수') ? 1 : 0, 0);
+eq('투수 값만 있으면 타자는 미입력', hasTrainInput({ 변화: 15, 구위: 15 }, '타자') ? 1 : 0, 0);
+eq('타자 입력 인식', hasTrainInput({ 파워: 12 }, '타자') ? 1 : 0, 1);
+eq('인내만 넣어도 입력', hasTrainInput({ 인내: 3 }, '타자') ? 1 : 0, 1);
+eq('투수 입력 인식 (반대쪽 값이 남아 있어도)', hasTrainInput({ 파워: 12, 구위: 9 }, '투수') ? 1 : 0, 1);
+eq('0 은 입력이 아님', hasTrainInput({ 변화: 0, 구위: 0 }, '투수') ? 1 : 0, 0);
+eq('빈 입력', hasTrainInput({}, '타자') ? 1 : 0, 0);
+eq('알 수 없는 포지션', hasTrainInput({ 파워: 5 }, '포수') ? 1 : 0, 0);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);

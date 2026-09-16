@@ -2354,6 +2354,15 @@ var SET_POINTS = {"골든글러브":6,"시그니처":8,"임팩트":7,"국가대�
    바꾸면 PREBUILT_DIST 의 train_* 도 다시 구워야 한다 (data/gendist2.mjs).
    2026-09 국가대표 60→66, 올스타 75→90 (포인트는 3 단위다) */
 var TRAIN_POINTS = {"골든글러브":75,"시그니처":75,"라이브":75,"올스타":90,"국가대표":66,"임팩트":54};
+/* 훈재분 계산기의 "내 훈재분" 입력칸 — 점수에 들어가는 능력치만 받는다 */
+var TRAIN_MY_STATS = {"타자":["파워","정확","선구","인내"],"투수":["변화","구위"]};
+/* 이 포지션 칸에 값을 넣었는가. 타자↔투수를 오가도 반대쪽 입력값은 그대로 남아 있으므로
+   지금 포지션의 칸만 본다 — 전부 보면 빈 투수 칸으로 "내 점수 0 · 상위 100%" 가 떴다 */
+function hasTrainInput(dist, pos) {
+  var keys = TRAIN_MY_STATS[pos] || [];
+  for (var i = 0; i < keys.length; i++) if (((dist || {})[keys[i]] || 0) > 0) return true;
+  return false;
+}
 var CARD_STARS = {"골든글러브":5,"시그니처":5,"임팩트":4,"국가대표":5};
 var CARD_STARS_SELECTABLE = {"골든글러브":true,"라이브":true};
 
@@ -7589,7 +7598,7 @@ function TrainSimulator(p) {
       /* 내 점수 백분위 */
       var myPct = null;
       var mySc = statScore(myDist);
-      var hasMyDist = Object.keys(myDist).some(function(k){return (myDist[k]||0)>0;});
+      var hasMyDist = hasTrainInput(myDist, pos);
       if (hasMyDist) {
         var myRank = scores.filter(function(s){return s<=mySc;}).length;
         myPct = Math.round((1-myRank/N)*1000)/10;
@@ -7638,9 +7647,9 @@ function TrainSimulator(p) {
         </div>
         <div style={{marginBottom:12}}>
           <div style={{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:4}}>{"내 훈재분 수치 입력 (선택사항)"}</div>
-          <div style={{fontSize:11,color:"var(--td)",marginBottom:8}}>{isBat?"파워/정확/선구/인내만 입력하면 됩니다":"변화/구위만 입력하면 됩니다"}</div>
+          <div style={{fontSize:11,color:"var(--td)",marginBottom:8}}>{TRAIN_MY_STATS[pos].join("/")+"만 입력하면 됩니다"}</div>
           <div style={{display:"flex",gap:10}}>
-            {(isBat?["파워","정확","선구","인내"]:["변화","구위"]).map(function(s){
+            {TRAIN_MY_STATS[pos].map(function(s){
               var clr = isBat?(s==="파워"?"#EF5350":s==="정확"?"#42A5F5":s==="선구"?"#66BB6A":"#FFA726"):(s==="변화"?"#AB47BC":"#FF7043");
               return (<div key={s} style={{flex:1,textAlign:"center"}}>
                 <div style={{fontSize:12,fontWeight:700,color:clr,marginBottom:4}}>{s}</div>
