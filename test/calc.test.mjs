@@ -7,7 +7,7 @@ import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
-  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW,
+  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter,
 } from './calc-extract.mjs';
 
 let pass = 0, fail = 0;
@@ -1044,6 +1044,95 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   const pitSD = (sd) => calcPit(pit, lu(pit), calcSDBonus(pit, 'SP1', sd, 0)).total;
   eq('고점 포수의 포수리드 6렙이 투수 점수에 들어간다 (변화 1.05 + 구위 1.35)',
     pitSD(peakBuffState({ _autoCatch: '없음' }, { _autoCatch: '6렙' })) - pitSD({ _autoCatch: '없음' }), 2.4, 0.011);
+}
+
+console.log('\n[덱 저장기] 선수·라인업·세트덱을 늘 최신 한 덩어리로, 부른 순서대로 저장한다');
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  /* 가짜 DB 한 줄 — 요청마다 걸리는 시간이 다르고, 끝난 순서대로 줄을 통째로 덮어쓴다 */
+  const mkDb = () => {
+    const db = { row: null, log: [], active: 0, maxActive: 0 };
+    db.send = (deck, ms) => async () => {
+      db.active++; db.maxActive = Math.max(db.maxActive, db.active);
+      await sleep(ms);
+      db.row = deck; db.log.push(deck); db.active--;
+    };
+    return db;
+  };
+  const P0 = [{ id: 'a', position: '중계', subPosition: 'RP1' }], LM0 = { RP1: 'a' }, SD0 = { bpcIdx: 4 };
+  const P1 = [{ id: 'a', position: '선발', subPosition: 'SP1' }], LM1 = { SP1: 'a' }, SD1 = { bpcIdx: 2, batOrder: ['C'] };
+  /* 대문자 = 새 값: P 선수, L 라인업, S 세트덱 */
+  const tag = (d) => (d.players === P1 ? 'P' : 'p') + (d.lineupMap === LM1 ? 'L' : 'l') + (d.sdConfig === SD1 ? 'S' : 's');
+
+  /* 옛 방식 재현 — 저장마다 나머지 절반을 옛 state 로 채워 동시에 보냈다 */
+  let db = mkDb();
+  await Promise.all([db.send({ players: P0, lineupMap: LM1, sdConfig: SD0 }, 5)(), db.send({ players: P1, lineupMap: LM0, sdConfig: SD0 }, 20)()]);
+  eq('옛 방식 — 순서대로 도착해도 옛 라인업이 남았다', tag(db.row) === 'Pls' ? 1 : 0, 1);
+  db = mkDb();
+  await Promise.all([db.send({ players: P0, lineupMap: LM1, sdConfig: SD0 }, 20)(), db.send({ players: P1, lineupMap: LM0, sdConfig: SD0 }, 5)()]);
+  eq('옛 방식 — 늦게 도착하면 옛 선수가 남았다', tag(db.row) === 'pLs' ? 1 : 0, 1);
+
+  /* 투수 자리 옮기기: 라인업 저장 → 선수 저장. 첫 요청이 더 느려도 */
+  let w = makeDeckWriter(1000);
+  w.sync({ players: P0, lineupMap: LM0, sdConfig: SD0 });
+  db = mkDb();
+  await Promise.all([w.queue(db.send(w.take({ lineupMap: LM1 }), 20)), w.queue(db.send(w.take({ players: P1 }), 5))]);
+  eq('투수 자리 — 요청은 한 번에 하나씩', db.maxActive, 1);
+  eq('투수 자리 — 저장 순서와 내용 (pL → PL)', db.log.map(tag).join(' ') === 'pLs PLs' ? 1 : 0, 1);
+  eq('투수 자리 — 마지막 줄에 새 라인업과 새 선수', tag(db.row) === 'PLs' ? 1 : 0, 1);
+
+  /* 다시 그리기 전의 옛 state 가 들어와도 최신 값은 그대로, 새로 불러온 state 는 반영 */
+  w.sync({ players: P0, lineupMap: LM0, sdConfig: SD0 });
+  eq('옛 state 로 다시 그려도 최신 값 유지', tag(w.take({})) === 'PLs' ? 1 : 0, 1);
+  const P2 = [{ id: 'b' }], LM2 = {};
+  w.sync({ players: P2, lineupMap: LM2, sdConfig: SD0 });
+  const t2 = w.take({});
+  eq('새로 불러온 state 는 반영', t2.players === P2 && t2.lineupMap === LM2 ? 1 : 0, 1);
+
+  /* 시트 가져오기·되돌리기: 선수 → 라인업 → 세트덱 */
+  w = makeDeckWriter(1000);
+  w.sync({ players: P0, lineupMap: LM0, sdConfig: SD0 });
+  db = mkDb();
+  await Promise.all([
+    w.queue(db.send(w.take({ players: P1 }), 15)),
+    w.queue(db.send(w.take({ lineupMap: LM1 }), 10)),
+    w.queue(db.send(w.take({ sdConfig: SD1 }), 1)),
+  ]);
+  eq('시트 가져오기 — 요청은 한 번에 하나씩', db.maxActive, 1);
+  eq('시트 가져오기 — 저장 순서와 내용 (Pl → PL → PLS)', db.log.map(tag).join(' ') === 'Pls PLs PLS' ? 1 : 0, 1);
+
+  /* 세트덱을 먼저 저장하고 선수를 저장해도 세트덱이 옛 값으로 돌아가지 않는다 */
+  w = makeDeckWriter(1000);
+  w.sync({ players: P0, lineupMap: LM0, sdConfig: SD0 });
+  db = mkDb();
+  await Promise.all([w.queue(db.send(w.take({ sdConfig: SD1 }), 10)), w.queue(db.send(w.take({ players: P1 }), 1))]);
+  eq('세트덱 → 선수 순서여도 세트덱 유지', tag(db.row) === 'PlS' ? 1 : 0, 1);
+
+  /* 읽기도 같은 줄에 선다 — 가는 중인 저장이 끝난 뒤에 읽는다 */
+  w = makeDeckWriter(1000);
+  w.sync({ players: P0, lineupMap: LM0, sdConfig: SD0 });
+  db = mkDb();
+  const saving = w.queue(db.send(w.take({ players: P1 }), 15));
+  const read = await w.queue(async () => db.row);
+  await saving;
+  eq('덱 불러오기는 가는 중인 저장 뒤에', read && read.players === P1 ? 1 : 0, 1);
+
+  /* 실패한 저장이 있어도 다음 저장은 나가고, 실패는 부른 쪽에 그대로 전해진다 */
+  w = makeDeckWriter(1000);
+  let ran = 0, rejected = 0;
+  await Promise.all([
+    w.queue(async () => { await sleep(5); throw new Error('network'); }).catch(() => { rejected++; }),
+    w.queue(async () => { ran++; }),
+  ]);
+  eq('실패 뒤에도 다음 저장은 나간다 (실패 1 · 실행 1)', rejected * 10 + ran, 11);
+
+  /* 앞 요청이 멈추면 waitMs 만 기다리고 다음 요청을 보낸다 */
+  w = makeDeckWriter(30);
+  w.queue(() => new Promise(() => {}));
+  const t0 = Date.now();
+  await w.queue(async () => {});
+  const waited = Date.now() - t0;
+  eq('멈춘 요청은 30ms 만 기다린다', waited >= 25 && waited < 1000 ? 1 : 0, 1);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);

@@ -739,6 +739,39 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
    ================================================================ */
 function useMedia(q){var _s=useState(false);var m=_s[0];var setM=_s[1];useEffect(function(){var mq=window.matchMedia(q);var fn=function(e){setM(e.matches);};setM(mq.matches);if(mq.addEventListener){mq.addEventListener("change",fn);}else{mq.addListener(fn);}return function(){if(mq.removeEventListener){mq.removeEventListener("change",fn);}else{mq.removeListener(fn);}};}, [q]);return m;}
 
+/* 덱 저장기 — 선수·라인업·세트덱 설정은 DB 한 줄(user_settings)에 한 덩어리로 들어간다.
+   한 동작에서 셋을 연달아 저장하면(투수 자리 옮기기, 시트 가져오기, 되돌리기) 아직 다시 그리기 전이라
+   나머지 절반이 옛 state 였고, 요청도 한꺼번에 나가서 옛 내용이 마지막에 DB 에 남을 수 있었다.
+   그래서 (1) 저장할 때마다 최신 값을 여기에 바로 적고 그 순간의 한 덩어리를 통째로 보내며
+   (2) 이 줄을 읽고 쓰는 요청은 부른 순서대로 하나씩 보낸다.
+   앞 요청이 waitMs 안에 끝나지 않으면(네트워크 멈춤) 더 기다리지 않고 다음 요청을 보낸다 */
+function makeDeckWriter(waitMs) {
+  var latest = {};
+  var seen = {};
+  var tail = Promise.resolve();
+  return {
+    /* 다시 그릴 때마다 부른다. state 가 새로 바뀐 칸(불러오기 등)만 최신 값으로 맞춘다 */
+    sync: function (state) {
+      Object.keys(state).forEach(function (k) {
+        if (seen[k] !== state[k]) { seen[k] = state[k]; latest[k] = state[k]; }
+      });
+    },
+    /* 바뀐 칸을 적고, 지금의 한 덩어리를 돌려준다 */
+    take: function (part) {
+      Object.keys(part).forEach(function (k) { latest[k] = part[k]; });
+      return { players: latest.players, lineupMap: latest.lineupMap, sdConfig: latest.sdConfig };
+    },
+    /* job 을 앞 요청이 끝난 뒤에 실행하고, job 의 결과(실패 포함)를 그대로 돌려준다 */
+    queue: function (job) {
+      var run = tail.then(function () { return job(); });
+      var timer = null;
+      var guard = new Promise(function (resolve) { timer = setTimeout(resolve, waitMs); });
+      tail = Promise.race([run.then(function () {}, function () {}), guard]).then(function () { clearTimeout(timer); });
+      return run;
+    }
+  };
+}
+
 function useData(userId, sdState, setSdState, curDeckId){
   var _p=useState([]);var players=_p[0];var setPlayers=_p[1];
   var _lm=useState({});var lineupMap=_lm[0];var setLineupMap=_lm[1];
@@ -747,6 +780,11 @@ function useData(userId, sdState, setSdState, curDeckId){
   var _lo=useState(true);var loading=_lo[0];var setLoading=_lo[1];
   var uidRef=React.useRef(userId);uidRef.current=userId;
   var deckIdRef=React.useRef(curDeckId);deckIdRef.current=curDeckId;
+  /* 덱 저장기 (makeDeckWriter) — 저장할 최신 값과 요청 순서를 붙잡는다 */
+  var writerRef=React.useRef(null);
+  if(!writerRef.current)writerRef.current=makeDeckWriter(10000);
+  var writer=writerRef.current;
+  writer.sync({players:players,lineupMap:lineupMap,sdConfig:sdState});
 
   /* ── 전체 sd_state 메모리 캐시 (읽기 중복 제거) ── */
   var allDataRef=React.useRef(null);
@@ -792,7 +830,8 @@ function useData(userId, sdState, setSdState, curDeckId){
     setLoading(true);
     (async function(){
       if(supabase){
-        var dd = await loadDeckData(userId, curDeckId);
+        /* 아직 가는 중인 저장이 끝난 뒤에 읽는다 — 덱을 바꾸자마자 읽으면 방금 저장한 내용이 빠진다 */
+        var dd = await writer.queue(function(){ return loadDeckData(userId, curDeckId); });
         if(dd && dd.players && dd.players.length > 0){
           setPlayers(dd.players); setLineupMap(dd.lineupMap||{}); setSdState(dd.sdConfig||{liveSetPo:0});
         } else {
@@ -839,19 +878,22 @@ function useData(userId, sdState, setSdState, curDeckId){
 
   SKILL_DATA=skills;if(skills.weights)LIVE_WEIGHTS=skills.weights;
 
+  /* 선수·라인업·세트덱 저장은 나머지 칸도 저장기의 최신 값으로 채워 한 덩어리로 보낸다 */
   var saveP=useCallback(async function(d){
     setPlayers(d);
+    var deck=writer.take({players:d});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){await saveAllData(uid,did,{players:d,lineupMap:lineupMap,sdConfig:sdState});}
+    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck); });}
     else if(did){await sSet("deck-players-"+did,d);}
-  },[lineupMap,sdState]);
+  },[]);
 
   var saveLM=useCallback(async function(d){
     setLineupMap(d);
+    var deck=writer.take({lineupMap:d});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){await saveAllData(uid,did,{players:players,lineupMap:d,sdConfig:sdState});}
+    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck); });}
     else if(did){await sSet("deck-lineup-"+did,d);}
-  },[players,sdState]);
+  },[]);
 
   var saveSK=useCallback(async function(d){
     setSkills(d);SKILL_DATA=d;
@@ -860,10 +902,11 @@ function useData(userId, sdState, setSdState, curDeckId){
   },[]);
 
   var saveSdState=useCallback(async function(nsd){
+    var deck=writer.take({sdConfig:nsd});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){await saveAllData(uid,did,{players:players,lineupMap:lineupMap,sdConfig:nsd});}
+    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck); });}
     else if(did){await sSet("deck-sdconfig-"+did,nsd);}
-  },[players,lineupMap]);
+  },[]);
 
   var savePotmList=useCallback(async function(arr){
     var list = Array.isArray(arr) ? arr : [];
@@ -888,7 +931,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     }
   },[]);
 
-  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef};
+  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
 }
 
 /* ================================================================
@@ -7997,16 +8040,20 @@ export default function App(){
     await sSet("deck-list",list);await sSet("deck-current",curId);
     /* Supabase: 전체 구조 유지하면서 deckList/deckCurrent만 업데이트 */
     if(supabase&&userId){
-      try{
-        var all=store.allDataRef ? store.allDataRef.current : null;
-        if(!all) all=await loadUserData(userId)||{};
-        if(!all.decks) all.decks={};
-        all.deckList=list;
-        all.deckCurrent=curId;
-        /* allDataRef 캐시도 동기화 */
-        if(store.allDataRef) store.allDataRef.current=all;
-        await saveUserData(userId,all);
-      }catch(e){console.warn('saveDecks 오류:',e);}
+      var job=async function(){
+        try{
+          var all=store.allDataRef ? store.allDataRef.current : null;
+          if(!all) all=await loadUserData(userId)||{};
+          if(!all.decks) all.decks={};
+          all.deckList=list;
+          all.deckCurrent=curId;
+          /* allDataRef 캐시도 동기화 */
+          if(store.allDataRef) store.allDataRef.current=all;
+          await saveUserData(userId,all);
+        }catch(e){console.warn('saveDecks 오류:',e);}
+      };
+      /* 덱 데이터와 같은 줄을 통째로 쓰므로 덱 저장과 같은 순서 줄에 세운다 (makeDeckWriter) */
+      await (store.queueWrite ? store.queueWrite(job) : job());
     }
   },[userId,store]);
 
