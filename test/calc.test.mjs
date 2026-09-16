@@ -212,6 +212,23 @@ eq('최신본은 건드리지 않음', resolveSkills(current)['타자']['정밀�
 /* 저장본이 없으면 기본값 */
 eq('빈 저장본 → 기본값', resolveSkills(null)['타자']['정밀타격'][0], 20.7);
 
+/* 2026-09 새 스킬 — 소방수 (마무리 전용, 메이저) */
+eq('소방수 Lv5', DEFAULT_SKILLS['마무리']['소방수'][0], 22.91);
+eq('소방수 Lv10', DEFAULT_SKILLS['마무리']['소방수'][5], 52.65);
+eq('소방수 6레벨 다 참', DEFAULT_SKILLS['마무리']['소방수'].filter(v => v > 0).length, 6);
+eq('소방수 상한은 Lv10', maxSkillLv('소방수', '마무리'), 10);
+eq('소방수는 메이저', DEFAULT_MAJOR['마무리']['소방수'] ? 1 : 0, 1);
+/* 마무리 전용 — 다른 세 분류에는 없어야 한다 */
+eq('타자엔 없음', DEFAULT_SKILLS['타자']['소방수'] === undefined ? 1 : 0, 1);
+eq('선발엔 없음', DEFAULT_SKILLS['선발']['소방수'] === undefined ? 1 : 0, 1);
+eq('중계엔 없음', DEFAULT_SKILLS['중계']['소방수'] === undefined ? 1 : 0, 1);
+eq('마무리 스킬 수', Object.keys(DEFAULT_SKILLS['마무리']).length, 69);
+/* 총점은 파1.0 정0.85 변1.05 구1.35 로 맞아떨어진다 (Lv10: 파7.7 정7.7 변16 구16) */
+eq('소방수 Lv10 검산',
+   Math.round((7.7 * 1.0 + 7.7 * 0.85 + 16 * 1.05 + 16 * 1.35) * 100) / 100, 52.65, 0.01);
+/* 낡은 저장본에도 새 스킬이 들어가야 한다 */
+eq('낡은 저장본에 소방수 반영', resolveSkills(legacyStored)['마무리']['소방수'][5], 52.65);
+
 console.log('\n[각성 잠재력] 등급은 C~S 만, 타자/투수 종류가 다르다');
 eq('등급 7개', POT_GRADES_AWK.length, 7);
 eq('마지막 등급 S', POT_GRADES_AWK[6] === 'S' ? 1 : 0, 1);
