@@ -4918,7 +4918,7 @@ function LockerRoomPage(p) {
         {/* 내 덱 POTM 설정 — 전역 명단을 끄거나, 라인업 선수를 직접 POTM 으로 지정 */}
         <div style={{ padding: 10, background: "var(--inner)", borderRadius: 8, border: "1px solid var(--bd)", marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)", marginBottom: 2 }}>{"내 덱 POTM 설정"}</div>
-          <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 8 }}>{"이 덱에서만 적용됩니다. 관리자가 지정한 전역 명단은 바뀌지 않습니다."}</div>
+          <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 8 }}>{"이 덱에서만 적용됩니다. 관리자가 올린 이번 달 명단은 바뀌지 않습니다."}</div>
 
           {potmList.length > 0 && (
             <div style={{ marginBottom: 10 }}>
@@ -4953,13 +4953,20 @@ function LockerRoomPage(p) {
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                 {lineupPlayers.map(function(pl) {
                   var key = potmKey(pl);
+                  /* 이번 달 명단에 있는 선수는 여기서 고르지 않는다 — 체크하지 않아도 적용되고,
+                     위 명단에서 체크를 풀었으면 이 덱에서는 빠진다. 체크 표시는 실제 적용 여부를 따른다 */
                   var glob = isGlobalPotm(pl);
+                  var off = glob && potmOff.indexOf(key) >= 0;
                   var on = potmOn.indexOf(key) >= 0;
+                  var applied = glob ? !off : on;
                   var teamOk = !!sdState.teamName && !!pl.team && pl.team === sdState.teamName;
+                  var tip = off ? "위 명단에서 체크를 풀어 이 덱에서는 빼고 계산합니다"
+                    : glob ? (teamOk ? "이번 달 POTM 명단에 있어 자동 적용됩니다" : "이번 달 POTM 명단에 있지만 구단이 달라 POTM 보너스는 0으로 계산됩니다")
+                    : (teamOk ? "" : "구단이 달라 POTM 보너스는 0으로 계산됩니다");
                   return (
                     <button key={pl.id} onClick={function(){ toggleInList("potmOn", key); }}
                       disabled={glob}
-                      title={glob ? "이미 전역 POTM 입니다" : (teamOk ? "" : "구단이 달라 POTM 보너스는 0으로 계산됩니다")}
+                      title={tip}
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px",
                         background: on ? "rgba(171,71,188,0.12)" : "transparent",
                         border: "1px solid " + (on ? "rgba(171,71,188,0.45)" : "var(--bd)"),
@@ -4967,10 +4974,10 @@ function LockerRoomPage(p) {
                         cursor: glob ? "default" : "pointer",
                         opacity: glob ? 0.45 : 1,
                         color: on ? "#CE93D8" : "var(--t2)" }}>
-                      <span>{on ? "☑" : "☐"}</span>
+                      <span>{applied ? "☑" : "☐"}</span>
                       <span>{pl.name}</span>
-                      {glob && <span style={{ fontSize: 10, color: "var(--td)" }}>{"전역"}</span>}
-                      {!glob && !teamOk && <span style={{ fontSize: 10, color: "#EF5350" }}>{"구단불일치"}</span>}
+                      {glob && <span style={{ fontSize: 10, color: "var(--td)" }}>{off ? "제외" : "적용중"}</span>}
+                      {!teamOk && !off && <span style={{ fontSize: 10, color: "#EF5350" }}>{"구단불일치"}</span>}
                     </button>
                   );
                 })}
