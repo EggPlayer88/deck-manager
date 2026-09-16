@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -711,6 +711,47 @@ eq('이진영B 무리는 둘', playerNameGroup('이진영B').length, 2);
 eq('이진영S 도 같은 무리', playerNameGroup('이진영S').join('|') === '이진영B|이진영S' ? 1 : 0, 1);
 eq('보통 선수는 무리가 자기 하나', playerNameGroup('김도영').join('|') === '김도영' ? 1 : 0, 1);
 eq('개명한 선수도 무리는 자기 하나', playerNameGroup('벤자민').length, 1);
+
+/* 2026-09 접미사 정리 — 도감 44명. 대표만 짚어 본다 */
+eq('양현종 → 양현종B', canonPlayerName('양현종') === '양현종B' ? 1 : 0, 1);
+eq('김태균 → 김태균S', canonPlayerName('김태균') === '김태균S' ? 1 : 0, 1);
+eq('마틴 → 마틴C', canonPlayerName('마틴') === '마틴C' ? 1 : 0, 1);
+eq('이상훈 → 이상훈C', canonPlayerName('이상훈') === '이상훈C' ? 1 : 0, 1);
+eq('페르난데스 → 페르난데스S', canonPlayerName('페르난데스') === '페르난데스S' ? 1 : 0, 1);
+eq('개명 안 한 선수는 그대로', canonPlayerName('김도영') === '김도영' ? 1 : 0, 1);
+eq('이미 접미사가 붙었으면 그대로', canonPlayerName('김상진B') === '김상진B' ? 1 : 0, 1);
+
+/* 팀으로 갈리는 7명 — 기본값과 예외가 둘 다 맞아야 한다 */
+eq('김상훈 + 기아 → 김상훈S', canonPlayerName('김상훈', '기아') === '김상훈S' ? 1 : 0, 1);
+eq('김상훈 + LG → 김상훈B', canonPlayerName('김상훈', 'LG') === '김상훈B' ? 1 : 0, 1);
+eq('박찬호 + 기아 → 박찬호S', canonPlayerName('박찬호', '기아') === '박찬호S' ? 1 : 0, 1);
+eq('박찬호 + 한화 → 박찬호B', canonPlayerName('박찬호', '한화') === '박찬호B' ? 1 : 0, 1);
+eq('윤석민 + 기아 → 윤석민S', canonPlayerName('윤석민', '기아') === '윤석민S' ? 1 : 0, 1);
+eq('윤석민 + KT → 윤석민B', canonPlayerName('윤석민', 'KT') === '윤석민B' ? 1 : 0, 1);
+eq('이승호 + SSG → 이승호S', canonPlayerName('이승호', 'SSG') === '이승호S' ? 1 : 0, 1);
+eq('이승호 + 키움 → 이승호C', canonPlayerName('이승호', '키움') === '이승호C' ? 1 : 0, 1);
+eq('정대현 + 두산 → 정대현S', canonPlayerName('정대현', '두산') === '정대현S' ? 1 : 0, 1);
+eq('정대현 + SSG → 정대현B', canonPlayerName('정대현', 'SSG') === '정대현B' ? 1 : 0, 1);
+eq('최원준 + 기아 → 최원준B', canonPlayerName('최원준', '기아') === '최원준B' ? 1 : 0, 1);
+eq('최원준 + 두산 → 최원준S', canonPlayerName('최원준', '두산') === '최원준S' ? 1 : 0, 1);
+eq('팀을 모르면 기본값', canonPlayerName('이승호') === '이승호S' ? 1 : 0, 1);
+/* 팀 인자가 갈리지 않는 이름을 흔들면 안 된다 */
+eq('팀 인자가 양현종을 흔들지 않는다', canonPlayerName('양현종', '키움') === '양현종B' ? 1 : 0, 1);
+
+/* 팀 칸이 없는 보관함 시트는 갈라진 이름을 다 후보로 봐야 한다 */
+eq('갈라진 이름 무리 7개', PLAYER_NAME_GROUPS.length, 7);
+eq('최원준 무리', playerNameGroup('최원준S').join('|') === '최원준B|최원준S' ? 1 : 0, 1);
+eq('이승호 무리', playerNameGroup('이승호C').join('|') === '이승호C|이승호S' ? 1 : 0, 1);
+eq('안 갈라진 이름은 무리가 자기 하나', playerNameGroup('김태균S').length, 1);
+/* 무리마다 서로 다른 이름 둘 이상 — 표가 꼬이면 여기서 걸린다 */
+eq('무리 원소가 모두 2개', PLAYER_NAME_GROUPS.filter(g => g.length === 2).length, 7);
+/* 팀별 예외의 목적지는 전부 기본값과 달라야 한다 */
+eq('팀 예외가 기본값과 겹치지 않는다',
+   Object.keys(PLAYER_RENAME_BY_TEAM).every(k =>
+     Object.values(PLAYER_RENAME_BY_TEAM[k]).every(v => v !== PLAYER_RENAME[k])) ? 1 : 0, 1);
+/* 개명 결과가 또 개명 대상이면 무한 꼬임 — 그런 항목이 없어야 한다 */
+eq('개명 결과는 더 안 바뀐다',
+   Object.values(PLAYER_RENAME).every(v => PLAYER_RENAME[v] === undefined) ? 1 : 0, 1);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
