@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -879,6 +879,146 @@ eq('투수 입력 인식 (반대쪽 값이 남아 있어도)', hasTrainInput({ �
 eq('0 은 입력이 아님', hasTrainInput({ 변화: 0, 구위: 0 }, '투수') ? 1 : 0, 0);
 eq('빈 입력', hasTrainInput({}, '타자') ? 1 : 0, 0);
 eq('알 수 없는 포지션', hasTrainInput({ 파워: 5 }, '포수') ? 1 : 0, 0);
+
+console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 뜰 수 있는 조합, 상위 0.5% 안이어야 한다');
+{
+  __setLiveWeights(null);
+  /* 앱이 백분위를 보여 줄 때 쓰는 구워 둔 분포를 소스에서 그대로 읽는다 */
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/deck-manager.jsx', import.meta.url), 'utf8');
+  const obj = (name) => { const i = src.indexOf('var ' + name + ' = '); return JSON.parse(src.slice(src.indexOf('{', i), src.indexOf('};', i) + 1)); };
+  const SKD = obj('PREBUILT_SKILL_DIST'), TRD = obj('PREBUILT_DIST');
+  const LV = { '골든글러브': [6, 6, 6], '라이브': [7, 7, 7], '올스타': [8, 7, 7], '시그니처': [6, 5, 5], '국가대표': [6, 5, 5], '임팩트': [6, 5, 5] };
+  const base = (n) => n.replace(/\(.*?\)/g, '').trim();
+  const COND = ['철완', '5툴플레이어', '선봉장', '도전정신', '라이징스타', '국대에이스', '리드오프', '핵타선', '공포의하위타선', '수비안정성', '빈틈없는타선', '컨택트히터'];
+
+  eq('스킬 경우 72가지 (구워 둔 스킬 분포와 같은 키)', Object.keys(PEAK_SKILLS).filter(k => SKD[k]).length, 72);
+  let bad = [];
+  for (const [key, names] of Object.entries(PEAK_SKILLS)) {
+    const [cat, ct, hand, c] = key.split('|');
+    const fixed = ct === '임팩트' || ct === '올스타';
+    if (names.length !== 3) bad.push(key + ' 개수');
+    const cond = { hand, cardType: ct, cat };
+    names.forEach(n => {
+      if (!DEFAULT_SKILLS[cat][n]) bad.push(key + ' 표에 없음 ' + n);
+      if (!DEFAULT_MAJOR[cat][n]) bad.push(key + ' 메이저 아님 ' + n);
+      if (!skillPickable(n, cat) || !skillAllowedAt(n, cat, c === '포수') || !variantAllowed(n, cond)) bad.push(key + ' 뜰 수 없음 ' + n);
+      if (ct !== '국가대표' && isNatOnlySkill(n, cat)) bad.push(key + ' 국대 전용 ' + n);
+      if (COND.includes(base(n))) bad.push(key + ' 조건부 ' + n);
+    });
+    if (new Set(names.map(base)).size !== 3) bad.push(key + ' 같은 스킬 중복');
+    /* 1옵션 — 임팩트·올스타는 사용자 지정, 나머지는 대표 스킬 (좌타·양타는 손잡이 스킬) */
+    const role = cat === '타자' ? '정밀타격' : cat === '선발' ? (hand === '좌' ? '좌승사자(좌투)' : '저니맨') : '마당쇠(불펜)';
+    const handSig = cat === '타자' ? ({ '좌': '좌타해결사(좌타)', '양': '스위치히터(양타)' })[hand] : undefined;
+    if (names[0] !== (fixed ? role : (handSig || role))) bad.push(key + ' 1옵션 ' + names[0]);
+    if (handSig && !names.includes(handSig)) bad.push(key + ' 손잡이 스킬 없음');
+    if (c === '포수' && !(fixed && handSig) && !names.includes('포수리드')) bad.push(key + ' 포수리드 없음');
+    /* 백분위 — 임팩트·올스타는 1옵션을 빼고 2·3옵션만으로 */
+    const sc = Math.round(names.reduce((t2, n, k) => t2 + ((fixed && k === 0) ? 0 : getSkillScore(n, LV[ct][k], cat, true)), 0) * 100) / 100;
+    const pct = pctFromDist(SKD[key], sc);
+    if (!(pct <= 0.5)) bad.push(key + ' 백분위 ' + pct);
+    if (sc >= SKD[key][SKD[key].length - 1]) bad.push(key + ' 표본 최고점 이상 ' + sc);
+  }
+  eq('스킬 72가지 — 메이저·실제로 뜸·1옵션 규칙·상위 0.5% 안 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
+  eq('좌타 12가지 모두 좌타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '좌' && v.includes('좌타해결사(좌타)')).length, 12);
+
+  bad = [];
+  for (const [key, v] of Object.entries(PEAK_TRAIN)) {
+    const [role, ct] = key.split('_');
+    const sc = role === 'bat' ? v[0] * 1 + v[1] * 0.85 + v[2] * 0.4 + v[3] * 0.15 : v[0] * 1.05 + v[1] * 1.35;
+    if (v.reduce((a, b) => a + b, 0) > TRAIN_POINTS[ct]) bad.push(key + ' 포인트 초과');
+    const pct = getPercentile(TRD['train_' + key], Math.round(sc * 100) / 100);
+    if (!(pct >= 0.1 && pct <= 0.5)) bad.push(key + ' 백분위 ' + pct);
+  }
+  eq('훈련 12가지 — 포인트 안이고 상위 0.1~0.5% (' + (bad.join(' / ') || '문제 없음') + ')', bad.length + (Object.keys(PEAK_TRAIN).length === 12 ? 0 : 100), 0);
+
+  bad = [];
+  for (const [key, v] of Object.entries(PEAK_SPEC)) {
+    const parts = key.split('_'), role = parts[0], fa = parts[1] === 'fa', ct = parts[parts.length - 1];
+    const b0 = fa ? 5 : 3;
+    const trials = fa ? 5 : ct === '국가대표' ? 4 : 3;
+    const perTrial = ct === '임팩트' ? 2 : 3;
+    if (v.some(x => x > 15)) bad.push(key + ' 15 초과');
+    if (v[role === 'bat' ? 0 : 1] < b0) bad.push(key + ' 기본값 미만');
+    if (v.reduce((a, b) => a + b, 0) - b0 > trials * perTrial) bad.push(key + ' 시행 초과');
+    const sc = role === 'bat' ? v[0] * 1 + v[1] * 0.85 + v[2] * 0.4 + v[3] * 0.15 : v[0] * 1.05 + v[1] * 1.35;
+    const pct = getPercentile(TRD['spec_' + key], Math.round(sc * 100) / 100);
+    if (!(pct >= 0.1 && pct <= 0.5)) bad.push(key + ' 백분위 ' + pct);
+  }
+  eq('특훈 12가지 — 15 이하·기본값 포함·상위 0.1~0.5% (' + (bad.join(' / ') || '문제 없음') + ')', bad.length + (Object.keys(PEAK_SPEC).length === 12 ? 0 : 100), 0);
+
+  eq('잠재력 — 풀스윙·장타억제 SR+, 클러치·침착 A', PEAK_POT['풀스윙'] === 'SR+' && PEAK_POT['장타억제'] === 'SR+' && PEAK_POT['클러치'] === 'A' && PEAK_POT['침착'] === 'A' ? 1 : 0, 1);
+  eq('각성 — 임팩트만 S', PEAK_AWK['임팩트'] === 'S' && Object.keys(PEAK_AWK).length === 1 ? 1 : 0, 1);
+
+  /* peakPl */
+  const bat = { id: 'x', role: '타자', cardType: '골든글러브', hand: '우', name: '가', team: 'LG', power: 80, accuracy: 80, eye: 70, patience: 60,
+    enhance: '9각성', sLvManual: false, skill1: '', skill2: '', skill3: '', pot1: '', pot2: '' };
+  const snap = JSON.stringify(bat);
+  const pb = peakPl(bat, '1B');
+  const sk3 = (p) => [p.skill1, p.skill2, p.skill3].join(',');
+  eq('원본은 그대로', JSON.stringify(bat) === snap ? 1 : 0, 1);
+  eq('골글 우타 — 스킬', sk3(pb) === PEAK_SKILLS['타자|골든글러브|우|-'].join(',') ? 1 : 0, 1);
+  eq('골글 우타 — 레벨 6/6/6 (수동)', pb.sLvManual && pb.s1Lv === 6 && pb.s2Lv === 6 && pb.s3Lv === 6 ? 1 : 0, 1);
+  eq('골글 우타 — 훈련', [pb.trainP, pb.trainA, pb.trainE, pb.trainN].join(',') === PEAK_TRAIN.bat_골든글러브.join(',') ? 1 : 0, 1);
+  eq('골글 우타 — 특훈', [pb.specPower, pb.specAccuracy, pb.specEye, pb.specPatience].join(',') === PEAK_SPEC.bat_골든글러브.join(',') ? 1 : 0, 1);
+  eq('타자 잠재력 — 풀스윙 SR+ · 클러치 A', pb.pot1 === 'SR+' && pb.pot2 === 'A' && pb.potType1 === '풀스윙' && pb.potType2 === '클러치' ? 1 : 0, 1);
+  eq('각성 — 골글은 A, 종류가 없으면 첫 종류', pb.pot3 === 'A' && pb.potType3 === POT_TYPES_AWK_BAT[0] ? 1 : 0, 1);
+  eq('잠재력 종류를 바꿔 둔 칸은 종류대로', (() => { const q = peakPl({ ...bat, potType1: '클러치', potType2: '풀스윙' }, '1B'); return q.pot1 === 'A' && q.pot2 === 'SR+'; })() ? 1 : 0, 1);
+  eq('강화·카드 정보는 그대로', pb.enhance === '9각성' && pb.name === '가' && pb.team === 'LG' && pb.power === 80 ? 1 : 0, 1);
+  eq('포수 자리는 포수 조합', sk3(peakPl(bat, 'C')) === PEAK_SKILLS['타자|골든글러브|우|포수'].join(',') ? 1 : 0, 1);
+  eq('좌타는 좌타해결사부터', peakPl({ ...bat, hand: '좌' }, 'RF').skill1 === '좌타해결사(좌타)' ? 1 : 0, 1);
+  eq('양타는 스위치히터부터', peakPl({ ...bat, hand: '양' }, 'DH').skill1 === '스위치히터(양타)' ? 1 : 0, 1);
+  eq('빈 선수는 그대로', peakPl(null, 'C') === null ? 1 : 0, 1);
+
+  /* 임팩트·올스타 — 1옵션도 지정값으로 */
+  const imp = { ...bat, cardType: '임팩트', skill1: '대표타자', s1Lv: 0, sLvManual: false };
+  const pi = peakPl(imp, 'LF');
+  eq('임팩트 타자 — 1옵션 정밀타격 Lv6', pi.skill1 === '정밀타격' && pi.s1Lv === 6 ? 1 : 0, 1);
+  eq('임팩트 타자 — 2·3옵션 Lv5', pi.skill2 === PEAK_SKILLS['타자|임팩트|우|-'][1] && pi.s2Lv === 5 && pi.s3Lv === 5 ? 1 : 0, 1);
+  eq('임팩트 좌타 — 정밀타격 + 좌타해결사', (() => { const q = peakPl({ ...imp, hand: '좌' }, 'LF'); return q.skill1 === '정밀타격' && q.skill2 === '좌타해결사(좌타)'; })() ? 1 : 0, 1);
+  eq('임팩트 각성 — S', pi.pot3 === 'S' ? 1 : 0, 1);
+  const impM = { ...imp, sLvManual: true, s1Lv: 7 };
+  eq('FA 시그 — FA 특훈', peakPl({ ...bat, cardType: '시그니처', isFa: true }, '1B').specPower === PEAK_SPEC.bat_fa_시그니처[0] ? 1 : 0, 1);
+  eq('라이브 — 특훈 없음, 내 값 그대로', peakPl({ ...bat, cardType: '라이브', specPower: 2 }, '1B').specPower === 2 ? 1 : 0, 1);
+  const season = peakPl({ ...bat, cardType: '시즌', trainP: 4 }, '1B');
+  eq('시즌 — 스킬은 시그니처 표, 훈련 그대로, 각성 A', sk3(season) === PEAK_SKILLS['타자|시그니처|우|-'].join(',') && season.trainP === 4 && season.pot3 === 'A' ? 1 : 0, 1);
+
+  /* 투수 */
+  const pit = { id: 'p', role: '투수', position: '선발', cardType: '골든글러브', hand: '좌', change: 80, stuff: 80, enhance: '9각성', sLvManual: false };
+  const pp = peakPl(pit, 'SP1');
+  eq('선발 좌투 — 좌승사자부터', sk3(pp) === PEAK_SKILLS['선발|골든글러브|좌|-'].join(',') && pp.skill1 === '좌승사자(좌투)' ? 1 : 0, 1);
+  eq('선발 — 훈련·특훈', pp.trainC === PEAK_TRAIN.pit_골든글러브[0] && pp.specStuff === PEAK_SPEC.pit_골든글러브[1] ? 1 : 0, 1);
+  eq('투수 잠재력 — 장타억제 SR+ · 침착 A, 각성 A', pp.pot1 === 'SR+' && pp.pot2 === 'A' && pp.potType1 === '장타억제' && pp.potType2 === '침착' && pp.pot3 === 'A' && pp.potType3 === POT_TYPES_AWK_PIT[0] ? 1 : 0, 1);
+  eq('올스타 좌투 선발 — 좌승사자 Lv8', (() => { const q = peakPl({ ...pit, cardType: '올스타' }, 'SP1'); return q.skill1 === '좌승사자(좌투)' && q.s1Lv === 8; })() ? 1 : 0, 1);
+  eq('임팩트 우투 선발 — 저니맨', peakPl({ ...pit, cardType: '임팩트', hand: '우' }, 'SP2').skill1 === '저니맨' ? 1 : 0, 1);
+  eq('임팩트 중계·마무리 — 마당쇠', peakPl({ ...pit, cardType: '임팩트', position: '중계' }, 'RP1').skill1 === '마당쇠(불펜)' && peakPl({ ...pit, cardType: '임팩트', position: '마무리' }, 'CP').skill1 === '마당쇠(불펜)' ? 1 : 0, 1);
+  eq('마무리 자리', sk3(peakPl({ ...pit, position: '마무리', hand: '우' }, 'CP')) === PEAK_SKILLS['마무리|골든글러브|우|-'].join(',') ? 1 : 0, 1);
+
+  /* 내 값이 더 좋으면 그대로 */
+  const strong = { ...bat, sLvManual: true, skill1: '정밀타격', s1Lv: 10, skill2: '워크에식', s2Lv: 10, skill3: '빅게임헌터', s3Lv: 10,
+    trainP: 40, trainA: 30, specPower: 15, specAccuracy: 15, pot1: 'SR+', pot2: 'S', potType3: '속구대처', pot3: 'S' };
+  const ps = peakPl(strong, '1B');
+  eq('더 좋은 스킬은 그대로', ps.skill3 === '빅게임헌터' && ps.s1Lv === 10 ? 1 : 0, 1);
+  eq('더 좋은 훈련은 그대로', ps.trainP === 40 && ps.trainA === 30 ? 1 : 0, 1);
+  eq('더 좋은 특훈은 그대로', ps.specPower === 15 ? 1 : 0, 1);
+  eq('잠재력은 칸마다 — 클러치 S 는 A 보다 좋아 그대로', ps.pot1 === 'SR+' && ps.pot2 === 'S' ? 1 : 0, 1);
+  eq('각성 — 내 S 가 A 보다 좋아 그대로', ps.potType3 === '속구대처' && ps.pot3 === 'S' ? 1 : 0, 1);
+  const pw = peakPl({ ...bat, pot1: 'C', pot2: 'C', potType3: '속구대처', pot3: 'C' }, '1B');
+  eq('낮은 잠재력은 올린다', pw.pot1 === 'SR+' && pw.pot2 === 'A' && pw.pot3 === 'A' && pw.potType3 === '속구대처' ? 1 : 0, 1);
+
+  const lu = (p) => ({ enhance: p.enhance, trainP: p.trainP || 0, trainA: p.trainA || 0, trainE: p.trainE || 0, trainN: p.trainN || 0, trainC: p.trainC || 0, trainS: p.trainS || 0,
+    skill1: p.skill1 || '', s1Lv: p.s1Lv || 0, skill2: p.skill2 || '', s2Lv: p.s2Lv || 0, skill3: p.skill3 || '', s3Lv: p.s3Lv || 0 });
+  let down = 0;
+  for (const p of [bat, imp, impM, strong, { ...bat, hand: '좌', trainP: 25, trainA: 25 }, { ...bat, hand: '양', pot2: 'SR+' }]) {
+    const q = peakPl(p, '1B');
+    if (calcBat(q, lu(q)).total < calcBat(p, lu(p)).total) down++;
+  }
+  for (const p of [pit, { ...pit, position: '중계' }, { ...pit, position: '마무리', trainC: 30, trainS: 30 }, { ...pit, cardType: '임팩트', hand: '우' }]) {
+    const q = peakPl(p, 'SP1');
+    if (calcPit(q, lu(q)).total < calcPit(p, lu(p)).total) down++;
+  }
+  eq('고점을 켜서 점수가 떨어지는 선수 없음', down, 0);
+}
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
