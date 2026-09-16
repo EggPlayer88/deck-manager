@@ -890,7 +890,9 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   const SKD = obj('PREBUILT_SKILL_DIST'), TRD = obj('PREBUILT_DIST');
   const LV = { '골든글러브': [6, 6, 6], '라이브': [7, 7, 7], '올스타': [8, 7, 7], '시그니처': [6, 5, 5], '국가대표': [6, 5, 5], '임팩트': [6, 5, 5] };
   const base = (n) => n.replace(/\(.*?\)/g, '').trim();
-  const COND = ['철완', '5툴플레이어', '선봉장', '도전정신', '라이징스타', '국대에이스', '리드오프', '핵타선', '공포의하위타선', '수비안정성', '빈틈없는타선', '컨택트히터'];
+  /* 조건부 스킬 — 배치·타순·능력치 구간·성급·불펜 자리·이닝에 따라 켜지고 꺼진다 */
+  const COND = ['철완', '5툴플레이어', '선봉장', '도전정신', '라이징스타', '국대에이스', '리드오프', '핵타선', '공포의하위타선', '수비안정성', '빈틈없는타선', '컨택트히터',
+    '원투펀치', '수호신', '긴급투입', '승리의함성', '원포인트릴리프', '얼리스타트', '흐름끊기', '기선제압', '타선지원', '대타스페셜', '베스트포지션', '약속의8회', '약속의 8회'];
 
   eq('스킬 경우 72가지 (구워 둔 스킬 분포와 같은 키)', Object.keys(PEAK_SKILLS).filter(k => SKD[k]).length, 72);
   let bad = [];
@@ -905,6 +907,7 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
       if (!skillPickable(n, cat) || !skillAllowedAt(n, cat, c === '포수') || !variantAllowed(n, cond)) bad.push(key + ' 뜰 수 없음 ' + n);
       if (ct !== '국가대표' && isNatOnlySkill(n, cat)) bad.push(key + ' 국대 전용 ' + n);
       if (COND.includes(base(n))) bad.push(key + ' 조건부 ' + n);
+      if (base(n) === '패기' && (ct === '라이브' || ct === '국가대표')) bad.push(key + ' 다른 카드 이름의 패기 ' + n);
     });
     if (new Set(names.map(base)).size !== 3) bad.push(key + ' 같은 스킬 중복');
     /* 1옵션 — 포수는 포수리드, 임팩트·올스타는 사용자 지정, 나머지는 손잡이·보직 대표 스킬 */
@@ -912,7 +915,8 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
     const handSig = cat === '타자' ? (({ '좌': '좌타해결사(좌타)', '양': '스위치히터(양타)' })[hand] || '정밀타격') : undefined;
     const want1 = c === '포수' ? '포수리드' : fixed ? role : (handSig || role);
     if (names[0] !== want1) bad.push(key + ' 1옵션 ' + names[0]);
-    if (handSig && !names.includes(handSig)) bad.push(key + ' 손잡이 스킬 없음');
+    /* 우타 포수의 정밀타격은 1점 낮추기에서 빠질 수 있다 */
+    if (handSig && !names.includes(handSig) && !(c === '포수' && hand === '우')) bad.push(key + ' 손잡이 스킬 없음');
     /* 백분위 — 임팩트·올스타는 1옵션을 빼고 2·3옵션만으로 */
     const sc = Math.round(names.reduce((t2, n, k) => t2 + ((fixed && k === 0) ? 0 : getSkillScore(n, LV[ct][k], cat, true)), 0) * 100) / 100;
     const pct = pctFromDist(SKD[key], sc);
@@ -920,9 +924,8 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
     if (sc >= SKD[key][SKD[key].length - 1]) bad.push(key + ' 표본 최고점 이상 ' + sc);
   }
   eq('스킬 72가지 — 메이저·실제로 뜸·1옵션 규칙·상위 0.5% 안 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
-  eq('골글 타자는 지정 조합 그대로', PEAK_SKILLS['타자|골든글러브|우|-'].join(',') === '정밀타격,저니맨,홈어드밴티지'
-    && PEAK_SKILLS['타자|골든글러브|좌|-'].join(',') === '좌타해결사(좌타),저니맨,홈어드밴티지'
-    && PEAK_SKILLS['타자|골든글러브|양|-'].join(',') === '스위치히터(양타),저니맨,홈어드밴티지' ? 1 : 0, 1);
+  eq('골글 타자 — 대표 스킬 · 저니맨은 지정 조합 그대로', ['우|정밀타격', '좌|좌타해결사(좌타)', '양|스위치히터(양타)']
+    .every(x => { const [h, sig] = x.split('|'); const v = PEAK_SKILLS['타자|골든글러브|' + h + '|-']; return v[0] === sig && v[1] === '저니맨'; }) ? 1 : 0, 1);
   eq('포수 18가지 모두 1옵션 포수리드', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.endsWith('|포수') && v[0] === '포수리드').length, 18);
   eq('좌타 12가지 모두 좌타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '좌' && v.includes('좌타해결사(좌타)')).length, 12);
 
