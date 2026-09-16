@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -839,6 +839,33 @@ eq('dexFitsSlot 타자', dexFitsSlot(IX[0], '타자') ? 1 : 0, 1);
 eq('dexFitsSlot 타자에 투수 아님', dexFitsSlot(IX[3], '타자') ? 1 : 0, 0);
 eq('dexFitsSlot 선발', dexFitsSlot(IX[3], '선발') ? 1 : 0, 1);
 eq('dexFitsSlot 선발에 중계 아님', dexFitsSlot(IX[4], '선발') ? 1 : 0, 0);
+
+
+console.log('\n[최대 훈련 포인트] 2026-09 국가대표 65 · 올스타 90');
+eq('골든글러브 75', TRAIN_POINTS['골든글러브'], 75);
+eq('시그니처 75', TRAIN_POINTS['시그니처'], 75);
+eq('라이브 75', TRAIN_POINTS['라이브'], 75);
+eq('임팩트 54', TRAIN_POINTS['임팩트'], 54);
+eq('국가대표 65', TRAIN_POINTS['국가대표'], 65);
+eq('올스타 90', TRAIN_POINTS['올스타'], 90);
+{
+  /* 유효 능력치로 가는 비율은 카드마다 같으니, 중앙값은 훈련 포인트에 비례해야 한다 */
+  const D = buildDist({}, 20000);
+  const med = (k) => D[k][Math.floor(D[k].length / 2)];
+  eq('분포 키 24개 (훈련 12 + 특훈 12)', Object.keys(D).length, 24);
+  eq('올스타 타자 / 골글 타자 ≈ 90/75', Math.round(med('train_bat_올스타') / med('train_bat_골든글러브') * 100) / 100, 1.2, 0.05);
+  eq('올스타 투수 / 골글 투수 ≈ 90/75', Math.round(med('train_pit_올스타') / med('train_pit_골든글러브') * 100) / 100, 1.2, 0.05);
+  eq('국대 타자 / 골글 타자 ≈ 65/75', Math.round(med('train_bat_국가대표') / med('train_bat_골든글러브') * 100) / 100, 0.87, 0.04);
+  eq('국대 투수 / 골글 투수 ≈ 65/75', Math.round(med('train_pit_국가대표') / med('train_pit_골든글러브') * 100) / 100, 0.87, 0.04);
+  eq('라이브 = 골글 (둘 다 75)', Math.round(med('train_bat_라이브') / med('train_bat_골든글러브') * 100) / 100, 1.0, 0.03);
+  /* 상한 — 수비 하나가 고정이라 유효 칸에 전부 몰아도 올스타 90pt 를 넘을 수 없다 */
+  const top = (k) => D[k][D[k].length - 1];
+  eq('올스타 타자 최댓값 ≤ 90', top('train_bat_올스타') <= 90 ? 1 : 0, 1);
+  eq('국대 타자 최댓값 ≤ 65', top('train_bat_국가대표') <= 65 ? 1 : 0, 1);
+  /* 특훈은 훈련 포인트와 무관 — 올스타·라이브는 특훈 분포가 없어야 한다 */
+  eq('올스타 특훈 분포 없음', D['spec_bat_올스타'] === undefined ? 1 : 0, 1);
+  eq('국대 특훈 분포 있음', Array.isArray(D['spec_bat_국가대표']) ? 1 : 0, 1);
+}
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
