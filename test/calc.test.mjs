@@ -907,12 +907,12 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
       if (COND.includes(base(n))) bad.push(key + ' 조건부 ' + n);
     });
     if (new Set(names.map(base)).size !== 3) bad.push(key + ' 같은 스킬 중복');
-    /* 1옵션 — 임팩트·올스타는 사용자 지정, 나머지는 대표 스킬 (좌타·양타는 손잡이 스킬) */
+    /* 1옵션 — 포수는 포수리드, 임팩트·올스타는 사용자 지정, 나머지는 손잡이·보직 대표 스킬 */
     const role = cat === '타자' ? '정밀타격' : cat === '선발' ? (hand === '좌' ? '좌승사자(좌투)' : '저니맨') : '마당쇠(불펜)';
-    const handSig = cat === '타자' ? ({ '좌': '좌타해결사(좌타)', '양': '스위치히터(양타)' })[hand] : undefined;
-    if (names[0] !== (fixed ? role : (handSig || role))) bad.push(key + ' 1옵션 ' + names[0]);
+    const handSig = cat === '타자' ? (({ '좌': '좌타해결사(좌타)', '양': '스위치히터(양타)' })[hand] || '정밀타격') : undefined;
+    const want1 = c === '포수' ? '포수리드' : fixed ? role : (handSig || role);
+    if (names[0] !== want1) bad.push(key + ' 1옵션 ' + names[0]);
     if (handSig && !names.includes(handSig)) bad.push(key + ' 손잡이 스킬 없음');
-    if (c === '포수' && !(fixed && handSig) && !names.includes('포수리드')) bad.push(key + ' 포수리드 없음');
     /* 백분위 — 임팩트·올스타는 1옵션을 빼고 2·3옵션만으로 */
     const sc = Math.round(names.reduce((t2, n, k) => t2 + ((fixed && k === 0) ? 0 : getSkillScore(n, LV[ct][k], cat, true)), 0) * 100) / 100;
     const pct = pctFromDist(SKD[key], sc);
@@ -920,6 +920,10 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
     if (sc >= SKD[key][SKD[key].length - 1]) bad.push(key + ' 표본 최고점 이상 ' + sc);
   }
   eq('스킬 72가지 — 메이저·실제로 뜸·1옵션 규칙·상위 0.5% 안 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
+  eq('골글 타자는 지정 조합 그대로', PEAK_SKILLS['타자|골든글러브|우|-'].join(',') === '정밀타격,저니맨,홈어드밴티지'
+    && PEAK_SKILLS['타자|골든글러브|좌|-'].join(',') === '좌타해결사(좌타),저니맨,홈어드밴티지'
+    && PEAK_SKILLS['타자|골든글러브|양|-'].join(',') === '스위치히터(양타),저니맨,홈어드밴티지' ? 1 : 0, 1);
+  eq('포수 18가지 모두 1옵션 포수리드', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.endsWith('|포수') && v[0] === '포수리드').length, 18);
   eq('좌타 12가지 모두 좌타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '좌' && v.includes('좌타해결사(좌타)')).length, 12);
 
   bad = [];
@@ -965,7 +969,7 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   eq('각성 — 골글은 A, 종류가 없으면 첫 종류', pb.pot3 === 'A' && pb.potType3 === POT_TYPES_AWK_BAT[0] ? 1 : 0, 1);
   eq('잠재력 종류를 바꿔 둔 칸은 종류대로', (() => { const q = peakPl({ ...bat, potType1: '클러치', potType2: '풀스윙' }, '1B'); return q.pot1 === 'A' && q.pot2 === 'SR+'; })() ? 1 : 0, 1);
   eq('강화·카드 정보는 그대로', pb.enhance === '9각성' && pb.name === '가' && pb.team === 'LG' && pb.power === 80 ? 1 : 0, 1);
-  eq('포수 자리는 포수 조합', sk3(peakPl(bat, 'C')) === PEAK_SKILLS['타자|골든글러브|우|포수'].join(',') ? 1 : 0, 1);
+  eq('포수 자리는 포수 조합 — 1옵션 포수리드 Lv6', (() => { const q = peakPl(bat, 'C'); return sk3(q) === PEAK_SKILLS['타자|골든글러브|우|포수'].join(',') && q.skill1 === '포수리드' && q.s1Lv === 6; })() ? 1 : 0, 1);
   eq('좌타는 좌타해결사부터', peakPl({ ...bat, hand: '좌' }, 'RF').skill1 === '좌타해결사(좌타)' ? 1 : 0, 1);
   eq('양타는 스위치히터부터', peakPl({ ...bat, hand: '양' }, 'DH').skill1 === '스위치히터(양타)' ? 1 : 0, 1);
   eq('빈 선수는 그대로', peakPl(null, 'C') === null ? 1 : 0, 1);
@@ -977,6 +981,7 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   eq('임팩트 타자 — 2·3옵션 Lv5', pi.skill2 === PEAK_SKILLS['타자|임팩트|우|-'][1] && pi.s2Lv === 5 && pi.s3Lv === 5 ? 1 : 0, 1);
   eq('임팩트 좌타 — 정밀타격 + 좌타해결사', (() => { const q = peakPl({ ...imp, hand: '좌' }, 'LF'); return q.skill1 === '정밀타격' && q.skill2 === '좌타해결사(좌타)'; })() ? 1 : 0, 1);
   eq('임팩트 각성 — S', pi.pot3 === 'S' ? 1 : 0, 1);
+  eq('임팩트 포수 — 1옵션 포수리드, 2옵션 정밀타격', (() => { const q = peakPl(imp, 'C'); return q.skill1 === '포수리드' && q.s1Lv === 6 && q.skill2 === '정밀타격' && q.s2Lv === 5; })() ? 1 : 0, 1);
   const impM = { ...imp, sLvManual: true, s1Lv: 7 };
   eq('FA 시그 — FA 특훈', peakPl({ ...bat, cardType: '시그니처', isFa: true }, '1B').specPower === PEAK_SPEC.bat_fa_시그니처[0] ? 1 : 0, 1);
   eq('라이브 — 특훈 없음, 내 값 그대로', peakPl({ ...bat, cardType: '라이브', specPower: 2 }, '1B').specPower === 2 ? 1 : 0, 1);
