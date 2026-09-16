@@ -3151,27 +3151,24 @@ function LineupPage(p) {
   BAT_SLOTS.forEach(function(s) { var pl = pick(s); if (pl) batSlotMap[s] = pl; });
 
   /* Auto-calculate set points from lineup card types */
-  /* 세트덱 점수는 카드 종류로만 정해져서 고점판독 중에도 같다.
-     팀 버프(국대에이스·포수리드) 자동 레벨은 내 덱과 고점 라인업 중 높은 쪽을 쓴다 —
-     고점 포수의 포수리드는 살리고, 내 버프 카드의 국대에이스를 고점 조합이 지우지 않게 한다 */
+  /* 세트덱 점수는 카드 종류로만 정해져서 고점판독 중에도 같다 */
   var totalSP = computeLineupSetDeck(realPick, sdState);
-  var AUTO_BUFF = ["_autoNatBat", "_autoNatPit", "_autoCatch"];
-  var realBuff = AUTO_BUFF.map(function(k) { return sdState[k]; });
-  var peakBuff = realBuff;
+  /* 고점판독 계산에만 쓰는 sdState 사본 (팀 버프 규칙은 peakBuffState).
+     공유 객체(sdState)에는 고점 값을 절대 쓰지 않는다. 다른 화면이나 저장으로 새면 안 된다 */
+  var sdCalc = sdState;
   if (peakOn) {
-    computeLineupSetDeck(pick, sdState);
-    var buffLv = function(v) { return parseInt(v, 10) || 0; };
-    peakBuff = AUTO_BUFF.map(function(k, i) { return buffLv(sdState[k]) >= buffLv(realBuff[i]) ? sdState[k] : realBuff[i]; });
+    var probe = Object.assign({}, sdState);
+    computeLineupSetDeck(pick, probe);
+    sdCalc = peakBuffState(sdState, probe);
   }
-  var setBuff = function(vals) { AUTO_BUFF.forEach(function(k, i) { sdState[k] = vals[i]; }); };
-  setBuff(peakBuff);
   /* 세트덱 패널 표시용 — 라이브 추가분을 뺀 순수 세트덱 점수 */
   var setPoint = totalSP - (sdState.liveSetPo || 0);
 
   /* Helper: build lu + calc with SD bonus */
   var mkLuB = function(pl) { return { enhance: pl.enhance || "9각성", trainP: pl.trainP || 0, trainA: pl.trainA || 0, trainE: pl.trainE || 0, trainN: pl.trainN || 0, trainC: pl.trainC || 0, trainS: pl.trainS || 0, skill1: pl.skill1 || "", s1Lv: pl.s1Lv || 0, skill2: pl.skill2 || "", s2Lv: pl.s2Lv || 0, skill3: pl.skill3 || "", s3Lv: pl.s3Lv || 0 }; };
-  var calcBatSD = function(pl, slot) { var orderIdx = batOrder.indexOf(slot); return calcBat(pl, mkLuB(pl), calcSDBonus(pl, slot, sdState, totalSP, orderIdx >= 0 ? orderIdx : undefined)); };
-  var calcPitSD = function(pl, slot) { return calcPit(pl, mkLuB(pl), calcSDBonus(pl, slot, sdState, totalSP)); };
+  /* sd 를 안 주면 화면 기준(고점판독 중이면 고점 버프) */
+  var calcBatSD = function(pl, slot, sd) { var orderIdx = batOrder.indexOf(slot); return calcBat(pl, mkLuB(pl), calcSDBonus(pl, slot, sd || sdCalc, totalSP, orderIdx >= 0 ? orderIdx : undefined)); };
+  var calcPitSD = function(pl, slot, sd) { return calcPit(pl, mkLuB(pl), calcSDBonus(pl, slot, sd || sdCalc, totalSP)); };
 
   /* ── 그라데이션 색상 헬퍼 ── */
   var pctColor = function(val, allVals, baseColor) {
@@ -3216,28 +3213,27 @@ function LineupPage(p) {
   }, [lBats, sdState, players]);
 
   /* pk 로 뽑은 라인업의 총점 — 고점판독 중에는 현실 총점도 같이 구해 비교한다 */
-  var calcTotalWith = function(pk) {
+  var calcTotalWith = function(pk, sd) {
     var bats = batOrder.map(function(s) { return { slot: s, pl: pk(s) }; });
-    var ranks = strRanks(bats.map(function(x) { return x.pl ? calcBatSD(x.pl, x.slot).total : 0; }));
+    var ranks = strRanks(bats.map(function(x) { return x.pl ? calcBatSD(x.pl, x.slot, sd).total : 0; }));
     var t = 0;
     bats.forEach(function(x, i) {
       if (!x.pl) return;
       /* 자리의 값(타순) x 선수의 값(그 라인업 안에서의 강함 순위) */
-      t += calcBatSD(x.pl, x.slot).total * batMult(i) * strMult(ranks[i]);
+      t += calcBatSD(x.pl, x.slot, sd).total * batMult(i) * strMult(ranks[i]);
     });
     /* 선발 — 중계 전술에 따라 배율이 달라진다 (기본 7.00 / 적극 6.66 / 분업 6.33) */
     var tac = rpTactic(sdState);
-    SP_SLOTS.forEach(function(s, i) { var pl = pk(s); if (pl) t += calcPitSD(pl, s).total * spMult(tac, i); });
+    SP_SLOTS.forEach(function(s, i) { var pl = pk(s); if (pl) t += calcPitSD(pl, s, sd).total * spMult(tac, i); });
     /* 중계 — 편성(11종)별 상대비에 전술별 예산을 맞춘 값 */
-    RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += calcPitSD(pl, s).total * getRPWeight(bpcIdx, s, tac); });
+    RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += calcPitSD(pl, s, sd).total * getRPWeight(bpcIdx, s, tac); });
     /* 마무리는 항상 0.8 */
-    var cp = pk("CP"); if (cp) t += calcPitSD(cp, "CP").total * CP_MULT;
+    var cp = pk("CP"); if (cp) t += calcPitSD(cp, "CP", sd).total * CP_MULT;
     return Math.round(t * 100) / 100;
   };
-  var totalScore = calcTotalWith(pick);
-  /* 현실 총점은 현실 버프로 구하고 곧바로 고점 버프로 되돌린다 (아래 행들이 고점 기준으로 그려진다) */
-  var realTotal = totalScore;
-  if (peakOn) { setBuff(realBuff); realTotal = calcTotalWith(realPick); setBuff(peakBuff); }
+  var totalScore = calcTotalWith(pick, sdCalc);
+  /* 현실 총점은 내 덱 그대로의 선수와 버프로 */
+  var realTotal = peakOn ? calcTotalWith(realPick, sdState) : totalScore;
   var rpSlotData = RP_SLOTS.map(function(s) { return { slot: s, pl: pick(s) }; });
 
   var diamondPl = Object.keys(batSlotMap).length;
@@ -7337,6 +7333,7 @@ var PREBUILT_SKILL_DIST = {"타자|골든글러브|우|-":[0,4.22,5.2,5.9,6.65,7
 
    스킬: "포지션|카드|손|포수" -> [1옵션, 2옵션, 3옵션] (레벨은 SKILL_DIST_LV). 전부 메이저다.
      기준 — 골글 우타 정밀타격·대표타자·베스트포지션 (사용자 지정, 상위 0.0436%). 나머지는 이 확률의 2배 안에서 맞췄다.
+     마무리 — 카드·손잡이와 관계없이 마당쇠·소방수·위닝샷 (사용자 지정).
      1옵션 — 포수 포수리드 / 임팩트·올스타 타자 정밀타격·우투 선발 저니맨·좌투 선발 좌승사자·불펜 마당쇠 (사용자 지정) /
        그 밖의 카드는 손잡이·보직 대표 스킬. 좌타는 좌타해결사, 양타는 스위치히터가 반드시 들어가고,
        포수는 2옵션에 손잡이 대표 스킬을 둔다 (우타 포수는 정밀타격 없이도 찾아 봤다).
@@ -7406,18 +7403,18 @@ var PEAK_SKILLS = {
   "중계|국가대표|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0374% · 기준의 0.86배 */
   "중계|임팩트|우|-":["마당쇠(불펜)","저니맨","패기(임팩불펜)"],  /* 32.87점 · 상위 0.0441% · 기준의 1.01배 */
   "중계|임팩트|좌|-":["마당쇠(불펜)","저니맨","패기(임팩불펜)"],  /* 32.87점 · 상위 0.0441% · 기준의 1.01배 */
-  "마무리|골든글러브|우|-":["마당쇠(불펜)","홈어드밴티지","필승카드"],  /* 62.12점 · 상위 0.0426% · 기준의 0.98배 */
-  "마무리|골든글러브|좌|-":["마당쇠(불펜)","홈어드밴티지","필승카드"],  /* 62.12점 · 상위 0.0426% · 기준의 0.98배 */
-  "마무리|라이브|우|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 75.94점 · 상위 0.023% · 기준의 0.53배 */
-  "마무리|라이브|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 75.94점 · 상위 0.023% · 기준의 0.53배 */
-  "마무리|올스타|우|-":["마당쇠(불펜)","저니맨","구속제어"],  /* 46.54점 · 상위 0.0368% · 기준의 0.84배 */
-  "마무리|올스타|좌|-":["마당쇠(불펜)","저니맨","구속제어"],  /* 46.54점 · 상위 0.0368% · 기준의 0.84배 */
-  "마무리|시그니처|우|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.029% · 기준의 0.66배 */
-  "마무리|시그니처|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0304% · 기준의 0.7배 */
-  "마무리|국가대표|우|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0464% · 기준의 1.07배 */
-  "마무리|국가대표|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0473% · 기준의 1.09배 */
-  "마무리|임팩트|우|-":["마당쇠(불펜)","저니맨","파이어볼"],  /* 33.07점 · 상위 0.0434% · 기준의 1배 */
-  "마무리|임팩트|좌|-":["마당쇠(불펜)","저니맨","파이어볼"]  /* 33.07점 · 상위 0.0434% · 기준의 1배 */
+  "마무리|골든글러브|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 61.71점 · 상위 0.0457% · 기준의 1.05배 */
+  "마무리|골든글러브|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 61.71점 · 상위 0.0457% · 기준의 1.05배 */
+  "마무리|라이브|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 73.73점 · 상위 0.0399% · 기준의 0.91배 */
+  "마무리|라이브|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 73.73점 · 상위 0.0426% · 기준의 0.98배 */
+  "마무리|올스타|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 39.53점 · 상위 0.2091% · 기준의 4.8배 */
+  "마무리|올스타|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 39.53점 · 상위 0.2361% · 기준의 5.42배 */
+  "마무리|시그니처|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.037% · 기준의 0.85배 */
+  "마무리|시그니처|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.037% · 기준의 0.85배 */
+  "마무리|국가대표|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.0585% · 기준의 1.34배 */
+  "마무리|국가대표|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.0585% · 기준의 1.34배 */
+  "마무리|임팩트|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 27.25점 · 상위 0.3285% · 기준의 7.54배 */
+  "마무리|임팩트|좌|-":["마당쇠(불펜)","소방수","위닝샷"]  /* 27.25점 · 상위 0.3285% · 기준의 7.54배 */
 };
 /* 훈련: 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위] */
 var PEAK_TRAIN = {"bat_골든글러브":[20,18,12,10],"bat_시그니처":[22,17,12,9],"bat_라이브":[20,18,12,10],"bat_올스타":[23,21,15,12],"bat_국가대표":[19,15,11,8],"bat_임팩트":[16,13,9,6],"pit_골든글러브":[16,22],"pit_시그니처":[20,20],"pit_라이브":[16,22],"pit_올스타":[22,23],"pit_국가대표":[17,18],"pit_임팩트":[15,15]};
@@ -7492,6 +7489,16 @@ function peakPl(pl, slot) {
   var awk = PEAK_AWK[ct] || "A";
   if (!pl.potType3) { out.potType3 = awkTypesFor(pl.role)[0]; out.pot3 = awk; }
   else out.pot3 = better(awk, pl.potType3, pl.pot3);
+  return out;
+}
+/* 고점판독 계산에만 쓰는 sdState 사본. 팀 버프(국대에이스·포수리드) 자동 레벨은 내 덱(real)과
+   고점 라인업(probe) 중 높은 쪽 — 고점 포수의 포수리드는 살리고, 내 버프 카드의 국대에이스는 지우지 않는다.
+   real 은 여러 화면이 같이 쓰는 객체라 건드리지 않고 새 객체를 돌려준다 */
+function peakBuffState(real, probe) {
+  var out = Object.assign({}, real);
+  ["_autoNatBat", "_autoNatPit", "_autoCatch"].forEach(function (k) {
+    if ((parseInt(probe[k], 10) || 0) > (parseInt(real[k], 10) || 0)) out[k] = probe[k];
+  });
   return out;
 }
 

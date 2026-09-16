@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -926,6 +926,7 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   }
   eq('스킬 72가지 — 메이저·실제로 뜸·1옵션 규칙·상위 0.5% 안 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
   eq('기준 — 골글 우타는 정밀타격·대표타자·베스트포지션', PEAK_SKILLS['타자|골든글러브|우|-'].join(',') === '정밀타격,대표타자,베스트포지션' ? 1 : 0, 1);
+  eq('마무리 12가지 모두 마당쇠·소방수·위닝샷', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.startsWith('마무리|') && v.join(',') === '마당쇠(불펜),소방수,위닝샷').length, 12);
   eq('양타 12가지 모두 스위치히터', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '양' && v.includes('스위치히터(양타)')).length, 12);
   eq('타자 36가지 중 대표타자·베스트포지션이 든 조합이 절반 넘게', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.startsWith('타자|') && v.some(n => n === '대표타자' || n === '베스트포지션')).length > 18 ? 1 : 0, 1);
   eq('포수 18가지 모두 1옵션 포수리드', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.endsWith('|포수') && v[0] === '포수리드').length, 18);
@@ -1002,7 +1003,8 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   eq('올스타 좌투 선발 — 좌승사자 Lv8', (() => { const q = peakPl({ ...pit, cardType: '올스타' }, 'SP1'); return q.skill1 === '좌승사자(좌투)' && q.s1Lv === 8; })() ? 1 : 0, 1);
   eq('임팩트 우투 선발 — 저니맨', peakPl({ ...pit, cardType: '임팩트', hand: '우' }, 'SP2').skill1 === '저니맨' ? 1 : 0, 1);
   eq('임팩트 중계·마무리 — 마당쇠', peakPl({ ...pit, cardType: '임팩트', position: '중계' }, 'RP1').skill1 === '마당쇠(불펜)' && peakPl({ ...pit, cardType: '임팩트', position: '마무리' }, 'CP').skill1 === '마당쇠(불펜)' ? 1 : 0, 1);
-  eq('마무리 자리', sk3(peakPl({ ...pit, position: '마무리', hand: '우' }, 'CP')) === PEAK_SKILLS['마무리|골든글러브|우|-'].join(',') ? 1 : 0, 1);
+  eq('마무리 자리 — 마당쇠·소방수·위닝샷', sk3(peakPl({ ...pit, position: '마무리', hand: '우' }, 'CP')) === '마당쇠(불펜),소방수,위닝샷' ? 1 : 0, 1);
+  eq('임팩트 마무리도 같은 조합 (1옵 마당쇠 Lv6, 2·3옵 Lv5)', (() => { const q = peakPl({ ...pit, cardType: '임팩트', position: '마무리' }, 'CP'); return sk3(q) === '마당쇠(불펜),소방수,위닝샷' && q.s1Lv === 6 && q.s2Lv === 5 && q.s3Lv === 5; })() ? 1 : 0, 1);
 
   /* 내 값이 더 좋으면 그대로 */
   const strong = { ...bat, sLvManual: true, skill1: '정밀타격', s1Lv: 10, skill2: '워크에식', s2Lv: 10, skill3: '빅게임헌터', s3Lv: 10,
@@ -1028,6 +1030,20 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
     if (calcPit(q, lu(q)).total < calcPit(p, lu(p)).total) down++;
   }
   eq('고점을 켜서 점수가 떨어지는 선수 없음', down, 0);
+
+  /* peakBuffState — 고점 계산용 팀 버프. 내 덱 값(여러 화면이 같이 쓰는 객체)은 안 바뀐다 */
+  const realSd = { bpcIdx: 3, catchLead: '', _autoCatch: '없음', _autoNatBat: '6렙', _autoNatPit: '없음' };
+  const realCopy = JSON.stringify(realSd);
+  const pbs = peakBuffState(realSd, { ...realSd, _autoCatch: '6렙', _autoNatBat: '5렙', _autoNatPit: '5렙' });
+  eq('팀 버프 — 고점 포수의 포수리드를 쓴다', pbs._autoCatch === '6렙' ? 1 : 0, 1);
+  eq('팀 버프 — 고점 투수의 국대에이스를 쓴다', pbs._autoNatPit === '5렙' ? 1 : 0, 1);
+  eq('팀 버프 — 내 덱이 더 높으면 내 값 (국대에이스 6렙 유지)', pbs._autoNatBat === '6렙' ? 1 : 0, 1);
+  eq('팀 버프 — 나머지 설정은 그대로', pbs.bpcIdx === 3 && pbs.catchLead === '' ? 1 : 0, 1);
+  eq('팀 버프 — 내 덱 객체는 그대로 두고 새 객체', JSON.stringify(realSd) === realCopy && pbs !== realSd ? 1 : 0, 1);
+  eq('팀 버프 — 값이 비어 있어도 된다', peakBuffState({}, { _autoCatch: '7렙' })._autoCatch === '7렙' && peakBuffState({ _autoCatch: '8렙' }, {})._autoCatch === '8렙' ? 1 : 0, 1);
+  const pitSD = (sd) => calcPit(pit, lu(pit), calcSDBonus(pit, 'SP1', sd, 0)).total;
+  eq('고점 포수의 포수리드 6렙이 투수 점수에 들어간다 (변화 1.05 + 구위 1.35)',
+    pitSD(peakBuffState({ _autoCatch: '없음' }, { _autoCatch: '6렙' })) - pitSD({ _autoCatch: '없음' }), 2.4, 0.011);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);

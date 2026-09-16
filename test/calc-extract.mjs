@@ -724,18 +724,18 @@ var PEAK_SKILLS = {
   "중계|국가대표|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0374% · 기준의 0.86배 */
   "중계|임팩트|우|-":["마당쇠(불펜)","저니맨","패기(임팩불펜)"],  /* 32.87점 · 상위 0.0441% · 기준의 1.01배 */
   "중계|임팩트|좌|-":["마당쇠(불펜)","저니맨","패기(임팩불펜)"],  /* 32.87점 · 상위 0.0441% · 기준의 1.01배 */
-  "마무리|골든글러브|우|-":["마당쇠(불펜)","홈어드밴티지","필승카드"],  /* 62.12점 · 상위 0.0426% · 기준의 0.98배 */
-  "마무리|골든글러브|좌|-":["마당쇠(불펜)","홈어드밴티지","필승카드"],  /* 62.12점 · 상위 0.0426% · 기준의 0.98배 */
-  "마무리|라이브|우|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 75.94점 · 상위 0.023% · 기준의 0.53배 */
-  "마무리|라이브|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 75.94점 · 상위 0.023% · 기준의 0.53배 */
-  "마무리|올스타|우|-":["마당쇠(불펜)","저니맨","구속제어"],  /* 46.54점 · 상위 0.0368% · 기준의 0.84배 */
-  "마무리|올스타|좌|-":["마당쇠(불펜)","저니맨","구속제어"],  /* 46.54점 · 상위 0.0368% · 기준의 0.84배 */
-  "마무리|시그니처|우|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.029% · 기준의 0.66배 */
-  "마무리|시그니처|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0304% · 기준의 0.7배 */
-  "마무리|국가대표|우|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0464% · 기준의 1.07배 */
-  "마무리|국가대표|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0473% · 기준의 1.09배 */
-  "마무리|임팩트|우|-":["마당쇠(불펜)","저니맨","파이어볼"],  /* 33.07점 · 상위 0.0434% · 기준의 1배 */
-  "마무리|임팩트|좌|-":["마당쇠(불펜)","저니맨","파이어볼"]  /* 33.07점 · 상위 0.0434% · 기준의 1배 */
+  "마무리|골든글러브|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 61.71점 · 상위 0.0457% · 기준의 1.05배 */
+  "마무리|골든글러브|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 61.71점 · 상위 0.0457% · 기준의 1.05배 */
+  "마무리|라이브|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 73.73점 · 상위 0.0399% · 기준의 0.91배 */
+  "마무리|라이브|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 73.73점 · 상위 0.0426% · 기준의 0.98배 */
+  "마무리|올스타|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 39.53점 · 상위 0.2091% · 기준의 4.8배 */
+  "마무리|올스타|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 39.53점 · 상위 0.2361% · 기준의 5.42배 */
+  "마무리|시그니처|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.037% · 기준의 0.85배 */
+  "마무리|시그니처|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.037% · 기준의 0.85배 */
+  "마무리|국가대표|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.0585% · 기준의 1.34배 */
+  "마무리|국가대표|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.0585% · 기준의 1.34배 */
+  "마무리|임팩트|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 27.25점 · 상위 0.3285% · 기준의 7.54배 */
+  "마무리|임팩트|좌|-":["마당쇠(불펜)","소방수","위닝샷"]  /* 27.25점 · 상위 0.3285% · 기준의 7.54배 */
 };
 var PEAK_TRAIN = {"bat_골든글러브":[20,18,12,10],"bat_시그니처":[22,17,12,9],"bat_라이브":[20,18,12,10],"bat_올스타":[23,21,15,12],"bat_국가대표":[19,15,11,8],"bat_임팩트":[16,13,9,6],"pit_골든글러브":[16,22],"pit_시그니처":[20,20],"pit_라이브":[16,22],"pit_올스타":[22,23],"pit_국가대표":[17,18],"pit_임팩트":[15,15]};
 var PEAK_SPEC = {"bat_골든글러브":[7,2,1,0],"bat_시그니처":[7,2,1,0],"bat_fa_시그니처":[9,5,1,1],"bat_임팩트":[6,2,0,0],"bat_fa_임팩트":[8,4,1,0],"bat_국가대표":[7,3,2,0],"pit_골든글러브":[2,7],"pit_시그니처":[2,7],"pit_fa_시그니처":[2,11],"pit_임팩트":[2,6],"pit_fa_임팩트":[3,9],"pit_국가대표":[2,8]};
@@ -802,6 +802,13 @@ function peakPl(pl, slot) {
   var awk = PEAK_AWK[ct] || "A";
   if (!pl.potType3) { out.potType3 = awkTypesFor(pl.role)[0]; out.pot3 = awk; }
   else out.pot3 = better(awk, pl.potType3, pl.pot3);
+  return out;
+}
+function peakBuffState(real, probe) {
+  var out = Object.assign({}, real);
+  ["_autoNatBat", "_autoNatPit", "_autoCatch"].forEach(function (k) {
+    if ((parseInt(probe[k], 10) || 0) > (parseInt(real[k], 10) || 0)) out[k] = probe[k];
+  });
   return out;
 }
 var TRAIN_POINTS = {"골든글러브":75,"시그니처":75,"라이브":75,"올스타":90,"국가대표":66,"임팩트":54};
@@ -1151,4 +1158,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
