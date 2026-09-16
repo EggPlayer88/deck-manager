@@ -315,6 +315,69 @@ function playerNameGroup(n) {
   }
   return [t];
 }
+var CHO_TABLE = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+function choseong(s) {
+  var t = String(s || ""), out = "";
+  for (var i = 0; i < t.length; i++) {
+    var c = t.charCodeAt(i);
+    out += (c >= 0xAC00 && c <= 0xD7A3) ? CHO_TABLE[((c - 0xAC00) / 588) | 0] : t.charAt(i);
+  }
+  return out;
+}
+function isChoQuery(q) { return /^[ㄱ-ㅎ]+$/.test(q); }
+function dexHay(sp) {
+  return [sp.name, sp.cardType, sp.team, sp.impactType, sp.liveType, sp.year,
+          sp.role === "타자" ? sp.subPosition : sp.position]
+         .filter(Boolean).join(" ").toLowerCase();
+}
+function dexScore(sp, w) {
+  return sp.role === "타자"
+    ? (sp.power || 0) * w.p + (sp.accuracy || 0) * w.a + (sp.eye || 0) * w.e + (sp.patience || 0) * w.n
+    : (sp.change || 0) * w.c + (sp.stuff || 0) * w.s;
+}
+function buildDexIndex(list, w) {
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    var sp = list[i];
+    out.push({ sp: sp, name: String(sp.name || "").toLowerCase(),
+               cho: choseong(sp.name), hay: dexHay(sp),
+               role: sp.role, pos: sp.position || "",
+               score: Math.round(dexScore(sp, w) * 10) / 10 });
+  }
+  return out;
+}
+function dexFitsSlot(e, slot) {
+  return slot === "타자" ? e.role === "타자" : (e.role === "투수" && e.pos === slot);
+}
+function dexRank(e, q, cho) {
+  if (!q) return 0;
+  if (cho) {
+    var i = e.cho.indexOf(q);
+    return i === 0 ? 0 : (i > 0 ? 1 : 3);
+  }
+  var j = e.name.indexOf(q);
+  if (j === 0) return 0;
+  if (j > 0) return 1;
+  return e.hay.indexOf(q) >= 0 ? 2 : 3;
+}
+function dexSearch(index, slot, q, cardType, team) {
+  var qq = String(q || "").trim().toLowerCase();
+  var cho = isChoQuery(qq);
+  var hit = [];
+  for (var i = 0; i < index.length; i++) {
+    var e = index[i];
+    if (!dexFitsSlot(e, slot)) continue;
+    if (cardType && e.sp.cardType !== cardType) continue;
+    if (team && (e.sp.team || "") !== team) continue;
+    var r = dexRank(e, qq, cho);
+    if (r === 3) continue;
+    hit.push({ e: e, r: r });
+  }
+  hit.sort(function (a, b) {
+    return (a.r - b.r) || (b.e.score - a.e.score) || (a.e.name < b.e.name ? -1 : a.e.name > b.e.name ? 1 : 0);
+  });
+  return hit.map(function (x) { return x.e; });
+}
 function canonSkillName(name, cat) {
   if (!name || !SKILL_DATA) return name;
   var t = SKILL_DATA[cat];
@@ -940,4 +1003,4 @@ function calcPit(pl,lu,sdB){
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, getPercentile, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 
 /* Supabase: injected via window._SUPABASE from main.jsx (Vercel deployment).
    In artifact preview / standalone, these remain as stubs → localStorage-only mode. */
@@ -5207,6 +5207,86 @@ function resolveSkillName(rawName, category, seedPlayer, skillsDB, slot) {
   return { name: candidates[0], missing: false, candidates: candidates };
 }
 
+/* ================================================================
+   도감 검색 — "도감에서 선수 추가" 창이 쓰는 것
+   ================================================================
+   카드가 5천 장이라, 글자 하나 칠 때마다 카드마다 여섯 필드를 훑으면
+   입력이 눈에 띄게 밀린다. 그래서 창을 열 때 카드마다
+   검색용 한 줄(hay)과 이름 초성(cho)을 미리 만들어 두고 그것만 본다. */
+var CHO_TABLE = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+/* 김도영 → ㄱㄷㅇ. 한글이 아닌 글자는 그대로 둔다. */
+function choseong(s) {
+  var t = String(s || ""), out = "";
+  for (var i = 0; i < t.length; i++) {
+    var c = t.charCodeAt(i);
+    out += (c >= 0xAC00 && c <= 0xD7A3) ? CHO_TABLE[((c - 0xAC00) / 588) | 0] : t.charAt(i);
+  }
+  return out;
+}
+/* 자음만 친 질의는 초성 검색으로 본다 */
+function isChoQuery(q) { return /^[ㄱ-ㅎ]+$/.test(q); }
+
+/* 카드 한 장을 검색용 한 줄로. 이름·카드종류·팀·임팩트종류·라이브종류·연도·포지션 */
+function dexHay(sp) {
+  return [sp.name, sp.cardType, sp.team, sp.impactType, sp.liveType, sp.year,
+          sp.role === "타자" ? sp.subPosition : sp.position]
+         .filter(Boolean).join(" ").toLowerCase();
+}
+/* 도감 카드의 맨몸 점수. 강화·스킬 없이 기본 수치만 본다 — 목록 정렬용이다. */
+function dexScore(sp, w) {
+  return sp.role === "타자"
+    ? (sp.power || 0) * w.p + (sp.accuracy || 0) * w.a + (sp.eye || 0) * w.e + (sp.patience || 0) * w.n
+    : (sp.change || 0) * w.c + (sp.stuff || 0) * w.s;
+}
+/* 검색 인덱스. 창을 열 때 한 번만 만든다. */
+function buildDexIndex(list, w) {
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    var sp = list[i];
+    out.push({ sp: sp, name: String(sp.name || "").toLowerCase(),
+               cho: choseong(sp.name), hay: dexHay(sp),
+               role: sp.role, pos: sp.position || "",
+               score: Math.round(dexScore(sp, w) * 10) / 10 });
+  }
+  return out;
+}
+/* 어느 자리(타자/선발/중계/마무리)에 넣을 수 있는 카드인가 */
+function dexFitsSlot(e, slot) {
+  return slot === "타자" ? e.role === "타자" : (e.role === "투수" && e.pos === slot);
+}
+/* 0 이름 앞부분 일치 · 1 이름 어딘가 일치 · 2 다른 항목 일치 · 3 안 맞음.
+   이름으로 찾은 카드가 위로 올라와야 같은 선수 카드가 뭉쳐 보인다. */
+function dexRank(e, q, cho) {
+  if (!q) return 0;
+  if (cho) {
+    var i = e.cho.indexOf(q);
+    return i === 0 ? 0 : (i > 0 ? 1 : 3);
+  }
+  var j = e.name.indexOf(q);
+  if (j === 0) return 0;
+  if (j > 0) return 1;
+  return e.hay.indexOf(q) >= 0 ? 2 : 3;
+}
+/* 걸러서 정렬한 결과. 질의가 없으면 그냥 센 카드부터 보여준다. */
+function dexSearch(index, slot, q, cardType, team) {
+  var qq = String(q || "").trim().toLowerCase();
+  var cho = isChoQuery(qq);
+  var hit = [];
+  for (var i = 0; i < index.length; i++) {
+    var e = index[i];
+    if (!dexFitsSlot(e, slot)) continue;
+    if (cardType && e.sp.cardType !== cardType) continue;
+    if (team && (e.sp.team || "") !== team) continue;
+    var r = dexRank(e, qq, cho);
+    if (r === 3) continue;
+    hit.push({ e: e, r: r });
+  }
+  hit.sort(function (a, b) {
+    return (a.r - b.r) || (b.e.score - a.e.score) || (a.e.name < b.e.name ? -1 : a.e.name > b.e.name ? 1 : 0);
+  });
+  return hit.map(function (x) { return x.e; });
+}
+
 function MyPlayersPage(p) {
   var mob = p.mobile;
   var players = p.players;
@@ -5222,6 +5302,31 @@ function MyPlayersPage(p) {
   var _filter = useState("타자"); var filter = _filter[0]; var setFilter = _filter[1];
   var _addOpen = useState(false); var addOpen = _addOpen[0]; var setAddOpen = _addOpen[1];
   var _addQuery = useState(""); var addQuery = _addQuery[0]; var setAddQuery = _addQuery[1];
+  /* 도감 검색 — 칩 필터와 보여줄 줄 수. 조건이 바뀌면 다시 위에서부터 본다. */
+  var _addType = useState(""); var addType = _addType[0]; var setAddType = _addType[1];
+  var _addTeam = useState(""); var addTeam = _addTeam[0]; var setAddTeam = _addTeam[1];
+  var _addOwned = useState(false); var addHideOwned = _addOwned[0]; var setAddHideOwned = _addOwned[1];
+  var _addLimit = useState(40); var addLimit = _addLimit[0]; var setAddLimit = _addLimit[1];
+  /* 검색 인덱스는 창을 열 때 한 번만 만든다. 도감이 갱신되면 길이가 달라져 다시 만들어진다. */
+  var dexIndex = useMemo(function () {
+    return addOpen ? buildDexIndex(SEED_PLAYERS, getW()) : [];
+  }, [addOpen, SEED_PLAYERS.length]);
+  /* 글자를 칠 때 다시 도는 건 여기까지다. 화면에 그리는 줄은 addLimit 으로 끊는다. */
+  var dexHits = useMemo(function () {
+    return addOpen ? dexSearch(dexIndex, filter, addQuery, addType, addTeam) : [];
+  }, [dexIndex, addOpen, filter, addQuery, addType, addTeam]);
+  /* 이미 가진 카드 표시용 열쇠 모음 */
+  var ownedKeys = useMemo(function () {
+    var m = {};
+    for (var i = 0; i < players.length; i++) {
+      var x = players[i];
+      if (x.dbId) m["#" + x.dbId] = 1;
+      m[[x.name, x.cardType, x.year || "", x.impactType || "", x.liveType || ""].join("|")] = 1;
+    }
+    return m;
+  }, [players]);
+  /* 검색어나 칩이 바뀌면 다시 맨 위부터 */
+  var dexReset = function (fn) { return function (v) { fn(v); setAddLimit(40); }; };
   /* 관리기 시트 가져오기 — 파싱 결과를 먼저 보여주고, 확정할 때만 저장한다 */
   var _imp = useState(null); var impPrev = _imp[0]; var setImpPrev = _imp[1];
   var _impMode = useState("merge"); var impMode = _impMode[0]; var setImpMode = _impMode[1];
@@ -5901,17 +6006,23 @@ function MyPlayersPage(p) {
       })()}
 
 
-      {/* Add Player Popup */}
+      {/* 도감에서 선수 추가 — 검색·칩 필터·끊어 그리기 */}
       {addOpen && (function() {
         var isBat = filter === "타자";
-        var dbPlayers = SEED_PLAYERS.filter(function(sp) {
-          if (isBat) return sp.role === "타자";
-          return sp.role === "투수" && sp.position === filter;
-        });
-        if (addQuery.trim()) {
-          var q2 = addQuery.trim().toLowerCase();
-          dbPlayers = dbPlayers.filter(function(sp) { return sp.name.toLowerCase().indexOf(q2) >= 0 || (sp.cardType||"").indexOf(q2) >= 0 || (sp.team||"").indexOf(q2) >= 0; });
+        var ownKey = function(sp){ return [sp.name, sp.cardType, sp.year||"", sp.impactType||"", sp.liveType||""].join("|"); };
+        var isOwned = function(sp){ return !!(ownedKeys["#" + sp.id] || ownedKeys[ownKey(sp)]); };
+        var listed = addHideOwned ? dexHits.filter(function(e){ return !isOwned(e.sp); }) : dexHits;
+        var shown = listed.slice(0, addLimit);
+        /* 이 자리에 실제로 있는 카드종류만 칩으로 보여준다 (팀 칩과 함께 좁혀진다) */
+        var typeCount = {};
+        for (var ti = 0; ti < dexIndex.length; ti++) {
+          var te = dexIndex[ti];
+          if (!dexFitsSlot(te, filter)) continue;
+          if (addTeam && (te.sp.team||"") !== addTeam) continue;
+          typeCount[te.sp.cardType] = (typeCount[te.sp.cardType]||0) + 1;
         }
+        var types = CARD_TYPES.filter(function(t){ return typeCount[t]; });
+        var chip = function(on){ return { padding:"3px 9px", fontSize:12, fontWeight:on?700:400, background:on?"var(--ta)":"transparent", border:"1px solid "+(on?"var(--acc)":"var(--bd)"), borderRadius:999, color:on?"var(--acc)":"var(--td)", cursor:"pointer", whiteSpace:"nowrap" }; };
         var addPl = function(src) {
           var id2 = "p" + Date.now() + "_" + Math.random().toString(36).slice(2,5);
           var defaultSubPos = src.role === "타자" ? (src.subPosition || "RF")
@@ -5924,6 +6035,11 @@ function MyPlayersPage(p) {
             subPosition: src.subPosition || defaultSubPos,
             year: src.year || "", team: src.team || "",
             liveType: src.liveType || "",
+            /* 도감 카드가 들고 있는 값은 같이 옮겨 온다.
+               임팩트종류가 빠지면 어느 카드인지 구분이 안 되고 "등록됨"도 못 알아본다. */
+            impactType: src.impactType || "",
+            hand: src.hand || "우",
+            stars: src.stars || 5,
             sLvManual: false,  /* 신규 선수는 스킬 레벨 자동 */
             trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0,
             specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0,
@@ -5936,44 +6052,78 @@ function MyPlayersPage(p) {
         };
         return (
           <div onClick={function(){setAddOpen(false);}} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-            <div onClick={function(e){e.stopPropagation();}} style={{ background: "var(--card)", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 440, width: "100%", maxHeight: "80vh", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
-              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--bd)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"도감에서 선수 추가"}</div>
-                  <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{filter + " · " + dbPlayers.length + "명"}</div>
+            <div onClick={function(e){e.stopPropagation();}} style={{ background: "var(--card)", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 520, width: "100%", maxHeight: "86vh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+              <div style={{ padding: "14px 18px 10px", borderBottom: "1px solid var(--bd)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"도감에서 선수 추가"}</div>
+                    <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>
+                      {filter + " · " + listed.length.toLocaleString() + "장" + (listed.length > shown.length ? (" 중 " + shown.length + "장 표시") : "")}
+                    </div>
+                  </div>
+                  <button onClick={function(){setAddOpen(false);}} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18 }}>{"\u2715"}</button>
                 </div>
-                <button onClick={function(){setAddOpen(false);}} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18 }}>{"✕"}</button>
-              </div>
-              <div style={{ padding: "8px 18px", borderBottom: "1px solid var(--bd)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, padding: "6px 10px" }}>
-                  <span style={{ fontSize: 16, opacity: 0.4 }}>{"🔍"}</span>
-                  <input type="text" value={addQuery} onChange={function(e){setAddQuery(e.target.value);}} placeholder="이름, 카드종류, 팀 검색..." style={{ flex: 1, background: "transparent", border: "none", color: "var(--t1)", fontSize: 14, outline: "none" }} />
+
+                {/* 검색 — 이름·팀·카드종류·임팩트종류·라이브종류·연도·포지션, 초성도 된다 */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, padding: "6px 10px", marginBottom: 8 }}>
+                  <span style={{ fontSize: 16, opacity: 0.4 }}>{"\uD83D\uDD0D"}</span>
+                  <input type="text" value={addQuery} autoFocus
+                    onChange={function(e){ setAddQuery(e.target.value); setAddLimit(40); }}
+                    placeholder="이름 · 팀 · 임팩트종류 · 연도 (ㄱㄷㅇ 처럼 초성도 됩니다)"
+                    style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", color: "var(--t1)", fontSize: 14, outline: "none" }} />
+                  {addQuery && (<button onClick={function(){ setAddQuery(""); setAddLimit(40); }} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 14 }}>{"\u2715"}</button>)}
+                </div>
+
+                {/* 카드종류 */}
+                <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4, marginBottom: 4 }}>
+                  <button onClick={function(){ setAddType(""); setAddLimit(40); }} style={chip(!addType)}>{"카드 전체"}</button>
+                  {types.map(function(t){ return (<button key={t} onClick={function(){ setAddType(addType===t?"":t); setAddLimit(40); }} style={chip(addType===t)}>{t + " " + typeCount[t]}</button>); })}
+                </div>
+                {/* 팀 */}
+                <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>
+                  <button onClick={function(){ setAddTeam(""); setAddLimit(40); }} style={chip(!addTeam)}>{"팀 전체"}</button>
+                  {KBO_TEAMS.map(function(t){ return (<button key={t} onClick={function(){ setAddTeam(addTeam===t?"":t); setAddLimit(40); }} style={chip(addTeam===t)}>{t}</button>); })}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  <button onClick={function(){ setAddHideOwned(!addHideOwned); setAddLimit(40); }} style={chip(addHideOwned)}>{(addHideOwned ? "\u2611 " : "\u2610 ") + "보유 카드 숨기기"}</button>
+                  {!addQuery && !addType && !addTeam && (<span style={{ fontSize: 11, color: "var(--td)" }}>{"센 카드부터 보여드립니다"}</span>)}
                 </div>
               </div>
-              <div style={{ overflowY: "auto", maxHeight: "60vh" }}>
-                {dbPlayers.length === 0 ? (
-                  <div style={{ padding: "24px 18px", textAlign: "center", color: "var(--td)", fontSize: 14 }}>{"도감에 등록된 선수가 없습니다."}</div>
-                ) : dbPlayers.map(function(sp) {
-                  var already = players.some(function(x){ return x.name===sp.name && x.cardType===sp.cardType && (x.year||"")===(sp.year||"") && (x.impactType||"")===(sp.impactType||"") && (sp.cardType!=="라이브" || (x.liveType||"")===(sp.liveType||"")); });
+
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {shown.length === 0 ? (
+                  <div style={{ padding: "28px 18px", textAlign: "center", color: "var(--td)", fontSize: 14, lineHeight: 1.6 }}>
+                    {dexIndex.length === 0 ? "도감을 불러오는 중입니다." : "찾는 카드가 없습니다."}
+                    {dexIndex.length > 0 && (<div style={{ fontSize: 12, marginTop: 6 }}>{"검색어나 칩을 바꿔 보세요."}</div>)}
+                  </div>
+                ) : shown.map(function(e) {
+                  var sp = e.sp;
+                  var already = isOwned(sp);
                   return (
                     <div key={sp.id} onClick={function(){if(!already)addPl(sp);}} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 18px", borderBottom: "1px solid var(--bd)", cursor: already?"not-allowed":"pointer", opacity: already?0.4:1 }}>
                       <PlayerCard player={sp} size="sm" />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
                           <Badge type={sp.cardType} />
                           <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 15 }}>{sp.name}</span>
                           {sp.year && (<span style={{ fontSize: 11, color: "var(--td)" }}>{sp.year}</span>)}
-                          {sp.cardType === "임팩트" && sp.impactType && (<span style={{ fontSize: 11, color: "#a78bfa", marginLeft: 2 }}>{'(' + sp.impactType + ')'}</span>)}
-                          {sp.cardType === "라이브" && sp.liveType && (<span style={{ fontSize: 11, color: "#34d399", marginLeft: 2 }}>{'(' + sp.liveType + ')'}</span>)}
+                          {sp.cardType === "임팩트" && sp.impactType && (<span style={{ fontSize: 11, color: "#a78bfa", marginLeft: 2 }}>{"(" + sp.impactType + ")"}</span>)}
+                          {sp.cardType === "라이브" && sp.liveType && (<span style={{ fontSize: 11, color: "#34d399", marginLeft: 2 }}>{"(" + sp.liveType + ")"}</span>)}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--td)", marginTop: 2 }}>
                           {isBat ? (sp.team + " · " + sp.hand + "타 · 파" + (sp.power||0) + " 정" + (sp.accuracy||0) + " 선" + (sp.eye||0)) : (sp.team + " · " + sp.hand + "투 · 변" + (sp.change||0) + " 구" + (sp.stuff||0))}
                         </div>
                       </div>
-                      {already && (<span style={{ fontSize: 11, color: "var(--acc)" }}>{"등록됨"}</span>)}
+                      {already ? (<span style={{ fontSize: 11, color: "var(--acc)", flexShrink: 0 }}>{"등록됨"}</span>)
+                               : (<span style={{ fontSize: 12, fontWeight: 700, color: "var(--t2)", flexShrink: 0 }}>{e.score.toFixed(1)}</span>)}
                     </div>
                   );
                 })}
+                {listed.length > shown.length && (
+                  <button onClick={function(){ setAddLimit(addLimit + 60); }} style={{ width: "100%", padding: "11px", fontSize: 13, fontWeight: 700, background: "var(--inner)", border: "none", borderTop: "1px solid var(--bd)", color: "var(--t2)", cursor: "pointer" }}>
+                    {"더 보기 (" + (listed.length - shown.length).toLocaleString() + "장 남음)"}
+                  </button>
+                )}
               </div>
             </div>
           </div>

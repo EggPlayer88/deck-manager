@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -752,6 +752,76 @@ eq('팀 예외가 기본값과 겹치지 않는다',
 /* 개명 결과가 또 개명 대상이면 무한 꼬임 — 그런 항목이 없어야 한다 */
 eq('개명 결과는 더 안 바뀐다',
    Object.values(PLAYER_RENAME).every(v => PLAYER_RENAME[v] === undefined) ? 1 : 0, 1);
+
+console.log('\n[도감 검색] 이름·팀·임팩트종류·초성으로 찾고, 센 카드부터 보여준다');
+eq('초성 — 김도영', choseong('김도영') === 'ㄱㄷㅇ' ? 1 : 0, 1);
+eq('초성 — 쌍자음', choseong('쌍둥이') === 'ㅆㄷㅇ' ? 1 : 0, 1);
+eq('초성 — 한글 아닌 글자는 그대로', choseong('로하스B') === 'ㄹㅎㅅB' ? 1 : 0, 1);
+eq('초성 — 빈 값', choseong('') === '' ? 1 : 0, 1);
+eq('초성질의 판정 O', isChoQuery('ㄱㄷㅇ') ? 1 : 0, 1);
+eq('초성질의 판정 X (완성형)', isChoQuery('김도') ? 1 : 0, 0);
+eq('초성질의 판정 X (섞임)', isChoQuery('ㄱ도') ? 1 : 0, 0);
+
+const W = { p: 1.0, a: 0.85, e: 0.4, n: 0.15, c: 1.05, s: 1.35 };
+const DEX = [
+  { id: 'a', name: '김도영', role: '타자', cardType: '임팩트', team: '기아', impactType: '여름사나이',
+    subPosition: '3B', power: 90, accuracy: 85, eye: 70, patience: 60 },
+  { id: 'b', name: '김도영', role: '타자', cardType: '시그니처', team: '기아', year: '2024',
+    subPosition: '3B', power: 70, accuracy: 70, eye: 60, patience: 55 },
+  { id: 'c', name: '최정', role: '타자', cardType: '임팩트', team: 'SSG', impactType: '여름사나이',
+    subPosition: '3B', power: 87, accuracy: 85, eye: 73, patience: 64 },
+  { id: 'd', name: '양현종B', role: '투수', cardType: '임팩트', team: '기아', position: '선발',
+    impactType: '여름사나이', change: 64, stuff: 66 },
+  { id: 'e', name: '박준표', role: '투수', cardType: '임팩트', team: '기아', position: '중계',
+    impactType: '여름사나이', change: 78, stuff: 77 },
+];
+const IX = buildDexIndex(DEX, W);
+const ids = (arr) => arr.map(x => x.sp.id).join('');
+
+eq('인덱스 길이', IX.length, 5);
+eq('검색용 한 줄에 임팩트종류가 들어간다', dexHay(DEX[0]).indexOf('여름사나이') >= 0 ? 1 : 0, 1);
+eq('검색용 한 줄에 팀이 들어간다', dexHay(DEX[0]).indexOf('기아') >= 0 ? 1 : 0, 1);
+eq('타자 점수 = 파1 정0.85 선0.4 인0.15',
+   Math.round(dexScore(DEX[0], W) * 100) / 100, Math.round((90 + 85 * 0.85 + 70 * 0.4 + 60 * 0.15) * 100) / 100);
+eq('투수 점수 = 변1.05 구1.35',
+   Math.round(dexScore(DEX[3], W) * 100) / 100, Math.round((64 * 1.05 + 66 * 1.35) * 100) / 100);
+
+/* 자리 구분 — 투수는 보직까지 맞아야 한다 */
+eq('타자 자리엔 타자만', ids(dexSearch(IX, '타자', '', '', '')) === 'acb' ? 1 : 0, 1);
+eq('선발 자리엔 선발만', ids(dexSearch(IX, '선발', '', '', '')) === 'd' ? 1 : 0, 1);
+eq('중계 자리엔 중계만', ids(dexSearch(IX, '중계', '', '', '')) === 'e' ? 1 : 0, 1);
+eq('마무리는 없음', dexSearch(IX, '마무리', '', '', '').length, 0);
+
+/* 질의 없으면 센 카드부터 */
+eq('점수 내림차순', ids(dexSearch(IX, '타자', '', '', '')) === 'acb' ? 1 : 0, 1);
+
+/* 이름으로 찾으면 그 선수 카드가 뭉친다 */
+eq('이름 검색', ids(dexSearch(IX, '타자', '김도영', '', '')) === 'ab' ? 1 : 0, 1);
+eq('초성 검색', ids(dexSearch(IX, '타자', 'ㄱㄷㅇ', '', '')) === 'ab' ? 1 : 0, 1);
+eq('임팩트종류 검색', ids(dexSearch(IX, '타자', '여름사나이', '', '')) === 'ac' ? 1 : 0, 1);
+eq('팀 검색', ids(dexSearch(IX, '타자', 'SSG', '', '')) === 'c' ? 1 : 0, 1);
+eq('연도 검색', ids(dexSearch(IX, '타자', '2024', '', '')) === 'b' ? 1 : 0, 1);
+eq('카드종류 검색', ids(dexSearch(IX, '타자', '시그니처', '', '')) === 'b' ? 1 : 0, 1);
+eq('없는 말', dexSearch(IX, '타자', '없는말', '', '').length, 0);
+eq('앞뒤 공백·대소문자', ids(dexSearch(IX, '투수', '', '', '')) === '' ? 1 : 0, 1);
+
+/* 이름 일치가 다른 항목 일치보다 위 */
+eq('이름 일치가 먼저', dexRank(IX[0], '김도영', false) < dexRank(IX[0], '여름사나이', false) ? 1 : 0, 1);
+eq('앞부분 일치가 부분 일치보다 위', dexRank(IX[0], '김도', false) < dexRank(IX[0], '도영', false) ? 1 : 0, 1);
+eq('안 맞으면 3', dexRank(IX[0], '없는말', false), 3);
+
+/* 칩 필터 */
+eq('카드종류 칩', ids(dexSearch(IX, '타자', '', '임팩트', '')) === 'ac' ? 1 : 0, 1);
+eq('팀 칩', ids(dexSearch(IX, '타자', '', '', '기아')) === 'ab' ? 1 : 0, 1);
+eq('칩 두 개 겹치기', ids(dexSearch(IX, '타자', '', '시그니처', '기아')) === 'b' ? 1 : 0, 1);
+eq('칩 + 검색어', ids(dexSearch(IX, '타자', 'ㄱㄷㅇ', '임팩트', '기아')) === 'a' ? 1 : 0, 1);
+eq('칩이 결과를 다 걸러내면 0', dexSearch(IX, '타자', '', '라이브', '').length, 0);
+
+/* 자리 판정 단독 */
+eq('dexFitsSlot 타자', dexFitsSlot(IX[0], '타자') ? 1 : 0, 1);
+eq('dexFitsSlot 타자에 투수 아님', dexFitsSlot(IX[3], '타자') ? 1 : 0, 0);
+eq('dexFitsSlot 선발', dexFitsSlot(IX[3], '선발') ? 1 : 0, 1);
+eq('dexFitsSlot 선발에 중계 아님', dexFitsSlot(IX[4], '선발') ? 1 : 0, 0);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
