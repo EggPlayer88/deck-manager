@@ -574,6 +574,14 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('130 우 — POTM 라이브 +1', calcSDBonus(live(), 'DH', Object.assign({ s95: '', s125: '', s110: '', s130: 'R' }, on(live())), 130, 8).a
      - calcSDBonus(live(), 'DH', Object.assign({ s95: '', s125: '', s110: '', s130: '' }, on(live())), 130, 8).a, 1);
   eq('50 우 — 올스타 POTM 은 받지 않음', sd50(ol(), 'R', on(ol())) - sd50(ol(), '', on(ol())), 0);
+  /* "라이브/스페셜 세트덱 효과 모두 적용" 은 30·50·90·130·150·170 의 우에만 있다 (2026-09-18 사용자 확인) */
+  const sdAt = (sp, v, st) => calcSDBonus(live(), 'DH', Object.assign({ s95: '', s125: '', s110: '', s30: '', s90: '', s150: '', s170: '', ['s' + sp]: v }, st), sp, 8).p;
+  eq('30·90·150·170 우 — POTM 라이브도 받는다',
+    [30, 90, 150, 170].every((sp) => sdAt(sp, 'R', on(live())) - sdAt(sp, '', on(live())) > 0) ? 1 : 0, 1);
+  eq('그 구간 우 — POTM 아닌 라이브는 0',
+    [30, 90, 150, 170].every((sp) => sdAt(sp, 'R', { teamName: K }) - sdAt(sp, '', { teamName: K }) === 0) ? 1 : 0, 1);
+  eq('모두 적용 표시는 우에만 · 여섯 구간뿐',
+    SD_RULES.filter((r) => r.who && r.who.potmLive).map((r) => r.sp + r.side).join() === '30R,50R,90R,130R,150R,170R' ? 1 : 0, 1);
 
   /* 능력치 +N 은 모든 능력치 (인내·주루·수비 포함) */
   const b0 = calcSDBonus(live(), 'DH', { teamName: K, s95: '', s125: '', s110: '' }, 0, 8);
@@ -1310,12 +1318,26 @@ console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선�
   eq('30 — 키움 덱의 키움 선수는 +1', at30(K, 30) - at30(K, 29), 1);
   eq('30 — 구단 없는 덱의 선수는 안 받음', at30('내 덱', 30) - at30('내 덱', 29), 0);
 
-  eq('30 좌 고정 — 선택 팀 타자 파워 +1', gain(bat(), 'DH', 30, undefined, 'p', 8), 1);
-  eq('30 좌 고정 — 선택 팀 타자 주루 +1 (기록만)', gain(bat(), 'DH', 30, undefined, 'run', 8), 1);
-  eq('30 좌 고정 — 타팀 타자는 0', gain(bat({ team: '두산' }), 'DH', 30, undefined, 'p', 8), 0);
-  eq('90 좌 고정 — 타팀 골든글러브 투수 구위 +2', gain(pit({ team: '두산', cardType: '골든글러브' }), 'SP1', 90, undefined, 's'), 2);
-  eq('150 좌 고정 — 선택 팀 투수 지구력 +2 (기록만)', gain(pit(), 'SP1', 150, undefined, 'sta'), 2);
-  eq('170 좌 고정 — 타팀 투수 변화 0', gain(pit({ team: 'LG' }), 'SP1', 170, undefined, 'c'), 0);
+  /* 30·90·150·170 은 예전에 좌 고정이었다. 이제 좌/우를 고르고, 저장값이 없으면 예전처럼 좌다 (SD_LEGACY_AUTO) */
+  eq('30 기본값 좌 — 선택 팀 타자 파워 +1', gain(bat(), 'DH', 30, undefined, 'p', 8), 1);
+  eq('30 기본값 좌 — 선택 팀 타자 주루 +1 (기록만)', gain(bat(), 'DH', 30, undefined, 'run', 8), 1);
+  eq('30 기본값 좌 — 타팀 타자는 0', gain(bat({ team: '두산' }), 'DH', 30, undefined, 'p', 8), 0);
+  eq('90 기본값 좌 — 타팀 골든글러브 투수 구위 +2', gain(pit({ team: '두산', cardType: '골든글러브' }), 'SP1', 90, undefined, 's'), 2);
+  eq('150 기본값 좌 — 선택 팀 투수 지구력 +2 (기록만)', gain(pit(), 'SP1', 150, undefined, 'sta'), 2);
+  eq('170 기본값 좌 — 타팀 투수 변화 0', gain(pit({ team: 'LG' }), 'SP1', 170, undefined, 'c'), 0);
+  eq('30·90·150·170 저장값이 없으면 좌',
+    [30, 90, 150, 170].every((sp) => sdPick({ teamName: K }, sp) === 'L') ? 1 : 0, 1);
+  eq('30 좌를 끄면(빈 값) 아무 효과 없음', gain(bat(), 'DH', 30, '', 'p', 8), 0);
+
+  /* 30·90·150·170 우 — 인게임처럼 고를 수 있다 (2026-09-18 사용자 확인) */
+  eq('30 우 — 타팀 임팩트 타자 +1', gain(bat({ team: '두산', cardType: '임팩트' }), 'DH', 30, 'R', 'p', 8), 1);
+  eq('30 우 — 자팀이어도 라이브는 안 받음', gain(bat({ cardType: '라이브' }), 'DH', 30, 'R', 'p', 8), 0);
+  eq('90 우 — 국가대표 투수 구위 +2', gain(pit({ cardType: '국가대표' }), 'SP1', 90, 'R', 's'), 2);
+  eq('150 우 — 시그니처 타자 인내 +2', gain(bat({ cardType: '시그니처' }), 'DH', 150, 'R', 'n', 8), 2);
+  eq('170 우 — 골든글러브 투수 변화 +1', gain(pit({ cardType: '골든글러브' }), 'SP1', 170, 'R', 'c'), 1);
+  eq('170 우 — 시즌 카드는 안 받음', gain(pit({ cardType: '시즌' }), 'SP1', 170, 'R', 'c'), 0);
+  eq('좌에는 카드 종류 조건이 없다 (선택 팀 전원)',
+    [30, 90, 150, 170].every((sp) => gain(bat({ cardType: '라이브' }), 'DH', sp, 'L', 'p', 8) > 0) ? 1 : 0, 1);
 
   eq('110 좌(드림) — 두산 타자 +1', gain(bat({ team: '두산' }), 'DH', 110, 'L', 'p', 8), 1);
   eq('110 좌(드림) — 키움 타자 0', gain(bat(), 'DH', 110, 'L', 'p', 8), 0);
@@ -1374,7 +1396,6 @@ console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선�
   /* 패널 문구(SD_ROWS)와 효과 표(SD_RULES)가 같은 모양인지 */
   const sameShape = SD_ROWS.every((r) => {
     const rs = SD_RULES.filter((x) => x.sp === r.sp);
-    if (r.type === 'auto') return rs.length === 1 && rs[0].side === 'F';
     const L = rs.find((x) => x.side === 'L'), R = rs.find((x) => x.side === 'R');
     if (rs.length !== 2 || !L || !R) return false;
     if (r.type === 'yearLR') return !!L.year && !!R.year;
@@ -1382,14 +1403,14 @@ console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선�
     return !L.year && !R.year;
   });
   eq('패널 33구간과 효과 표가 같은 모양', sameShape && SD_ROWS.length === 33 ? 1 : 0, 1);
+  eq('33구간 모두 좌/우 택1 (고정 구간 없음)',
+    SD_ROWS.every((r) => r.type !== 'auto') && SD_RULES.every((r) => r.side === 'L' || r.side === 'R') ? 1 : 0, 1);
   const keysOk = SD_RULES.every((r) => ['bat', 'pit'].every((role) =>
     !r[role] || r[role][0] === '*' || r[role][0].every((k) => (role === 'bat' ? SD_BAT_ALL : SD_PIT_ALL).includes(k))));
   eq('효과 표의 능력치 키가 모두 그 역할의 것', keysOk ? 1 : 0, 1);
 
   /* 패널 버튼은 줄임말, 원문은 마우스를 올리면 */
-  const shortOk = SD_ROWS.every((r) => (r.type === 'auto'
-    ? r.s && r.s.length <= 14 && r.desc
-    : r.l && r.r && r.l.length <= 14 && r.r.length <= 14 && r.lDesc && r.rDesc));
+  const shortOk = SD_ROWS.every((r) => r.l && r.r && r.l.length <= 14 && r.r.length <= 14 && r.lDesc && r.rDesc);
   eq('패널 버튼 글씨는 14자 이내, 원문 설명은 따로', shortOk ? 1 : 0, 1);
   eq('버튼 글씨에 "선택 팀" 이 없다', SD_ROWS.every((r) => ![r.s, r.l, r.r].some((t) => t && t.includes('선택 팀'))) ? 1 : 0, 1);
 

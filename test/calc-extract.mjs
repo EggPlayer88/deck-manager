@@ -558,7 +558,7 @@ var POS_TRAIN = {
   "RP6":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7]},
   "CP": {mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,6,7,8,8]},
 };
-var SD_LEGACY_AUTO = { "s95": "R", "s125": "L" };
+var SD_LEGACY_AUTO = { "s95": "R", "s125": "L", "s30": "L", "s90": "L", "s150": "L", "s170": "L" };
 function sdPick(sdState, sp) {
   var k = "s" + sp; var x = sdState[k];
   if (x === undefined || x === null) {
@@ -624,12 +624,14 @@ function isSelTeam(pl, sdState) {
 }
 var SD_BAT_ALL = ["p", "a", "e", "n", "run", "def"];
 var SD_PIT_ALL = ["c", "s", "vel", "ctl", "sta", "def"];
+var SD_SPECIAL_CARDS = ["임팩트", "국가대표", "시그니처", "골든글러브"];
 var SD_RULES = [
-  { sp: 30, side: "F", who: { selTeam: true }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 30, side: "L", who: { selTeam: true }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 30, side: "R", who: { cards: SD_SPECIAL_CARDS, potmLive: true }, bat: ["*", 1], pit: ["*", 1] },
   { sp: 40, side: "L", bat: ["*", 1] },
   { sp: 40, side: "R", pit: ["*", 1] },
   { sp: 50, side: "L", who: { cards: ["시즌", "라이브", "올스타"] }, bat: ["*", 1], pit: ["*", 1] },
-  { sp: 50, side: "R", who: { cards: ["임팩트", "국가대표", "시그니처", "골든글러브"], potmLive: true }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 50, side: "R", who: { cards: SD_SPECIAL_CARDS, potmLive: true }, bat: ["*", 1], pit: ["*", 1] },
   { sp: 55, side: "L", year: true, bat: [["run", "def"], 1] },
   { sp: 55, side: "R", year: true, pit: [["c", "sta"], 2] },
   { sp: 60, side: "L", bat: ["*", 1] },
@@ -644,7 +646,8 @@ var SD_RULES = [
   { sp: 80, side: "R", pit: ["*", 1] },
   { sp: 85, side: "L", who: { stars: 4 }, bat: [["p", "a", "e"], 2], pit: [["s", "ctl", "c"], 2] },
   { sp: 85, side: "R", who: { stars: 5 }, bat: [["p"], 1], pit: [["s"], 1] },
-  { sp: 90, side: "F", who: { selTeam: true }, bat: ["*", 2], pit: ["*", 2] },
+  { sp: 90, side: "L", who: { selTeam: true }, bat: ["*", 2], pit: ["*", 2] },
+  { sp: 90, side: "R", who: { cards: SD_SPECIAL_CARDS, potmLive: true }, bat: ["*", 2], pit: ["*", 2] },
   { sp: 95, side: "L", who: { pos: "infield" }, bat: [["n", "def"], 2] },
   { sp: 95, side: "R", who: { pos: "outfield" }, bat: [["e", "run"], 2] },
   { sp: 100, side: "L", bat: ["*", 1] },
@@ -660,21 +663,23 @@ var SD_RULES = [
   { sp: 125, side: "L", who: { stars: 4 }, bat: [["a", "e", "n"], 2], pit: [["vel", "c", "ctl"], 2] },
   { sp: 125, side: "R", who: { stars: 5 }, bat: [["n"], 1], pit: [["ctl"], 1] },
   { sp: 130, side: "L", who: { cards: ["시즌", "라이브", "올스타"] }, bat: ["*", 1], pit: ["*", 1] },
-  { sp: 130, side: "R", who: { cards: ["임팩트", "국가대표", "시그니처", "골든글러브"], potmLive: true }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 130, side: "R", who: { cards: SD_SPECIAL_CARDS, potmLive: true }, bat: ["*", 1], pit: ["*", 1] },
   { sp: 135, side: "L", who: { order: [3, 5] }, bat: [["a", "run", "def"], 2] },
   { sp: 135, side: "R", who: { pos: "starter" }, pit: [["ctl", "s", "sta"], 1] },
   { sp: 140, side: "L", who: { order: [6, 9] }, bat: ["*", 1] },
   { sp: 140, side: "R", who: { pos: "relief" }, pit: ["*", 1] },
   { sp: 145, side: "L", who: { order: [1, 2] }, bat: [["a", "run", "e"], 2] },
   { sp: 145, side: "R", who: { pos: "starter" }, pit: [["ctl", "s", "sta"], 1] },
-  { sp: 150, side: "F", who: { selTeam: true }, bat: ["*", 2], pit: ["*", 2] },
+  { sp: 150, side: "L", who: { selTeam: true }, bat: ["*", 2], pit: ["*", 2] },
+  { sp: 150, side: "R", who: { cards: SD_SPECIAL_CARDS, potmLive: true }, bat: ["*", 2], pit: ["*", 2] },
   { sp: 155, side: "L", who: { order: [1, 2] }, bat: [["p", "e", "n"], 2] },
   { sp: 155, side: "R", who: { pos: "starter" }, pit: [["vel", "c", "def"], 1] },
   { sp: 160, side: "L", bat: ["*", 1] },
   { sp: 160, side: "R", pit: ["*", 1] },
   { sp: 165, side: "L", bat: [["a", "run", "def"], 1] },
   { sp: 165, side: "R", pit: [["vel", "c", "def"], 1] },
-  { sp: 170, side: "F", who: { selTeam: true }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 170, side: "L", who: { selTeam: true }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 170, side: "R", who: { cards: SD_SPECIAL_CARDS, potmLive: true }, bat: ["*", 1], pit: ["*", 1] },
   { sp: 175, side: "L", bat: [["p", "e", "n"], 1] },
   { sp: 175, side: "R", pit: [["ctl", "s", "sta"], 1] },
   { sp: 180, side: "L", who: { cards: ["라이브", "올스타"] }, bat: ["*", 2], pit: ["*", 2] },
@@ -702,9 +707,9 @@ function sdWho(w, x) {
   return true;
 }
 var SD_ROWS = [
-  {sp:30,type:"auto",s:"모두 +1",desc:"선택 팀 선수 모두 +1 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +1) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:30,type:"lr",l:"모두 +1",r:"임국시골 +1",lDesc:"선택 팀 선수 모두 +1 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1 (라이브/스페셜 세트덱 효과 모두 적용 — POTM 라이브 카드도 받는다)"},
   {sp:40,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:50,type:"lr",l:"시라올 +1",r:"임국시골 +1",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1 (POTM 받은 라이브 포함)"},
+  {sp:50,type:"lr",l:"시라올 +1",r:"임국시골 +1",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1 (라이브/스페셜 세트덱 효과 모두 적용 — POTM 라이브 카드도 받는다)"},
   {sp:55,type:"yearLR",l:"연도 주수 +1",r:"연도 변지 +2",lDesc:"선택 연도 타자 주루/수비 +1 (임팩트는 어느 연도든)",rDesc:"선택 연도 투수 변화/지구력 +2 (임팩트는 어느 연도든)"},
   {sp:60,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
   {sp:65,type:"lr",l:"3성 +2",r:"4성 정인·속제 +2",lDesc:"3성 +2",rDesc:"4성 타자 정확/인내 +2 · 4성 투수 구속/제구 +2"},
@@ -712,7 +717,7 @@ var SD_ROWS = [
   {sp:75,type:"yearLR",l:"연도 파정 +3",r:"연도 구제 +3",lDesc:"선택 연도 타자 파워/정확 +3 (임팩트는 어느 연도든)",rDesc:"선택 연도 투수 구위/제구 +3 (임팩트는 어느 연도든)"},
   {sp:80,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
   {sp:85,type:"lr",l:"4성 파정선·구제변 +2",r:"5성 파·구 +1",lDesc:"4성 타자 파워/정확/선구 +2 · 4성 투수 구위/제구/변화 +2",rDesc:"5성 타자 파워 +1 · 5성 투수 구위 +1"},
-  {sp:90,type:"auto",s:"모두 +2",desc:"선택 팀 선수 모두 +2 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +2) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:90,type:"lr",l:"모두 +2",r:"임국시골 +2",lDesc:"선택 팀 선수 모두 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"임팩트/국가대표/시그니처/골든글러브 +2 (라이브/스페셜 세트덱 효과 모두 적용 — POTM 라이브 카드도 받는다)"},
   {sp:95,type:"lr",l:"내야 인수 +2",r:"외야 선주 +2",lDesc:"내야/포수 인내/수비 +2",rDesc:"외야/지명 선구/주루 +2"},
   {sp:100,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
   {sp:105,type:"lr",l:"3성 +2",r:"4성 파선·구변 +2",lDesc:"3성 +2",rDesc:"4성 타자 파워/선구 +2 · 4성 투수 구위/변화 +2"},
@@ -720,15 +725,15 @@ var SD_ROWS = [
   {sp:115,type:"lr",l:"6~9번 정주수 +2",r:"불펜 제구지 +2",lDesc:"6~9번 정확/주루/수비 +2",rDesc:"중계/마무리 제구/구위/지구력 +2"},
   {sp:120,type:"lr",l:"3~5번 +2",r:"선발 +1",lDesc:"3~5번 모두 +2",rDesc:"선발 +1"},
   {sp:125,type:"lr",l:"4성 정선인·속변제 +2",r:"5성 인·제 +1",lDesc:"4성 타자 정확/선구/인내 +2 · 4성 투수 구속/변화/제구 +2",rDesc:"5성 타자 인내 +1 · 5성 투수 제구 +1"},
-  {sp:130,type:"lr",l:"시라올 +1",r:"임국시골 +1",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1 (POTM 받은 라이브 포함)"},
+  {sp:130,type:"lr",l:"시라올 +1",r:"임국시골 +1",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1 (라이브/스페셜 세트덱 효과 모두 적용 — POTM 라이브 카드도 받는다)"},
   {sp:135,type:"lr",l:"3~5번 정주수 +2",r:"선발 제구지 +1",lDesc:"3~5번 정확/주루/수비 +2",rDesc:"선발 제구/구위/지구력 +1"},
   {sp:140,type:"lr",l:"6~9번 +1",r:"불펜 +1",lDesc:"6~9번 +1",rDesc:"중계/마무리 +1"},
   {sp:145,type:"lr",l:"1~2번 정주선 +2",r:"선발 제구지 +1",lDesc:"1~2번 정확/주루/선구 +2",rDesc:"선발 제구/구위/지구력 +1"},
-  {sp:150,type:"auto",s:"모두 +2",desc:"선택 팀 선수 모두 +2 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +2) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:150,type:"lr",l:"모두 +2",r:"임국시골 +2",lDesc:"선택 팀 선수 모두 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"임팩트/국가대표/시그니처/골든글러브 +2 (라이브/스페셜 세트덱 효과 모두 적용 — POTM 라이브 카드도 받는다)"},
   {sp:155,type:"lr",l:"1~2번 파선인 +2",r:"선발 속변수 +1",lDesc:"1~2번 파워/선구/인내 +2",rDesc:"선발 구속/변화/수비 +1"},
   {sp:160,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
   {sp:165,type:"lr",l:"타자 정주수 +1",r:"투수 속변수 +1",lDesc:"타자 정확/주루/수비 +1",rDesc:"투수 구속/변화/수비 +1"},
-  {sp:170,type:"auto",s:"모두 +1",desc:"선택 팀 선수 모두 +1 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +1) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:170,type:"lr",l:"모두 +1",r:"임국시골 +1",lDesc:"선택 팀 선수 모두 +1 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1 (라이브/스페셜 세트덱 효과 모두 적용 — POTM 라이브 카드도 받는다)"},
   {sp:175,type:"lr",l:"타자 파선인 +1",r:"투수 제구지 +1",lDesc:"타자 파워/선구/인내 +1",rDesc:"투수 제구/구위/지구력 +1"},
   {sp:180,type:"lrYear",l:"라올 +2",r:"연도 +1",lDesc:"라이브/올스타 +2",rDesc:"선택 연도 모두 +1 (임팩트는 어느 연도든)"},
   {sp:185,type:"lrYear",l:"1~2번 파주 +2",r:"연도 타자 +1",lDesc:"1~2번 파워/주루 +2",rDesc:"선택 연도 타자 +1 (임팩트는 어느 연도든)"},
@@ -1349,11 +1354,9 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
     if (!act(r.sp)) return;
     var eff = isBat ? r.bat : r.pit;
     if (!eff) return;
-    if (r.side !== "F") {
-      var got = sdSideOf(sdPick(sdState, r.sp));
-      if (got.side !== r.side) return;
-      if (r.year && ct !== "임팩트" && !(got.year && String(pl.year) === got.year)) return;
-    }
+    var got = sdSideOf(sdPick(sdState, r.sp));
+    if (got.side !== r.side) return;
+    if (r.year && ct !== "임팩트" && !(got.year && String(pl.year) === got.year)) return;
     if (!sdWho(r.who, x)) return;
     var keys = eff[0] === "*" ? (isBat ? SD_BAT_ALL : SD_PIT_ALL) : eff[0];
     keys.forEach(function(k) { S[k] += eff[1]; });
