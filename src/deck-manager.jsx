@@ -573,31 +573,46 @@ var KBO_LEAGUE = { "두산": "드림", "롯데": "드림", "삼성": "드림", "
   "기아": "나눔", "한화": "나눔", "LG": "나눔", "NC": "나눔", "키움": "나눔" };
 /* 예전에 "KIA" 로 저장된 구단은 "기아" 로 본다 (덱은 로그인할 때 바뀌지만 선수 기록에는 남을 수 있다) */
 function teamKey(t) { return t === "KIA" ? "기아" : (t || ""); }
+/* 덱 구단 추천 — 라인업 선수(라인업이 비었으면 보유 선수) 중 가장 많은 KBO 구단.
+   수가 같으면 KBO_TEAMS 순서가 앞선 쪽. 구단 선택 창에 "추천"으로 표시한다 */
+function suggestDeckTeam(players, lineupMap) {
+  var ids = {};
+  Object.keys(lineupMap || {}).forEach(function(k) { var v = lineupMap[k]; if (v) ids[v] = 1; });
+  var useAll = Object.keys(ids).length === 0;
+  var cnt = {};
+  (players || []).forEach(function(pl) {
+    if (!pl || (!useAll && !ids[pl.id])) return;
+    var t = teamKey(pl.team);
+    if (KBO_LEAGUE[t]) cnt[t] = (cnt[t] || 0) + 1;
+  });
+  var best = "";
+  KBO_TEAMS.forEach(function(t) { if (cnt[t] && (!best || cnt[t] > cnt[best])) best = t; });
+  return best;
+}
 /* 저장된 선택을 돌려준다. 저장값이 없을 때
    - 95 는 우, 125 는 좌 (위)
-   - 110 은 덱 구단이 속한 리그 쪽. 덱 구단을 모르면(예전 '내 덱') 양쪽 모두 "B"
+   - 110 은 덱 구단이 속한 리그 쪽 (덱마다 구단을 반드시 고른다)
    55 는 예전에 연도만 저장했다(우 효과뿐이었다) — "R:연도" 로 읽는다 */
 function sdPick(sdState, sp) {
   var k = "s" + sp; var x = sdState[k];
   if (x === undefined || x === null) {
-    if (sp === 110) { var lg = KBO_LEAGUE[teamKey(sdState.teamName)]; return lg === "드림" ? "L" : lg === "나눔" ? "R" : "B"; }
+    if (sp === 110) { var lg = KBO_LEAGUE[teamKey(sdState.teamName)]; return lg === "드림" ? "L" : lg === "나눔" ? "R" : ""; }
     return SD_LEGACY_AUTO[k] || "";
   }
   if (sp === 55 && /^\d{4}$/.test(String(x))) return "R:" + x;
   return x;
 }
-/* 저장값("L" "R" "B" "L:2010" "R:") → 고른 쪽과 연도 */
+/* 저장값("L" "R" "L:2010" "R:") → 고른 쪽과 연도 */
 function sdSideOf(val) {
   var s = String(val || ""), c = s.charAt(0), at = s.indexOf(":");
-  return { side: (c === "L" || c === "R" || s === "B") ? c : "", year: at > 0 ? s.slice(at + 1) : "" };
+  return { side: (c === "L" || c === "R") ? c : "", year: at > 0 ? s.slice(at + 1) : "" };
 }
 /* 세트덱의 "선택 팀" — 덱 구단 선수. 골든글러브 카드, FA 로 쓴 타팀 선수,
    와일드카드로 쓴 국가대표 선수(곧 추가)도 선택 팀으로 친다.
-   덱 구단이 KBO 구단이 아니면(예전 '내 덱') 가릴 수 없으니 모두 선택 팀으로 본다 */
+   덱 구단은 덱마다 반드시 고른다 — 구단 없는 예전 '내 덱'은 열 때 고르게 한다 (TeamPickModal) */
 function isSelTeam(pl, sdState) {
   var team = teamKey(sdState && sdState.teamName);
-  if (!KBO_LEAGUE[team]) return true;
-  return teamKey(pl.team) === team || pl.cardType === "골든글러브" || !!pl.isFa ||
+  return (!!KBO_LEAGUE[team] && teamKey(pl.team) === team) || pl.cardType === "골든글러브" || !!pl.isFa ||
     (pl.cardType === "국가대표" && !!pl.isWildcard);
 }
 
@@ -715,7 +730,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
     if (!eff) return;
     if (r.side !== "F") {
       var got = sdSideOf(sdPick(sdState, r.sp));
-      if (got.side !== r.side && got.side !== "B") return;
+      if (got.side !== r.side) return;
       if (r.year && ct !== "임팩트" && !(got.year && String(pl.year) === got.year)) return;
     }
     if (!sdWho(r.who, x)) return;
@@ -840,6 +855,25 @@ function makeDeckWriter(waitMs) {
   };
 }
 
+/* 옛 형식 줄(선수·라인업·세트덱 설정이 맨 위, decks 없음)을 덱별 형식으로 바꾼다.
+   맨 위 데이터는 주인 덱으로 옮긴다 — 예전 '내 덱'(dk_legacy_) → 줄에 저장된 지금 덱 → fallbackId 순.
+   빈 decks 만 붙이면 불러오기(loadDeckData)가 decks 쪽만 봐서 맨 위 데이터가 사라진 것처럼 보인다 */
+function toDeckFormat(all, list, fallbackId) {
+  if (all && all.decks) return all;
+  var src = all || {};
+  var out = {};
+  Object.keys(src).forEach(function(k) { if (k !== "players" && k !== "lineupMap" && k !== "sdConfig") out[k] = src[k]; });
+  out.decks = {};
+  out.deckList = src.deckList || [];
+  out.deckCurrent = src.deckCurrent || "";
+  if (src.players || src.lineupMap || src.sdConfig) {
+    var legacy = (list || out.deckList).filter(function(d) { return d && String(d.deckId || "").indexOf("dk_legacy_") === 0; })[0];
+    var owner = legacy ? legacy.deckId : (src.deckCurrent || fallbackId || "");
+    if (owner) out.decks[owner] = { players: src.players || [], lineupMap: src.lineupMap || {}, sdConfig: src.sdConfig || { liveSetPo: 0 } };
+  }
+  return out;
+}
+
 function useData(userId, sdState, setSdState, curDeckId){
   var _p=useState([]);var players=_p[0];var setPlayers=_p[1];
   var _lm=useState({});var lineupMap=_lm[0];var setLineupMap=_lm[1];
@@ -877,9 +911,7 @@ function useData(userId, sdState, setSdState, curDeckId){
       allDataRef.current = all;
     }
     if (!all.decks) {
-      var migrated = { players: all.players||[], lineupMap: all.lineupMap||{}, sdConfig: all.sdConfig||{liveSetPo:0} };
-      all = { decks: {}, deckList: all.deckList||[], deckCurrent: all.deckCurrent||'' };
-      all.decks[deckId] = migrated;
+      all = toDeckFormat(all, await sGet("deck-list"), deckId);
       allDataRef.current = all;
     }
     /* deckList/deckCurrent는 localStorage(saveDecks가 항상 최신으로 유지)에서 읽어 보존
@@ -3612,7 +3644,6 @@ function LineupPage(p) {
     );
   };
 
-  var _teamDrop = useState(false); var teamDropOpen = _teamDrop[0]; var setTeamDrop = _teamDrop[1];
   /* 고점판독기 버튼 — PC 는 TOTAL SCORE 왼쪽, 모바일은 덱 선택 줄 오른쪽 끝.
      켜져 있는 동안은 "현실로 돌아오기" 가 된다 */
   var peakBtn = (
@@ -3624,8 +3655,8 @@ function LineupPage(p) {
       <span aria-hidden="true" style={{ fontSize: mob ? 13 : 14 }}>{peakOn ? "↩" : "🔍"}</span>{peakOn ? "현실로 돌아오기" : "고점판독기"}
     </button>
   );
-  var teamName = sdState.teamName || "";
-  var selectTeam = function(t) { setSdState(function(prev) { return Object.assign({}, prev, {teamName: t}); }); setTeamDrop(false); };
+  /* 가중치 줄은 줄임말, 원래 이름은 마우스를 올리면 */
+  var wNow = getW();
 
   return (
     <div style={{ padding: mob ? 12 : 18, maxWidth: 1200, paddingBottom: mob ? 80 : 18 }}>
@@ -3633,10 +3664,11 @@ function LineupPage(p) {
       <div style={{ display: "flex", alignItems: mob ? "flex-start" : "center", justifyContent: "space-between", flexDirection: mob ? "column" : "row", gap: 8, marginBottom: 14, padding: mob ? 14 : "18px 20px", background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)" }}>
         <div style={mob ? { width: "100%" } : undefined}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <DeckDropdown decks={p.decks||[]} curDeckId={p.curDeckId} onSwitch={p.onSwitchDeck} onAdd={p.onAddDeck} onDelete={p.onDeleteDeck}/>
+            <DeckDropdown decks={p.decks||[]} curDeckId={p.curDeckId} onSwitch={p.onSwitchDeck} onAdd={p.onAddDeck} onDelete={p.onDeleteDeck} onChangeTeam={p.onChangeTeam}/>
             {mob && (<div style={{ marginLeft: "auto" }}>{peakBtn}</div>)}
           </div>
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--td)" }}>{"가중치: 파워 " + getW().p + " / 정확 " + getW().a + " / 선구 " + getW().e + " / 인내 " + getW().n + " / 변화 " + getW().c + " / 구위 " + getW().s}</p>
+          <p title={"가중치 — 파워 " + wNow.p + " / 정확 " + wNow.a + " / 선구 " + wNow.e + " / 인내 " + wNow.n + " / 변화 " + wNow.c + " / 구위 " + wNow.s}
+            style={{ margin: "2px 0 0", fontSize: 12, color: "var(--td)" }}>{"가중치: 파 " + wNow.p + " / 정 " + wNow.a + " / 선 " + wNow.e + " / 인 " + wNow.n + " / 변 " + wNow.c + " / 구 " + wNow.s}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {!mob && peakBtn}
@@ -4094,7 +4126,7 @@ function PolicyModal(p) {
         <p>{"상단의 'Google 계정으로 시작하기' 버튼을 눌러 로그인하면 최대 5개 팀을 클라우드에 저장할 수 있고, 휴대폰과 PC에서 동일한 데이터를 확인할 수 있습니다. 간단히 체험해 보고 싶다면 '게스트로 시작하기'를 선택해 닉네임만 입력하고 바로 사용할 수 있습니다."}</p>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"2단계. 팀 선택"}</h3>
-        <p>{"로그인 직후 나타나는 팀 선택 창에서 원하는 KBO 구단(키움, 삼성, LG, 두산, KT, SSG, 롯데, 한화, NC, 기아)을 선택합니다. 여기서 고르는 팀은 '덱 이름'으로만 사용되며, 실제 선수 소속팀과는 관계가 없습니다. 예를 들어 LG 덱 안에 키움 선수를 편성해도 전혀 문제가 없습니다."}</p>
+        <p>{"로그인 직후 나타나는 팀 선택 창에서 원하는 KBO 구단(키움, 삼성, LG, 두산, KT, SSG, 롯데, 한화, NC, 기아)을 선택합니다. 여기서 고른 구단이 세트덱의 '선택 팀'과 드림/나눔 기준이 됩니다. 다른 구단 선수도 편성할 수 있지만, 선택 팀 효과는 이 구단 선수(골든글러브·FA로 쓴 선수 포함)만 받습니다. 구단은 덱 목록의 '구단 변경'으로 바꿀 수 있습니다."}</p>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"3단계. 선수 추가"}</h3>
         <p>{"'내 선수' 탭으로 이동하여 보유하고 있는 선수를 추가합니다. 선수 이름을 검색하면 DB에 등록된 기본 정보(포지션, 연도, 카드 종류 등)가 자동으로 불러와집니다. 이어서 강화 수치, 특능 수치, 훈련 수치, 스킬 레벨, 잠재력 등급 등 세부 정보를 입력하면 전력 계산에 반영됩니다."}</p>
@@ -4412,7 +4444,7 @@ function LoginPage(p) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {[
-              { n: "01", t: "로그인 및 팀 선택", d: "상단 로그인 카드에서 Google 계정으로 로그인하거나 게스트 모드를 이용합니다. 로그인 후 나타나는 10개의 KBO 구단 중 하나를 선택해 첫 덱을 만듭니다. 이때 고르는 팀은 단순히 덱 이름으로 사용되므로, 내가 응원하는 구단이나 기억하기 쉬운 이름을 고르시면 됩니다." },
+              { n: "01", t: "로그인 및 팀 선택", d: "상단 로그인 카드에서 Google 계정으로 로그인하거나 게스트 모드를 이용합니다. 로그인 후 나타나는 10개의 KBO 구단 중 하나를 선택해 첫 덱을 만듭니다. 이때 고른 구단이 세트덱의 '선택 팀'과 드림/나눔 기준이 되며, 나중에 덱 목록에서 바꿀 수 있습니다." },
               { n: "02", t: "선수 입력 및 강화 수치 기록", d: "'내 선수' 탭에서 보유한 선수를 하나씩 추가합니다. 선수명을 검색하면 해당 카드의 기본 정보가 자동으로 불러와지며, 이어서 강화 단계(+0~+18), 특수능력 수치, 훈련 수치, 스킬과 스킬 레벨, 잠재력 등급을 입력하면 됩니다. 모든 데이터는 입력 즉시 자동 저장됩니다." },
               { n: "03", t: "라인업 배치 및 전력 확인", d: "'라인업' 탭에서 추가한 선수들을 타순대로 배치하고 투수 로테이션을 지정합니다. 배치가 완료되면 총 전력 점수, 공격·수비·투수 세부 점수, 활성화된 세트덱 보너스가 화면에 표시됩니다. '데이터 센터'에서는 더 자세한 분석과 전체 이용자 대비 백분위를 확인할 수 있습니다." }
             ].map(function(s, i) {
@@ -4552,7 +4584,7 @@ function LoginPage(p) {
    ================================================================ */
 /* ── 덱 드롭다운: 팀 이름 클릭 → 내 덱 리스트 + 추가 버튼 ── */
 function DeckDropdown(p){
-  /* props: decks, curDeckId, onSwitch(deckId), onAdd(), onDelete(deckId) */
+  /* props: decks, curDeckId, onSwitch(deckId), onAdd(), onDelete(deckId), onChangeTeam() — 지금 덱의 구단 바꾸기 */
   var _open=useState(false);var open=_open[0];var setOpen=_open[1];
   var _confirmDel=useState(null);var confirmDel=_confirmDel[0];var setConfirmDel=_confirmDel[1];
   var cur=(p.decks||[]).find(function(d){return d.deckId===p.curDeckId;})||(p.decks&&p.decks[0])||null;
@@ -4598,6 +4630,13 @@ function DeckDropdown(p){
                 </div>
               );
             })}
+            {p.onChangeTeam&&cur&&(
+              <button onClick={function(){p.onChangeTeam();setOpen(false);setConfirmDel(null);}}
+                style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"10px 14px",background:"transparent",border:"none",borderBottom:"1px solid var(--bd)",color:"var(--t2)",fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left"}}>
+                <span>{"구단 변경"}</span>
+                <span style={{fontSize:11,color:"var(--td)"}}>{"지금 덱"}</span>
+              </button>
+            )}
             {canAdd&&(
               <button onClick={function(){p.onAdd();setOpen(false);}}
                 style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"10px 14px",background:"transparent",border:"none",color:"#81C784",fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left"}}>
@@ -4615,11 +4654,41 @@ function DeckDropdown(p){
   );
 }
 
+/* ── 덱 구단 고르기 — 구단 없는 예전 '내 덱'을 열면 바로 뜨고(forced: 닫기 없음),
+   덱 목록의 "구단 변경"으로도 연다. 라인업 선수가 가장 많은 구단에 "추천"을 붙인다 ── */
+function TeamPickModal(p){
+  var best=suggestDeckTeam(p.players,p.lineupMap);
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div role="dialog" aria-modal="true" aria-labelledby="team-pick-title"
+        style={{background:"var(--side)",borderRadius:16,border:"1px solid var(--bd)",boxShadow:"0 12px 32px rgba(0,0,0,0.5)",padding:p.mobile?20:28,maxWidth:380,width:"100%",textAlign:"center"}}>
+        <h2 id="team-pick-title" style={{margin:"0 0 6px",fontSize:20,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--acc)"}}>{p.forced?"구단 선택":"구단 변경"}</h2>
+        <p style={{margin:"0 0 4px",fontSize:13,color:"var(--t2)"}}>{p.forced?"이 덱은 구단이 정해지지 않았어요":"지금 구단: "+p.current}</p>
+        <p style={{margin:"0 0 16px",fontSize:12,color:"var(--td)"}}>{"세트덱 선택 팀·드림/나눔 기준"}</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {KBO_TEAMS.map(function(t){
+            var isBest=t===best, isCur=t===p.current;
+            return(
+              <button key={t} onClick={function(){ if(isCur) p.onCancel(); else p.onPick(t); }}
+                title={isBest?"라인업 선수가 가장 많은 구단 (라인업이 비면 보유 선수 기준)":undefined} aria-pressed={isCur}
+                style={{position:"relative",padding:"12px 0",fontSize:15,fontWeight:800,fontFamily:"var(--h)",letterSpacing:2,background:isCur?"var(--ta)":"var(--inner)",border:"1px solid "+(isBest||isCur?"var(--acc)":"var(--bd)"),borderRadius:8,color:isCur?"var(--acc)":"var(--t1)",cursor:"pointer"}}>
+                {t}
+                {isBest&&(<span style={{position:"absolute",top:-8,right:6,fontSize:10,fontWeight:700,letterSpacing:0,padding:"1px 5px",borderRadius:4,background:"var(--acc)",color:"var(--bg)"}}>{"추천"}</span>)}
+              </button>
+            );
+          })}
+        </div>
+        {!p.forced&&(<button onClick={p.onCancel} style={{marginTop:14,padding:"8px 20px",fontSize:13,background:"transparent",border:"1px solid var(--bd)",borderRadius:8,color:"var(--td)",cursor:"pointer"}}>{"취소"}</button>)}
+      </div>
+    </div>
+  );
+}
+
 function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
   var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",icon:"👥"},{id:"postrain",label:"포지션 특훈",icon:"🏋️"},{id:"locker",label:"라커룸",icon:"🏠"},{id:"datacenter",label:"데이터센터",icon:"📊"},{id:"clublounge",label:"클럽라운지",icon:"🎙️",soon:true}];
   if(p.isAdmin){tabs.splice(4,0,{id:"db",label:"선수도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
-  var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck};
+  var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck,onChangeTeam:p.onChangeTeam};
 
   if(p.mobile){return(
     <React.Fragment>
@@ -8078,6 +8147,8 @@ export default function App(){
   var _curId=useState(null);var curDeckId=_curId[0];var setCurDeckId=_curId[1];
   /* showTeamSelect: "first"(첫 덱 추가), "add"(추가 덱), false(숨김) */
   var _sts=useState(false);var showTeamSelect=_sts[0];var setShowTeamSelect=_sts[1];
+  /* teamPick: 덱 목록의 "구단 변경"으로 연 구단 선택 창 (구단 없는 덱이면 이 값과 관계없이 뜬다) */
+  var _tpk=useState(false);var teamPick=_tpk[0];var setTeamPick=_tpk[1];
 
   var store=useData(userId,sdState,setSdState,curDeckId);
 
@@ -8114,7 +8185,8 @@ export default function App(){
         try{
           var all=store.allDataRef ? store.allDataRef.current : null;
           if(!all) all=await loadUserData(userId)||{};
-          if(!all.decks) all.decks={};
+          /* 옛 형식 줄이면 맨 위 데이터를 주인 덱('내 덱')으로 옮긴 뒤에 목록을 쓴다 */
+          all=toDeckFormat(all,list,curId);
           all.deckList=list;
           all.deckCurrent=curId;
           /* allDataRef 캐시도 동기화 */
@@ -8138,8 +8210,7 @@ export default function App(){
       /* localStorage에서 가져왔으면 Supabase에 즉시 동기화 */
       if(!fromSupabase && list && list.length>0 && supabase){
         try{
-          var all=await loadUserData(userId)||{};
-          if(!all.decks)all.decks={};
+          var all=toDeckFormat(await loadUserData(userId)||{},list,savedCurId);
           all.deckList=list;
           all.deckCurrent=savedCurId;
           await saveUserData(userId,all);
@@ -8177,9 +8248,8 @@ export default function App(){
           await sSet("deck-list", list);
           if (supabase && userId) {
             try {
-              var allM = store.allDataRef && store.allDataRef.current
-                ? store.allDataRef.current : (await loadUserData(userId) || {});
-              if (!allM.decks) allM.decks = {};
+              var allM = toDeckFormat(store.allDataRef && store.allDataRef.current
+                ? store.allDataRef.current : (await loadUserData(userId) || {}), list, savedCurId);
               allM.deckList = list;
               if (savedCurId) allM.deckCurrent = savedCurId;
               if (store.allDataRef) store.allDataRef.current = allM;
@@ -8265,12 +8335,20 @@ export default function App(){
     setCurDeckId(deckId);
     await saveDecks(decks,deckId);
   };
+  /* ── 지금 덱의 구단 정하기/바꾸기 — 덱 데이터는 그대로, 목록의 teamName 만 바뀐다 ── */
+  var handleSetDeckTeam=async function(teamName){
+    var id=curDeckId;
+    var newList=decks.map(function(d){return d.deckId===id?Object.assign({},d,{teamName:teamName}):d;});
+    setDecks(newList);
+    setTeamPick(false);
+    await saveDecks(newList,id);
+  };
 
   /* ── 로그아웃 ── */
   var lo=function(){
     if(supabase){signOut();}
     setLi(false);setUser("");setAuthType("");setTab("lineup");setAdmin(false);setUserId(null);
-    setDecks([]);setCurDeckId(null);setShowTeamSelect(false);setSdState({liveSetPo:0});
+    setDecks([]);setCurDeckId(null);setShowTeamSelect(false);setTeamPick(false);setSdState({liveSetPo:0});
   };
 
   var CSS=(<style>{"\
@@ -8300,7 +8378,7 @@ export default function App(){
           <div style={{fontSize:48,marginBottom:12}}>{"⚾"}</div>
           <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--acc)"}}>{isFirst?"팀 선택":"덱 추가"}</h2>
           <p style={{margin:"0 0 6px",fontSize:14,color:"var(--td)"}}>{isFirst?"덱 매니저에서 사용할 팀을 선택하세요":"추가할 팀을 선택하세요"}</p>
-          <p style={{margin:"0 0 18px",fontSize:12,color:"var(--td)"}}>{isFirst?"팀 선택은 덱 저장 이름입니다. 선수 팀 정보와는 무관합니다":decks.length+"/5 덱 사용 중"}</p>
+          <p style={{margin:"0 0 18px",fontSize:12,color:"var(--td)"}}>{isFirst?"고른 구단이 세트덱 선택 팀·드림/나눔 기준이 됩니다":decks.length+"/5 덱 사용 중"}</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             {KBO_TEAMS.map(function(t){return(
               <button key={t} onClick={function(){handleSelectTeam(t);}}
@@ -8321,7 +8399,7 @@ export default function App(){
   if(store.loading||!curDeckId)return(<div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
 
   var pg=null;
-  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} userId={userId}/>);
+  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} potmList={store.potmList} setPotmList={store.savePotmList} isAdmin={isAdmin}/>);
@@ -8332,6 +8410,9 @@ export default function App(){
   else if(tab==="clublounge")pg=(<ClubLoungePage mobile={mob}/>);
   else pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin}/>);
 
+  /* 구단 없는 덱(예전 '내 덱')은 구단을 고를 때까지 선택 창을 띄운다 — 세트덱 선택 팀·드림/나눔이 덱 구단을 따른다 */
+  var needTeam=!!curDeckObj&&KBO_TEAMS.indexOf(teamKey(curDeckObj.teamName))<0;
+
   return(
     <div className={theme==="light"?"light":""} style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
       <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin}
@@ -8339,8 +8420,14 @@ export default function App(){
         onSwitchDeck={handleSwitchDeck}
         onAddDeck={function(){setShowTeamSelect("add");}}
         onDeleteDeck={handleDeleteDeck}
+        onChangeTeam={function(){setTeamPick(true);}}
         theme={theme} toggleTheme={toggleTheme}/>
       <div style={{flex:1,overflowY:"auto",minHeight:"100vh",paddingTop:mob?44:(tbl?50:0)}}>{pg}</div>
+      {(needTeam||teamPick)&&curDeckObj&&(
+        <TeamPickModal mobile={mob} forced={needTeam} current={needTeam?"":teamKey(curDeckObj.teamName)}
+          players={store.players} lineupMap={store.lineupMap}
+          onPick={handleSetDeckTeam} onCancel={function(){setTeamPick(false);}}/>
+      )}
       {CSS}
     </div>
   );

@@ -459,23 +459,37 @@ var SD_LEGACY_AUTO = { "s95": "R", "s125": "L" };
 function sdPick(sdState, sp) {
   var k = "s" + sp; var x = sdState[k];
   if (x === undefined || x === null) {
-    if (sp === 110) { var lg = KBO_LEAGUE[teamKey(sdState.teamName)]; return lg === "드림" ? "L" : lg === "나눔" ? "R" : "B"; }
+    if (sp === 110) { var lg = KBO_LEAGUE[teamKey(sdState.teamName)]; return lg === "드림" ? "L" : lg === "나눔" ? "R" : ""; }
     return SD_LEGACY_AUTO[k] || "";
   }
   if (sp === 55 && /^\d{4}$/.test(String(x))) return "R:" + x;
   return x;
 }
+var KBO_TEAMS = ["키움","삼성","LG","두산","KT","SSG","롯데","한화","NC","기아"];
 var KBO_LEAGUE = { "두산": "드림", "롯데": "드림", "삼성": "드림", "SSG": "드림", "KT": "드림",
   "기아": "나눔", "한화": "나눔", "LG": "나눔", "NC": "나눔", "키움": "나눔" };
 function teamKey(t) { return t === "KIA" ? "기아" : (t || ""); }
+function suggestDeckTeam(players, lineupMap) {
+  var ids = {};
+  Object.keys(lineupMap || {}).forEach(function(k) { var v = lineupMap[k]; if (v) ids[v] = 1; });
+  var useAll = Object.keys(ids).length === 0;
+  var cnt = {};
+  (players || []).forEach(function(pl) {
+    if (!pl || (!useAll && !ids[pl.id])) return;
+    var t = teamKey(pl.team);
+    if (KBO_LEAGUE[t]) cnt[t] = (cnt[t] || 0) + 1;
+  });
+  var best = "";
+  KBO_TEAMS.forEach(function(t) { if (cnt[t] && (!best || cnt[t] > cnt[best])) best = t; });
+  return best;
+}
 function sdSideOf(val) {
   var s = String(val || ""), c = s.charAt(0), at = s.indexOf(":");
-  return { side: (c === "L" || c === "R" || s === "B") ? c : "", year: at > 0 ? s.slice(at + 1) : "" };
+  return { side: (c === "L" || c === "R") ? c : "", year: at > 0 ? s.slice(at + 1) : "" };
 }
 function isSelTeam(pl, sdState) {
   var team = teamKey(sdState && sdState.teamName);
-  if (!KBO_LEAGUE[team]) return true;
-  return teamKey(pl.team) === team || pl.cardType === "골든글러브" || !!pl.isFa ||
+  return (!!KBO_LEAGUE[team] && teamKey(pl.team) === team) || pl.cardType === "골든글러브" || !!pl.isFa ||
     (pl.cardType === "국가대표" && !!pl.isWildcard);
 }
 var SD_BAT_ALL = ["p", "a", "e", "n", "run", "def"];
@@ -1168,7 +1182,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
     if (!eff) return;
     if (r.side !== "F") {
       var got = sdSideOf(sdPick(sdState, r.sp));
-      if (got.side !== r.side && got.side !== "B") return;
+      if (got.side !== r.side) return;
       if (r.year && ct !== "임팩트" && !(got.year && String(pl.year) === got.year)) return;
     }
     if (!sdWho(r.who, x)) return;
@@ -1336,6 +1350,21 @@ function makeDeckWriter(waitMs) {
     }
   };
 }
+function toDeckFormat(all, list, fallbackId) {
+  if (all && all.decks) return all;
+  var src = all || {};
+  var out = {};
+  Object.keys(src).forEach(function(k) { if (k !== "players" && k !== "lineupMap" && k !== "sdConfig") out[k] = src[k]; });
+  out.decks = {};
+  out.deckList = src.deckList || [];
+  out.deckCurrent = src.deckCurrent || "";
+  if (src.players || src.lineupMap || src.sdConfig) {
+    var legacy = (list || out.deckList).filter(function(d) { return d && String(d.deckId || "").indexOf("dk_legacy_") === 0; })[0];
+    var owner = legacy ? legacy.deckId : (src.deckCurrent || fallbackId || "");
+    if (owner) out.decks[owner] = { players: src.players || [], lineupMap: src.lineupMap || {}, sdConfig: src.sdConfig || { liveSetPo: 0 } };
+  }
+  return out;
+}
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, KBO_LEAGUE, sdSideOf, isSelTeam, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, toDeckFormat, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, KBO_LEAGUE, KBO_TEAMS, sdSideOf, isSelTeam, suggestDeckTeam, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS };

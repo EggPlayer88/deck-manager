@@ -8,7 +8,7 @@ import {
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck,
-  isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL,
+  isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
 } from './calc-extract.mjs';
 
 let pass = 0, fail = 0;
@@ -325,10 +325,11 @@ eq('수동은 저장값 유지', calcBat(plMan, { skill1: '정밀타격', s1Lv: 
 
 
 console.log('\n[세트덱 인내] "타자 +1" 은 파·정·선·인 넷 다 오른다');
+/* 30·90·150·170·200 은 선택 팀(덱 구단 선수) 효과라 덱 구단과 선수 구단을 맞춰 둔다 */
 var sdBat = function(sp, side, extra){
-  var st = {}; if (side) st["s" + sp] = side;
+  var st = { teamName: "키움" }; if (side) st["s" + sp] = side;
   if (extra) for (var k in extra) st[k] = extra[k];
-  return calcSDBonus({ role:"타자", cardType:"시즌", stars:5, year:"2020" }, "DH", st, sp, 8);
+  return calcSDBonus({ role:"타자", cardType:"시즌", stars:5, year:"2020", team:"키움" }, "DH", st, sp, 8);
 };
 var sdPit = function(sp, side){
   var st = {}; if (side) st["s" + sp] = side;
@@ -338,7 +339,7 @@ var sdPit = function(sp, side){
 eq('40 좌 - 인내도 +1', sdBat(40, "L").n - sdBat(40, "").n, 1);
 eq('40 좌 - 파워도 +1', sdBat(40, "L").p - sdBat(40, "").p, 1);
 eq('200 좌 - 인내 +2', sdBat(200, "L").n - sdBat(200, "").n, 2);
-var atSP = function(sp){ return calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "DH", {}, sp, 8); };
+var atSP = function(sp){ return calcSDBonus({ role:"타자", cardType:"시즌", stars:5, team:"키움" }, "DH", { teamName:"키움" }, sp, 8); };
 eq('30 자동 - 인내 +1', atSP(30).n - atSP(29).n, 1);
 eq('90 자동 - 인내 +2', atSP(90).n - atSP(89).n, 2);
 /* 110 은 2026-09 부터 드림/나눔 선택 — 아래 [세트덱 인게임 대조] 에서 본다 */
@@ -1068,7 +1069,14 @@ console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선�
   eq('선택 팀 — FA 로 쓴 타팀 선수', isSelTeam(bat({ team: '두산', cardType: '임팩트', isFa: true }), { teamName: K }) ? 1 : 0, 1);
   eq('선택 팀 — 와일드카드 국가대표', isSelTeam(bat({ team: '두산', cardType: '국가대표', isWildcard: true }), { teamName: K }) ? 1 : 0, 1);
   eq('선택 팀 — 와일드카드 표시가 있어도 국가대표가 아니면 아님', isSelTeam(bat({ team: '두산', cardType: '라이브', isWildcard: true }), { teamName: K }) ? 1 : 0, 0);
-  eq('선택 팀 — 덱 구단을 모르면(예전 내 덱) 모두 선택 팀', isSelTeam(bat({ team: '두산' }), { teamName: '내 덱' }) ? 1 : 0, 1);
+  /* 덱 구단은 반드시 고르게 했으므로(구단 선택 창) 구단 없는 덱의 예외는 없다 */
+  eq('선택 팀 — 덱 구단이 없으면 선수 구단으로는 안 됨', isSelTeam(bat({ team: '두산' }), { teamName: '내 덱' }) ? 1 : 0, 0);
+  eq('선택 팀 — 덱 구단이 없어도 골든글러브는 선택 팀', isSelTeam(bat({ team: '두산', cardType: '골든글러브' }), { teamName: '내 덱' }) ? 1 : 0, 1);
+  eq('선택 팀 — 빈 덱 구단과 구단 없는 선수는 같은 팀이 아님', isSelTeam(bat({ team: '' }), { teamName: '' }) ? 1 : 0, 0);
+  eq('선택 팀 — sdState 가 없어도 오류 없이 아님', isSelTeam(bat({ team: '두산' }), undefined) ? 1 : 0, 0);
+  const at30 = (team, sp) => calcSDBonus(bat(), 'DH', on(30, undefined, team), sp, 8).p;
+  eq('30 — 키움 덱의 키움 선수는 +1', at30(K, 30) - at30(K, 29), 1);
+  eq('30 — 구단 없는 덱의 선수는 안 받음', at30('내 덱', 30) - at30('내 덱', 29), 0);
 
   eq('30 좌 고정 — 선택 팀 타자 파워 +1', gain(bat(), 'DH', 30, undefined, 'p', 8), 1);
   eq('30 좌 고정 — 선택 팀 타자 주루 +1 (기록만)', gain(bat(), 'DH', 30, undefined, 'run', 8), 1);
@@ -1082,7 +1090,9 @@ console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선�
   eq('110 우(나눔) — 키움 투수 +1', gain(pit(), 'SP1', 110, 'R', 'c'), 1);
   eq('110 기본 — 키움 덱은 나눔(우)', sdPick({ teamName: '키움' }, 110) === 'R' ? 1 : 0, 1);
   eq('110 기본 — 두산 덱은 드림(좌)', sdPick({ teamName: '두산' }, 110) === 'L' ? 1 : 0, 1);
-  eq('110 기본 — 덱 구단을 모르면 양쪽', sdPick({ teamName: '내 덱' }, 110) === 'B' ? 1 : 0, 1);
+  eq('110 기본 — 덱 구단이 없으면 선택 없음', sdPick({ teamName: '내 덱' }, 110) === '' ? 1 : 0, 1);
+  eq('110 기본 — teamName 이 없어도 선택 없음', sdPick({}, 110) === '' ? 1 : 0, 1);
+  eq('양쪽("B") 저장값은 더 이상 쪽으로 보지 않음', sdSideOf('B').side === '' ? 1 : 0, 1);
   const byDefault = (pl, key) => {
     const st = { s95: '', s125: '', teamName: K };
     return (calcSDBonus(pl, 'DH', st, 110, 8)[key] || 0) - (calcSDBonus(pl, 'DH', st, 109, 8)[key] || 0);
@@ -1166,6 +1176,45 @@ console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선�
   eq('기아 덱의 KIA 선수는 선택 팀', isSelTeam(bat({ team: 'KIA' }), { teamName: '기아' }) ? 1 : 0, 1);
   eq('KIA 덱의 110 기본은 나눔(우)', sdPick({ teamName: 'KIA' }, 110) === 'R' ? 1 : 0, 1);
   eq('KIA 선수는 110 나눔을 받는다', gain(bat({ team: 'KIA' }), 'DH', 110, 'R', 'p', 8), 1);
+}
+
+console.log('\n[덱 구단 추천] 구단 선택 창 — 라인업 선수가 가장 많은 구단');
+{
+  const pls = [{ id: 1, team: '두산' }, { id: 2, team: '두산' }, { id: 3, team: 'LG' }, { id: 4, team: 'LG' }, { id: 5, team: 'LG' }];
+  eq('라인업 기준 — 라인업에 두산 2, LG 1 이면 두산', suggestDeckTeam(pls, { C: 1, '1B': 2, '2B': 3 }) === '두산' ? 1 : 0, 1);
+  eq('라인업이 비면 보유 선수 기준 — LG', suggestDeckTeam(pls, {}) === 'LG' ? 1 : 0, 1);
+  eq('빈 칸 값은 라인업으로 치지 않음', suggestDeckTeam(pls, { C: '', '1B': null }) === 'LG' ? 1 : 0, 1);
+  eq('수가 같으면 구단 목록 순서가 앞선 쪽 (키움)', suggestDeckTeam([{ id: 1, team: '기아' }, { id: 2, team: '키움' }], {}) === '키움' ? 1 : 0, 1);
+  eq('KIA 는 기아로 센다', suggestDeckTeam([{ id: 1, team: 'KIA' }, { id: 2, team: 'KIA' }, { id: 3, team: 'LG' }], {}) === '기아' ? 1 : 0, 1);
+  eq('KBO 구단이 아닌 값은 세지 않음', suggestDeckTeam([{ id: 1, team: '내 덱' }, { id: 2, team: '' }, { id: 3 }], {}) === '' ? 1 : 0, 1);
+  eq('선수·라인업이 없어도 오류 없이 빈 값', suggestDeckTeam(null, null) === '' ? 1 : 0, 1);
+}
+
+console.log('\n[옛 형식 줄 → 덱별 형식] 덱 목록을 쓸 때 맨 위 데이터를 주인 덱으로 옮긴다');
+{
+  const data = { players: [{ id: 'p1' }], lineupMap: { C: 'p1' }, sdConfig: { liveSetPo: 3 } };
+  const newRow = { decks: { dk_1: data }, deckList: [{ deckId: 'dk_1', teamName: '키움' }], deckCurrent: 'dk_1' };
+  eq('이미 덱별 형식이면 그대로 (같은 객체)', toDeckFormat(newRow, [], 'dk_9') === newRow ? 1 : 0, 1);
+
+  const legacyList = [{ deckId: 'dk_legacy_abcd1234', teamName: 'LG' }];
+  const oldRow = Object.assign({ deckList: [{ deckId: 'dk_legacy_abcd1234', teamName: '내 덱' }], deckCurrent: 'dk_legacy_abcd1234', extra: 7 }, data);
+  const a = toDeckFormat(oldRow, legacyList, 'dk_new');
+  eq('옛 형식 — 맨 위 데이터는 내 덱(dk_legacy_)으로', JSON.stringify(a.decks.dk_legacy_abcd1234) === JSON.stringify(data) ? 1 : 0, 1);
+  eq('옛 형식 — 새 덱(fallback)에는 옮기지 않음', a.decks.dk_new === undefined ? 1 : 0, 1);
+  eq('옛 형식 — 맨 위 선수·라인업·설정은 남기지 않음', a.players === undefined && a.lineupMap === undefined && a.sdConfig === undefined ? 1 : 0, 1);
+  eq('옛 형식 — 다른 키는 그대로', a.extra === 7 && a.deckCurrent === 'dk_legacy_abcd1234' ? 1 : 0, 1);
+  eq('옛 형식 — 원래 객체는 건드리지 않음', oldRow.players && !oldRow.decks ? 1 : 0, 1);
+
+  const b = toDeckFormat(Object.assign({ deckCurrent: 'dk_5' }, data), [{ deckId: 'dk_5', teamName: '두산' }, { deckId: 'dk_6', teamName: 'NC' }], 'dk_6');
+  eq('내 덱이 없으면 줄에 저장된 지금 덱으로', b.decks.dk_5 && !b.decks.dk_6 ? 1 : 0, 1);
+  const c = toDeckFormat(Object.assign({}, data), [{ deckId: 'dk_7', teamName: 'KT' }], 'dk_7');
+  eq('지금 덱도 없으면 fallbackId 로', c.decks.dk_7 && c.deckCurrent === '' ? 1 : 0, 1);
+  const d = toDeckFormat({}, [{ deckId: 'dk_8', teamName: 'KT' }], 'dk_8');
+  eq('데이터 없는 줄은 빈 decks', JSON.stringify(d) === JSON.stringify({ decks: {}, deckList: [], deckCurrent: '' }) ? 1 : 0, 1);
+  const e = toDeckFormat(null, null, null);
+  eq('줄이 없어도 오류 없이 빈 형식', e.decks && e.deckList.length === 0 ? 1 : 0, 1);
+  const f = toDeckFormat(Object.assign({ deckList: [{ deckId: 'dk_legacy_zz', teamName: '내 덱' }] }, data), null, 'dk_x');
+  eq('목록을 안 주면 줄의 목록에서 내 덱을 찾음', f.decks.dk_legacy_zz && !f.decks.dk_x ? 1 : 0, 1);
 }
 
 console.log('\n[세트덱 점수] FA 는 시그니처 -1, 임팩트 -2 — 총 셋포와 화면 표시가 같은 값을 쓴다');
