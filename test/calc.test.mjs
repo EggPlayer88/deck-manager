@@ -9,6 +9,7 @@ import {
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck,
   isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
+  isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
 } from './calc-extract.mjs';
 
 let pass = 0, fail = 0;
@@ -855,7 +856,7 @@ eq('훈련 포인트는 전부 3 단위', Object.values(TRAIN_POINTS).every(v =>
   /* 유효 능력치로 가는 비율은 카드마다 같으니, 중앙값은 훈련 포인트에 비례해야 한다 */
   const D = buildDist({}, 20000);
   const med = (k) => D[k][Math.floor(D[k].length / 2)];
-  eq('분포 키 24개 (훈련 12 + 특훈 12)', Object.keys(D).length, 24);
+  eq('분포 키 26개 (훈련 12 + 특훈 14 — 와일드카드 2 포함)', Object.keys(D).length, 26);
   eq('올스타 타자 / 골글 타자 ≈ 90/75', Math.round(med('train_bat_올스타') / med('train_bat_골든글러브') * 100) / 100, 1.2, 0.05);
   eq('올스타 투수 / 골글 투수 ≈ 90/75', Math.round(med('train_pit_올스타') / med('train_pit_골든글러브') * 100) / 100, 1.2, 0.05);
   eq('국대 타자 / 골글 타자 ≈ 66/75', Math.round(med('train_bat_국가대표') / med('train_bat_골든글러브') * 100) / 100, 0.88, 0.04);
@@ -868,6 +869,17 @@ eq('훈련 포인트는 전부 3 단위', Object.values(TRAIN_POINTS).every(v =>
   /* 특훈은 훈련 포인트와 무관 — 올스타·라이브는 특훈 분포가 없어야 한다 */
   eq('올스타 특훈 분포 없음', D['spec_bat_올스타'] === undefined ? 1 : 0, 1);
   eq('국대 특훈 분포 있음', Array.isArray(D['spec_bat_국가대표']) ? 1 : 0, 1);
+  /* 특훈 기본값 = 특훈 횟수 (국가대표 +4, 와일드카드 +6) — 어떤 표본도 기본값 × 가중치 아래로 내려가지 않는다 */
+  const low = (k) => D[k][0];
+  const atLeast = (k, v) => low(k) >= v - 0.001 ? 1 : 0;
+  eq('국대 타자 특훈 ≥ 파워 4', atLeast('spec_bat_국가대표', 4), 1);
+  eq('국대 투수 특훈 ≥ 구위 4 × 1.35', atLeast('spec_pit_국가대표', 5.4), 1);
+  eq('와일드카드 타자 특훈 ≥ 파워 6', atLeast('spec_bat_wc_국가대표', 6), 1);
+  eq('와일드카드 투수 특훈 ≥ 구위 6 × 1.35', atLeast('spec_pit_wc_국가대표', 8.1), 1);
+  eq('FA 시그 타자 특훈 ≥ 파워 5', atLeast('spec_bat_fa_시그니처', 5), 1);
+  eq('골글 타자 특훈 ≥ 파워 3', atLeast('spec_bat_골든글러브', 3), 1);
+  eq('와일드카드는 국가대표에만', D['spec_bat_wc_시그니처'] === undefined && D['spec_bat_fa_국가대표'] === undefined ? 1 : 0, 1);
+  eq('와일드카드 특훈 중앙값 > 국대', med('spec_bat_wc_국가대표') > med('spec_bat_국가대표') ? 1 : 0, 1);
 }
 
 console.log('\n[훈재분 계산기 — 내 입력 판정]');
@@ -946,9 +958,10 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
 
   bad = [];
   for (const [key, v] of Object.entries(PEAK_SPEC)) {
-    const parts = key.split('_'), role = parts[0], fa = parts[1] === 'fa', ct = parts[parts.length - 1];
-    const b0 = fa ? 5 : 3;
-    const trials = fa ? 5 : ct === '국가대표' ? 4 : 3;
+    const parts = key.split('_'), role = parts[0], ct = parts[parts.length - 1];
+    /* 특훈 횟수 = 기본 보너스 (골글·시그·임팩트 3, 국대 4, FA·와일드카드 +2) */
+    const trials = specTrialsOf({ cardType: ct, isFa: parts[1] === 'fa', isWildcard: parts[1] === 'wc' });
+    const b0 = trials;
     const perTrial = ct === '임팩트' ? 2 : 3;
     if (v.some(x => x > 15)) bad.push(key + ' 15 초과');
     if (v[role === 'bat' ? 0 : 1] < b0) bad.push(key + ' 기본값 미만');
@@ -957,7 +970,11 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
     const pct = getPercentile(TRD['spec_' + key], Math.round(sc * 100) / 100);
     if (!(pct >= 0.1 && pct <= 0.5)) bad.push(key + ' 백분위 ' + pct);
   }
-  eq('특훈 12가지 — 15 이하·기본값 포함·상위 0.1~0.5% (' + (bad.join(' / ') || '문제 없음') + ')', bad.length + (Object.keys(PEAK_SPEC).length === 12 ? 0 : 100), 0);
+  eq('특훈 14가지(와일드카드 2 포함) — 15 이하·기본값 포함·상위 0.1~0.5% (' + (bad.join(' / ') || '문제 없음') + ')', bad.length + (Object.keys(PEAK_SPEC).length === 14 ? 0 : 100), 0);
+  /* 앱 분포에도 와일드카드 특훈 키가 있다 */
+  eq('앱 분포 — 와일드카드 특훈 타자·투수', Array.isArray(TRD['spec_bat_wc_국가대표']) && Array.isArray(TRD['spec_pit_wc_국가대표']) ? 1 : 0, 1);
+  eq('앱 분포 — 국대 특훈 최솟값은 기본 +4 (파워 4)', TRD['spec_bat_국가대표'][0], 4);
+  eq('앱 분포 — 와일드카드 특훈 최솟값은 기본 +6 (구위 6 × 1.35)', TRD['spec_pit_wc_국가대표'][0], 8.1);
 
   eq('잠재력 — 풀스윙·장타억제 SR+, 클러치·침착 A', PEAK_POT['풀스윙'] === 'SR+' && PEAK_POT['장타억제'] === 'SR+' && PEAK_POT['클러치'] === 'A' && PEAK_POT['침착'] === 'A' ? 1 : 0, 1);
   eq('각성 — 임팩트만 S', PEAK_AWK['임팩트'] === 'S' && Object.keys(PEAK_AWK).length === 1 ? 1 : 0, 1);
@@ -1243,10 +1260,92 @@ console.log('\n[세트덱 점수] FA 는 시그니처 -1, 임팩트 -2 — 총 �
   eq('시그니처 FA — 총 셋포 -1', base - total(deck({ sig: { isFa: true } })), 1);
   eq('라이브 추가 셋포는 더한다', total(deck({}), { liveSetPo: 5 }) - base, 5);
 
-  /* 스페셜 POTM(임팩트)은 FA 여도 +1 만 붙는다 */
-  __setGlobalPotm([{ name: '가', team: '키움' }]);
-  eq('임팩트 FA POTM — 7 - 2 + 1 = 6', total({ CP: { cardType: '임팩트', name: '가', team: '키움', isFa: true } }, { teamName: '키움' }), 6);
+  /* FA 는 타팀 선수에게만 걸린다 (2026-09-18) — 자팀 선수에게 남은 FA 표시는 감점하지 않는다.
+     POTM 보정은 선수 구단이 덱 구단과 같아야 붙으므로 타팀 FA 선수에게는 붙지 않는다 (POTM 규칙은 따로 정하기로 함) */
+  __setGlobalPotm([{ name: '가', team: '키움' }, { name: '나', team: '두산' }]);
+  eq('자팀 임팩트의 FA 표시는 무시 — 7 + POTM 1 = 8', total({ CP: { cardType: '임팩트', name: '가', team: '키움', isFa: true } }, { teamName: '키움' }), 8);
+  eq('타팀 임팩트 FA — 7 - 2 = 5 (POTM 은 구단이 달라 안 붙음)', total({ CP: { cardType: '임팩트', name: '나', team: '두산', isFa: true } }, { teamName: '키움' }), 5);
   __setGlobalPotm([]);
+
+  /* 와일드카드 — 국가대표 8 → 7 */
+  eq('국가대표 와일드카드 7 (-1)', cardSetScore({ cardType: '국가대표', isWildcard: true }), 7);
+  eq('와일드카드 표시가 있어도 국가대표가 아니면 그대로 (시그 8)', cardSetScore({ cardType: '시그니처', isWildcard: true }), 8);
+  eq('감점 크기 — 와일드카드 1', cardSetPenalty({ cardType: '국가대표', isWildcard: true }), 1);
+  eq('타팀 국대 와일드카드 — 총 셋포 8 → 7', total({ SP1: { cardType: '국가대표', team: '두산', isWildcard: true } }, { teamName: '키움' }), 7);
+  eq('자팀 국대의 와일드카드 표시는 무시 — 8', total({ SP1: { cardType: '국가대표', team: '키움', isWildcard: true } }, { teamName: '키움' }), 8);
+  eq('KIA 로 적힌 자팀 국대도 자팀 — 8', total({ SP1: { cardType: '국가대표', team: 'KIA', isWildcard: true } }, { teamName: '기아' }), 8);
+}
+
+console.log('\n[FA·와일드카드] 타팀 선수만 — 선택 팀 취급 · 능력치 -3 · 특훈 2회 추가');
+{
+  const K = '키움';
+  const nat = (o) => Object.assign({ role: '타자', cardType: '국가대표', stars: 5, team: '두산', year: '2010', power: 100, accuracy: 100, eye: 100, patience: 100 }, o);
+  const natP = (o) => Object.assign({ role: '투수', cardType: '국가대표', stars: 5, team: '두산', position: '선발', change: 100, stuff: 100 }, o);
+  eq('타팀 판정 — 두산 선수, 키움 덱', isOtherTeam({ team: '두산' }, K) ? 1 : 0, 1);
+  eq('타팀 판정 — 키움 선수, 키움 덱', isOtherTeam({ team: '키움' }, K) ? 1 : 0, 0);
+  eq('타팀 판정 — KIA 선수, 기아 덱은 자팀', isOtherTeam({ team: 'KIA' }, '기아') ? 1 : 0, 0);
+  eq('타팀 판정 — 덱 구단을 모르면 저장값을 따른다(타팀으로 봄)', isOtherTeam({ team: '키움' }, '') ? 1 : 0, 1);
+
+  const a = applyTeamFlags(nat({ isWildcard: true }), K);
+  eq('타팀 국대 와일드카드는 켜진 채', a.isWildcard ? 1 : 0, 1);
+  const b = applyTeamFlags(nat({ team: K, isWildcard: true }), K);
+  eq('자팀 국대 와일드카드는 끈 것으로', b.isWildcard ? 1 : 0, 0);
+  const c = applyTeamFlags(nat({ isFa: true }), K);
+  eq('국대에 FA 표시는 끈 것으로', c.isFa ? 1 : 0, 0);
+  const d = applyTeamFlags({ cardType: '임팩트', team: '두산', isWildcard: true }, K);
+  eq('임팩트에 와일드카드 표시는 끈 것으로', d.isWildcard ? 1 : 0, 0);
+  const plain = nat({});
+  eq('바꿀 게 없으면 같은 객체', applyTeamFlags(plain, K) === plain ? 1 : 0, 1);
+  const orig = nat({ team: K, isWildcard: true });
+  applyTeamFlags(orig, K);
+  eq('원본은 건드리지 않음', orig.isWildcard ? 1 : 0, 1);
+
+  /* 선택 팀 */
+  eq('타팀 국대 와일드카드 = 선택 팀', isSelTeam(nat({ isWildcard: true }), { teamName: K }) ? 1 : 0, 1);
+  eq('타팀 국대(와일드카드 끔) = 선택 팀 아님', isSelTeam(nat({}), { teamName: K }) ? 1 : 0, 0);
+  eq('라이브에 FA 표시는 선택 팀 아님', isSelTeam({ cardType: '라이브', team: '두산', isFa: true }, { teamName: K }) ? 1 : 0, 0);
+  const sd30 = (pl) => calcSDBonus(pl, 'DH', { s95: '', s125: '', s110: '', teamName: K }, 30, 8).p - calcSDBonus(pl, 'DH', { s95: '', s125: '', s110: '', teamName: K }, 29, 8).p;
+  eq('30 — 타팀 국대 와일드카드는 +1', sd30(nat({ isWildcard: true })), 1);
+  eq('30 — 타팀 국대(와일드카드 끔)는 0', sd30(nat({})), 0);
+
+  /* 능력치 -3 */
+  const lu = { enhance: '' };
+  const bat0 = calcBat(nat({}), lu, { p: 0, a: 0, e: 0, n: 0 });
+  const batW = calcBat(nat({ isWildcard: true }), lu, { p: 0, a: 0, e: 0, n: 0 });
+  eq('와일드카드 타자 파워 -3', batW.power - bat0.power, -3);
+  eq('와일드카드 타자 정확 -3', batW.accuracy - bat0.accuracy, -3);
+  eq('와일드카드 타자 선구 -3', batW.eye - bat0.eye, -3);
+  eq('와일드카드 타자 인내 -3', batW.patience - bat0.patience, -3);
+  const pit0 = calcPit(natP({}), lu, { c: 0, s: 0 });
+  const pitW = calcPit(natP({ isWildcard: true }), lu, { c: 0, s: 0 });
+  eq('와일드카드 투수 변화 -3', pitW.change - pit0.change, -3);
+  eq('와일드카드 투수 구위 -3', pitW.stuff - pit0.stuff, -3);
+  eq('능력치 보정 — 와일드카드 -3 / FA -3 / 없음 0',
+    teamFlagStatAdj({ cardType: '국가대표', isWildcard: true }) === -3 && teamFlagStatAdj({ cardType: '시그니처', isFa: true }) === -3
+      && teamFlagStatAdj({ cardType: '국가대표' }) === 0 && teamFlagStatAdj({ cardType: '골든글러브', isFa: true }) === 0 ? 1 : 0, 1);
+
+  /* 특훈 횟수 = 기본 보너스 */
+  eq('특훈 — 골글 3', specTrialsOf({ cardType: '골든글러브' }), 3);
+  eq('특훈 — 시그 FA 5', specTrialsOf({ cardType: '시그니처', isFa: true }), 5);
+  eq('특훈 — 국대 4', specTrialsOf({ cardType: '국가대표' }), 4);
+  eq('특훈 — 국대 와일드카드 6', specTrialsOf({ cardType: '국가대표', isWildcard: true }), 6);
+  eq('특훈 — 라이브 없음 0', specTrialsOf({ cardType: '라이브', isFa: true }), 0);
+  eq('특훈 분포 키 — 와일드카드', specDistKey({ cardType: '국가대표', isWildcard: true }, true) === 'spec_bat_wc_국가대표' ? 1 : 0, 1);
+  eq('특훈 분포 키 — FA', specDistKey({ cardType: '임팩트', isFa: true }, false) === 'spec_pit_fa_임팩트' ? 1 : 0, 1);
+  eq('특훈 분포 키 — 일반 국대', specDistKey({ cardType: '국가대표' }, true) === 'spec_bat_국가대표' ? 1 : 0, 1);
+
+  /* 고점판독기 특훈 표 — 와일드카드 키가 있어야 한다 */
+  eq('고점 특훈 표 — 와일드카드 타자·투수', Array.isArray(PEAK_SPEC['bat_wc_국가대표']) && Array.isArray(PEAK_SPEC['pit_wc_국가대표']) ? 1 : 0, 1);
+  eq('고점 특훈 — 와일드카드 타자 파워는 기본 6 이상', PEAK_SPEC['bat_wc_국가대표'][0] >= 6 ? 1 : 0, 1);
+  eq('고점 특훈 — 국대 타자 파워는 기본 4 이상', PEAK_SPEC['bat_국가대표'][0] >= 4 ? 1 : 0, 1);
+  const pk = peakPl(nat({ isWildcard: true, specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0 }), 'DH');
+  eq('고점판독 — 와일드카드 선수는 와일드카드 특훈 표', pk.specPower === PEAK_SPEC['bat_wc_국가대표'][0] ? 1 : 0, 1);
+
+  /* 시트 가져오기 — 국대(F)·국대(W) 는 와일드카드 */
+  const pc = parseCardCode('국대(W)');
+  eq('시트 국대(W) 인식', pc && pc.types[0] === '국가대표' && pc.isFa ? 1 : 0, 1);
+  const pf = parseCardCode('시그(F)');
+  eq('시트 시그(F) 는 그대로', pf && pf.types[0] === '시그니처' && pf.isFa ? 1 : 0, 1);
 }
 
 console.log('\n[덱 저장기] 선수·라인업·세트덱을 늘 최신 한 덩어리로, 부른 순서대로 저장한다');

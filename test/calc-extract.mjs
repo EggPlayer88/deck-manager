@@ -487,10 +487,37 @@ function sdSideOf(val) {
   var s = String(val || ""), c = s.charAt(0), at = s.indexOf(":");
   return { side: (c === "L" || c === "R") ? c : "", year: at > 0 ? s.slice(at + 1) : "" };
 }
+var FA_CARDS = {"임팩트":1,"시그니처":1};
+var WILDCARD_CARDS = {"국가대표":1};
+function isOtherTeam(pl, teamName) {
+  var team = teamKey(teamName);
+  return !KBO_LEAGUE[team] || teamKey(pl && pl.team) !== team;
+}
+function applyTeamFlags(pl, teamName) {
+  if (!pl) return pl;
+  var other = isOtherTeam(pl, teamName);
+  var fa = !!pl.isFa && !!FA_CARDS[pl.cardType] && other;
+  var wc = !!pl.isWildcard && !!WILDCARD_CARDS[pl.cardType] && other;
+  if (fa === !!pl.isFa && wc === !!pl.isWildcard) return pl;
+  return Object.assign({}, pl, { isFa: fa, isWildcard: wc });
+}
+function teamFlagStatAdj(pl) {
+  return ((pl.isFa && FA_CARDS[pl.cardType]) || (pl.isWildcard && WILDCARD_CARDS[pl.cardType])) ? -3 : 0;
+}
+var SPEC_TRIALS = {"골든글러브":3,"시그니처":3,"임팩트":3,"국가대표":4};
+function specTrialsOf(pl) {
+  var n = SPEC_TRIALS[pl.cardType] || 0;
+  if (!n) return 0;
+  return n + (teamFlagStatAdj(pl) ? 2 : 0);
+}
+function specDistKey(pl, isBat) {
+  var tag = (pl.isFa && FA_CARDS[pl.cardType]) ? "_fa" : (pl.isWildcard && WILDCARD_CARDS[pl.cardType]) ? "_wc" : "";
+  return "spec_" + (isBat ? "bat" : "pit") + tag + "_" + pl.cardType;
+}
 function isSelTeam(pl, sdState) {
   var team = teamKey(sdState && sdState.teamName);
-  return (!!KBO_LEAGUE[team] && teamKey(pl.team) === team) || pl.cardType === "골든글러브" || !!pl.isFa ||
-    (pl.cardType === "국가대표" && !!pl.isWildcard);
+  var f = applyTeamFlags(pl, team);
+  return (!!KBO_LEAGUE[team] && teamKey(pl.team) === team) || pl.cardType === "골든글러브" || !!f.isFa || !!f.isWildcard;
 }
 var SD_BAT_ALL = ["p", "a", "e", "n", "run", "def"];
 var SD_PIT_ALL = ["c", "s", "vel", "ctl", "sta", "def"];
@@ -887,7 +914,7 @@ var PEAK_SKILLS = {
   "마무리|임팩트|좌|-":["마당쇠(불펜)","소방수","위닝샷"]  /* 27.25점 · 상위 0.3285% · 기준의 7.54배 */
 };
 var PEAK_TRAIN = {"bat_골든글러브":[20,18,12,10],"bat_시그니처":[22,17,12,9],"bat_라이브":[20,18,12,10],"bat_올스타":[23,21,15,12],"bat_국가대표":[19,15,11,8],"bat_임팩트":[16,13,9,6],"pit_골든글러브":[16,22],"pit_시그니처":[20,20],"pit_라이브":[16,22],"pit_올스타":[22,23],"pit_국가대표":[17,18],"pit_임팩트":[15,15]};
-var PEAK_SPEC = {"bat_골든글러브":[7,2,1,0],"bat_시그니처":[7,2,1,0],"bat_fa_시그니처":[9,5,1,1],"bat_임팩트":[6,2,0,0],"bat_fa_임팩트":[8,4,1,0],"bat_국가대표":[7,3,2,0],"pit_골든글러브":[2,7],"pit_시그니처":[2,7],"pit_fa_시그니처":[2,11],"pit_임팩트":[2,6],"pit_fa_임팩트":[3,9],"pit_국가대표":[2,8]};
+var PEAK_SPEC = {"bat_골든글러브":[7,2,1,0],"bat_시그니처":[7,2,1,0],"bat_fa_시그니처":[9,5,1,1],"bat_임팩트":[6,2,0,0],"bat_fa_임팩트":[8,4,1,0],"bat_국가대표":[8,3,2,0],"bat_wc_국가대표":[11,5,1,1],"pit_골든글러브":[2,7],"pit_시그니처":[2,7],"pit_fa_시그니처":[2,11],"pit_임팩트":[2,6],"pit_fa_임팩트":[3,9],"pit_국가대표":[2,9],"pit_wc_국가대표":[5,11]};
 var PEAK_POT = {"풀스윙":"SR+","장타억제":"SR+","클러치":"A","침착":"A"};
 var PEAK_AWK = {"임팩트":"S"};
 function peakSkillSum(p, cat) {
@@ -928,8 +955,8 @@ function peakPl(pl, slot) {
       out.trainC = tr[0]; out.trainS = tr[1];
     }
   }
-  var fa = !!pl.isFa && (ct === "임팩트" || ct === "시그니처");
-  var sp = PEAK_SPEC[role + (fa ? "_fa_" : "_") + ct];
+  /* 특훈 표 키는 특훈 분포 키에서 "spec_" 를 뗀 것 — bat_국가대표 · bat_fa_시그니처 · bat_wc_국가대표 */
+  var sp = PEAK_SPEC[specDistKey(pl, isBat).slice(5)];
   if (sp) {
     if (isBat) {
       if (sp[0] * w.p + sp[1] * w.a + sp[2] * w.e + sp[3] * (w.n || 0) > (pl.specPower || 0) * w.p + (pl.specAccuracy || 0) * w.a + (pl.specEye || 0) * w.e + (pl.specPatience || 0) * (w.n || 0)) {
@@ -1030,29 +1057,31 @@ function buildDist(skills, N) {
 
   /* 특훈 분포 추가
      가능 카드: 골든글러브/시그니처/임팩트/국가대표
-     시행횟수: 골든글러브/시그니처/임팩트=3, 국가대표=4, FA(임팩트/시그니처)=5
+     시행횟수(specTrialsOf): 골든글러브/시그니처/임팩트=3, 국가대표=4,
+       FA(임팩트/시그니처)·와일드카드(국가대표)는 2회 더
      임팩트: perfect 없음 (good/great 각 1/2)
      others: good/great/perfect 각 1/3
-     기본값: 타자 파워+3(FA:+5), 투수 구위+3(FA:+5)
+     기본값: 시행횟수만큼 타자 파워 / 투수 구위 (국가대표 +4, 와일드카드 +6)
      각 시행: good=1점, great=2점, perfect=3점 → 각 점수를 1씩 랜덤 스탯에 배정 */
-  var SPEC_CARDS = ["골든글러브","시그니처","임팩트","국가대표"];
-  var SPEC_TRIALS = {"골든글러브":3,"시그니처":3,"임팩트":3,"국가대표":4};
+  var SPEC_CARDS = Object.keys(SPEC_TRIALS);
   var BAT_SPEC_STATS = ["파워","정확","선구","인내","주루","수비"];
   var PIT_SPEC_STATS = ["구속","변화","구위","제구","지구력","수비"];
   var w3 = getW();
 
   SPEC_CARDS.forEach(function(ct) {
-    ["bat","pit","bat_fa","pit_fa"].forEach(function(roleKey) {
-      var isFa = roleKey.indexOf("fa") >= 0;
+    ["bat","pit","bat_fa","pit_fa","bat_wc","pit_wc"].forEach(function(roleKey) {
+      var isFa = roleKey.indexOf("_fa") >= 0;
+      var isWc = roleKey.indexOf("_wc") >= 0;
       var isBatR = roleKey.indexOf("bat") >= 0;
-      /* FA는 임팩트/시그니처만 */
-      if (isFa && ct !== "임팩트" && ct !== "시그니처") return;
-      var trials = isFa ? 5 : SPEC_TRIALS[ct];
+      /* FA는 임팩트/시그니처, 와일드카드는 국가대표만 */
+      if (isFa && !FA_CARDS[ct]) return;
+      if (isWc && !WILDCARD_CARDS[ct]) return;
+      var trials = specTrialsOf({ cardType: ct, isFa: isFa, isWildcard: isWc });
       var hasPerfect = ct !== "임팩트";
       var statList = isBatR ? BAT_SPEC_STATS : PIT_SPEC_STATS;
       /* 기본값: 타자 파워, 투수 구위 */
       var baseStatIdx = isBatR ? 0 : 2; /* 파워=0, 구위=2 */
-      var baseVal = isFa ? 5 : 3;
+      var baseVal = trials;
 
       var scores = [];
       for (var i = 0; i < N; i++) {
@@ -1096,14 +1125,37 @@ function getPercentile(dist, value) {
 }
 var SET_POINTS = {"골든글러브":6,"시그니처":8,"임팩트":7,"국가대표":8,"시즌":0,"라이브":0,"올스타":4};
 var FA_SET_PENALTY = {"시그니처":1,"임팩트":2};
+var WILDCARD_SET_PENALTY = {"국가대표":1};
+function cardSetPenalty(pl) {
+  if (!pl) return 0;
+  if (pl.isFa) return FA_SET_PENALTY[pl.cardType] || 0;
+  if (pl.isWildcard) return WILDCARD_SET_PENALTY[pl.cardType] || 0;
+  return 0;
+}
 function cardSetScore(pl) {
   if (!pl) return 0;
   var sc = pl.cardType === "라이브" ? (pl.setScore || 0) : (SET_POINTS[pl.cardType] || 0);
-  var pen = pl.isFa ? (FA_SET_PENALTY[pl.cardType] || 0) : 0;
+  var pen = cardSetPenalty(pl);
   if (pen) sc = Math.max(0, sc - pen);
   return sc;
 }
-function computeLineupSetDeck(pick, sdState) {
+var CARD_CODE = {
+  "골글": ["골든글러브"],
+  "시그": ["시그니처"],
+  "임팩": ["임팩트"],
+  "국대": ["국가대표"],
+  "라올": ["올스타", "라이브"],   /* 올스타 먼저 찾고 없으면 라이브 */
+};
+function miTxt(v) { return v == null ? "" : String(v).trim(); }
+function parseCardCode(raw) {
+  var t = miTxt(raw), fa = false;
+  if (/\([FW]\)\s*$/i.test(t)) { fa = true; t = t.replace(/\([FW]\)\s*$/i, "").trim(); }
+  var types = CARD_CODE[t];
+  return types ? { types: types, isFa: fa, code: miTxt(raw) } : null;
+}
+function computeLineupSetDeck(pickRaw, sdState) {
+    /* FA·와일드카드는 덱 구단 기준으로 다시 본다 — 자팀 선수에게 남은 표시는 감점하지 않는다 */
+    var pick = function(sl) { return applyTeamFlags(pickRaw(sl), sdState.teamName); };
     var calcSetPoint = function() {
       var total = 0;
       var potmList = GLOBAL_POTM_LIST;
@@ -1160,6 +1212,7 @@ function computeLineupSetDeck(pick, sdState) {
 }
 function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!pl) return {p:0,a:0,e:0,n:0,c:0,s:0};
+  pl = applyTeamFlags(pl, sdState && sdState.teamName);
   var isBat = pl.role === "타자";
   var ct = pl.cardType;
   var stars = pl.stars || 5;
@@ -1271,7 +1324,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
 function calcBat(pl,lu,sdB){
   if(!pl||!lu)return{power:0,accuracy:0,eye:0,total:0,skillScore:0};
   var w=getW();var sb=sdB||{p:0,a:0,e:0,n:0};
-  var faAdj=(pl.isFa&&(pl.cardType==="임팩트"||pl.cardType==="시그니처"))?-3:0;
+  var faAdj=teamFlagStatAdj(pl);
   var fP=(pl.power||0)+getEnhVal(pl.cardType,"파워",lu.enhance||"")+(lu.trainP||0)+(pl.specPower||0)+sb.p+faAdj;
   var fA=(pl.accuracy||0)+getEnhVal(pl.cardType,"정확",lu.enhance||"")+(lu.trainA||0)+(pl.specAccuracy||0)+sb.a+faAdj;
   var fE=(pl.eye||0)+getEnhVal(pl.cardType,"선구",lu.enhance||"")+(lu.trainE||0)+(pl.specEye||0)+sb.e+faAdj;
@@ -1300,7 +1353,7 @@ function calcBat(pl,lu,sdB){
 function calcPit(pl,lu,sdB){
   if(!pl||!lu)return{change:0,stuff:0,total:0,skillScore:0};
   var w=getW();var sb=sdB||{c:0,s:0};
-  var faAdjP=(pl.isFa&&(pl.cardType==="임팩트"||pl.cardType==="시그니처"))?-3:0;
+  var faAdjP=teamFlagStatAdj(pl);
   var fC=(pl.change||0)+getEnhVal(pl.cardType,"변화",lu.enhance||"")+(lu.trainC||0)+(pl.specChange||0)+sb.c+faAdjP;
   var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s+faAdjP;
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
@@ -1367,4 +1420,4 @@ function toDeckFormat(all, list, fallbackId) {
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, toDeckFormat, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, KBO_LEAGUE, KBO_TEAMS, sdSideOf, isSelTeam, suggestDeckTeam, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, toDeckFormat, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, KBO_LEAGUE, KBO_TEAMS, sdSideOf, isSelTeam, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS };
