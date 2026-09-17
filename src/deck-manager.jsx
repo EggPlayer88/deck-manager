@@ -104,12 +104,12 @@ function getPotScore(grade, skills) {
 }
 function mergePl(userPl) {
   if (!userPl) return null;
-  if (!userPl.dbId) return userPl;
+  if (!userPl.dbId) return normPlayerSkills(userPl);
   var seed = null;
   for (var i = 0; i < SEED_PLAYERS.length; i++) { if (SEED_PLAYERS[i].id === userPl.dbId) { seed = SEED_PLAYERS[i]; break; } }
   /* seed 못 찾으면 userPl 자체 반환 (name/cardType 등이 직접 저장돼 있으면 그대로 표시) */
-  if (!seed) return userPl;
-  return Object.assign({}, seed, {
+  if (!seed) return normPlayerSkills(userPl);
+  return normPlayerSkills(Object.assign({}, seed, {
     id: userPl.id, dbId: userPl.dbId,
     trainP: userPl.trainP||0, trainA: userPl.trainA||0, trainE: userPl.trainE||0, trainN: userPl.trainN||0,
     trainC: userPl.trainC||0, trainS: userPl.trainS||0,
@@ -140,7 +140,7 @@ function mergePl(userPl) {
     position: seed.role === "투수"
       ? (userPl.position || seed.position || "선발")
       : (seed.position || ""),
-  });
+  }));
 }
 
 /* ================================================================
@@ -248,7 +248,8 @@ Object.keys(SKILL_BUFF_OFF).forEach(function(c) {
   Object.keys(SKILL_BUFF_OFF[c]).forEach(function(n) { SKILL_HIDDEN[c][n] = 1; });
 });
 function skillPickable(name, cat) { return !(SKILL_HIDDEN[cat] && SKILL_HIDDEN[cat][name]); }
-function skillBaseName(n) { return String(n || "").replace(/\(.*?\)/g, "").trim(); }
+/* 괄호와 띄어쓰기를 뗀 기본명 — "포수 리드" 와 "포수리드" 를 같은 스킬로 본다 */
+function skillBaseName(n) { return String(n || "").replace(/\(.*?\)/g, "").replace(/\s+/g, ""); }
 /* pos 는 계산기의 타자/선발/중계/마무리. isCatcher 는 타자일 때만 의미가 있다. */
 /* 괄호 안에 역할이 박힌 변형은 그 역할에서만 뜬다.
    기선제압(선발) / 기선제압(셋업/마무리) / 기선제압(셋업제외불펜) 처럼
@@ -423,13 +424,69 @@ function maxSkillLv(name, cat){
    신규 선수는 생성 시 sLvManual:false 가 박혀서 자동이 된다. */
 function isLvManual(pl){ return !pl || pl.sLvManual === undefined ? true : !!pl.sLvManual; }
 
+/* 이 스킬이 그 자리의 포지션 특훈 스킬 보너스(+1)에 걸리는가.
+   띄어쓰기만 다른 이름도 같은 스킬로 본다 */
+function hasPtSkill(ptSkills, name){
+  if(!ptSkills || !ptSkills.length || !name) return false;
+  var f = String(name).replace(/\s+/g, "");
+  for(var i = 0; i < ptSkills.length; i++){
+    if(String(ptSkills[i] || "").replace(/\s+/g, "") === f) return true;
+  }
+  return false;
+}
+
 function autoSkillLv(name, cardType, num, cat, ptSkills){
   if(!name) return 0;
   var base = (CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5;
-  if(ptSkills && ptSkills.indexOf(name) >= 0) base += 1;
+  if(hasPtSkill(ptSkills, name)) base += 1;
   var mx = maxSkillLv(name, cat);
   return mx ? Math.min(base, mx) : base;
 }
+
+/* 스킬표 카테고리 — 타자 / 선발 / 중계 / 마무리 */
+function skillCatOf(pl){
+  if(!pl || pl.role === "타자") return "타자";
+  return pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
+}
+
+/* 선수에 저장하는 스킬 값 정리. 화면에 보이는 값(mergePl)과 저장하는 값(saveP)이 같도록 양쪽에서 쓴다.
+   - 스킬 이름은 스킬표에 있는 이름으로 (띄어쓰기만 다른 옛 이름이 다른 스킬처럼 취급되지 않게)
+   - 레벨이 "자동"인 선수는 계산된 레벨을 넣는다. 0 으로 두면 저장 레벨을 보는 곳에서 스킬이 없는 것처럼 보인다.
+     포지션 특훈 스킬 보너스(+1)는 어디에 배치했느냐에 따라 달라지므로 저장하지 않고 계산할 때만 얹는다.
+   - 국가대표 전용 스킬은 인게임 상한이 6레벨이다 (포지션 특훈 스킬 보너스에도 국대 스킬은 없다).
+     직접 넣은 값이 넘으면 6 으로 내린다. */
+function normPlayerSkills(pl){
+  if(!pl || !SKILL_DATA) return pl;
+  if(!pl.skill1 && !pl.skill2 && !pl.skill3) return pl;
+  /* 저장 줄에는 카드 종류·역할이 없을 수 있다 — 그때는 도감에서 본다 (mergePl 과 같은 기준) */
+  var info = pl;
+  if((!pl.cardType || !pl.role) && pl.dbId){
+    for(var i = 0; i < SEED_PLAYERS.length; i++){
+      if(SEED_PLAYERS[i].id === pl.dbId){
+        var sd = SEED_PLAYERS[i];
+        info = { cardType: pl.cardType || sd.cardType, role: pl.role || sd.role, position: pl.position || sd.position };
+        break;
+      }
+    }
+  }
+  var cat = skillCatOf(info);
+  var manual = isLvManual(pl);
+  var out = null;
+  for(var k = 1; k <= 3; k++){
+    var nm = pl["skill" + k];
+    if(!nm) continue;
+    var canon = canonSkillName(nm, cat);
+    var lv = pl["s" + k + "Lv"] || 0;
+    var want = manual ? lv : autoSkillLv(canon, info.cardType, k, cat, []);
+    if(want > 6 && isNatOnlySkill(canon, cat)) want = 6;
+    if(canon !== nm || want !== lv){
+      out = out || Object.assign({}, pl);
+      out["skill" + k] = canon; out["s" + k + "Lv"] = want;
+    }
+  }
+  return out || pl;
+}
+function normPlayerList(list){ return Array.isArray(list) ? list.map(normPlayerSkills) : list; }
 
 /* 실제 적용 레벨 */
 /* 실제 적용 레벨.
@@ -442,7 +499,7 @@ function effSkillLv(name, storedLv, manual, cardType, num, cat, ptSkills){
     ? (storedLv || 0)
     : ((CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5);
   if(!base) return 0;   /* 수동인데 레벨을 안 넣었으면 스킬 없는 것으로 본다 */
-  if(ptSkills && ptSkills.indexOf(name) >= 0) base += 1;
+  if(hasPtSkill(ptSkills, name)) base += 1;
   var mx = maxSkillLv(name, cat);
   return mx ? Math.min(base, mx) : base;
 }
@@ -516,14 +573,15 @@ var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
    5레벨 이상 중 가장 높은 레벨을 "N렙" 으로 돌려준다 (없으면 "없음").
    저장 레벨만 보면 레벨을 "자동"으로 둔 선수(저장 레벨 0)가 빠지고,
    포지션 특훈 스킬 보너스(+1)와 국대 전용 스킬 6레벨 상한도 어긋난다.
-   국대에이스는 타자 카드면 타자용, 투수 카드면 투수용이다. */
+   국대에이스는 타자 카드면 타자용, 투수 카드면 투수용이고 주전·후보를 모두 본다.
+   포수리드는 포수로 나가야 걸리므로 포수 자리(C)만 본다 — 2026-09-18 사용자 확인. */
 function detectTeamBuffs(slots, pick, sdState) {
   var best = { natBat: 0, natPit: 0, catchLead: 0 };
   slots.forEach(function(sl) {
     var pl = pick(sl);
     if (!pl) return;
     var isBat = pl.role === "타자";
-    var cat = isBat ? "타자" : pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
+    var cat = skillCatOf(pl);
     var pts = (sdState && sdState["pts_" + sl]) || [];
     var mn = isLvManual(pl);
     for (var k = 1; k <= 3; k++) {
@@ -532,7 +590,7 @@ function detectTeamBuffs(slots, pick, sdState) {
       /* "포수 리드" 처럼 띄어쓰기만 다른 옛 이름도 잡는다 (canonSkillName 과 같은 취지) */
       var flat = String(nm).replace(/\s+/g, "");
       var key = flat.indexOf("국대에이스") >= 0 ? (isBat ? "natBat" : "natPit")
-        : flat.indexOf("포수리드") >= 0 ? "catchLead" : null;
+        : (flat.indexOf("포수리드") >= 0 && sl === "C") ? "catchLead" : null;
       if (!key) continue;
       var lv = effSkillLv(nm, pl["s" + k + "Lv"], mn, pl.cardType, k, cat, pts);
       if (lv >= 5 && lv > best[key]) best[key] = lv;
@@ -1038,6 +1096,8 @@ function useData(userId, sdState, setSdState, curDeckId){
 
   /* 선수·라인업·세트덱 저장은 나머지 칸도 저장기의 최신 값으로 채워 한 덩어리로 보낸다 */
   var saveP=useCallback(async function(d){
+    /* 자동 레벨은 계산값으로, 스킬 이름은 표 이름으로 정리해서 저장한다 (normPlayerSkills) */
+    d=normPlayerList(d);
     setPlayers(d);
     var deck=writer.take({players:d});
     var did=deckIdRef.current; var uid=uidRef.current;
@@ -2892,8 +2952,9 @@ function readTeam(grid, origin) {
   out.capBatName = at(9, 10);    /* J9 주장 이름 */
   out.capPitName = at(10, 10);   /* J10 투수조장 이름 */
 
-  /* 국대에이스 / 포수리드 — 시트는 "X" 를 없음으로 쓴다 */
-  var lv = function (v) { return (!v || v === "X") ? "없음" : v; };
+  /* 국대에이스 / 포수리드 — 시트는 "X" 를 없음으로 쓴다.
+     빈 칸은 안 적은 것이므로 자동 감지에 맡긴다 ("" = 직접 고른 값 없음) */
+  var lv = function (v) { return !v ? "" : (v === "X" ? "없음" : v); };
   out.sd.natBat = lv(at(3, 10));    /* J3 */
   out.sd.natPit = lv(at(4, 10));    /* J4 */
   out.sd.catchLead = lv(at(5, 10)); /* J5 */
@@ -3003,8 +3064,9 @@ function SetDeckPanel(p) {
   var sdState = p.sdState;
   var setSdState = p.setSdState;
 
+  /* val 을 안 주면 그 칸을 지운다 = 자동 감지로 되돌린다 (시너지·특수 스킬) */
   var upd = function(key, val) {
-    setSdState(function(prev) { var c = Object.assign({}, prev); c[key] = val; return c; });
+    setSdState(function(prev) { var c = Object.assign({}, prev); if (val === undefined) delete c[key]; else c[key] = val; return c; });
   };
 
   var totalSP = setPoint + (sdState.liveSetPo || 0);
@@ -3224,15 +3286,19 @@ function SetDeckPanel(p) {
             return syns.map(function(syn) {
               var manual = sdState[syn.key];
               var on = manual !== undefined ? manual : syn.auto;
+              var synTip = "자동 감지: " + (syn.auto ? "켜짐" : "꺼짐") + (manual !== undefined ? " · 직접 " + (manual ? "켠" : "끈") + " 상태 (눌러서 자동으로)" : "");
               return (<div key={syn.key} style={{ padding: "5px 14px", display: "flex", alignItems: "center", gap: 8 }}>
                 <div onClick={function(){upd(syn.key, on ? false : true);}} style={{ width: 28, height: 16, borderRadius: 8, background: on ? "#4CAF50" : "var(--inner)", border: "1px solid " + (on ? "#4CAF50" : "var(--bd)"), position: "relative", flexShrink: 0, cursor: "pointer" }}>
                   <div style={{ width: 12, height: 12, borderRadius: "50%", background: on ? "#fff" : "var(--td)", position: "absolute", top: 1, left: on ? 14 : 1, transition: "left 0.2s" }} />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1 }} title={synTip}>
                   <div style={{ fontSize: 12, color: on ? "var(--t1)" : "var(--td)", fontWeight: on ? 700 : 400 }}>{syn.label + " 시너지"}</div>
                   <div style={{ fontSize: 8, color: "var(--td)" }}>{syn.desc + " → " + syn.effect}</div>
                 </div>
-                {syn.auto && manual === undefined && (<span style={{ fontSize: 7, color: "#4CAF50", background: "rgba(76,175,80,0.1)", padding: "1px 4px", borderRadius: 3 }}>{"AUTO"}</span>)}
+                {manual === undefined
+                  ? (syn.auto && (<span title={synTip} style={{ fontSize: 7, color: "#4CAF50", background: "rgba(76,175,80,0.1)", padding: "1px 4px", borderRadius: 3 }}>{"AUTO"}</span>))
+                  /* 직접 켜고 끈 값은 여기서 지워 자동으로 되돌린다 */
+                  : (<span onClick={function(){upd(syn.key);}} title={synTip} style={{ fontSize: 7, color: "var(--td)", background: "var(--inner)", padding: "1px 4px", borderRadius: 3, cursor: "pointer" }}>{"자동"}</span>)}
               </div>);
             });
           })()}
@@ -3254,7 +3320,7 @@ function SetDeckPanel(p) {
               return (
                 <div key={sp.key} style={{ padding: "4px 14px", display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 12, color: "var(--t2)", flex: 1 }}>{sp.label}</span>
-                  <select value={cur} title={tip} onChange={function(e) { upd(sp.key, e.target.value); }} style={{ width: 65, padding: "3px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: cur!=="없음"?"#2E86C1":"var(--t1)", fontWeight: cur!=="없음"?700:400, outline: "none" }}>
+                  <select value={cur} title={tip} onChange={function(e) { upd(sp.key, e.target.value || undefined); }} style={{ width: 65, padding: "3px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: cur!=="없음"?"#2E86C1":"var(--t1)", fontWeight: cur!=="없음"?700:400, outline: "none" }}>
                     <option value="">{"자동"}</option>
                     {sp.opts.map(function(o) { return (<option key={o} value={o}>{o}</option>); })}
                   </select>
@@ -3435,10 +3501,19 @@ function LineupPage(p) {
     return "rgba(255,213,79,"+alpha+")";
   };
 
-  /* 전체 타자 스킬/훈련 점수 배열 계산 */
+  /* 전체 타자 스킬/훈련 점수 배열 계산 — 레벨은 점수 계산과 같은 실제 적용 레벨로 본다 */
+  var skillSumOf = function(pl, slot, cat){
+    var mn = isLvManual(pl); var pts = (sdState["pts_" + slot] || []);
+    var t = 0;
+    for(var k = 1; k <= 3; k++){
+      var nm = pl["skill" + k];
+      if(nm) t += getSkillScore(nm, effSkillLv(nm, pl["s"+k+"Lv"], mn, pl.cardType, k, cat, pts), cat);
+    }
+    return t;
+  };
   var allBatSkillScores = lBats.map(function(x){
     if(!x.pl) return null;
-    return getSkillScore(x.pl.skill1,x.pl.s1Lv||0,"타자")+getSkillScore(x.pl.skill2,x.pl.s2Lv||0,"타자")+getSkillScore(x.pl.skill3,x.pl.s3Lv||0,"타자");
+    return skillSumOf(x.pl, x.slot, "타자");
   }).filter(function(v){return v!==null;});
   var allBatTrainScores = lBats.map(function(x){
     if(!x.pl) return null;
@@ -3449,8 +3524,7 @@ function LineupPage(p) {
   var allPitSlots = lSP.concat(lRP).concat([lCP]);
   var allPitSkillScores = allPitSlots.map(function(x){
     if(!x.pl) return null;
-    var pt=x.pl.position==="선발"?"선발":x.pl.position==="마무리"?"마무리":"중계";
-    return getSkillScore(x.pl.skill1,x.pl.s1Lv||0,pt)+getSkillScore(x.pl.skill2,x.pl.s2Lv||0,pt)+getSkillScore(x.pl.skill3,x.pl.s3Lv||0,pt);
+    return skillSumOf(x.pl, x.slot, skillCatOf(x.pl));
   }).filter(function(v){return v!==null;});
   var allPitTrainScores = allPitSlots.map(function(x){
     if(!x.pl) return null;
@@ -3527,7 +3601,8 @@ function LineupPage(p) {
             else updatePl(pl.id, nameField, v);
           }}
         />
-        <select value={lvShown} onChange={function(e) { updatePl(pl.id, lvField, parseInt(e.target.value)); }}
+        {/* 여기서 레벨을 고르면 직접 지정으로 넘어간다 — 자동인 채로 두면 이 값이 안 쓰인다 */}
+        <select value={lvShown} onChange={function(e) { updatePl2(pl.id, lvField, parseInt(e.target.value), "sLvManual", true); }}
           style={{ width: 38, padding: "3px 1px", fontSize: 12, background: "#1e293b", border: "1px solid " + c + "88", borderRadius: 3, color: c, fontFamily: "var(--m)", fontWeight: 700, outline: "none", textAlign: "center" }}>
           {[0,5,6,7,8,9,10].filter(function(v) { return v === 0 || !lvCap || v <= lvCap; })
             .map(function(v) { return (<option key={v} value={v} style={{background:"#1e293b",color:v===0?"#94a3b8":c}}>{v === 0 ? "-" : "Lv" + v}</option>); })}

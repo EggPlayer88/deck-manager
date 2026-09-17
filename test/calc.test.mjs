@@ -7,7 +7,7 @@ import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
-  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs,
+  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills, normPlayerList, hasPtSkill,
   isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
 } from './calc-extract.mjs';
@@ -1230,8 +1230,14 @@ console.log('\n[특수 스킬 자동 감지] 2026-09-18 — 점수 계산과 같
   eq('포수리드 · 10렙 상한 (수동 10 + 특훈 보너스)',
     find({ C: { role: '타자', cardType: '라이브', sLvManual: true, skill1: '포수리드', s1Lv: 10 } }, { pts_C: ['포수리드'] }).catchLead === '10렙' ? 1 : 0, 1);
   eq('포수리드 · 옛 이름 "포수 리드" 도 잡는다', find({ C: catcher('라이브', { skill1: '포수 리드' }) }).catchLead === '7렙' ? 1 : 0, 1);
-  eq('후보 칸도 본다', find({ BN3: natB({ skill1: '국대에이스' }) }).natBat === '6렙' ? 1 : 0, 1);
-  eq('여럿이면 가장 높은 레벨', find({ C: catcher('골든글러브'), BN1: catcher('올스타'), BN2: catcher('라이브') }).catchLead === '8렙' ? 1 : 0, 1);
+  eq('국대에이스는 후보 칸도 본다', find({ BN3: natB({ skill1: '국대에이스' }) }).natBat === '6렙' ? 1 : 0, 1);
+  eq('국대에이스 여럿이면 가장 높은 레벨',
+    find({ DH: natB({ skill2: '국대에이스' }), BN1: natB({ skill1: '국대에이스' }) }).natBat === '6렙' ? 1 : 0, 1);
+  /* 포수리드는 포수로 나가야 걸린다 (2026-09-18 사용자 확인) */
+  eq('포수리드 · 다른 자리 선수 것은 안 본다', find({ DH: catcher('올스타') }).catchLead === '없음' ? 1 : 0, 1);
+  eq('포수리드 · 후보 포수 것도 안 본다', find({ BN1: catcher('올스타') }).catchLead === '없음' ? 1 : 0, 1);
+  eq('포수리드 · 포수 자리 값만 쓴다 (후보에 더 높은 포수가 있어도)',
+    find({ C: catcher('골든글러브'), BN1: catcher('올스타') }).catchLead === '6렙' ? 1 : 0, 1);
   eq('빈 라인업은 모두 없음', (() => { const r = find({}); return r.natBat === '없음' && r.natPit === '없음' && r.catchLead === '없음'; })() ? 1 : 0, 1);
 
   /* computeLineupSetDeck 이 sdState 에 채우고, 그 값이 점수에 들어간다 */
@@ -1246,6 +1252,32 @@ console.log('\n[특수 스킬 자동 감지] 2026-09-18 — 점수 계산과 같
     1.05 + 1.35 + (1.05 + 1.35), 0.011);   /* 포수리드 7렙 + 국대에이스(투수) 5렙 */
   eq('패널에서 직접 고른 값이 자동 감지보다 우선',
     pitWith({ ...sd, catchLead: '없음', natPit: '없음' }) - pitWith({ liveSetPo: 0 }), 0, 0.011);
+}
+
+console.log('\n[스킬 레벨 저장] 2026-09-18 사용자 확인 — 자동이면 계산된 레벨을 저장한다');
+{
+  const nat = (o) => ({ role: '타자', cardType: '국가대표', sLvManual: false, ...o });
+  eq('자동 1옵 — 저장 레벨이 6', normPlayerSkills(nat({ skill1: '국대에이스' })).s1Lv, 6);
+  eq('자동 2옵 — 저장 레벨이 5', normPlayerSkills(nat({ skill2: '국대에이스' })).s2Lv, 5);
+  eq('자동 라이브 1옵 — 저장 레벨이 7',
+    normPlayerSkills({ role: '타자', cardType: '라이브', sLvManual: false, skill1: '포수리드' }).s1Lv, 7);
+  eq('자동이라도 포지션 특훈 보너스는 저장하지 않는다 (자리마다 다르므로)',
+    normPlayerSkills({ role: '타자', cardType: '라이브', sLvManual: false, skill1: '포수리드' }).s1Lv, 7);
+  eq('직접 넣은 레벨은 그대로',
+    normPlayerSkills({ role: '타자', cardType: '라이브', sLvManual: true, skill1: '포수리드', s1Lv: 9 }).s1Lv, 9);
+  eq('국가대표 전용 스킬은 직접 넣어도 6 상한',
+    normPlayerSkills({ role: '타자', cardType: '국가대표', sLvManual: true, skill1: '국대에이스', s1Lv: 10 }).s1Lv, 6);
+  eq('띄어쓰기만 다른 옛 이름은 표 이름으로 정리',
+    normPlayerSkills(nat({ skill1: '포수 리드' })).skill1 === '포수리드' ? 1 : 0, 1);
+  eq('스킬이 없으면 그대로 둔다', normPlayerSkills({ role: '타자', cardType: '라이브', sLvManual: false }).s1Lv === undefined ? 1 : 0, 1);
+  eq('고칠 게 없으면 같은 객체', (() => { const p = nat({ skill1: '국대에이스', s1Lv: 6 }); return normPlayerSkills(p) === p; })() ? 1 : 0, 1);
+  eq('목록도 같은 규칙', normPlayerList([nat({ skill1: '국대에이스' })])[0].s1Lv, 6);
+
+  /* 포지션 특훈 스킬 보너스는 띄어쓰기가 달라도 붙는다 */
+  eq('특훈 보너스 — 띄어쓰기 무시', hasPtSkill(['포수 리드'], '포수리드') ? 1 : 0, 1);
+  eq('특훈 보너스 — 다른 스킬은 아님', hasPtSkill(['정밀타격'], '포수리드') ? 1 : 0, 0);
+  eq('효과 레벨에도 반영 (라이브 7 + 보너스 = 8)',
+    effSkillLv('포수리드', 0, false, '라이브', 1, '타자', ['포수 리드']), 8);
 }
 
 console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선택 팀 · 드림/나눔 · 올스타 · 연도');

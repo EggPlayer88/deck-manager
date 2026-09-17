@@ -65,7 +65,7 @@ var SKILL_POS_LIMIT = {
   "라이징스타": ["선발","중계"], "원포인트릴리프": ["중계","마무리"], "첫단추": ["선발"],
 };
 var CATCHER_ONLY_SKILLS = ["포수리드"];
-function skillBaseName(n) { return String(n || "").replace(/\(.*?\)/g, "").trim(); }
+function skillBaseName(n) { return String(n || "").replace(/\(.*?\)/g, "").replace(/\s+/g, ""); }
 function skillRoleOf(name) {
   var m = /\(([^)]*)\)/.exec(String(name || ""));
   if (!m) return null;
@@ -473,20 +473,65 @@ function maxSkillLv(name, cat){
   return 0;
 }
 function isLvManual(pl){ return !pl || pl.sLvManual === undefined ? true : !!pl.sLvManual; }
+function hasPtSkill(ptSkills, name){
+  if(!ptSkills || !ptSkills.length || !name) return false;
+  var f = String(name).replace(/\s+/g, "");
+  for(var i = 0; i < ptSkills.length; i++){
+    if(String(ptSkills[i] || "").replace(/\s+/g, "") === f) return true;
+  }
+  return false;
+}
 function autoSkillLv(name, cardType, num, cat, ptSkills){
   if(!name) return 0;
   var base = (CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5;
-  if(ptSkills && ptSkills.indexOf(name) >= 0) base += 1;
+  if(hasPtSkill(ptSkills, name)) base += 1;
   var mx = maxSkillLv(name, cat);
   return mx ? Math.min(base, mx) : base;
 }
+function skillCatOf(pl){
+  if(!pl || pl.role === "타자") return "타자";
+  return pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
+}
+var SEED_PLAYERS = [];
+function normPlayerSkills(pl){
+  if(!pl || !SKILL_DATA) return pl;
+  if(!pl.skill1 && !pl.skill2 && !pl.skill3) return pl;
+  /* 저장 줄에는 카드 종류·역할이 없을 수 있다 — 그때는 도감에서 본다 (mergePl 과 같은 기준) */
+  var info = pl;
+  if((!pl.cardType || !pl.role) && pl.dbId){
+    for(var i = 0; i < SEED_PLAYERS.length; i++){
+      if(SEED_PLAYERS[i].id === pl.dbId){
+        var sd = SEED_PLAYERS[i];
+        info = { cardType: pl.cardType || sd.cardType, role: pl.role || sd.role, position: pl.position || sd.position };
+        break;
+      }
+    }
+  }
+  var cat = skillCatOf(info);
+  var manual = isLvManual(pl);
+  var out = null;
+  for(var k = 1; k <= 3; k++){
+    var nm = pl["skill" + k];
+    if(!nm) continue;
+    var canon = canonSkillName(nm, cat);
+    var lv = pl["s" + k + "Lv"] || 0;
+    var want = manual ? lv : autoSkillLv(canon, info.cardType, k, cat, []);
+    if(want > 6 && isNatOnlySkill(canon, cat)) want = 6;
+    if(canon !== nm || want !== lv){
+      out = out || Object.assign({}, pl);
+      out["skill" + k] = canon; out["s" + k + "Lv"] = want;
+    }
+  }
+  return out || pl;
+}
+function normPlayerList(list){ return Array.isArray(list) ? list.map(normPlayerSkills) : list; }
 function effSkillLv(name, storedLv, manual, cardType, num, cat, ptSkills){
   if(!name) return 0;
   var base = manual
     ? (storedLv || 0)
     : ((CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5);
   if(!base) return 0;   /* 수동인데 레벨을 안 넣었으면 스킬 없는 것으로 본다 */
-  if(ptSkills && ptSkills.indexOf(name) >= 0) base += 1;
+  if(hasPtSkill(ptSkills, name)) base += 1;
   var mx = maxSkillLv(name, cat);
   return mx ? Math.min(base, mx) : base;
 }
@@ -1228,7 +1273,7 @@ function detectTeamBuffs(slots, pick, sdState) {
     var pl = pick(sl);
     if (!pl) return;
     var isBat = pl.role === "타자";
-    var cat = isBat ? "타자" : pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
+    var cat = skillCatOf(pl);
     var pts = (sdState && sdState["pts_" + sl]) || [];
     var mn = isLvManual(pl);
     for (var k = 1; k <= 3; k++) {
@@ -1237,7 +1282,7 @@ function detectTeamBuffs(slots, pick, sdState) {
       /* "포수 리드" 처럼 띄어쓰기만 다른 옛 이름도 잡는다 (canonSkillName 과 같은 취지) */
       var flat = String(nm).replace(/\s+/g, "");
       var key = flat.indexOf("국대에이스") >= 0 ? (isBat ? "natBat" : "natPit")
-        : flat.indexOf("포수리드") >= 0 ? "catchLead" : null;
+        : (flat.indexOf("포수리드") >= 0 && sl === "C") ? "catchLead" : null;
       if (!key) continue;
       var lv = effSkillLv(nm, pl["s" + k + "Lv"], mn, pl.cardType, k, cat, pts);
       if (lv >= 5 && lv > best[key]) best[key] = lv;
@@ -1493,4 +1538,4 @@ function toDeckFormat(all, list, fallbackId) {
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, POTM_LIVE_STAT, POTM_OLSTAR, POTM_SPECIAL_STAT, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, toDeckFormat, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, detectTeamBuffs, KBO_LEAGUE, KBO_TEAMS, sdSideOf, isSelTeam, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, OLSTAR_SET_POINTS, NO_AWAKEN_CARDS, awakenScore, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, POTM_LIVE_STAT, POTM_OLSTAR, POTM_SPECIAL_STAT, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, hasPtSkill, skillCatOf, normPlayerSkills, normPlayerList, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, toDeckFormat, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, detectTeamBuffs, KBO_LEAGUE, KBO_TEAMS, sdSideOf, isSelTeam, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, OLSTAR_SET_POINTS, NO_AWAKEN_CARDS, awakenScore, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS };
