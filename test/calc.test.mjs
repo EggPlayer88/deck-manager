@@ -6,7 +6,7 @@ import {
   pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
-  potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
+  potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck,
   isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
@@ -519,22 +519,135 @@ const potmPl = { name: '홍길동', team: '키움', cardType: '라이브', stars
 eq('키 형식', potmKey(potmPl) === '홍길동|키움' ? 1 : 0, 1);
 __setGlobalPotm([{ name: '홍길동', team: '키움' }]);
 eq('전역 POTM 인정', isPotmFor(potmPl, {}) ? 1 : 0, 1);
-eq('라이브 5성 보너스', getPotmBonus(potmPl, { teamName: '키움' }), 6);
+eq('라이브 5성 보너스 +8 (2026-09-18)', getPotmBonus(potmPl, { teamName: '키움' }), 8);
 eq('구단 다르면 0', getPotmBonus(potmPl, { teamName: '삼성' }), 0);
 /* 유저가 끄면 이 덱에서는 POTM 이 아니다 */
 eq('사용자 해제', getPotmBonus(potmPl, { teamName: '키움', potmOff: ['홍길동|키움'] }), 0);
 /* 전역에 없어도 유저가 켜면 POTM */
 __setGlobalPotm([]);
 eq('전역에 없으면 0', getPotmBonus(potmPl, { teamName: '키움' }), 0);
-eq('사용자 지정', getPotmBonus(potmPl, { teamName: '키움', potmOn: ['홍길동|키움'] }), 6);
+eq('사용자 지정', getPotmBonus(potmPl, { teamName: '키움', potmOn: ['홍길동|키움'] }), 8);
 eq('사용자 지정도 구단 일치 필요', getPotmBonus(potmPl, { teamName: '삼성', potmOn: ['홍길동|키움'] }), 0);
 /* 끄기가 켜기보다 우선 */
 eq('해제가 우선', getPotmBonus(potmPl, { teamName: '키움', potmOn: ['홍길동|키움'], potmOff: ['홍길동|키움'] }), 0);
 /* 카드 종류별 보너스 */
 eq('임팩트', getPotmBonus({ name: 'A', team: '키움', cardType: '임팩트' }, { teamName: '키움', potmOn: ['A|키움'] }), 2);
 eq('골든글러브', getPotmBonus({ name: 'A', team: '키움', cardType: '골든글러브' }, { teamName: '키움', potmOn: ['A|키움'] }), 1);
-eq('라이브 4성', getPotmBonus({ name: 'A', team: '키움', cardType: '라이브', stars: 4 }, { teamName: '키움', potmOn: ['A|키움'] }), 12);
+eq('라이브 4성 +14', getPotmBonus({ name: 'A', team: '키움', cardType: '라이브', stars: 4 }, { teamName: '키움', potmOn: ['A|키움'] }), 14);
 __setGlobalPotm([]);
+
+console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이브 / 올스타(2026) / 스페셜');
+{
+  const K = '키움';
+  const on = (pl, extra) => Object.assign({ teamName: K, potmOn: [potmKey(pl)] }, extra || {});
+  const live = (o) => Object.assign({ name: '라', team: K, cardType: '라이브', role: '타자', stars: 5, setScore: 4, year: '2026' }, o);
+  const ol = (o) => Object.assign({ name: '올', team: K, cardType: '올스타', role: '타자', stars: 5, year: '2026' }, o);
+  const sp = (o) => Object.assign({ name: '스', team: K, cardType: '임팩트', role: '타자', stars: 4 }, o);
+
+  /* 명단 매칭 — 이름과 원래 구단이 둘 다 맞아야 */
+  __setGlobalPotm([{ name: '라', team: K }]);
+  eq('명단 — 이름·구단 일치', isPotmFor(live(), {}) ? 1 : 0, 1);
+  eq('명단 — 같은 이름 다른 구단은 아님', isPotmFor(live({ team: '두산' }), {}) ? 1 : 0, 0);
+  __setGlobalPotm([{ name: '라', team: 'KIA' }]);
+  eq('명단 — KIA 는 기아로', isPotmFor(live({ team: '기아' }), {}) ? 1 : 0, 1);
+  eq('키 — KIA 는 기아로', potmKey({ name: '라', team: 'KIA' }) === '라|기아' ? 1 : 0, 1);
+  __setGlobalPotm([]);
+
+  /* 라이브 — 자팀만 */
+  eq('라이브 5성 능력치 +8', potmEffect(live(), on(live())).stat, 8);
+  eq('라이브 4성 능력치 +14', potmEffect(live({ stars: 4 }), on(live())).stat, 14);
+  eq('라이브 3성 능력치 +18', potmEffect(live({ stars: 3 }), on(live())).stat, 18);
+  eq('라이브 1성 능력치 +18', potmEffect(live({ stars: 1 }), on(live())).stat, 18);
+  eq('라이브 셋포 4 → 10', potmEffect(live(), on(live())).setScore, 10);
+  eq('라이브 셋포 차이 +6', potmEffect(live(), on(live())).setDelta, 6);
+  eq('라이브 셋포 10 → 11', potmEffect(live({ setScore: 10 }), on(live())).setScore, 11);
+  eq('라이브 타팀은 효과 없음', potmEffect(live({ team: '두산' }), { teamName: K, potmOn: ['라|두산'] }).on ? 1 : 0, 0);
+  const lp = applyPotmPot(live({ pot1: 'SR+', pot2: 'C', pot3: 'S', potType3: '뜬공형' }), on(live()));
+  eq('라이브 잠재력 모두 A · 각성 없음', lp.pot1 === 'A' && lp.pot2 === 'A' && lp.pot3 === '' && lp.potmPot === 'live' ? 1 : 0, 1);
+  eq('POTM 아니면 잠재력 그대로 (같은 객체)', applyPotmPot(live({ pot1: 'SR+' }), { teamName: K }).pot1 === 'SR+' ? 1 : 0, 1);
+
+  /* 라이브 POTM 은 50·130 우(임국시골)를 골라도 받는다 */
+  const sd50 = (pl, v, st) => calcSDBonus(pl, 'DH', Object.assign({ s95: '', s125: '', s110: '', s50: v }, st), 50, 8).p;
+  eq('50 우 — POTM 라이브 +1', sd50(live(), 'R', on(live())) - sd50(live(), '', on(live())), 1);
+  eq('50 우 — POTM 아닌 라이브 0', sd50(live(), 'R', { teamName: K }) - sd50(live(), '', { teamName: K }), 0);
+  eq('50 좌 — POTM 라이브도 라이브로 +1', sd50(live(), 'L', on(live())) - sd50(live(), '', on(live())), 1);
+  eq('130 우 — POTM 라이브 +1', calcSDBonus(live(), 'DH', Object.assign({ s95: '', s125: '', s110: '', s130: 'R' }, on(live())), 130, 8).a
+     - calcSDBonus(live(), 'DH', Object.assign({ s95: '', s125: '', s110: '', s130: '' }, on(live())), 130, 8).a, 1);
+  eq('50 우 — 올스타 POTM 은 받지 않음', sd50(ol(), 'R', on(ol())) - sd50(ol(), '', on(ol())), 0);
+
+  /* 능력치 +N 은 모든 능력치 (인내·주루·수비 포함) */
+  const b0 = calcSDBonus(live(), 'DH', { teamName: K, s95: '', s125: '', s110: '' }, 0, 8);
+  const b1 = calcSDBonus(live(), 'DH', Object.assign({ s95: '', s125: '', s110: '' }, on(live())), 0, 8);
+  eq('POTM 타자 인내도 +8', b1.n - b0.n, 8);
+  eq('POTM 타자 주루 +8 (기록)', b1.run - b0.run, 8);
+  eq('POTM 타자 수비 +8 (기록)', b1.def - b0.def, 8);
+  const pitL = live({ role: '투수', position: '선발' });
+  const p0 = calcSDBonus(pitL, 'SP1', { teamName: K, s95: '', s125: '', s110: '' }, 0);
+  const p1 = calcSDBonus(pitL, 'SP1', Object.assign({ s95: '', s125: '', s110: '' }, on(pitL)), 0);
+  eq('POTM 투수 변화 +8', p1.c - p0.c, 8);
+  eq('POTM 투수 제구 +8 (기록)', p1.ctl - p0.ctl, 8);
+
+  /* 올스타 — 2026 카드만, 자팀 / 같은 군 / 다른 군 */
+  const eOwn = potmEffect(ol(), on(ol()));
+  eq('올스타 자팀 +6 · 셋포 12', eOwn.stat === 6 && eOwn.setScore === 12 && eOwn.setDelta === 8 && eOwn.rel === 'own' ? 1 : 0, 1);
+  const lg = ol({ team: 'LG' });   /* 키움·LG 모두 나눔 */
+  const eLg = potmEffect(lg, on(lg));
+  eq('올스타 같은 군 +3 · 셋포 8', eLg.stat === 3 && eLg.setScore === 8 && eLg.setDelta === 4 && eLg.rel === 'league' ? 1 : 0, 1);
+  const ds = ol({ team: '두산' }); /* 두산은 드림 */
+  const eDs = potmEffect(ds, on(ds));
+  eq('올스타 다른 군 +3 · 셋포 4 (차이 0)', eDs.stat === 3 && eDs.setScore === 4 && eDs.setDelta === 0 && eDs.rel === 'other' ? 1 : 0, 1);
+  eq('올스타 2025 카드는 효과 없음', potmEffect(ol({ year: '2025' }), on(ol())).on ? 1 : 0, 0);
+  eq('올스타 연도 숫자도 인식', potmEffect(ol({ year: 2026 }), on(ol())).on ? 1 : 0, 1);
+  const op = applyPotmPot(ol({ pot1: 'C', pot2: 'B', potType2: '풀스윙', pot3: '', potType3: '' }), on(ol()));
+  eq('올스타 타자 잠재력 A · 클러치 SR+ · 각성 A', op.pot1 === 'A' && op.pot2 === 'SR+' && op.potType2 === '클러치' && op.pot3 === 'A' && !!op.potType3 && op.potmPot === 'olstar' ? 1 : 0, 1);
+  const olP = ol({ role: '투수', position: '선발' });
+  const opp = applyPotmPot(olP, on(olP));
+  eq('올스타 투수 침착 SR+', opp.pot2 === 'SR+' && opp.potType2 === '침착' ? 1 : 0, 1);
+
+  /* 스페셜 — 자팀만, FA·와일드카드는 자팀 */
+  eq('스페셜 임팩트 자팀 +2 · 셋포 +1', potmEffect(sp(), on(sp())).stat === 2 && potmEffect(sp(), on(sp())).setDelta === 1 ? 1 : 0, 1);
+  eq('스페셜 골글 +1', potmEffect(sp({ cardType: '골든글러브' }), on(sp())).stat, 1);
+  eq('스페셜 시그 +2', potmEffect(sp({ cardType: '시그니처' }), on(sp())).stat, 2);
+  eq('스페셜 국대 +2', potmEffect(sp({ cardType: '국가대표' }), on(sp())).stat, 2);
+  eq('스페셜 셋포 — 임팩트 8', potmEffect(sp(), on(sp())).setScore, 8);
+  eq('스페셜 셋포 — 골글 7', potmEffect(sp({ cardType: '골든글러브' }), on(sp())).setScore, 7);
+  const spO = sp({ team: '두산' });
+  eq('스페셜 타팀은 효과 없음', potmEffect(spO, on(spO)).on ? 1 : 0, 0);
+  const spFa = sp({ team: '두산', isFa: true });
+  const eFa = potmEffect(spFa, on(spFa));
+  eq('스페셜 타팀 FA 는 자팀 — +2 · 셋포 +1 (FA 감점 뒤)', eFa.on && eFa.stat === 2 && eFa.setScore === 6 && eFa.rel === 'flag' ? 1 : 0, 1);
+  const natWc = sp({ team: '두산', cardType: '국가대표', isWildcard: true });
+  eq('스페셜 타팀 와일드카드 국대 +2 · 셋포 8', potmEffect(natWc, on(natWc)).stat === 2 && potmEffect(natWc, on(natWc)).setScore === 8 ? 1 : 0, 1);
+  const selfFa = sp({ isFa: true });
+  eq('자팀 선수의 FA 표시는 무시 — 셋포 7 + 1 = 8', potmEffect(selfFa, on(selfFa)).setScore, 8);
+  eq('시즌 카드는 스페셜 POTM 아님', potmEffect(sp({ cardType: '시즌' }), on(sp())).on ? 1 : 0, 0);
+  eq('스페셜은 잠재력 고정 없음', applyPotmPot(sp({ pot1: 'SR+' }), on(sp())).pot1 === 'SR+' ? 1 : 0, 1);
+
+  /* 총 셋포 — 덱별 설정(끄기·가정)도 따른다 */
+  const total = (d, sd) => computeLineupSetDeck((s) => d[s] || null, Object.assign({ liveSetPo: 0 }, sd));
+  const deck = { C: live(), SP1: ol({ role: '투수', position: '선발' }) };
+  eq('총 셋포 — POTM 없음 4 + 4', total(deck, { teamName: K }), 8);
+  eq('총 셋포 — 둘 다 가정하면 10 + 12', total(deck, { teamName: K, potmOn: ['라|키움', '올|키움'] }), 22);
+  __setGlobalPotm([{ name: '라', team: K }, { name: '올', team: K }]);
+  eq('총 셋포 — 명단 적용', total(deck, { teamName: K }), 22);
+  eq('총 셋포 — 덱에서 끈 선수는 빠짐', total(deck, { teamName: K, potmOff: ['올|키움'] }), 14);
+  __setGlobalPotm([]);
+
+  /* 덱 기준 선수 — FA 정리 + 잠재력 고정, 고점판독기는 고정 잠재력을 건드리지 않는다 */
+  const dp = deckPl(live({ pot1: 'C' }), on(live()));
+  eq('deckPl — POTM 잠재력 고정', dp.pot1 === 'A' && dp.potmPot === 'live' ? 1 : 0, 1);
+  const pk = peakPl(Object.assign({}, dp, { potType1: '풀스윙' }), 'DH');
+  eq('고점판독 — POTM 고정 잠재력은 그대로', pk.pot1 === 'A' && pk.pot3 === '' ? 1 : 0, 1);
+
+  /* 요약 문구 */
+  eq('요약 — 라이브', potmSummary(potmEffect(live(), on(live()))).startsWith('라이브 POTM — 능력치 +8 · 셋포 10') ? 1 : 0, 1);
+  eq('요약 — 올스타 같은 군', potmSummary(eLg).startsWith('올스타 POTM (같은 군) — 능력치 +3 · 셋포 8') ? 1 : 0, 1);
+  eq('요약 — 효과 없으면 빈 문자열', potmSummary(potmEffect(spO, on(spO))), '');
+  eq('요약 — 올스타 타자는 클러치 SR+ 만', potmSummary(eLg, '타자').includes('잠재력 A (클러치 SR+)') ? 1 : 0, 1);
+  eq('요약 — 올스타 투수는 침착 SR+ 만', potmSummary(eLg, '투수').includes('잠재력 A (침착 SR+)') ? 1 : 0, 1);
+  const info = getPotmInfo(ds, on(ds));
+  eq('표시 정보 — 올스타 다른 군도 POTM', info.isPotm && info.isOlstar && info.rel === 'other' && info.bonus === 3 ? 1 : 0, 1);
+}
 
 
 console.log('\n[팀 버프 스킬] 라인업은 버프 뺀 값, 데이터센터는 넣은 값');
@@ -1261,10 +1374,11 @@ console.log('\n[세트덱 점수] FA 는 시그니처 -1, 임팩트 -2 — 총 �
   eq('라이브 추가 셋포는 더한다', total(deck({}), { liveSetPo: 5 }) - base, 5);
 
   /* FA 는 타팀 선수에게만 걸린다 (2026-09-18) — 자팀 선수에게 남은 FA 표시는 감점하지 않는다.
-     POTM 보정은 선수 구단이 덱 구단과 같아야 붙으므로 타팀 FA 선수에게는 붙지 않는다 (POTM 규칙은 따로 정하기로 함) */
-  __setGlobalPotm([{ name: '가', team: '키움' }, { name: '나', team: '두산' }]);
+     스페셜 POTM 은 FA·와일드카드 선수를 자팀으로 본다 (2026-09-18 사용자 확인) */
+  __setGlobalPotm([{ name: '가', team: '키움' }, { name: '나', team: '두산' }, { name: '다', team: '두산' }]);
   eq('자팀 임팩트의 FA 표시는 무시 — 7 + POTM 1 = 8', total({ CP: { cardType: '임팩트', name: '가', team: '키움', isFa: true } }, { teamName: '키움' }), 8);
-  eq('타팀 임팩트 FA — 7 - 2 = 5 (POTM 은 구단이 달라 안 붙음)', total({ CP: { cardType: '임팩트', name: '나', team: '두산', isFa: true } }, { teamName: '키움' }), 5);
+  eq('타팀 임팩트 FA — 7 - 2 + POTM 1 = 6', total({ CP: { cardType: '임팩트', name: '나', team: '두산', isFa: true } }, { teamName: '키움' }), 6);
+  eq('타팀 임팩트(FA 아님) — POTM 효과 없이 7', total({ CP: { cardType: '임팩트', name: '다', team: '두산' } }, { teamName: '키움' }), 7);
   __setGlobalPotm([]);
 
   /* 와일드카드 — 국가대표 8 → 7 */
