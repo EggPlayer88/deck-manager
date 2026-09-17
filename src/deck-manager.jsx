@@ -568,88 +568,159 @@ function computeLineupSetDeck(pick, sdState) {
 /* 95·125 는 원래 선택 없이 자동 적용이었다. 좌/우 선택으로 바꾸면서
    저장된 값이 없는 기존 이용자는 예전과 같은 쪽이 켜져 있도록 둔다 (점수가 안 흔들리게). */
 var SD_LEGACY_AUTO = { "s95": "R", "s125": "L" };
-function sdPick(sdState, sp) { var k = "s" + sp; var x = sdState[k]; return (x === undefined || x === null) ? (SD_LEGACY_AUTO[k] || "") : x; }
+/* KBO 올스타 리그 — 110 구간(드림/나눔)은 선수 소속 구단으로 가른다 */
+var KBO_LEAGUE = { "두산": "드림", "롯데": "드림", "삼성": "드림", "SSG": "드림", "KT": "드림",
+  "기아": "나눔", "한화": "나눔", "LG": "나눔", "NC": "나눔", "키움": "나눔" };
+/* 저장된 선택을 돌려준다. 저장값이 없을 때
+   - 95 는 우, 125 는 좌 (위)
+   - 110 은 덱 구단이 속한 리그 쪽. 덱 구단을 모르면(예전 '내 덱') 양쪽 모두 "B"
+   55 는 예전에 연도만 저장했다(우 효과뿐이었다) — "R:연도" 로 읽는다 */
+function sdPick(sdState, sp) {
+  var k = "s" + sp; var x = sdState[k];
+  if (x === undefined || x === null) {
+    if (sp === 110) { var lg = KBO_LEAGUE[sdState.teamName]; return lg === "드림" ? "L" : lg === "나눔" ? "R" : "B"; }
+    return SD_LEGACY_AUTO[k] || "";
+  }
+  if (sp === 55 && /^\d{4}$/.test(String(x))) return "R:" + x;
+  return x;
+}
+/* 저장값("L" "R" "B" "L:2010" "R:") → 고른 쪽과 연도 */
+function sdSideOf(val) {
+  var s = String(val || ""), c = s.charAt(0), at = s.indexOf(":");
+  return { side: (c === "L" || c === "R" || s === "B") ? c : "", year: at > 0 ? s.slice(at + 1) : "" };
+}
+/* 세트덱의 "선택 팀" — 덱 구단 선수. 골든글러브 카드, FA 로 쓴 타팀 선수,
+   와일드카드로 쓴 국가대표 선수(곧 추가)도 선택 팀으로 친다.
+   덱 구단이 KBO 구단이 아니면(예전 '내 덱') 가릴 수 없으니 모두 선택 팀으로 본다 */
+function isSelTeam(pl, sdState) {
+  var team = (sdState && sdState.teamName) || "";
+  if (!KBO_LEAGUE[team]) return true;
+  return pl.team === team || pl.cardType === "골든글러브" || !!pl.isFa ||
+    (pl.cardType === "국가대표" && !!pl.isWildcard);
+}
+
+/* 세트덱 효과 — 인게임 표기 그대로 (2026-09-17 사용자 대조).
+   능력치 키 — 타자 p 파워 · a 정확 · e 선구 · n 인내 · run 주루 · def 수비
+              투수 c 변화 · s 구위 · vel 구속 · ctl 제구 · sta 지구력 · def 수비
+   점수에는 p·a·e·n·c·s 만 쓴다. 나머지는 인게임과 같은 모양으로 기록만 한다.
+   side — "F": 인게임은 좌/우 택1이지만 좌가 압도적이라 좌로 고정 / "L" 좌 / "R" 우
+   year — 그쪽을 고르면 연도도 고른다. 임팩트 카드는 어느 연도든 받는다
+   who  — 받는 선수 조건 (sdWho)
+   bat / pit — [오르는 능력치 목록, 값]. "*" 는 그 역할의 능력치 전부 (SD_BAT_ALL / SD_PIT_ALL)
+   화면 문구는 SD_ROWS 에 있다 */
+var SD_BAT_ALL = ["p", "a", "e", "n", "run", "def"];
+var SD_PIT_ALL = ["c", "s", "vel", "ctl", "sta", "def"];
+var SD_RULES = [
+  { sp: 30, side: "F", who: { selTeam: true }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 40, side: "L", bat: ["*", 1] },
+  { sp: 40, side: "R", pit: ["*", 1] },
+  { sp: 50, side: "L", who: { cards: ["시즌", "라이브", "올스타"] }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 50, side: "R", who: { cards: ["임팩트", "국가대표", "시그니처", "골든글러브"] }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 55, side: "L", year: true, bat: [["run", "def"], 1] },
+  { sp: 55, side: "R", year: true, pit: [["c", "sta"], 2] },
+  { sp: 60, side: "L", bat: ["*", 1] },
+  { sp: 60, side: "R", pit: ["*", 1] },
+  { sp: 65, side: "L", who: { stars: 3 }, bat: ["*", 2], pit: ["*", 2] },
+  { sp: 65, side: "R", who: { stars: 4 }, bat: [["a", "n"], 2], pit: [["vel", "ctl"], 2] },
+  { sp: 70, side: "L", who: { pos: "starter" }, pit: ["*", 1] },
+  { sp: 70, side: "R", who: { pos: "relief" }, pit: ["*", 2] },
+  { sp: 75, side: "L", year: true, bat: [["p", "a"], 3] },
+  { sp: 75, side: "R", year: true, pit: [["s", "ctl"], 3] },
+  { sp: 80, side: "L", bat: ["*", 1] },
+  { sp: 80, side: "R", pit: ["*", 1] },
+  { sp: 85, side: "L", who: { stars: 4 }, bat: [["p", "a", "e"], 2], pit: [["s", "ctl", "c"], 2] },
+  { sp: 85, side: "R", who: { stars: 5 }, bat: [["p"], 1], pit: [["s"], 1] },
+  { sp: 90, side: "F", who: { selTeam: true }, bat: ["*", 2], pit: ["*", 2] },
+  { sp: 95, side: "L", who: { pos: "infield" }, bat: [["n", "def"], 2] },
+  { sp: 95, side: "R", who: { pos: "outfield" }, bat: [["e", "run"], 2] },
+  { sp: 100, side: "L", bat: ["*", 1] },
+  { sp: 100, side: "R", pit: ["*", 1] },
+  { sp: 105, side: "L", who: { stars: 3 }, bat: ["*", 2], pit: ["*", 2] },
+  { sp: 105, side: "R", who: { stars: 4 }, bat: [["p", "e"], 2], pit: [["s", "c"], 2] },
+  { sp: 110, side: "L", who: { league: "드림" }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 110, side: "R", who: { league: "나눔" }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 115, side: "L", who: { order: [6, 9] }, bat: [["a", "run", "def"], 2] },
+  { sp: 115, side: "R", who: { pos: "relief" }, pit: [["ctl", "s", "sta"], 2] },
+  { sp: 120, side: "L", who: { order: [3, 5] }, bat: ["*", 2] },
+  { sp: 120, side: "R", who: { pos: "starter" }, pit: ["*", 1] },
+  { sp: 125, side: "L", who: { stars: 4 }, bat: [["a", "e", "n"], 2], pit: [["vel", "c", "ctl"], 2] },
+  { sp: 125, side: "R", who: { stars: 5 }, bat: [["n"], 1], pit: [["ctl"], 1] },
+  { sp: 130, side: "L", who: { cards: ["시즌", "라이브", "올스타"] }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 130, side: "R", who: { cards: ["임팩트", "국가대표", "시그니처", "골든글러브"] }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 135, side: "L", who: { order: [3, 5] }, bat: [["a", "run", "def"], 2] },
+  { sp: 135, side: "R", who: { pos: "starter" }, pit: [["ctl", "s", "sta"], 1] },
+  { sp: 140, side: "L", who: { order: [6, 9] }, bat: ["*", 1] },
+  { sp: 140, side: "R", who: { pos: "relief" }, pit: ["*", 1] },
+  { sp: 145, side: "L", who: { order: [1, 2] }, bat: [["a", "run", "e"], 2] },
+  { sp: 145, side: "R", who: { pos: "starter" }, pit: [["ctl", "s", "sta"], 1] },
+  { sp: 150, side: "F", who: { selTeam: true }, bat: ["*", 2], pit: ["*", 2] },
+  { sp: 155, side: "L", who: { order: [1, 2] }, bat: [["p", "e", "n"], 2] },
+  { sp: 155, side: "R", who: { pos: "starter" }, pit: [["vel", "c", "def"], 1] },
+  { sp: 160, side: "L", bat: ["*", 1] },
+  { sp: 160, side: "R", pit: ["*", 1] },
+  { sp: 165, side: "L", bat: [["a", "run", "def"], 1] },
+  { sp: 165, side: "R", pit: [["vel", "c", "def"], 1] },
+  { sp: 170, side: "F", who: { selTeam: true }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 175, side: "L", bat: [["p", "e", "n"], 1] },
+  { sp: 175, side: "R", pit: [["ctl", "s", "sta"], 1] },
+  { sp: 180, side: "L", who: { cards: ["라이브", "올스타"] }, bat: ["*", 2], pit: ["*", 2] },
+  { sp: 180, side: "R", year: true, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 185, side: "L", who: { order: [1, 2] }, bat: [["p", "run"], 2] },
+  { sp: 185, side: "R", year: true, bat: ["*", 1] },
+  { sp: 190, side: "L", who: { pos: "starter" }, pit: [["s", "sta"], 1] },
+  { sp: 190, side: "R", year: true, pit: ["*", 1] },
+  { sp: 195, side: "L", who: { selTeam: true, cards: ["라이브", "올스타", "국가대표"] }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 195, side: "R", who: { selTeam: true, cards: ["시그니처"] }, bat: ["*", 1], pit: ["*", 1] },
+  { sp: 200, side: "L", who: { selTeam: true }, bat: ["*", 2] },
+  { sp: 200, side: "R", who: { selTeam: true }, pit: ["*", 2] }
+];
+/* SD_RULES 의 who 조건. x 는 calcSDBonus 가 만든 선수 정보 */
+function sdWho(w, x) {
+  if (!w) return true;
+  if (w.selTeam && !x.selTeam) return false;
+  if (w.stars && x.stars !== w.stars) return false;
+  if (w.cards && w.cards.indexOf(x.ct) < 0) return false;
+  if (w.league && x.league !== w.league) return false;
+  if (w.order && !(x.order >= w.order[0] && x.order <= w.order[1])) return false;
+  if (w.pos === "starter" && !x.starter) return false;
+  if (w.pos === "relief" && !x.relief) return false;
+  if (w.pos === "infield" && x.outfield) return false;
+  if (w.pos === "outfield" && !x.outfield) return false;
+  return true;
+}
 
 function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!pl) return {p:0,a:0,e:0,n:0,c:0,s:0};
   var isBat = pl.role === "타자";
   var ct = pl.cardType;
   var stars = pl.stars || 5;
-  var isGold = ct === "골든글러브" || ct === "시그니처" || ct === "임팩트" || ct === "국가대표";
-  var isLive = ct === "시즌" || ct === "라이브";
-  var isSP = (pl.position === "선발");
   var isRP = (pl.position === "중계");
   var isCP = (pl.position === "마무리");
   var batSlots = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
   /* 타순 인덱스: batOrderIdx가 있으면 사용, 없으면 포지션 기준 (하위 호환) */
   var batIdx = (batOrderIdx !== undefined) ? batOrderIdx : batSlots.indexOf(slot);
-  var is12 = (batIdx === 0 || batIdx === 1);
-  var is35 = (batIdx >= 2 && batIdx <= 4);
-  var is69 = (batIdx >= 5 && batIdx <= 8);
   var isOF = (slot === "RF" || slot === "CF" || slot === "LF" || slot === "DH");
-  /* 인내(bn)도 다른 능력치와 똑같이 오른다 — "타자 +1" 은 파·정·선·인 넷 다 +1 이다.
-     인내에 가중치가 생기기 전에 만든 코드라 인내만 빠져 있었다. */
-  var bp = 0, ba = 0, be = 0, bn = 0, pc = 0, ps = 0;
-  var v = function(k) { return sdPick(sdState, k); };
   var act = function(sp) { return totalSP >= sp; };
-  var yr = pl.year;
 
-  /* AUTO bonuses */
-  if (act(30)) { bp++; ba++; be++; bn++; pc++; ps++; }
-  if (act(90)) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; }
-  if (act(110)) { bp++; ba++; be++; bn++; pc++; ps++; }
-
-  /* L/R selection bonuses */
-  if (act(40)) { if (v(40)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(40)==="R" && !isBat) { pc++; ps++; } }
-  if (act(50)) { if (v(50)==="L" && isLive) { bp++; ba++; be++; bn++; pc++; ps++; } if (v(50)==="R" && isGold) { bp++; ba++; be++; bn++; pc++; ps++; } }
-  if (act(55)) { var y55=v(55); if (y55 && !isBat) { if (ct==="임팩트") pc+=2; else if (String(yr)===y55) pc+=2; } }
-  if (act(60)) { if (v(60)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(60)==="R" && !isBat) { pc++; ps++; } }
-  if (act(65)) { if (v(65)==="L" && stars===3) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; } if (v(65)==="R" && stars===4 && isBat) { ba+=2; bn+=2; } }
-  if (act(70)) { if (v(70)==="L" && !isBat && !isRP && !isCP) { pc++; ps++; } if (v(70)==="R" && (isRP||isCP)) { pc+=2; ps+=2; } }
-  if (act(75)) {
-    var v75=v(75); var side75=v75&&v75[0]; var yr75=v75&&v75.indexOf(":")>0?v75.split(":")[1]:"";
-    if (side75==="L" && isBat) { var m75=(ct==="임팩트"||String(yr)===yr75); if(m75){bp+=3;ba+=3;} }
-    if (side75==="R" && !isBat) { var m75b=(ct==="임팩트"||String(yr)===yr75); if(m75b) ps+=3; }
-  }
-  if (act(80)) { if (v(80)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(80)==="R" && !isBat) { pc++; ps++; } }
-  if (act(85)) { if (v(85)==="L" && stars===4) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; } if (v(85)==="R" && stars===5) { bp++; ps++; } }
-  if (act(95)) { if (v(95)==="L" && isBat && !isOF) bn+=2; if (v(95)==="R" && isBat && isOF) be+=2; }
-  if (act(100)) { if (v(100)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(100)==="R" && !isBat) { pc++; ps++; } }
-  if (act(105)) { if (v(105)==="L" && stars===3) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; } if (v(105)==="R" && stars===4) { if(isBat){bp+=2;be+=2;} if(!isBat){pc+=2;ps+=2;} } }
-  if (act(115)) { if (v(115)==="L" && isBat && is69) ba+=2; if (v(115)==="R" && (isRP||isCP)) ps+=2; }
-  if (act(120)) { if (v(120)==="L" && isBat && is35) { bp+=2; ba+=2; be+=2; bn+=2; } if (v(120)==="R" && !isBat) { pc++; ps++; } }
-  if (act(125)) {
-    if (v(125)==="L" && stars===4) { if(isBat){ba+=2;be+=2;bn+=2;} else{pc+=2;} }
-    /* 우: 5성 타자 인내+1 / 투수 제구+1 — 제구는 점수 모델에 없어 투수는 변화 없음 */
-    if (v(125)==="R" && stars===5 && isBat) bn++;
-  }
-  if (act(130)) { if (v(130)==="L" && isLive) { bp++; ba++; be++; bn++; pc++; ps++; } if (v(130)==="R" && isGold) { bp++; ba++; be++; bn++; pc++; ps++; } }
-  if (act(135)) { if (v(135)==="L" && isBat && is35) ba+=2; if (v(135)==="R" && isSP) ps++; }
-  if (act(140)) { if (v(140)==="L" && isBat && is69) { bp++; ba++; be++; bn++; } if (v(140)==="R" && (isRP||isCP)) { pc++; ps++; } }
-  if (act(145)) { if (v(145)==="L" && isBat && is12) { ba+=2; be+=2; } if (v(145)==="R" && isSP) ps++; }
-  if (act(150)) { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; }
-  if (act(155)) { if (v(155)==="L" && isBat && is12) { bp+=2; be+=2; bn+=2; } if (v(155)==="R" && isSP) pc++; }
-  if (act(160)) { if (v(160)==="L" && isBat) { bp++; ba++; be++; bn++; } if (v(160)==="R" && !isBat) { pc++; ps++; } }
-  if (act(165)) { if (v(165)==="L" && isBat) ba++; if (v(165)==="R" && !isBat) pc++; }
-  if (act(170)) { bp++; ba++; be++; bn++; pc++; ps++; }
-  if (act(175)) { if (v(175)==="L" && isBat) { bp++; be++; bn++; } if (v(175)==="R" && !isBat) ps++; }
-  if (act(180)) {
-    var v180=v(180);
-    if (v180==="L" && ct==="라이브") { bp+=2; ba+=2; be+=2; bn+=2; pc+=2; ps+=2; }
-    if (typeof v180==="string"&&v180.startsWith("R:")) { var yr180=v180.split(":")[1]; if(isBat){if(ct==="임팩트"){bp++;ba++;be++;bn++;}else if(String(yr)===yr180){bp++;ba++;be++;bn++;}} else{if(ct==="임팩트"){pc++;ps++;}else if(String(yr)===yr180){pc++;ps++;}} }
-  }
-  if (act(185)) {
-    var v185=v(185);
-    if (v185==="L" && isBat && is12) bp+=2;
-    if (typeof v185==="string"&&v185.startsWith("R:")) { var yr185=v185.split(":")[1]; if(isBat){if(ct==="임팩트"){bp++;ba++;be++;bn++;}else if(String(yr)===yr185){bp++;ba++;be++;bn++;}} }
-  }
-  if (act(190)) {
-    var v190=v(190);
-    if (v190==="L" && isSP) ps++;
-    if (typeof v190==="string"&&v190.startsWith("R:")) { var yr190=v190.split(":")[1]; if(!isBat){if(ct==="임팩트"){pc++;ps++;}else if(String(yr)===yr190){pc++;ps++;}} }
-  }
-  if (act(195)) { if (v(195)==="L" && (ct==="라이브"||ct==="국가대표")) { bp++; ba++; be++; bn++; pc++; ps++; } if (v(195)==="R" && ct==="시그니처") { bp++; ba++; be++; bn++; pc++; ps++; } }
-  if (act(200)) { if (v(200)==="L" && isBat) { bp+=2; ba+=2; be+=2; bn+=2; } if (v(200)==="R" && !isBat) { pc+=2; ps+=2; } }
+  /* 세트덱 구간 효과 (SD_RULES) */
+  var S = { p: 0, a: 0, e: 0, n: 0, run: 0, def: 0, c: 0, s: 0, vel: 0, ctl: 0, sta: 0 };
+  var x = { ct: ct, stars: stars, selTeam: isSelTeam(pl, sdState), league: KBO_LEAGUE[pl.team] || "",
+    order: isBat && batIdx >= 0 ? batIdx + 1 : 0, outfield: isBat && isOF,
+    starter: !isBat && !isRP && !isCP, relief: !isBat && (isRP || isCP) };
+  SD_RULES.forEach(function(r) {
+    if (!act(r.sp)) return;
+    var eff = isBat ? r.bat : r.pit;
+    if (!eff) return;
+    if (r.side !== "F") {
+      var got = sdSideOf(sdPick(sdState, r.sp));
+      if (got.side !== r.side && got.side !== "B") return;
+      if (r.year && ct !== "임팩트" && !(got.year && String(pl.year) === got.year)) return;
+    }
+    if (!sdWho(r.who, x)) return;
+    var keys = eff[0] === "*" ? (isBat ? SD_BAT_ALL : SD_PIT_ALL) : eff[0];
+    keys.forEach(function(k) { S[k] += eff[1]; });
+  });
+  var bp = S.p, ba = S.a, be = S.e, bn = S.n, pc = S.c, ps = S.s;
 
   /* Synergy */
   var synCounts = sdState._synCounts || {};
@@ -659,7 +730,8 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   var synLive = sdState.synLive !== undefined ? sdState.synLive : autoLive;
   var synImp = sdState.synImpact !== undefined ? sdState.synImpact : autoImp;
   var synSig = sdState.synSig !== undefined ? sdState.synSig : autoSig;
-  if (synLive) { bp++; ba++; be++; bn++; pc++; ps++; }
+  /* 라이브 시너지는 전체 +1 — 점수에 안 쓰는 능력치도 같이 기록한다 */
+  if (synLive) { bp++; ba++; be++; bn++; pc++; ps++; S.run++; S.def++; S.vel++; S.ctl++; S.sta++; }
   if (synImp && isBat) { bp++; ba++; be++; bn++; }
   if (synSig && !isBat) { pc++; ps++; }
 
@@ -722,8 +794,9 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   else { pc += potmB; ps += potmB; }
 
   var ptSkillList = (sdState["pts_" + slot] || []).filter(function(x){ return !!x; });
-  return isBat ? {p:bp,a:ba,e:be,n:bn,ptSkills:ptSkillList,_sdState:sdState}
-               : {c:pc,s:ps,ptSkills:ptSkillList,_sdState:sdState};
+  /* run·def·vel·ctl·sta 는 점수에 안 쓰고 세트덱 효과만 담는다 */
+  return isBat ? {p:bp,a:ba,e:be,n:bn,run:S.run,def:S.def,ptSkills:ptSkillList,_sdState:sdState}
+               : {c:pc,s:ps,vel:S.vel,ctl:S.ctl,sta:S.sta,def:S.def,ptSkills:ptSkillList,_sdState:sdState};
 }
 
 /* ================================================================
@@ -2720,40 +2793,43 @@ function parseManagerWorkbook(wb) {
   return { team: team, sheet: sn, headerRows: { bat: hB + origin, pit: hP + origin }, entries: entries, lineup: readLineup(grid) };
 }
 
+/* 세트덱 패널 문구 — 인게임 표기 그대로 (2026-09-17 사용자 대조). 효과 계산은 SD_RULES.
+   auto: 인게임은 좌/우 택1이지만 좌(선택 팀)가 압도적이라 좌로 고정했다
+   yearLR: 좌/우를 고른 뒤 연도 / lrYear: 좌는 버튼만, 우는 연도까지 */
 var SD_ROWS = [
-  {sp:30,type:"auto",desc:"모두 +1"},
+  {sp:30,type:"auto",desc:"선택 팀 선수 모두 +1 (좌 고정)"},
   {sp:40,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:50,type:"lr",lDesc:"시즌/라이브 +1",rDesc:"골든/시그/임팩/국대 +1"},
-  {sp:55,type:"yearR",rDesc:"투수 변화: 임팩트+2, 연도매치+2"},
+  {sp:50,type:"lr",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
+  {sp:55,type:"yearLR",lDesc:"선택 연도 타자 주루/수비 +1",rDesc:"선택 연도 투수 변화/지구력 +2"},
   {sp:60,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:65,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 정확·인내 +2"},
-  {sp:70,type:"lr",lDesc:"선발 +1",rDesc:"불펜+마무리 +2"},
-  {sp:75,type:"yearLR",lDesc:"타자 파정 +3 (연도선택)",rDesc:"투수 구위 +3 (연도선택)"},
+  {sp:65,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 정확/인내 +2 · 4성 투수 구속/제구 +2"},
+  {sp:70,type:"lr",lDesc:"선발 +1",rDesc:"중계/마무리 +2"},
+  {sp:75,type:"yearLR",lDesc:"선택 연도 타자 파워/정확 +3",rDesc:"선택 연도 투수 구위/제구 +3"},
   {sp:80,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:85,type:"lr",lDesc:"4성 +2",rDesc:"5성 파구 +1"},
-  {sp:90,type:"auto",desc:"모두 +2"},
-  {sp:95,type:"lr",lDesc:"내야+포수 인내 +2",rDesc:"외야+지명 선구 +2"},
+  {sp:85,type:"lr",lDesc:"4성 타자 파워/정확/선구 +2 · 4성 투수 구위/제구/변화 +2",rDesc:"5성 타자 파워 +1 · 5성 투수 구위 +1"},
+  {sp:90,type:"auto",desc:"선택 팀 선수 모두 +2 (좌 고정)"},
+  {sp:95,type:"lr",lDesc:"내야/포수 인내/수비 +2",rDesc:"외야/지명 선구/주루 +2"},
   {sp:100,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:105,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 파선 +2 & 투수 변구 +2"},
-  {sp:110,type:"auto",desc:"모두 +1"},
-  {sp:115,type:"lr",lDesc:"6~9번 정확 +2",rDesc:"불펜+마무리 구위 +2"},
-  {sp:120,type:"lr",lDesc:"3~5번 +2",rDesc:"투수 +1"},
-  {sp:125,type:"lr",lDesc:"4성 타자 정선인 +2 / 투수 변화 +2",rDesc:"5성 타자 인내 +1"},
-  {sp:130,type:"lr",lDesc:"시즌/라이브 +1",rDesc:"골든/시그/임팩/국대 +1"},
-  {sp:135,type:"lr",lDesc:"3~5번 정확 +2",rDesc:"선발 구위 +1"},
-  {sp:140,type:"lr",lDesc:"6~9번 +1",rDesc:"불펜+마무리 +1"},
-  {sp:145,type:"lr",lDesc:"1~2번 정선 +2",rDesc:"선발 구위 +1"},
-  {sp:150,type:"auto",desc:"모두 +2"},
-  {sp:155,type:"lr",lDesc:"1~2번 파선인 +2",rDesc:"선발 변화 +1"},
+  {sp:105,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 파워/선구 +2 · 4성 투수 구위/변화 +2"},
+  {sp:110,type:"lr",lDesc:"드림(두산·롯데·삼성·SSG·KT) 모두 +1",rDesc:"나눔(기아·한화·LG·NC·키움) 모두 +1"},
+  {sp:115,type:"lr",lDesc:"6~9번 정확/주루/수비 +2",rDesc:"중계/마무리 제구/구위/지구력 +2"},
+  {sp:120,type:"lr",lDesc:"3~5번 모두 +2",rDesc:"선발 +1"},
+  {sp:125,type:"lr",lDesc:"4성 타자 정확/선구/인내 +2 · 4성 투수 구속/변화/제구 +2",rDesc:"5성 타자 인내 +1 · 5성 투수 제구 +1"},
+  {sp:130,type:"lr",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
+  {sp:135,type:"lr",lDesc:"3~5번 정확/주루/수비 +2",rDesc:"선발 제구/구위/지구력 +1"},
+  {sp:140,type:"lr",lDesc:"6~9번 +1",rDesc:"중계/마무리 +1"},
+  {sp:145,type:"lr",lDesc:"1~2번 정확/주루/선구 +2",rDesc:"선발 제구/구위/지구력 +1"},
+  {sp:150,type:"auto",desc:"선택 팀 선수 모두 +2 (좌 고정)"},
+  {sp:155,type:"lr",lDesc:"1~2번 파워/선구/인내 +2",rDesc:"선발 구속/변화/수비 +1"},
   {sp:160,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:165,type:"lr",lDesc:"타자 정확 +1",rDesc:"투수 변화 +1"},
-  {sp:170,type:"auto",desc:"모두 +1"},
-  {sp:175,type:"lr",lDesc:"타자 파선인 +1",rDesc:"구위 +1"},
-  {sp:180,type:"lrYear",lDesc:"라이브 +2",rDesc:"전체 연도 +1"},
-  {sp:185,type:"lrYear",lDesc:"1~2번 파워 +2",rDesc:"타자 연도 +1"},
-  {sp:190,type:"lrYear",lDesc:"선발 구위 +1",rDesc:"투수 연도 +1"},
-  {sp:195,type:"lr",lDesc:"라이브/국대 +1",rDesc:"시그니처 +1"},
-  {sp:200,type:"lr",lDesc:"타자 +2",rDesc:"투수 +2"},
+  {sp:165,type:"lr",lDesc:"타자 정확/주루/수비 +1",rDesc:"투수 구속/변화/수비 +1"},
+  {sp:170,type:"auto",desc:"선택 팀 선수 모두 +1 (좌 고정)"},
+  {sp:175,type:"lr",lDesc:"타자 파워/선구/인내 +1",rDesc:"투수 제구/구위/지구력 +1"},
+  {sp:180,type:"lrYear",lDesc:"라이브/올스타 +2",rDesc:"선택 연도 모두 +1"},
+  {sp:185,type:"lrYear",lDesc:"1~2번 파워/주루 +2",rDesc:"선택 연도 타자 +1"},
+  {sp:190,type:"lrYear",lDesc:"선발 구위/지구력 +1",rDesc:"선택 연도 투수 +1"},
+  {sp:195,type:"lr",lDesc:"선택 팀 라이브/올스타/국가대표 +1",rDesc:"선택 팀 시그니처 +1"},
+  {sp:200,type:"lr",lDesc:"선택 팀 타자 +2",rDesc:"선택 팀 투수 +2"},
 ];
 
 function SetDeckPanel(p) {
@@ -2774,10 +2850,7 @@ function SetDeckPanel(p) {
   var activeCount = 0;
   SD_ROWS.forEach(function(r) {
     if (totalSP < r.sp) return;
-    if (r.type === "auto") { activeCount++; return; }
-    var k = "s" + r.sp;
-    var v = sdState[k];
-    if (v === "L" || v === "R" || (typeof v === "string" && v.length === 4)) activeCount++;
+    if (r.type === "auto" || sdSideOf(sdPick(sdState, r.sp)).side) activeCount++;
   });
 
   var radioStyle = function(active, selected, side) {
@@ -2836,24 +2909,6 @@ function SetDeckPanel(p) {
             style={{ width: "100%", padding: "6px 8px", fontSize: 12, background: on2 ? "rgba(206,147,216,0.12)" : "var(--inner)", border: on2 ? "1px solid rgba(206,147,216,0.4)" : "1px solid var(--bd)", borderRadius: 6, color: on2 ? "var(--acp)" : "var(--t2)", cursor: active ? "pointer" : "default", fontWeight: on2 ? 700 : 400 }}>
             {r.rDesc}
           </button>
-        </div>
-      );
-    }
-
-    if (r.type === "yearR") {
-      return (
-        <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acp)" }}>{r.sp}</span>
-            <span style={{ fontSize: 11, color: "var(--td)" }}>{"연도 선택"}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 12, color: "var(--t2)", flex: 1 }}>{r.rDesc}</span>
-            <select value={val} onChange={active ? function(e) { upd(k, e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: val ? "var(--acp)" : "var(--t1)", outline: "none" }}>
-              <option value="">{"X"}</option>
-              {[1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(function(y) { return (<option key={y} value={String(y)}>{y}</option>); })}
-            </select>
-          </div>
         </div>
       );
     }

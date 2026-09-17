@@ -8,6 +8,7 @@ import {
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck,
+  isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL,
 } from './calc-extract.mjs';
 
 let pass = 0, fail = 0;
@@ -340,7 +341,7 @@ eq('200 좌 - 인내 +2', sdBat(200, "L").n - sdBat(200, "").n, 2);
 var atSP = function(sp){ return calcSDBonus({ role:"타자", cardType:"시즌", stars:5 }, "DH", {}, sp, 8); };
 eq('30 자동 - 인내 +1', atSP(30).n - atSP(29).n, 1);
 eq('90 자동 - 인내 +2', atSP(90).n - atSP(89).n, 2);
-eq('110 자동 - 인내 +1', atSP(110).n - atSP(109).n, 1);
+/* 110 은 2026-09 부터 드림/나눔 선택 — 아래 [세트덱 인게임 대조] 에서 본다 */
 eq('150 자동 - 인내 +2', atSP(150).n - atSP(149).n, 2);
 eq('170 자동 - 인내 +1', atSP(170).n - atSP(169).n, 1);
 eq('투수는 인내 없음', sdPit(40, "R").n === undefined ? 1 : 0, 1);
@@ -1044,6 +1045,104 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   const pitSD = (sd) => calcPit(pit, lu(pit), calcSDBonus(pit, 'SP1', sd, 0)).total;
   eq('고점 포수의 포수리드 6렙이 투수 점수에 들어간다 (변화 1.05 + 구위 1.35)',
     pitSD(peakBuffState({ _autoCatch: '없음' }, { _autoCatch: '6렙' })) - pitSD({ _autoCatch: '없음' }), 2.4, 0.011);
+}
+
+console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선택 팀 · 드림/나눔 · 올스타 · 연도');
+{
+  const K = '키움';
+  const on = (sp, v, team) => Object.assign({ s95: '', s125: '', s110: '', teamName: team === undefined ? K : team },
+    v === undefined ? {} : { ['s' + sp]: v });
+  /* 그 구간을 켰을 때 오르는 값. v 가 없으면 좌 고정 구간 — 셋포 sp 와 sp-1 을 비교한다 */
+  const gain = (pl, slot, sp, v, key, ord) => {
+    const forced = v === undefined;
+    const a = calcSDBonus(pl, slot, on(sp, v), sp, ord);
+    const b = calcSDBonus(pl, slot, on(sp, forced ? undefined : ''), forced ? sp - 1 : sp, ord);
+    return (a[key] || 0) - (b[key] || 0);
+  };
+  const bat = (o) => Object.assign({ role: '타자', cardType: '시즌', stars: 5, team: K, year: '2010' }, o);
+  const pit = (o) => Object.assign({ role: '투수', cardType: '시즌', stars: 5, team: K, year: '2010', position: '선발' }, o);
+
+  eq('선택 팀 — 덱 구단 선수', isSelTeam(bat(), { teamName: K }) ? 1 : 0, 1);
+  eq('선택 팀 — 타팀 선수는 아님', isSelTeam(bat({ team: '두산' }), { teamName: K }) ? 1 : 0, 0);
+  eq('선택 팀 — 타팀 골든글러브는 선택 팀', isSelTeam(bat({ team: '두산', cardType: '골든글러브' }), { teamName: K }) ? 1 : 0, 1);
+  eq('선택 팀 — FA 로 쓴 타팀 선수', isSelTeam(bat({ team: '두산', cardType: '임팩트', isFa: true }), { teamName: K }) ? 1 : 0, 1);
+  eq('선택 팀 — 와일드카드 국가대표', isSelTeam(bat({ team: '두산', cardType: '국가대표', isWildcard: true }), { teamName: K }) ? 1 : 0, 1);
+  eq('선택 팀 — 와일드카드 표시가 있어도 국가대표가 아니면 아님', isSelTeam(bat({ team: '두산', cardType: '라이브', isWildcard: true }), { teamName: K }) ? 1 : 0, 0);
+  eq('선택 팀 — 덱 구단을 모르면(예전 내 덱) 모두 선택 팀', isSelTeam(bat({ team: '두산' }), { teamName: '내 덱' }) ? 1 : 0, 1);
+
+  eq('30 좌 고정 — 선택 팀 타자 파워 +1', gain(bat(), 'DH', 30, undefined, 'p', 8), 1);
+  eq('30 좌 고정 — 선택 팀 타자 주루 +1 (기록만)', gain(bat(), 'DH', 30, undefined, 'run', 8), 1);
+  eq('30 좌 고정 — 타팀 타자는 0', gain(bat({ team: '두산' }), 'DH', 30, undefined, 'p', 8), 0);
+  eq('90 좌 고정 — 타팀 골든글러브 투수 구위 +2', gain(pit({ team: '두산', cardType: '골든글러브' }), 'SP1', 90, undefined, 's'), 2);
+  eq('150 좌 고정 — 선택 팀 투수 지구력 +2 (기록만)', gain(pit(), 'SP1', 150, undefined, 'sta'), 2);
+  eq('170 좌 고정 — 타팀 투수 변화 0', gain(pit({ team: 'LG' }), 'SP1', 170, undefined, 'c'), 0);
+
+  eq('110 좌(드림) — 두산 타자 +1', gain(bat({ team: '두산' }), 'DH', 110, 'L', 'p', 8), 1);
+  eq('110 좌(드림) — 키움 타자 0', gain(bat(), 'DH', 110, 'L', 'p', 8), 0);
+  eq('110 우(나눔) — 키움 투수 +1', gain(pit(), 'SP1', 110, 'R', 'c'), 1);
+  eq('110 기본 — 키움 덱은 나눔(우)', sdPick({ teamName: '키움' }, 110) === 'R' ? 1 : 0, 1);
+  eq('110 기본 — 두산 덱은 드림(좌)', sdPick({ teamName: '두산' }, 110) === 'L' ? 1 : 0, 1);
+  eq('110 기본 — 덱 구단을 모르면 양쪽', sdPick({ teamName: '내 덱' }, 110) === 'B' ? 1 : 0, 1);
+  const byDefault = (pl, key) => {
+    const st = { s95: '', s125: '', teamName: K };
+    return (calcSDBonus(pl, 'DH', st, 110, 8)[key] || 0) - (calcSDBonus(pl, 'DH', st, 109, 8)[key] || 0);
+  };
+  eq('110 기본 적용 — 키움 덱의 키움 타자 +1', byDefault(bat(), 'p'), 1);
+  eq('110 기본 적용 — 키움 덱의 두산 타자 0', byDefault(bat({ team: '두산' }), 'p'), 0);
+
+  eq('50 좌 — 올스타 +1', gain(bat({ cardType: '올스타' }), 'DH', 50, 'L', 'a', 8), 1);
+  eq('130 좌 — 올스타 투수 +1', gain(pit({ cardType: '올스타' }), 'SP1', 130, 'L', 's'), 1);
+  eq('180 좌 — 올스타 +2', gain(bat({ cardType: '올스타' }), 'DH', 180, 'L', 'p', 8), 2);
+  eq('180 좌 — 시즌은 0', gain(bat(), 'DH', 180, 'L', 'p', 8), 0);
+  eq('195 좌 — 선택 팀 올스타 +1', gain(bat({ cardType: '올스타' }), 'DH', 195, 'L', 'p', 8), 1);
+  eq('195 좌 — 타팀 라이브 0', gain(bat({ cardType: '라이브', team: 'LG' }), 'DH', 195, 'L', 'p', 8), 0);
+  eq('195 우 — 타팀 시그니처 0', gain(pit({ cardType: '시그니처', team: 'LG' }), 'SP1', 195, 'R', 'c'), 0);
+  eq('195 우 — FA 로 쓴 타팀 시그니처 +1', gain(pit({ cardType: '시그니처', team: 'LG', isFa: true }), 'SP1', 195, 'R', 'c'), 1);
+  eq('200 좌 — 타팀 타자 0', gain(bat({ team: 'LG' }), 'DH', 200, 'L', 'p', 8), 0);
+  eq('200 우 — 선택 팀 투수 +2', gain(pit(), 'SP1', 200, 'R', 's'), 2);
+
+  eq('85 좌 — 4성 타자 선구 +2', gain(bat({ stars: 4 }), 'DH', 85, 'L', 'e', 8), 2);
+  eq('85 좌 — 4성 타자 인내는 0', gain(bat({ stars: 4 }), 'DH', 85, 'L', 'n', 8), 0);
+  eq('85 좌 — 4성 투수 제구 +2 (기록만)', gain(pit({ stars: 4 }), 'SP1', 85, 'L', 'ctl'), 2);
+  eq('120 우 — 선발 변화 +1', gain(pit(), 'SP1', 120, 'R', 'c'), 1);
+  eq('120 우 — 중계 0', gain(pit({ position: '중계' }), 'RP1', 120, 'R', 'c'), 0);
+  eq('120 우 — 마무리 0', gain(pit({ position: '마무리' }), 'CP', 120, 'R', 's'), 0);
+
+  eq('55 좌 — 고른 연도 타자 주루 +1', gain(bat(), 'DH', 55, 'L:2010', 'run', 8), 1);
+  eq('55 좌 — 파워는 그대로', gain(bat(), 'DH', 55, 'L:2010', 'p', 8), 0);
+  eq('55 좌 — 연도가 다르면 0', gain(bat({ year: '2015' }), 'DH', 55, 'L:2010', 'def', 8), 0);
+  eq('55 우 — 고른 연도 투수 변화 +2', gain(pit(), 'SP1', 55, 'R:2010', 'c'), 2);
+  eq('55 우 — 지구력 +2 (기록만)', gain(pit(), 'SP1', 55, 'R:2010', 'sta'), 2);
+  eq('55 예전 저장값(연도만) — 우로 읽는다', gain(pit(), 'SP1', 55, '2010', 'c'), 2);
+  eq('55 예전 저장값 — sdPick 은 R:연도', sdPick({ s55: '2010' }, 55) === 'R:2010' ? 1 : 0, 1);
+
+  eq('75 좌 — 임팩트는 연도와 상관없이 파워 +3', gain(bat({ cardType: '임팩트', year: '' }), 'DH', 75, 'L:2010', 'p', 8), 3);
+  eq('185 우 — 임팩트 타자 정확 +1', gain(bat({ cardType: '임팩트', year: '' }), 'DH', 185, 'R:2010', 'a', 8), 1);
+  eq('190 우 — 연도를 안 고르면 임팩트만 (일반 0 · 임팩트 1)',
+    gain(pit({ year: '' }), 'SP1', 190, 'R:', 'c') * 10 + gain(pit({ cardType: '임팩트', year: '' }), 'SP1', 190, 'R:', 'c'), 1);
+
+  eq('95 좌 — 내야 수비 +2 (기록만)', gain(bat(), 'SS', 95, 'L', 'def', 0), 2);
+  const lu0 = { enhance: '9각성' };
+  const bp0 = bat({ power: 80, accuracy: 80, eye: 70, patience: 60 }), pp0 = pit({ change: 80, stuff: 80 });
+  eq('기록만 하는 능력치는 타자 점수에 안 들어감',
+    calcBat(bp0, lu0, { p: 0, a: 0, e: 0, n: 0, run: 9, def: 9 }).total - calcBat(bp0, lu0, { p: 0, a: 0, e: 0, n: 0 }).total, 0);
+  eq('기록만 하는 능력치는 투수 점수에 안 들어감',
+    calcPit(pp0, lu0, { c: 0, s: 0, vel: 9, ctl: 9, sta: 9, def: 9 }).total - calcPit(pp0, lu0, { c: 0, s: 0 }).total, 0);
+
+  /* 패널 문구(SD_ROWS)와 효과 표(SD_RULES)가 같은 모양인지 */
+  const sameShape = SD_ROWS.every((r) => {
+    const rs = SD_RULES.filter((x) => x.sp === r.sp);
+    if (r.type === 'auto') return rs.length === 1 && rs[0].side === 'F';
+    const L = rs.find((x) => x.side === 'L'), R = rs.find((x) => x.side === 'R');
+    if (rs.length !== 2 || !L || !R) return false;
+    if (r.type === 'yearLR') return !!L.year && !!R.year;
+    if (r.type === 'lrYear') return !L.year && !!R.year;
+    return !L.year && !R.year;
+  });
+  eq('패널 33구간과 효과 표가 같은 모양', sameShape && SD_ROWS.length === 33 ? 1 : 0, 1);
+  const keysOk = SD_RULES.every((r) => ['bat', 'pit'].every((role) =>
+    !r[role] || r[role][0] === '*' || r[role][0].every((k) => (role === 'bat' ? SD_BAT_ALL : SD_PIT_ALL).includes(k))));
+  eq('효과 표의 능력치 키가 모두 그 역할의 것', keysOk ? 1 : 0, 1);
 }
 
 console.log('\n[세트덱 점수] FA 는 시그니처 -1, 임팩트 -2 — 총 셋포와 화면 표시가 같은 값을 쓴다');
