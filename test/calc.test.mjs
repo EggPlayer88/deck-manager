@@ -6,7 +6,7 @@ import {
   pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
-  potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
+  potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck,
   isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
@@ -589,7 +589,7 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
 
   /* 올스타 — 2026 카드만, 자팀 / 같은 군 / 다른 군 */
   const eOwn = potmEffect(ol(), on(ol()));
-  eq('올스타 자팀 +6 · 셋포 12', eOwn.stat === 6 && eOwn.setScore === 12 && eOwn.setDelta === 8 && eOwn.rel === 'own' ? 1 : 0, 1);
+  eq('올스타 자팀 +6 · 셋포 12 (평소 8 에서 +4)', eOwn.stat === 6 && eOwn.setScore === 12 && eOwn.setDelta === 4 && eOwn.rel === 'own' ? 1 : 0, 1);
   const lg = ol({ team: 'LG' });   /* 키움·LG 모두 나눔 */
   const eLg = potmEffect(lg, on(lg));
   eq('올스타 같은 군 +3 · 셋포 8', eLg.stat === 3 && eLg.setScore === 8 && eLg.setDelta === 4 && eLg.rel === 'league' ? 1 : 0, 1);
@@ -599,7 +599,7 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('올스타 2025 카드는 효과 없음', potmEffect(ol({ year: '2025' }), on(ol())).on ? 1 : 0, 0);
   eq('올스타 연도 숫자도 인식', potmEffect(ol({ year: 2026 }), on(ol())).on ? 1 : 0, 1);
   const op = applyPotmPot(ol({ pot1: 'C', pot2: 'B', potType2: '풀스윙', pot3: '', potType3: '' }), on(ol()));
-  eq('올스타 타자 잠재력 A · 클러치 SR+ · 각성 A', op.pot1 === 'A' && op.pot2 === 'SR+' && op.potType2 === '클러치' && op.pot3 === 'A' && !!op.potType3 && op.potmPot === 'olstar' ? 1 : 0, 1);
+  eq('올스타 타자 잠재력 A · 클러치 SR+ · 각성 없음', op.pot1 === 'A' && op.pot2 === 'SR+' && op.potType2 === '클러치' && op.pot3 === '' && op.potmPot === 'olstar' ? 1 : 0, 1);
   const olP = ol({ role: '투수', position: '선발' });
   const opp = applyPotmPot(olP, on(olP));
   eq('올스타 투수 침착 SR+', opp.pot2 === 'SR+' && opp.potType2 === '침착' ? 1 : 0, 1);
@@ -626,11 +626,34 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   /* 총 셋포 — 덱별 설정(끄기·가정)도 따른다 */
   const total = (d, sd) => computeLineupSetDeck((s) => d[s] || null, Object.assign({ liveSetPo: 0 }, sd));
   const deck = { C: live(), SP1: ol({ role: '투수', position: '선발' }) };
-  eq('총 셋포 — POTM 없음 4 + 4', total(deck, { teamName: K }), 8);
+  eq('총 셋포 — POTM 없음 라이브 4 + 자팀 올스타 8', total(deck, { teamName: K }), 12);
   eq('총 셋포 — 둘 다 가정하면 10 + 12', total(deck, { teamName: K, potmOn: ['라|키움', '올|키움'] }), 22);
   __setGlobalPotm([{ name: '라', team: K }, { name: '올', team: K }]);
   eq('총 셋포 — 명단 적용', total(deck, { teamName: K }), 22);
-  eq('총 셋포 — 덱에서 끈 선수는 빠짐', total(deck, { teamName: K, potmOff: ['올|키움'] }), 14);
+  eq('총 셋포 — 덱에서 끈 선수는 평소 셋포 (10 + 8)', total(deck, { teamName: K, potmOff: ['올|키움'] }), 18);
+  __setGlobalPotm([]);
+
+  /* 올스타 평소 셋포 — 자팀 8, 타팀 4 (2026-09-18) */
+  eq('올스타 평소 셋포 — 자팀 8', cardSetScore(ol(), K), 8);
+  eq('올스타 평소 셋포 — 같은 군 타팀 4', cardSetScore(ol({ team: 'LG' }), K), 4);
+  eq('올스타 평소 셋포 — 다른 군 타팀 4', cardSetScore(ol({ team: '두산' }), K), 4);
+  eq('올스타 평소 셋포 — 덱 구단 모르면 4', cardSetScore(ol(), ''), 4);
+  eq('올스타 평소 셋포 — KIA 는 기아로 (자팀 8)', cardSetScore(ol({ team: 'KIA' }), '기아'), 8);
+  eq('올스타 평소 셋포 — 2025 자팀도 8', cardSetScore(ol({ year: '2025' }), K), 8);
+  eq('총 셋포 — 타팀 올스타 4', total({ C: ol({ team: '두산' }) }, { teamName: K }), 4);
+  eq('올스타 다른 군 POTM — 셋포 4 그대로 (평소 4)', potmEffect(ol({ team: '두산' }), on(ol({ team: '두산' }))).setDelta, 0);
+
+  /* 라이브·올스타는 각성 잠재력이 없다 — 입력값이 있어도 점수에 넣지 않는다 */
+  const lu0 = { enhance: '' };
+  const withAwk = (o) => Object.assign({ pot3: 'S', potType3: '뜬공형', power: 80, accuracy: 80, eye: 80 }, o);
+  eq('각성 무시 — 라이브', calcBat(withAwk(live()), lu0, { p: 0, a: 0, e: 0, n: 0 }).total - calcBat(Object.assign(withAwk(live()), { pot3: '' }), lu0, { p: 0, a: 0, e: 0, n: 0 }).total, 0);
+  eq('각성 무시 — 올스타', calcBat(withAwk(ol()), lu0, { p: 0, a: 0, e: 0, n: 0 }).total - calcBat(Object.assign(withAwk(ol()), { pot3: '' }), lu0, { p: 0, a: 0, e: 0, n: 0 }).total, 0);
+  eq('각성 반영 — 임팩트는 그대로', calcBat(withAwk(sp()), lu0, { p: 0, a: 0, e: 0, n: 0 }).total - calcBat(Object.assign(withAwk(sp()), { pot3: '' }), lu0, { p: 0, a: 0, e: 0, n: 0 }).total > 0 ? 1 : 0, 1);
+  eq('각성 점수 함수 — 라이브·올스타 0', awakenScore(withAwk(live())) === 0 && awakenScore(withAwk(ol())) === 0 ? 1 : 0, 1);
+  const pkOl = peakPl(ol({ potType3: '', pot3: '' }), 'DH');
+  eq('고점판독 — 올스타에 각성을 채우지 않음', pkOl.pot3 === '' && !pkOl.potType3 ? 1 : 0, 1);
+  const pkImp = peakPl(sp({ potType3: '', pot3: '' }), 'DH');
+  eq('고점판독 — 임팩트는 각성 S 로 채움', pkImp.pot3 === 'S' && !!pkImp.potType3 ? 1 : 0, 1);
   __setGlobalPotm([]);
 
   /* 덱 기준 선수 — FA 정리 + 잠재력 고정, 고점판독기는 고정 잠재력을 건드리지 않는다 */

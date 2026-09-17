@@ -81,6 +81,13 @@ POT_TYPES_AWK_ALL.forEach(function(t){
   if(!DEFAULT_POT_SCORES_BY_TYPE[t]) DEFAULT_POT_SCORES_BY_TYPE[t] = Object.assign({}, DEFAULT_AWK_SCORES);
 });
 function awkTypesFor(role){ return role === "타자" ? POT_TYPES_AWK_BAT : POT_TYPES_AWK_PIT; }
+/* 각성 잠재력이 없는 카드 — 라이브와 그 연장선인 올스타 (2026-09-18 사용자 확인).
+   입력값이 남아 있어도 점수에 넣지 않고, 화면에서도 칸을 보이지 않는다 */
+var NO_AWAKEN_CARDS = {"라이브": 1, "올스타": 1};
+function awakenScore(pl) {
+  if (!pl || NO_AWAKEN_CARDS[pl.cardType]) return 0;
+  return getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
+}
 /* 라인업은 칸이 좁으니 앞글자만 — 좌투선호→좌투, 변화구대처→변화구, 땅볼형→땅볼 */
 function awkShort(type){ return type ? String(type).replace(/(선호|대처|연마|형)$/, "") : ""; }
 function getPotScoreByType(grade, type, skills) {
@@ -463,8 +470,8 @@ function calcBat(pl,lu,sdB){
   if(sdB&&sdB._sdState){var nb2=sdB._sdState.natBat||sdB._sdState._autoNatBat||"없음";if(nb2==="5렙"){t+=1*w.p+1*w.a;}if(nb2==="6렙"){t+=2*w.p+2*w.a;}}
   /* 잠재력 점수 */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
-  /* 각성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
-  t += getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
+  /* 각성 잠재력 (C~S). 종류를 고르지 않았거나 라이브·올스타면 0 */
+  t += awakenScore(pl);
   return{power:fP,accuracy:fA,eye:fE,patience:fN,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100,
     laReq:launchAngleReq(pl.launchAngle),laBonus:launchAngleBonus(pl.launchAngle),
     laGain:launchAngleGain(pl.launchAngle,fP),zonePen:zonePenalty(pl)};
@@ -493,8 +500,8 @@ function calcPit(pl,lu,sdB){
   }
   /* 잠재력 점수 */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
-  /* 각성 잠재력 (C~S). 종류를 고르지 않았으면 0 */
-  t += getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
+  /* 각성 잠재력 (C~S). 종류를 고르지 않았거나 라이브·올스타면 0 */
+  t += awakenScore(pl);
   return{change:fC,stuff:fS,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
 }
 
@@ -522,13 +529,13 @@ function computeLineupSetDeck(pickRaw, sdState) {
       allSlots.forEach(function(slot) {
         var pl = pick(slot);
         if (!pl) return;
-        var sc = cardSetScore(pl) + getPotmSetDelta(pl);
+        var sc = cardSetScore(pl, sdState.teamName) + getPotmSetDelta(pl);
         total += sc;
       });
       for (var bn = 1; bn <= 6; bn++) {
         var bnPl = pick("BN" + bn);
         if (!bnPl) continue;
-        var bnSc = cardSetScore(bnPl) + getPotmSetDelta(bnPl);
+        var bnSc = cardSetScore(bnPl, sdState.teamName) + getPotmSetDelta(bnPl);
         total += bnSc;
       }
       return total;
@@ -2079,7 +2086,8 @@ var GLOBAL_POTM_LIST = [];
    · 라이브 — 자팀만. 능력치 5성 +8 · 4성 +14 · 1~3성 +18, 셋포 10 (이미 10이면 11),
              잠재력 모두 A · 각성 없음, 50·130 우(임국시골)를 골라도 받는다
    · 올스타 — 2026 카드만. 자팀 +6 · 셋포 12 / 같은 군(드림·나눔) +3 · 셋포 8 / 다른 군 +3 · 셋포 4,
-             잠재력 모두 A (타자 클러치 · 투수 침착은 SR+)
+             잠재력 모두 A (타자 클러치 · 투수 침착은 SR+). 평소 셋포는 자팀 8 · 타팀 4 (cardSetScore)
+   라이브·올스타는 각성 잠재력이 없는 카드다 (NO_AWAKEN_CARDS)
    · 스페셜(임팩트·시그니처·국가대표·골든글러브) — 자팀만, FA·와일드카드로 쓴 선수도 자팀.
              능력치 임팩트·시그·국대 +2, 골글 +1, 셋포 +1
    "능력치 +N" 은 모든 능력치다 (점수에 안 쓰는 능력치도 기록한다) */
@@ -2120,7 +2128,7 @@ function potmEffect(pl, sdState) {
   var team = teamKey(pl.team);
   var own = !!KBO_LEAGUE[deck] && team === deck;
   var ct = pl.cardType;
-  var base = cardSetScore(pl);
+  var base = cardSetScore(pl, deck);
   if (ct === "라이브") {
     if (!own) return none;
     var setL = base >= 10 ? base + 1 : 10;
@@ -2144,21 +2152,17 @@ function getPotmBonus(pl, sdState) {
 }
 
 /* POTM 으로 잠재력이 고정되는 카드의 사본.
-   라이브는 모두 A · 각성 없음, 올스타(2026)는 모두 A 에 타자 클러치 · 투수 침착 SR+ (각성도 A).
+   라이브는 모두 A, 올스타(2026)는 모두 A 에 타자 클러치 · 투수 침착 SR+.
+   둘 다 각성 잠재력이 없는 카드다 (NO_AWAKEN_CARDS).
    potmPot 표시가 붙은 선수는 화면에서 잠재력을 고칠 수 없고 고점판독기도 잠재력을 바꾸지 않는다 */
 function applyPotmPot(pl, sdState) {
   if (!pl) return pl;
   var e = potmEffect(pl, sdState);
   if (!e.on || !e.pot) return pl;
-  var isBat = pl.role === "타자";
-  var out = Object.assign({}, pl, { potmPot: e.pot, pot1: "A", pot2: "A" });
-  if (e.pot === "live") {
-    out.pot3 = "";
-  } else {
-    out.potType2 = isBat ? "클러치" : "침착";
+  var out = Object.assign({}, pl, { potmPot: e.pot, pot1: "A", pot2: "A", pot3: "" });
+  if (e.pot === "olstar") {
+    out.potType2 = pl.role === "타자" ? "클러치" : "침착";
     out.pot2 = "SR+";
-    out.pot3 = "A";
-    if (!out.potType3) out.potType3 = awkTypesFor(pl.role)[0];
   }
   return out;
 }
@@ -2563,22 +2567,32 @@ function SkillPicker(p) {
 /* ================================================================
    SET DECK SYSTEM
    ================================================================ */
+/* 올스타는 덱 구단에 따라 다르다 — cardSetScore 가 OLSTAR_SET_POINTS 를 쓴다 (여기 4 는 타팀 값) */
 var SET_POINTS = {"골든글러브":6,"시그니처":8,"임팩트":7,"국가대표":8,"시즌":0,"라이브":0,"올스타":4};
+/* 올스타 기본 셋포 — 자팀 8, 타팀 4 (2026-09-18 사용자 확인). POTM 은 potmEffect 가 따로 정한다 */
+var OLSTAR_SET_POINTS = { own: 8, other: 4 };
 /* FA 카드는 세트덱 점수가 깎인다 — 시그니처 -1, 임팩트 -2 */
 var FA_SET_PENALTY = {"시그니처":1,"임팩트":2};
 /* 와일드카드 국가대표 — 기본 셋포 4 에서 3 깎이고 특훈이 4 → 6레벨이 되어, 다 채우면 8 → 7 (-1) */
 var WILDCARD_SET_PENALTY = {"국가대표":1};
 /* 카드 한 장의 세트덱 점수 (POTM 가산 전). 총 셋포 계산과 화면 표시가 모두 이 값을 쓴다.
-   FA·와일드카드는 applyTeamFlags 를 거친 선수 기준이다 */
+   FA·와일드카드는 applyTeamFlags 를 거친 선수 기준이다.
+   teamName(덱 구단)은 올스타에만 쓰인다 — 자팀 8, 타팀·모름 4 */
 function cardSetPenalty(pl) {
   if (!pl) return 0;
   if (pl.isFa) return FA_SET_PENALTY[pl.cardType] || 0;
   if (pl.isWildcard) return WILDCARD_SET_PENALTY[pl.cardType] || 0;
   return 0;
 }
-function cardSetScore(pl) {
+function cardSetScore(pl, teamName) {
   if (!pl) return 0;
-  var sc = pl.cardType === "라이브" ? (pl.setScore || 0) : (SET_POINTS[pl.cardType] || 0);
+  var sc;
+  if (pl.cardType === "라이브") sc = pl.setScore || 0;
+  else if (pl.cardType === "올스타") {
+    var deck = teamKey(teamName);
+    sc = (KBO_LEAGUE[deck] && teamKey(pl.team) === deck) ? OLSTAR_SET_POINTS.own : OLSTAR_SET_POINTS.other;
+  }
+  else sc = SET_POINTS[pl.cardType] || 0;
   var pen = cardSetPenalty(pl);
   if (pen) sc = Math.max(0, sc - pen);
   return sc;
@@ -3588,7 +3602,7 @@ function LineupPage(p) {
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 13, color: "var(--td)" }}>{"잠재"}</div>
               <div style={{ fontSize: 15, color: "var(--t2)" }}>{(<span><span style={{fontSize:11,color:"var(--td)"}}>풀</span>{pl.pot1||"-"} <span style={{fontSize:11,color:"var(--td)"}}>클</span>{pl.pot2||"-"}</span>)}</div>
-              {pl.pot3 && pl.potType3 && (<div title={pl.potType3} style={{ fontSize: 12, color: "#FFA726", whiteSpace: "nowrap" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{awkShort(pl.potType3)}</span>{" " + pl.pot3}</div>)}
+              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={pl.potType3} style={{ fontSize: 12, color: "#FFA726", whiteSpace: "nowrap" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{awkShort(pl.potType3)}</span>{" " + pl.pot3}</div>)}
             </div>
           </React.Fragment>)}
         </div>
@@ -3683,7 +3697,7 @@ function LineupPage(p) {
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 13, color: "var(--td)" }}>{"잠재"}</div>
               <div style={{ fontSize: 15, color: "var(--t2)" }}>{(<span><span style={{fontSize:11,color:"var(--td)"}}>장</span>{pl.pot1||"-"} <span style={{fontSize:11,color:"var(--td)"}}>침</span>{pl.pot2||"-"}</span>)}</div>
-              {pl.pot3 && pl.potType3 && (<div title={pl.potType3} style={{ fontSize: 12, color: "#FFA726", whiteSpace: "nowrap" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{awkShort(pl.potType3)}</span>{" " + pl.pot3}</div>)}
+              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={pl.potType3} style={{ fontSize: 12, color: "#FFA726", whiteSpace: "nowrap" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{awkShort(pl.potType3)}</span>{" " + pl.pot3}</div>)}
             </div>
           </React.Fragment>)}
         </div>
@@ -5743,10 +5757,11 @@ function MyPlayersPage(p) {
         specPower: isBat ? en.spec["파워"] : 0, specAccuracy: isBat ? en.spec["정확"] : 0,
         specEye: isBat ? en.spec["선구"] : 0, specPatience: isBat ? en.spec["인내"] : 0,
         specChange: isBat ? 0 : en.spec["변화"], specStuff: isBat ? 0 : en.spec["구위"],
-        pot1: en.pot1, pot2: en.pot2, pot3: en.pot3,
+        /* 라이브·올스타는 각성 잠재력이 없다 — 시트에 적혀 있어도 버린다 */
+        pot1: en.pot1, pot2: en.pot2, pot3: NO_AWAKEN_CARDS[npType] ? "" : en.pot3,
         potType1: isBat ? "풀스윙" : "장타억제",
         potType2: isBat ? "클러치" : "침착",
-        potType3: en.pot3 ? "뜬공형" : "",
+        potType3: (en.pot3 && !NO_AWAKEN_CARDS[npType]) ? "뜬공형" : "",
         skill1: (en.skills[0] && en.skills[0].name) || "", s1Lv: (en.skills[0] && en.skills[0].lv) || 0,
         skill2: (en.skills[1] && en.skills[1].name) || "", s2Lv: (en.skills[1] && en.skills[1].lv) || 0,
         skill3: (en.skills[2] && en.skills[2].name) || "", s3Lv: (en.skills[2] && en.skills[2].lv) || 0,
@@ -6075,7 +6090,7 @@ function MyPlayersPage(p) {
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 6, padding: "4px 8px", background: "var(--inner)", borderRadius: 4, fontSize: 13 }}>
               <span style={{ color: "var(--td)" }}>{"세트덱 스코어:"}</span>
-              <span style={{ color: "var(--acc)", fontWeight: 800, fontFamily: "var(--m)" }}>{cardSetScore(pl) + potmMy.setDelta}</span>
+              <span style={{ color: "var(--acc)", fontWeight: 800, fontFamily: "var(--m)" }}>{cardSetScore(pl, sdState.teamName) + potmMy.setDelta}</span>
               {potmMy.on && potmMy.setDelta !== 0 && (<span title={potmSummary(potmMy, pl.role)} style={{ color: "#FFD54F", fontSize: 11 }}>{"(POTM " + (potmMy.setDelta > 0 ? "+" : "") + potmMy.setDelta + ")"}</span>)}
               {cardSetPenalty(pl) > 0 && (<span style={{ color: pl.isFa ? "#FF9800" : "#2196F3", fontSize: 11 }}>{"(" + (pl.isFa ? "FA" : "와일드카드") + " -" + cardSetPenalty(pl) + ")"}</span>)}
             </div>
@@ -6139,24 +6154,26 @@ function MyPlayersPage(p) {
                   </div>
                 </div>
               </div>
-              {/* 각성 잠재력 — 종류를 직접 고르고 등급은 C~S 만 */}
+              {/* 각성 잠재력 — 종류를 직접 고르고 등급은 C~S 만. 라이브·올스타는 각성이 없어 칸을 보이지 않는다 */}
+              {!NO_AWAKEN_CARDS[pl.cardType] && (
               <div>
                 <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"각성 잠재력"}</div>
                 <div style={{ display: "flex", gap: 4 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontSize: 11, color: "var(--td)" }}>{"종류"}</span>
-                    <select value={pl.potType3||""} disabled={!!pl.potmPot} onChange={function(e){upd(pl.id,"potType3",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 13, outline: "none", width: 96 }}>
+                    <select value={pl.potType3||""} onChange={function(e){upd(pl.id,"potType3",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 13, outline: "none", width: 96 }}>
                       <option value="">-</option>{awkTypesFor(pl.role).map(function(t){return (<option key={t} value={t}>{t}</option>);})}
                     </select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontSize: 11, color: "var(--td)" }}>{"등급"}</span>
-                    <select value={pl.pot3||""} disabled={!!pl.potmPot} onChange={function(e){upd(pl.id,"pot3",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 14, outline: "none", width: 52 }}>
+                    <select value={pl.pot3||""} onChange={function(e){upd(pl.id,"pot3",e.target.value);}} style={{ padding: "3px 4px", background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", fontSize: 14, outline: "none", width: 52 }}>
                       <option value="">-</option>{POT_GRADES_AWK.map(function(g){return (<option key={g} value={g}>{g}</option>);})}
                     </select>
                   </div>
                 </div>
               </div>
+              )}
             </div>
             {/* 타자 전용 — 흰존/콜존 직접 입력, 발사각 보너스 확인 (라인업에는 표시하지 않는다) */}
             {isBat && (
@@ -7705,7 +7722,7 @@ var PEAK_TRAIN = {"bat_골든글러브":[20,18,12,10],"bat_시그니처":[22,17,
 /* 특훈 (기본 보너스 = 특훈 횟수 포함 — 골글·시그·임팩트 +3, 국대 +4, FA +5, 와일드카드 +6): 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위].
    특훈이 없는 카드는 내 값 그대로. 국대·와일드카드는 2026-09-18 정확 계산으로 다시 뽑았다 */
 var PEAK_SPEC = {"bat_골든글러브":[7,2,1,0],"bat_시그니처":[7,2,1,0],"bat_fa_시그니처":[9,5,1,1],"bat_임팩트":[6,2,0,0],"bat_fa_임팩트":[8,4,1,0],"bat_국가대표":[8,3,2,0],"bat_wc_국가대표":[11,5,1,1],"pit_골든글러브":[2,7],"pit_시그니처":[2,7],"pit_fa_시그니처":[2,11],"pit_임팩트":[2,6],"pit_fa_임팩트":[3,9],"pit_국가대표":[2,9],"pit_wc_국가대표":[5,11]};
-/* 잠재력: 종류별 등급 (사용자 지정). 각성 잠재력은 임팩트만 S, 나머지 카드는 A */
+/* 잠재력: 종류별 등급 (사용자 지정). 각성 잠재력은 임팩트만 S, 나머지 카드는 A (라이브·올스타는 각성 없음) */
 var PEAK_POT = {"풀스윙":"SR+","장타억제":"SR+","클러치":"A","침착":"A"};
 var PEAK_AWK = {"임팩트":"S"};
 /* 스킬 합 — 스킬 분포와 같은 기준 (팀 버프 포함, 포지션 특훈 보너스 제외) */
@@ -7772,7 +7789,9 @@ function peakPl(pl, slot) {
   out.pot1 = better(PEAK_POT[out.potType1] || "A", out.potType1, pl.pot1);
   out.potType2 = pl.potType2 || (isBat ? "클러치" : "침착");
   out.pot2 = better(PEAK_POT[out.potType2] || "A", out.potType2, pl.pot2);
-  /* 각성은 종류를 안 골랐으면 0점이다 — 그때는 첫 종류로 채운다 (종류마다 점수는 같다) */
+  /* 각성 — 라이브·올스타는 각성 잠재력이 없다 (NO_AWAKEN_CARDS).
+     종류를 안 골랐으면 0점이라 그때는 첫 종류로 채운다 (종류마다 점수는 같다) */
+  if (NO_AWAKEN_CARDS[ct]) return out;
   var awk = PEAK_AWK[ct] || "A";
   if (!pl.potType3) { out.potType3 = awkTypesFor(pl.role)[0]; out.pot3 = awk; }
   else out.pot3 = better(awk, pl.potType3, pl.pot3);
