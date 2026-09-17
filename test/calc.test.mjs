@@ -7,7 +7,7 @@ import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
-  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter,
+  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck,
 } from './calc-extract.mjs';
 
 let pass = 0, fail = 0;
@@ -1044,6 +1044,38 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   const pitSD = (sd) => calcPit(pit, lu(pit), calcSDBonus(pit, 'SP1', sd, 0)).total;
   eq('고점 포수의 포수리드 6렙이 투수 점수에 들어간다 (변화 1.05 + 구위 1.35)',
     pitSD(peakBuffState({ _autoCatch: '없음' }, { _autoCatch: '6렙' })) - pitSD({ _autoCatch: '없음' }), 2.4, 0.011);
+}
+
+console.log('\n[세트덱 점수] FA 는 시그니처 -1, 임팩트 -2 — 총 셋포와 화면 표시가 같은 값을 쓴다');
+{
+  eq('골든글러브 6', cardSetScore({ cardType: '골든글러브' }), 6);
+  eq('시그니처 8', cardSetScore({ cardType: '시그니처' }), 8);
+  eq('시그니처 FA 7 (-1)', cardSetScore({ cardType: '시그니처', isFa: true }), 7);
+  eq('임팩트 7', cardSetScore({ cardType: '임팩트' }), 7);
+  eq('임팩트 FA 5 (-2)', cardSetScore({ cardType: '임팩트', isFa: true }), 5);
+  eq('국가대표 8', cardSetScore({ cardType: '국가대표' }), 8);
+  eq('올스타 4', cardSetScore({ cardType: '올스타' }), 4);
+  eq('라이브는 카드에 적힌 점수', cardSetScore({ cardType: '라이브', setScore: 9 }), 9);
+  eq('FA 가 없는 카드는 FA 표시가 있어도 그대로 (골글 6)', cardSetScore({ cardType: '골든글러브', isFa: true }), 6);
+  eq('빈 칸 0', cardSetScore(null), 0);
+  eq('감점이 없는 카드는 적힌 점수 그대로 (라이브 -1 에 FA 표시)', cardSetScore({ cardType: '라이브', setScore: -1, isFa: true }), -1);
+
+  /* 총 셋포 — 라인업 칸과 후보 칸 모두 같은 규칙 */
+  __setGlobalPotm([]);
+  const deck = (x) => ({ C: { cardType: '골든글러브' }, SP1: { cardType: '시그니처', ...(x.sig || {}) },
+    CP: { cardType: '임팩트', ...(x.cp || {}) }, BN1: { cardType: '임팩트', ...(x.bn || {}) } });
+  const total = (d, sd) => computeLineupSetDeck((s) => d[s] || null, sd || { liveSetPo: 0 });
+  const base = total(deck({}));
+  eq('기준 총 셋포 (골글 6 + 시그 8 + 임팩트 7 + 후보 임팩트 7)', base, 28);
+  eq('라인업 임팩트 FA — 총 셋포 -2', base - total(deck({ cp: { isFa: true } })), 2);
+  eq('후보 임팩트 FA — 총 셋포 -2', base - total(deck({ bn: { isFa: true } })), 2);
+  eq('시그니처 FA — 총 셋포 -1', base - total(deck({ sig: { isFa: true } })), 1);
+  eq('라이브 추가 셋포는 더한다', total(deck({}), { liveSetPo: 5 }) - base, 5);
+
+  /* 스페셜 POTM(임팩트)은 FA 여도 +1 만 붙는다 */
+  __setGlobalPotm([{ name: '가', team: '키움' }]);
+  eq('임팩트 FA POTM — 7 - 2 + 1 = 6', total({ CP: { cardType: '임팩트', name: '가', team: '키움', isFa: true } }, { teamName: '키움' }), 6);
+  __setGlobalPotm([]);
 }
 
 console.log('\n[덱 저장기] 선수·라인업·세트덱을 늘 최신 한 덩어리로, 부른 순서대로 저장한다');

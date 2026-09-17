@@ -945,6 +945,70 @@ function getPercentile(dist, value) {
   var top = 100 - rank;
   return Math.max(0.1, Math.round(top * 10) / 10);
 }
+var SET_POINTS = {"골든글러브":6,"시그니처":8,"임팩트":7,"국가대표":8,"시즌":0,"라이브":0,"올스타":4};
+var FA_SET_PENALTY = {"시그니처":1,"임팩트":2};
+function cardSetScore(pl) {
+  if (!pl) return 0;
+  var sc = pl.cardType === "라이브" ? (pl.setScore || 0) : (SET_POINTS[pl.cardType] || 0);
+  var pen = pl.isFa ? (FA_SET_PENALTY[pl.cardType] || 0) : 0;
+  if (pen) sc = Math.max(0, sc - pen);
+  return sc;
+}
+function computeLineupSetDeck(pick, sdState) {
+    var calcSetPoint = function() {
+      var total = 0;
+      var potmList = GLOBAL_POTM_LIST;
+      var teamName = sdState.teamName || "";
+      /* POTM 세트덱 보너스 — 정책: 팀 일치 시에만 적용
+         - 라이브: 세트덱 점수 10까지 끌어올림 (이미 10 이상이면 +1)
+         - 올스타: 동일
+         - 스페셜 POTM (그 외): +1
+         팀 불일치 시 모두 0 */
+      var getPotmSetDelta = function(pl) {
+        if (!potmList.length || !pl) return 0;
+        var isPotm = potmList.some(function(p) { return p.name === (pl.name||"") && p.team === (pl.team||""); });
+        if (!isPotm) return 0;
+        /* 팀 일치 필수 */
+        if (!teamName || !pl.team || pl.team !== teamName) return 0;
+        var ct = pl.cardType;
+        var isLive = ct === "라이브";
+        var isOlstar = ct === "올스타";
+        /* 올스타 별5 외에는 효과 없음 */
+        if (isOlstar && (pl.stars||5) !== 5) return 0;
+        var baseScore = cardSetScore(pl);
+        if (isLive || isOlstar) {
+          /* 10까지 끌어올리되, 이미 10 이상이면 +1 */
+          return baseScore >= 10 ? 1 : (10 - baseScore);
+        }
+        /* 스페셜 POTM */
+        return 1;
+      };
+      var allSlots = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP"]);
+      allSlots.forEach(function(slot) {
+        var pl = pick(slot);
+        if (!pl) return;
+        var sc = cardSetScore(pl) + getPotmSetDelta(pl);
+        total += sc;
+      });
+      for (var bn = 1; bn <= 6; bn++) {
+        var bnPl = pick("BN" + bn);
+        if (!bnPl) continue;
+        var bnSc = cardSetScore(bnPl) + getPotmSetDelta(bnPl);
+        total += bnSc;
+      }
+      return total;
+    };
+    /* Compute card type counts for synergy */
+    var synCounts = {};
+    var allSlotsForSyn = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP","BN1","BN2","BN3","BN4","BN5","BN6"]);
+    allSlotsForSyn.forEach(function(sl) { var pl2 = pick(sl); if (pl2) { synCounts[pl2.cardType] = (synCounts[pl2.cardType]||0) + 1; } });
+    sdState._synCounts = synCounts;
+    /* Auto-detect special skills */
+    var autoNB="없음",autoNP="없음",autoCC="없음";
+    allSlotsForSyn.forEach(function(sl){var pl4=pick(sl);if(!pl4)return;var sks=[pl4.skill1,pl4.skill2,pl4.skill3],lvs=[pl4.s1Lv||0,pl4.s2Lv||0,pl4.s3Lv||0];for(var i=0;i<3;i++){if(!sks[i])continue;if(sks[i].indexOf("국대에이스")>=0&&lvs[i]>=5){var lv=lvs[i]+"렙";if(pl4.role==="타자"){if(lvs[i]>parseInt(autoNB)||autoNB==="없음")autoNB=lv;}else{if(lvs[i]>parseInt(autoNP)||autoNP==="없음")autoNP=lv;}}if(sks[i].indexOf("포수리드")>=0&&lvs[i]>=5){var lv2=lvs[i]+"렙";if(lvs[i]>parseInt(autoCC)||autoCC==="없음")autoCC=lv2;}}});
+    sdState._autoNatBat=autoNB;sdState._autoNatPit=autoNP;sdState._autoCatch=autoCC;
+      return calcSetPoint() + (sdState.liveSetPo || 0);
+}
 function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!pl) return {p:0,a:0,e:0,n:0,c:0,s:0};
   var isBat = pl.role === "타자";
@@ -1184,4 +1248,4 @@ function makeDeckWriter(waitMs) {
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck };

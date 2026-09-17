@@ -530,9 +530,7 @@ function computeLineupSetDeck(pick, sdState) {
         var isOlstar = ct === "올스타";
         /* 올스타 별5 외에는 효과 없음 */
         if (isOlstar && (pl.stars||5) !== 5) return 0;
-        var baseScore = isLive ? (pl.setScore || 0) : (SET_POINTS[ct] || 0);
-        if (pl.isFa && ct==="시그니처") baseScore = Math.max(0, baseScore - 1);
-        if (pl.isFa && ct==="임팩트") baseScore = Math.max(0, baseScore - 2);
+        var baseScore = cardSetScore(pl);
         if (isLive || isOlstar) {
           /* 10까지 끌어올리되, 이미 10 이상이면 +1 */
           return baseScore >= 10 ? 1 : (10 - baseScore);
@@ -544,19 +542,13 @@ function computeLineupSetDeck(pick, sdState) {
       allSlots.forEach(function(slot) {
         var pl = pick(slot);
         if (!pl) return;
-        var sc = pl.cardType === "라이브" ? (pl.setScore || 0) : (SET_POINTS[pl.cardType] || 0);
-        if (pl.isFa && pl.cardType==="시그니처") sc = Math.max(0, sc - 1);
-        if (pl.isFa && pl.cardType==="임팩트") sc = Math.max(0, sc - 2);
-        sc += getPotmSetDelta(pl);
+        var sc = cardSetScore(pl) + getPotmSetDelta(pl);
         total += sc;
       });
       for (var bn = 1; bn <= 6; bn++) {
         var bnPl = pick("BN" + bn);
         if (!bnPl) continue;
-        var bnSc = bnPl.cardType === "라이브" ? (bnPl.setScore || 0) : (SET_POINTS[bnPl.cardType] || 0);
-        if (bnPl.isFa && bnPl.cardType==="시그니처") bnSc = Math.max(0, bnSc - 1);
-        if (bnPl.isFa && bnPl.cardType==="임팩트") bnSc = Math.max(0, bnSc - 2);
-        bnSc += getPotmSetDelta(bnPl);
+        var bnSc = cardSetScore(bnPl) + getPotmSetDelta(bnPl);
         total += bnSc;
       }
       return total;
@@ -2393,6 +2385,16 @@ function SkillPicker(p) {
    SET DECK SYSTEM
    ================================================================ */
 var SET_POINTS = {"골든글러브":6,"시그니처":8,"임팩트":7,"국가대표":8,"시즌":0,"라이브":0,"올스타":4};
+/* FA 카드는 세트덱 점수가 깎인다 — 시그니처 -1, 임팩트 -2 */
+var FA_SET_PENALTY = {"시그니처":1,"임팩트":2};
+/* 카드 한 장의 세트덱 점수 (POTM 가산 전). 총 셋포 계산과 화면 표시가 모두 이 값을 쓴다 */
+function cardSetScore(pl) {
+  if (!pl) return 0;
+  var sc = pl.cardType === "라이브" ? (pl.setScore || 0) : (SET_POINTS[pl.cardType] || 0);
+  var pen = pl.isFa ? (FA_SET_PENALTY[pl.cardType] || 0) : 0;
+  if (pen) sc = Math.max(0, sc - pen);
+  return sc;
+}
 /* 카드 종류별 최대 훈련 포인트. 훈재분 계산기와 라인업 분석의 훈련 분포가 같이 쓴다.
    바꾸면 PREBUILT_DIST 의 train_* 도 다시 구워야 한다 (data/gendist2.mjs).
    2026-09 국가대표 60→66, 올스타 75→90 (포인트는 3 단위다) */
@@ -4998,9 +5000,7 @@ function LockerRoomPage(p) {
               var isSpecial = !isLive && !isOlstar;
               var statBonus = getPotmBonus(pl, sdState);
               /* potmMatched는 팀 일치 + 효과 있는 카드만 들어옴 → 단순 표시 */
-              var baseScore = isLive ? (pl.setScore || 0) : (SET_POINTS[ct] || 0);
-              if (pl.isFa && ct==="시그니처") baseScore = Math.max(0, baseScore - 1);
-              if (pl.isFa && ct==="임팩트") baseScore = Math.max(0, baseScore - 2);
+              var baseScore = cardSetScore(pl);
               var setDelta = (isLive || isOlstar) ? (baseScore >= 10 ? 1 : (10 - baseScore)) : 1;
               return (
                 <div key={pl.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderRadius: 6, background: "rgba(255,213,79,0.06)", border: "1px solid rgba(255,213,79,0.2)" }}>
@@ -5845,8 +5845,8 @@ function MyPlayersPage(p) {
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 6, padding: "4px 8px", background: "var(--inner)", borderRadius: 4, fontSize: 13 }}>
               <span style={{ color: "var(--td)" }}>{"세트덱 스코어:"}</span>
-              <span style={{ color: "var(--acc)", fontWeight: 800, fontFamily: "var(--m)" }}>{(function(){var sc=pl.cardType==="라이브"?(pl.setScore||0):(SET_POINTS[pl.cardType]||0);if(pl.isFa)sc=Math.max(0,sc-1);return sc;})()}</span>
-              {pl.isFa && pl.cardType==="시그니처" && (<span style={{ color: "#FF9800", fontSize: 11 }}>{"(FA -1)"}</span>)}{pl.isFa && pl.cardType==="임팩트" && (<span style={{ color: "#FF9800", fontSize: 11 }}>{"(FA -2)"}</span>)}
+              <span style={{ color: "var(--acc)", fontWeight: 800, fontFamily: "var(--m)" }}>{cardSetScore(pl)}</span>
+              {pl.isFa && FA_SET_PENALTY[pl.cardType] && (<span style={{ color: "#FF9800", fontSize: 11 }}>{"(FA -" + FA_SET_PENALTY[pl.cardType] + ")"}</span>)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: 10 }}>
               {/* Training */}
