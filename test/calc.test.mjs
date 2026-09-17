@@ -1143,6 +1143,29 @@ console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선�
   const keysOk = SD_RULES.every((r) => ['bat', 'pit'].every((role) =>
     !r[role] || r[role][0] === '*' || r[role][0].every((k) => (role === 'bat' ? SD_BAT_ALL : SD_PIT_ALL).includes(k))));
   eq('효과 표의 능력치 키가 모두 그 역할의 것', keysOk ? 1 : 0, 1);
+
+  /* 패널 버튼은 줄임말, 원문은 마우스를 올리면 */
+  const shortOk = SD_ROWS.every((r) => (r.type === 'auto'
+    ? r.s && r.s.length <= 14 && r.desc
+    : r.l && r.r && r.l.length <= 14 && r.r.length <= 14 && r.lDesc && r.rDesc));
+  eq('패널 버튼 글씨는 14자 이내, 원문 설명은 따로', shortOk ? 1 : 0, 1);
+  eq('버튼 글씨에 "선택 팀" 이 없다', SD_ROWS.every((r) => ![r.s, r.l, r.r].some((t) => t && t.includes('선택 팀'))) ? 1 : 0, 1);
+
+  /* 시너지 — 임팩트 = 타자 +1, 시그니처 = 투수 +1 (능력치 전부) */
+  const syn = (pl, slot, key, imp, sig) => (calcSDBonus(pl, slot,
+    { s95: '', s125: '', s110: '', teamName: K, synImpact: imp, synSig: sig, synLive: false }, 0, 8)[key] || 0);
+  eq('임팩트 시너지 — 타자 인내 +1', syn(bat(), 'DH', 'n', true, false) - syn(bat(), 'DH', 'n', false, false), 1);
+  eq('임팩트 시너지 — 타자 주루 +1 (기록만)', syn(bat(), 'DH', 'run', true, false) - syn(bat(), 'DH', 'run', false, false), 1);
+  eq('임팩트 시너지 — 투수는 0', syn(pit(), 'SP1', 'c', true, false) - syn(pit(), 'SP1', 'c', false, false), 0);
+  eq('시그니처 시너지 — 투수 구위 +1', syn(pit(), 'SP1', 's', false, true) - syn(pit(), 'SP1', 's', false, false), 1);
+  eq('시그니처 시너지 — 투수 제구 +1 (기록만)', syn(pit(), 'SP1', 'ctl', false, true) - syn(pit(), 'SP1', 'ctl', false, false), 1);
+  eq('시그니처 시너지 — 타자는 0', syn(bat(), 'DH', 'p', false, true) - syn(bat(), 'DH', 'p', false, false), 0);
+
+  /* 예전 "KIA" 는 기아로 */
+  eq('KIA 덱의 기아 선수는 선택 팀', isSelTeam(bat({ team: '기아' }), { teamName: 'KIA' }) ? 1 : 0, 1);
+  eq('기아 덱의 KIA 선수는 선택 팀', isSelTeam(bat({ team: 'KIA' }), { teamName: '기아' }) ? 1 : 0, 1);
+  eq('KIA 덱의 110 기본은 나눔(우)', sdPick({ teamName: 'KIA' }, 110) === 'R' ? 1 : 0, 1);
+  eq('KIA 선수는 110 나눔을 받는다', gain(bat({ team: 'KIA' }), 'DH', 110, 'R', 'p', 8), 1);
 }
 
 console.log('\n[세트덱 점수] FA 는 시그니처 -1, 임팩트 -2 — 총 셋포와 화면 표시가 같은 값을 쓴다');

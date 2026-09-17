@@ -571,6 +571,8 @@ var SD_LEGACY_AUTO = { "s95": "R", "s125": "L" };
 /* KBO 올스타 리그 — 110 구간(드림/나눔)은 선수 소속 구단으로 가른다 */
 var KBO_LEAGUE = { "두산": "드림", "롯데": "드림", "삼성": "드림", "SSG": "드림", "KT": "드림",
   "기아": "나눔", "한화": "나눔", "LG": "나눔", "NC": "나눔", "키움": "나눔" };
+/* 예전에 "KIA" 로 저장된 구단은 "기아" 로 본다 (덱은 로그인할 때 바뀌지만 선수 기록에는 남을 수 있다) */
+function teamKey(t) { return t === "KIA" ? "기아" : (t || ""); }
 /* 저장된 선택을 돌려준다. 저장값이 없을 때
    - 95 는 우, 125 는 좌 (위)
    - 110 은 덱 구단이 속한 리그 쪽. 덱 구단을 모르면(예전 '내 덱') 양쪽 모두 "B"
@@ -578,7 +580,7 @@ var KBO_LEAGUE = { "두산": "드림", "롯데": "드림", "삼성": "드림", "
 function sdPick(sdState, sp) {
   var k = "s" + sp; var x = sdState[k];
   if (x === undefined || x === null) {
-    if (sp === 110) { var lg = KBO_LEAGUE[sdState.teamName]; return lg === "드림" ? "L" : lg === "나눔" ? "R" : "B"; }
+    if (sp === 110) { var lg = KBO_LEAGUE[teamKey(sdState.teamName)]; return lg === "드림" ? "L" : lg === "나눔" ? "R" : "B"; }
     return SD_LEGACY_AUTO[k] || "";
   }
   if (sp === 55 && /^\d{4}$/.test(String(x))) return "R:" + x;
@@ -593,9 +595,9 @@ function sdSideOf(val) {
    와일드카드로 쓴 국가대표 선수(곧 추가)도 선택 팀으로 친다.
    덱 구단이 KBO 구단이 아니면(예전 '내 덱') 가릴 수 없으니 모두 선택 팀으로 본다 */
 function isSelTeam(pl, sdState) {
-  var team = (sdState && sdState.teamName) || "";
+  var team = teamKey(sdState && sdState.teamName);
   if (!KBO_LEAGUE[team]) return true;
-  return pl.team === team || pl.cardType === "골든글러브" || !!pl.isFa ||
+  return teamKey(pl.team) === team || pl.cardType === "골든글러브" || !!pl.isFa ||
     (pl.cardType === "국가대표" && !!pl.isWildcard);
 }
 
@@ -704,7 +706,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
 
   /* 세트덱 구간 효과 (SD_RULES) */
   var S = { p: 0, a: 0, e: 0, n: 0, run: 0, def: 0, c: 0, s: 0, vel: 0, ctl: 0, sta: 0 };
-  var x = { ct: ct, stars: stars, selTeam: isSelTeam(pl, sdState), league: KBO_LEAGUE[pl.team] || "",
+  var x = { ct: ct, stars: stars, selTeam: isSelTeam(pl, sdState), league: KBO_LEAGUE[teamKey(pl.team)] || "",
     order: isBat && batIdx >= 0 ? batIdx + 1 : 0, outfield: isBat && isOF,
     starter: !isBat && !isRP && !isCP, relief: !isBat && (isRP || isCP) };
   SD_RULES.forEach(function(r) {
@@ -730,10 +732,11 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   var synLive = sdState.synLive !== undefined ? sdState.synLive : autoLive;
   var synImp = sdState.synImpact !== undefined ? sdState.synImpact : autoImp;
   var synSig = sdState.synSig !== undefined ? sdState.synSig : autoSig;
-  /* 라이브 시너지는 전체 +1 — 점수에 안 쓰는 능력치도 같이 기록한다 */
+  /* 라이브 시너지 = 모두 +1, 임팩트 시너지 = 타자 +1, 시그니처 시너지 = 투수 +1.
+     "+1" 은 능력치 전부다 — 점수에 안 쓰는 능력치도 같이 기록한다 */
   if (synLive) { bp++; ba++; be++; bn++; pc++; ps++; S.run++; S.def++; S.vel++; S.ctl++; S.sta++; }
-  if (synImp && isBat) { bp++; ba++; be++; bn++; }
-  if (synSig && !isBat) { pc++; ps++; }
+  if (synImp && isBat) { bp++; ba++; be++; bn++; S.run++; S.def++; }
+  if (synSig && !isBat) { pc++; ps++; S.vel++; S.ctl++; S.sta++; S.def++; }
 
   /* 국대에이스/포수리드: 종합점수에만 반영 (calcBat/calcPit에서 처리) */
 
@@ -2793,43 +2796,46 @@ function parseManagerWorkbook(wb) {
   return { team: team, sheet: sn, headerRows: { bat: hB + origin, pit: hP + origin }, entries: entries, lineup: readLineup(grid) };
 }
 
-/* 세트덱 패널 문구 — 인게임 표기 그대로 (2026-09-17 사용자 대조). 효과 계산은 SD_RULES.
+/* 세트덱 패널 문구 (2026-09-17 인게임 대조). 효과 계산은 SD_RULES.
+   버튼에는 짧은 줄임말(l · r · s)을 쓰고, 인게임 원문(lDesc · rDesc · desc)은 마우스를 올리면 보인다.
+   줄임말 — 파워 파 · 정확 정 · 선구 선 · 인내 인 · 주루 주 · 수비 수 / 변화 변 · 구위 구 · 구속 속 · 제구 제 · 지구력 지
+            시라올 = 시즌·라이브·올스타, 임국시골 = 임팩트·국가대표·시그니처·골든글러브, 불펜 = 중계·마무리
    auto: 인게임은 좌/우 택1이지만 좌(선택 팀)가 압도적이라 좌로 고정했다
    yearLR: 좌/우를 고른 뒤 연도 / lrYear: 좌는 버튼만, 우는 연도까지 */
 var SD_ROWS = [
-  {sp:30,type:"auto",desc:"선택 팀 선수 모두 +1 (좌 고정)"},
-  {sp:40,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:50,type:"lr",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
-  {sp:55,type:"yearLR",lDesc:"선택 연도 타자 주루/수비 +1",rDesc:"선택 연도 투수 변화/지구력 +2"},
-  {sp:60,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:65,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 정확/인내 +2 · 4성 투수 구속/제구 +2"},
-  {sp:70,type:"lr",lDesc:"선발 +1",rDesc:"중계/마무리 +2"},
-  {sp:75,type:"yearLR",lDesc:"선택 연도 타자 파워/정확 +3",rDesc:"선택 연도 투수 구위/제구 +3"},
-  {sp:80,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:85,type:"lr",lDesc:"4성 타자 파워/정확/선구 +2 · 4성 투수 구위/제구/변화 +2",rDesc:"5성 타자 파워 +1 · 5성 투수 구위 +1"},
-  {sp:90,type:"auto",desc:"선택 팀 선수 모두 +2 (좌 고정)"},
-  {sp:95,type:"lr",lDesc:"내야/포수 인내/수비 +2",rDesc:"외야/지명 선구/주루 +2"},
-  {sp:100,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:105,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 파워/선구 +2 · 4성 투수 구위/변화 +2"},
-  {sp:110,type:"lr",lDesc:"드림(두산·롯데·삼성·SSG·KT) 모두 +1",rDesc:"나눔(기아·한화·LG·NC·키움) 모두 +1"},
-  {sp:115,type:"lr",lDesc:"6~9번 정확/주루/수비 +2",rDesc:"중계/마무리 제구/구위/지구력 +2"},
-  {sp:120,type:"lr",lDesc:"3~5번 모두 +2",rDesc:"선발 +1"},
-  {sp:125,type:"lr",lDesc:"4성 타자 정확/선구/인내 +2 · 4성 투수 구속/변화/제구 +2",rDesc:"5성 타자 인내 +1 · 5성 투수 제구 +1"},
-  {sp:130,type:"lr",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
-  {sp:135,type:"lr",lDesc:"3~5번 정확/주루/수비 +2",rDesc:"선발 제구/구위/지구력 +1"},
-  {sp:140,type:"lr",lDesc:"6~9번 +1",rDesc:"중계/마무리 +1"},
-  {sp:145,type:"lr",lDesc:"1~2번 정확/주루/선구 +2",rDesc:"선발 제구/구위/지구력 +1"},
-  {sp:150,type:"auto",desc:"선택 팀 선수 모두 +2 (좌 고정)"},
-  {sp:155,type:"lr",lDesc:"1~2번 파워/선구/인내 +2",rDesc:"선발 구속/변화/수비 +1"},
-  {sp:160,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:165,type:"lr",lDesc:"타자 정확/주루/수비 +1",rDesc:"투수 구속/변화/수비 +1"},
-  {sp:170,type:"auto",desc:"선택 팀 선수 모두 +1 (좌 고정)"},
-  {sp:175,type:"lr",lDesc:"타자 파워/선구/인내 +1",rDesc:"투수 제구/구위/지구력 +1"},
-  {sp:180,type:"lrYear",lDesc:"라이브/올스타 +2",rDesc:"선택 연도 모두 +1"},
-  {sp:185,type:"lrYear",lDesc:"1~2번 파워/주루 +2",rDesc:"선택 연도 타자 +1"},
-  {sp:190,type:"lrYear",lDesc:"선발 구위/지구력 +1",rDesc:"선택 연도 투수 +1"},
-  {sp:195,type:"lr",lDesc:"선택 팀 라이브/올스타/국가대표 +1",rDesc:"선택 팀 시그니처 +1"},
-  {sp:200,type:"lr",lDesc:"선택 팀 타자 +2",rDesc:"선택 팀 투수 +2"},
+  {sp:30,type:"auto",s:"모두 +1",desc:"선택 팀 선수 모두 +1 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +1) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:40,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:50,type:"lr",l:"시라올 +1",r:"임국시골 +1",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
+  {sp:55,type:"yearLR",l:"연도 주수 +1",r:"연도 변지 +2",lDesc:"선택 연도 타자 주루/수비 +1 (임팩트는 어느 연도든)",rDesc:"선택 연도 투수 변화/지구력 +2 (임팩트는 어느 연도든)"},
+  {sp:60,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:65,type:"lr",l:"3성 +2",r:"4성 정인·속제 +2",lDesc:"3성 +2",rDesc:"4성 타자 정확/인내 +2 · 4성 투수 구속/제구 +2"},
+  {sp:70,type:"lr",l:"선발 +1",r:"불펜 +2",lDesc:"선발 +1",rDesc:"중계/마무리 +2"},
+  {sp:75,type:"yearLR",l:"연도 파정 +3",r:"연도 구제 +3",lDesc:"선택 연도 타자 파워/정확 +3 (임팩트는 어느 연도든)",rDesc:"선택 연도 투수 구위/제구 +3 (임팩트는 어느 연도든)"},
+  {sp:80,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:85,type:"lr",l:"4성 파정선·구제변 +2",r:"5성 파·구 +1",lDesc:"4성 타자 파워/정확/선구 +2 · 4성 투수 구위/제구/변화 +2",rDesc:"5성 타자 파워 +1 · 5성 투수 구위 +1"},
+  {sp:90,type:"auto",s:"모두 +2",desc:"선택 팀 선수 모두 +2 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +2) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:95,type:"lr",l:"내야 인수 +2",r:"외야 선주 +2",lDesc:"내야/포수 인내/수비 +2",rDesc:"외야/지명 선구/주루 +2"},
+  {sp:100,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:105,type:"lr",l:"3성 +2",r:"4성 파선·구변 +2",lDesc:"3성 +2",rDesc:"4성 타자 파워/선구 +2 · 4성 투수 구위/변화 +2"},
+  {sp:110,type:"lr",l:"드림 +1",r:"나눔 +1",lDesc:"드림(두산·롯데·삼성·SSG·KT) 모두 +1",rDesc:"나눔(기아·한화·LG·NC·키움) 모두 +1"},
+  {sp:115,type:"lr",l:"6~9번 정주수 +2",r:"불펜 제구지 +2",lDesc:"6~9번 정확/주루/수비 +2",rDesc:"중계/마무리 제구/구위/지구력 +2"},
+  {sp:120,type:"lr",l:"3~5번 +2",r:"선발 +1",lDesc:"3~5번 모두 +2",rDesc:"선발 +1"},
+  {sp:125,type:"lr",l:"4성 정선인·속변제 +2",r:"5성 인·제 +1",lDesc:"4성 타자 정확/선구/인내 +2 · 4성 투수 구속/변화/제구 +2",rDesc:"5성 타자 인내 +1 · 5성 투수 제구 +1"},
+  {sp:130,type:"lr",l:"시라올 +1",r:"임국시골 +1",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
+  {sp:135,type:"lr",l:"3~5번 정주수 +2",r:"선발 제구지 +1",lDesc:"3~5번 정확/주루/수비 +2",rDesc:"선발 제구/구위/지구력 +1"},
+  {sp:140,type:"lr",l:"6~9번 +1",r:"불펜 +1",lDesc:"6~9번 +1",rDesc:"중계/마무리 +1"},
+  {sp:145,type:"lr",l:"1~2번 정주선 +2",r:"선발 제구지 +1",lDesc:"1~2번 정확/주루/선구 +2",rDesc:"선발 제구/구위/지구력 +1"},
+  {sp:150,type:"auto",s:"모두 +2",desc:"선택 팀 선수 모두 +2 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +2) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:155,type:"lr",l:"1~2번 파선인 +2",r:"선발 속변수 +1",lDesc:"1~2번 파워/선구/인내 +2",rDesc:"선발 구속/변화/수비 +1"},
+  {sp:160,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:165,type:"lr",l:"타자 정주수 +1",r:"투수 속변수 +1",lDesc:"타자 정확/주루/수비 +1",rDesc:"투수 구속/변화/수비 +1"},
+  {sp:170,type:"auto",s:"모두 +1",desc:"선택 팀 선수 모두 +1 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +1) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:175,type:"lr",l:"타자 파선인 +1",r:"투수 제구지 +1",lDesc:"타자 파워/선구/인내 +1",rDesc:"투수 제구/구위/지구력 +1"},
+  {sp:180,type:"lrYear",l:"라올 +2",r:"연도 +1",lDesc:"라이브/올스타 +2",rDesc:"선택 연도 모두 +1 (임팩트는 어느 연도든)"},
+  {sp:185,type:"lrYear",l:"1~2번 파주 +2",r:"연도 타자 +1",lDesc:"1~2번 파워/주루 +2",rDesc:"선택 연도 타자 +1 (임팩트는 어느 연도든)"},
+  {sp:190,type:"lrYear",l:"선발 구지 +1",r:"연도 투수 +1",lDesc:"선발 구위/지구력 +1",rDesc:"선택 연도 투수 +1 (임팩트는 어느 연도든)"},
+  {sp:195,type:"lr",l:"라올국 +1",r:"시그 +1",lDesc:"선택 팀 라이브/올스타/국가대표 +1 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"선택 팀 시그니처 +1 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:200,type:"lr",l:"타자 +2",r:"투수 +2",lDesc:"선택 팀 타자 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"선택 팀 투수 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
 ];
 
 function SetDeckPanel(p) {
@@ -2853,10 +2859,11 @@ function SetDeckPanel(p) {
     if (r.type === "auto" || sdSideOf(sdPick(sdState, r.sp)).side) activeCount++;
   });
 
-  var radioStyle = function(active, selected, side) {
+  /* 좌/우는 버튼 위치로 구분한다. 12자 이상인 표기(85·125 좌)는 모바일 폭(260)에서도 한 줄에 들어가도록 글씨를 한 단계 줄인다 */
+  var radioStyle = function(active, selected, side, txt) {
     var baseC = side === "L" ? "#FFD54F" : "#CE93D8";
     return {
-      flex: 1, padding: "6px 4px", fontSize: 12, fontWeight: selected ? 700 : 400,
+      flex: 1, padding: "6px 2px", fontSize: txt && txt.length > 11 ? 11 : 12, fontWeight: selected ? 700 : 400,
       background: selected ? baseC + "18" : "transparent",
       border: selected ? "1px solid " + baseC + "55" : "1px solid var(--bd)",
       borderRadius: side === "L" ? "6px 0 0 6px" : "0 6px 6px 0",
@@ -2871,14 +2878,16 @@ function SetDeckPanel(p) {
     var active = totalSP >= r.sp;
     var k = "s" + r.sp;
     var val = sdPick(sdState, r.sp);
+    /* 버튼에는 줄임말, 인게임 원문은 마우스를 올리면 보인다 */
+    var rowTip = r.type === "auto" ? r.sp + ": " + r.desc : r.sp + " 좌: " + r.lDesc + "\n" + r.sp + " 우: " + r.rDesc;
 
     if (r.type === "auto") {
       return (
-        <div key={k} style={{ padding: "5px 14px", display: "flex", alignItems: "center", gap: 8, opacity: active ? 1 : 0.35 }}>
+        <div key={k} title={rowTip} style={{ padding: "5px 14px", display: "flex", alignItems: "center", gap: 8, opacity: active ? 1 : 0.35 }}>
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: active ? "#4CAF50" : "var(--bd)", flexShrink: 0 }} />
           <span style={{ fontSize: 13, color: active ? "#4CAF50" : "var(--td)", fontWeight: 700, fontFamily: "var(--m)" }}>{r.sp}</span>
-          <span style={{ fontSize: 12, color: active ? "var(--t1)" : "var(--td)" }}>{r.desc}</span>
-          {active && (<span style={{ marginLeft: "auto", fontSize: 8, color: "#4CAF50", fontFamily: "var(--m)", background: "rgba(76,175,80,0.1)", padding: "2px 6px", borderRadius: 3 }}>{"AUTO"}</span>)}
+          <span style={{ fontSize: 12, color: active ? "var(--t1)" : "var(--td)" }}>{r.s}</span>
+          {active && (<span style={{ marginLeft: "auto", fontSize: 8, color: "#4CAF50", fontFamily: "var(--m)", background: "rgba(76,175,80,0.1)", padding: "2px 6px", borderRadius: 3 }}>{"좌 고정"}</span>)}
         </div>
       );
     }
@@ -2886,13 +2895,13 @@ function SetDeckPanel(p) {
     if (r.type === "lOnly") {
       var on = val === "L";
       return (
-        <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
+        <div key={k} title={rowTip} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
           </div>
           <button onClick={active ? function() { upd(k, on ? "" : "L"); } : undefined}
             style={{ width: "100%", padding: "6px 8px", fontSize: 12, background: on ? "rgba(255,213,79,0.12)" : "var(--inner)", border: on ? "1px solid rgba(255,213,79,0.4)" : "1px solid var(--bd)", borderRadius: 6, color: on ? "var(--acc)" : "var(--t2)", cursor: active ? "pointer" : "default", fontWeight: on ? 700 : 400 }}>
-            {r.lDesc}
+            {r.l}
           </button>
         </div>
       );
@@ -2901,13 +2910,13 @@ function SetDeckPanel(p) {
     if (r.type === "rOnly") {
       var on2 = val === "R";
       return (
-        <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
+        <div key={k} title={rowTip} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acp)" }}>{r.sp}</span>
           </div>
           <button onClick={active ? function() { upd(k, on2 ? "" : "R"); } : undefined}
             style={{ width: "100%", padding: "6px 8px", fontSize: 12, background: on2 ? "rgba(206,147,216,0.12)" : "var(--inner)", border: on2 ? "1px solid rgba(206,147,216,0.4)" : "1px solid var(--bd)", borderRadius: 6, color: on2 ? "var(--acp)" : "var(--t2)", cursor: active ? "pointer" : "default", fontWeight: on2 ? 700 : 400 }}>
-            {r.rDesc}
+            {r.r}
           </button>
         </div>
       );
@@ -2918,17 +2927,16 @@ function SetDeckPanel(p) {
       var yearV = "";
       if (side && val.indexOf(":") > 0) yearV = val.split(":")[1];
       return (
-        <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
+        <div key={k} title={rowTip} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
-            <span style={{ fontSize: 11, color: "var(--td)" }}>{"연도 선택 좌/우"}</span>
           </div>
           <div style={{ display: "flex", gap: 0, marginBottom: 4 }}>
-            <button onClick={active ? function() { upd(k, side === "L" ? "" : "L:"); } : undefined} style={radioStyle(active, side === "L", "L")}>
-              <span>{"◀ " + r.lDesc}</span>
+            <button onClick={active ? function() { upd(k, side === "L" ? "" : "L:"); } : undefined} style={radioStyle(active, side === "L", "L", r.l)}>
+              <span title={r.lDesc}>{r.l}</span>
             </button>
-            <button onClick={active ? function() { upd(k, side === "R" ? "" : "R:"); } : undefined} style={radioStyle(active, side === "R", "R")}>
-              <span>{r.rDesc + " ▶"}</span>
+            <button onClick={active ? function() { upd(k, side === "R" ? "" : "R:"); } : undefined} style={radioStyle(active, side === "R", "R", r.r)}>
+              <span title={r.rDesc}>{r.r}</span>
             </button>
           </div>
           {side && (<select value={yearV} onChange={active ? function(e) { upd(k, side + ":" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>
@@ -2944,16 +2952,16 @@ function SetDeckPanel(p) {
       var isR = typeof val === "string" && val.startsWith && val.startsWith("R:");
       var yrVal = isR ? val.split(":")[1] : "";
       return (
-        <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
+        <div key={k} title={rowTip} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
           </div>
           <div style={{ display: "flex", gap: 0, marginBottom: isR ? 4 : 0 }}>
-            <button onClick={active ? function() { upd(k, isL ? "" : "L"); } : undefined} style={radioStyle(active, isL, "L")}>
-              <span>{"◀ " + r.lDesc}</span>
+            <button onClick={active ? function() { upd(k, isL ? "" : "L"); } : undefined} style={radioStyle(active, isL, "L", r.l)}>
+              <span title={r.lDesc}>{r.l}</span>
             </button>
-            <button onClick={active ? function() { upd(k, isR ? "" : "R:"); } : undefined} style={radioStyle(active, isR, "R")}>
-              <span>{r.rDesc + " ▶"}</span>
+            <button onClick={active ? function() { upd(k, isR ? "" : "R:"); } : undefined} style={radioStyle(active, isR, "R", r.r)}>
+              <span title={r.rDesc}>{r.r}</span>
             </button>
           </div>
           {isR && (<select value={yrVal} onChange={active ? function(e) { upd(k, "R:" + e.target.value); } : undefined} disabled={!active} style={{ width: 65, padding: "4px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#FFD54F", outline: "none" }}>
@@ -2966,16 +2974,16 @@ function SetDeckPanel(p) {
 
     /* Default: lr radio */
     return (
-      <div key={k} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
+      <div key={k} title={rowTip} style={{ padding: "5px 14px", opacity: active ? 1 : 0.35 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
           <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--acc)" }}>{r.sp}</span>
         </div>
         <div style={{ display: "flex", gap: 0 }}>
-          <button onClick={active ? function() { upd(k, val === "L" ? "" : "L"); } : undefined} style={radioStyle(active, val === "L", "L")}>
-            <span>{"◀ " + r.lDesc}</span>
+          <button onClick={active ? function() { upd(k, val === "L" ? "" : "L"); } : undefined} style={radioStyle(active, val === "L", "L", r.l)}>
+            <span title={r.lDesc}>{r.l}</span>
           </button>
-          <button onClick={active ? function() { upd(k, val === "R" ? "" : "R"); } : undefined} style={radioStyle(active, val === "R", "R")}>
-            <span>{r.rDesc + " ▶"}</span>
+          <button onClick={active ? function() { upd(k, val === "R" ? "" : "R"); } : undefined} style={radioStyle(active, val === "R", "R", r.r)}>
+            <span title={r.rDesc}>{r.r}</span>
           </button>
         </div>
       </div>
@@ -3052,9 +3060,9 @@ function SetDeckPanel(p) {
             var impCnt = counts["임팩트"]||0;
             var sigCnt = counts["시그니처"]||0;
             var syns = [
-              {key:"synLive",label:"라이브",auto:liveNat>=7,desc:"라이브+국대 "+liveNat+"/7",effect:"전체 +1"},
-              {key:"synImpact",label:"임팩트",auto:impCnt>=5,desc:"임팩트 "+impCnt+"/5",effect:"타자 파정선 +1"},
-              {key:"synSig",label:"시그니처",auto:sigCnt>=5,desc:"시그 "+sigCnt+"/5",effect:"투수 변구 +1"}
+              {key:"synLive",label:"라이브",auto:liveNat>=7,desc:"라이브+국대 "+liveNat+"/7",effect:"모두 +1"},
+              {key:"synImpact",label:"임팩트",auto:impCnt>=5,desc:"임팩트 "+impCnt+"/5",effect:"타자 +1"},
+              {key:"synSig",label:"시그니처",auto:sigCnt>=5,desc:"시그 "+sigCnt+"/5",effect:"투수 +1"}
             ];
             return syns.map(function(syn) {
               var manual = sdState[syn.key];

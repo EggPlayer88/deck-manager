@@ -459,7 +459,7 @@ var SD_LEGACY_AUTO = { "s95": "R", "s125": "L" };
 function sdPick(sdState, sp) {
   var k = "s" + sp; var x = sdState[k];
   if (x === undefined || x === null) {
-    if (sp === 110) { var lg = KBO_LEAGUE[sdState.teamName]; return lg === "드림" ? "L" : lg === "나눔" ? "R" : "B"; }
+    if (sp === 110) { var lg = KBO_LEAGUE[teamKey(sdState.teamName)]; return lg === "드림" ? "L" : lg === "나눔" ? "R" : "B"; }
     return SD_LEGACY_AUTO[k] || "";
   }
   if (sp === 55 && /^\d{4}$/.test(String(x))) return "R:" + x;
@@ -467,14 +467,15 @@ function sdPick(sdState, sp) {
 }
 var KBO_LEAGUE = { "두산": "드림", "롯데": "드림", "삼성": "드림", "SSG": "드림", "KT": "드림",
   "기아": "나눔", "한화": "나눔", "LG": "나눔", "NC": "나눔", "키움": "나눔" };
+function teamKey(t) { return t === "KIA" ? "기아" : (t || ""); }
 function sdSideOf(val) {
   var s = String(val || ""), c = s.charAt(0), at = s.indexOf(":");
   return { side: (c === "L" || c === "R" || s === "B") ? c : "", year: at > 0 ? s.slice(at + 1) : "" };
 }
 function isSelTeam(pl, sdState) {
-  var team = (sdState && sdState.teamName) || "";
+  var team = teamKey(sdState && sdState.teamName);
   if (!KBO_LEAGUE[team]) return true;
-  return pl.team === team || pl.cardType === "골든글러브" || !!pl.isFa ||
+  return teamKey(pl.team) === team || pl.cardType === "골든글러브" || !!pl.isFa ||
     (pl.cardType === "국가대표" && !!pl.isWildcard);
 }
 var SD_BAT_ALL = ["p", "a", "e", "n", "run", "def"];
@@ -557,39 +558,39 @@ function sdWho(w, x) {
   return true;
 }
 var SD_ROWS = [
-  {sp:30,type:"auto",desc:"선택 팀 선수 모두 +1 (좌 고정)"},
-  {sp:40,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:50,type:"lr",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
-  {sp:55,type:"yearLR",lDesc:"선택 연도 타자 주루/수비 +1",rDesc:"선택 연도 투수 변화/지구력 +2"},
-  {sp:60,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:65,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 정확/인내 +2 · 4성 투수 구속/제구 +2"},
-  {sp:70,type:"lr",lDesc:"선발 +1",rDesc:"중계/마무리 +2"},
-  {sp:75,type:"yearLR",lDesc:"선택 연도 타자 파워/정확 +3",rDesc:"선택 연도 투수 구위/제구 +3"},
-  {sp:80,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:85,type:"lr",lDesc:"4성 타자 파워/정확/선구 +2 · 4성 투수 구위/제구/변화 +2",rDesc:"5성 타자 파워 +1 · 5성 투수 구위 +1"},
-  {sp:90,type:"auto",desc:"선택 팀 선수 모두 +2 (좌 고정)"},
-  {sp:95,type:"lr",lDesc:"내야/포수 인내/수비 +2",rDesc:"외야/지명 선구/주루 +2"},
-  {sp:100,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:105,type:"lr",lDesc:"3성 +2",rDesc:"4성 타자 파워/선구 +2 · 4성 투수 구위/변화 +2"},
-  {sp:110,type:"lr",lDesc:"드림(두산·롯데·삼성·SSG·KT) 모두 +1",rDesc:"나눔(기아·한화·LG·NC·키움) 모두 +1"},
-  {sp:115,type:"lr",lDesc:"6~9번 정확/주루/수비 +2",rDesc:"중계/마무리 제구/구위/지구력 +2"},
-  {sp:120,type:"lr",lDesc:"3~5번 모두 +2",rDesc:"선발 +1"},
-  {sp:125,type:"lr",lDesc:"4성 타자 정확/선구/인내 +2 · 4성 투수 구속/변화/제구 +2",rDesc:"5성 타자 인내 +1 · 5성 투수 제구 +1"},
-  {sp:130,type:"lr",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
-  {sp:135,type:"lr",lDesc:"3~5번 정확/주루/수비 +2",rDesc:"선발 제구/구위/지구력 +1"},
-  {sp:140,type:"lr",lDesc:"6~9번 +1",rDesc:"중계/마무리 +1"},
-  {sp:145,type:"lr",lDesc:"1~2번 정확/주루/선구 +2",rDesc:"선발 제구/구위/지구력 +1"},
-  {sp:150,type:"auto",desc:"선택 팀 선수 모두 +2 (좌 고정)"},
-  {sp:155,type:"lr",lDesc:"1~2번 파워/선구/인내 +2",rDesc:"선발 구속/변화/수비 +1"},
-  {sp:160,type:"lr",lDesc:"타자 +1",rDesc:"투수 +1"},
-  {sp:165,type:"lr",lDesc:"타자 정확/주루/수비 +1",rDesc:"투수 구속/변화/수비 +1"},
-  {sp:170,type:"auto",desc:"선택 팀 선수 모두 +1 (좌 고정)"},
-  {sp:175,type:"lr",lDesc:"타자 파워/선구/인내 +1",rDesc:"투수 제구/구위/지구력 +1"},
-  {sp:180,type:"lrYear",lDesc:"라이브/올스타 +2",rDesc:"선택 연도 모두 +1"},
-  {sp:185,type:"lrYear",lDesc:"1~2번 파워/주루 +2",rDesc:"선택 연도 타자 +1"},
-  {sp:190,type:"lrYear",lDesc:"선발 구위/지구력 +1",rDesc:"선택 연도 투수 +1"},
-  {sp:195,type:"lr",lDesc:"선택 팀 라이브/올스타/국가대표 +1",rDesc:"선택 팀 시그니처 +1"},
-  {sp:200,type:"lr",lDesc:"선택 팀 타자 +2",rDesc:"선택 팀 투수 +2"},
+  {sp:30,type:"auto",s:"모두 +1",desc:"선택 팀 선수 모두 +1 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +1) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:40,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:50,type:"lr",l:"시라올 +1",r:"임국시골 +1",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
+  {sp:55,type:"yearLR",l:"연도 주수 +1",r:"연도 변지 +2",lDesc:"선택 연도 타자 주루/수비 +1 (임팩트는 어느 연도든)",rDesc:"선택 연도 투수 변화/지구력 +2 (임팩트는 어느 연도든)"},
+  {sp:60,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:65,type:"lr",l:"3성 +2",r:"4성 정인·속제 +2",lDesc:"3성 +2",rDesc:"4성 타자 정확/인내 +2 · 4성 투수 구속/제구 +2"},
+  {sp:70,type:"lr",l:"선발 +1",r:"불펜 +2",lDesc:"선발 +1",rDesc:"중계/마무리 +2"},
+  {sp:75,type:"yearLR",l:"연도 파정 +3",r:"연도 구제 +3",lDesc:"선택 연도 타자 파워/정확 +3 (임팩트는 어느 연도든)",rDesc:"선택 연도 투수 구위/제구 +3 (임팩트는 어느 연도든)"},
+  {sp:80,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:85,type:"lr",l:"4성 파정선·구제변 +2",r:"5성 파·구 +1",lDesc:"4성 타자 파워/정확/선구 +2 · 4성 투수 구위/제구/변화 +2",rDesc:"5성 타자 파워 +1 · 5성 투수 구위 +1"},
+  {sp:90,type:"auto",s:"모두 +2",desc:"선택 팀 선수 모두 +2 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +2) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:95,type:"lr",l:"내야 인수 +2",r:"외야 선주 +2",lDesc:"내야/포수 인내/수비 +2",rDesc:"외야/지명 선구/주루 +2"},
+  {sp:100,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:105,type:"lr",l:"3성 +2",r:"4성 파선·구변 +2",lDesc:"3성 +2",rDesc:"4성 타자 파워/선구 +2 · 4성 투수 구위/변화 +2"},
+  {sp:110,type:"lr",l:"드림 +1",r:"나눔 +1",lDesc:"드림(두산·롯데·삼성·SSG·KT) 모두 +1",rDesc:"나눔(기아·한화·LG·NC·키움) 모두 +1"},
+  {sp:115,type:"lr",l:"6~9번 정주수 +2",r:"불펜 제구지 +2",lDesc:"6~9번 정확/주루/수비 +2",rDesc:"중계/마무리 제구/구위/지구력 +2"},
+  {sp:120,type:"lr",l:"3~5번 +2",r:"선발 +1",lDesc:"3~5번 모두 +2",rDesc:"선발 +1"},
+  {sp:125,type:"lr",l:"4성 정선인·속변제 +2",r:"5성 인·제 +1",lDesc:"4성 타자 정확/선구/인내 +2 · 4성 투수 구속/변화/제구 +2",rDesc:"5성 타자 인내 +1 · 5성 투수 제구 +1"},
+  {sp:130,type:"lr",l:"시라올 +1",r:"임국시골 +1",lDesc:"시즌/라이브/올스타 +1",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1"},
+  {sp:135,type:"lr",l:"3~5번 정주수 +2",r:"선발 제구지 +1",lDesc:"3~5번 정확/주루/수비 +2",rDesc:"선발 제구/구위/지구력 +1"},
+  {sp:140,type:"lr",l:"6~9번 +1",r:"불펜 +1",lDesc:"6~9번 +1",rDesc:"중계/마무리 +1"},
+  {sp:145,type:"lr",l:"1~2번 정주선 +2",r:"선발 제구지 +1",lDesc:"1~2번 정확/주루/선구 +2",rDesc:"선발 제구/구위/지구력 +1"},
+  {sp:150,type:"auto",s:"모두 +2",desc:"선택 팀 선수 모두 +2 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +2) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:155,type:"lr",l:"1~2번 파선인 +2",r:"선발 속변수 +1",lDesc:"1~2번 파워/선구/인내 +2",rDesc:"선발 구속/변화/수비 +1"},
+  {sp:160,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
+  {sp:165,type:"lr",l:"타자 정주수 +1",r:"투수 속변수 +1",lDesc:"타자 정확/주루/수비 +1",rDesc:"투수 구속/변화/수비 +1"},
+  {sp:170,type:"auto",s:"모두 +1",desc:"선택 팀 선수 모두 +1 · 인게임은 좌/우 택1이지만 좌로 고정 (우: 임팩트/국가대표/시그니처/골든글러브 +1) (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:175,type:"lr",l:"타자 파선인 +1",r:"투수 제구지 +1",lDesc:"타자 파워/선구/인내 +1",rDesc:"투수 제구/구위/지구력 +1"},
+  {sp:180,type:"lrYear",l:"라올 +2",r:"연도 +1",lDesc:"라이브/올스타 +2",rDesc:"선택 연도 모두 +1 (임팩트는 어느 연도든)"},
+  {sp:185,type:"lrYear",l:"1~2번 파주 +2",r:"연도 타자 +1",lDesc:"1~2번 파워/주루 +2",rDesc:"선택 연도 타자 +1 (임팩트는 어느 연도든)"},
+  {sp:190,type:"lrYear",l:"선발 구지 +1",r:"연도 투수 +1",lDesc:"선발 구위/지구력 +1",rDesc:"선택 연도 투수 +1 (임팩트는 어느 연도든)"},
+  {sp:195,type:"lr",l:"라올국 +1",r:"시그 +1",lDesc:"선택 팀 라이브/올스타/국가대표 +1 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"선택 팀 시그니처 +1 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
+  {sp:200,type:"lr",l:"타자 +2",r:"투수 +2",lDesc:"선택 팀 타자 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"선택 팀 투수 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
 ];
 var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
@@ -1158,7 +1159,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
 
   /* 세트덱 구간 효과 (SD_RULES) */
   var S = { p: 0, a: 0, e: 0, n: 0, run: 0, def: 0, c: 0, s: 0, vel: 0, ctl: 0, sta: 0 };
-  var x = { ct: ct, stars: stars, selTeam: isSelTeam(pl, sdState), league: KBO_LEAGUE[pl.team] || "",
+  var x = { ct: ct, stars: stars, selTeam: isSelTeam(pl, sdState), league: KBO_LEAGUE[teamKey(pl.team)] || "",
     order: isBat && batIdx >= 0 ? batIdx + 1 : 0, outfield: isBat && isOF,
     starter: !isBat && !isRP && !isCP, relief: !isBat && (isRP || isCP) };
   SD_RULES.forEach(function(r) {
@@ -1184,10 +1185,11 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   var synLive = sdState.synLive !== undefined ? sdState.synLive : autoLive;
   var synImp = sdState.synImpact !== undefined ? sdState.synImpact : autoImp;
   var synSig = sdState.synSig !== undefined ? sdState.synSig : autoSig;
-  /* 라이브 시너지는 전체 +1 — 점수에 안 쓰는 능력치도 같이 기록한다 */
+  /* 라이브 시너지 = 모두 +1, 임팩트 시너지 = 타자 +1, 시그니처 시너지 = 투수 +1.
+     "+1" 은 능력치 전부다 — 점수에 안 쓰는 능력치도 같이 기록한다 */
   if (synLive) { bp++; ba++; be++; bn++; pc++; ps++; S.run++; S.def++; S.vel++; S.ctl++; S.sta++; }
-  if (synImp && isBat) { bp++; ba++; be++; bn++; }
-  if (synSig && !isBat) { pc++; ps++; }
+  if (synImp && isBat) { bp++; ba++; be++; bn++; S.run++; S.def++; }
+  if (synSig && !isBat) { pc++; ps++; S.vel++; S.ctl++; S.sta++; S.def++; }
 
   /* 국대에이스/포수리드: 종합점수에만 반영 (calcBat/calcPit에서 처리) */
 
