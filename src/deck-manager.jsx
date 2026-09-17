@@ -511,6 +511,37 @@ var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
 var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
 
+/* 팀 버프 스킬(국대에이스·포수리드) 자동 감지.
+   slots 칸 선수의 스킬을 점수 계산과 같은 실제 적용 레벨(effSkillLv)로 보고,
+   5레벨 이상 중 가장 높은 레벨을 "N렙" 으로 돌려준다 (없으면 "없음").
+   저장 레벨만 보면 레벨을 "자동"으로 둔 선수(저장 레벨 0)가 빠지고,
+   포지션 특훈 스킬 보너스(+1)와 국대 전용 스킬 6레벨 상한도 어긋난다.
+   국대에이스는 타자 카드면 타자용, 투수 카드면 투수용이다. */
+function detectTeamBuffs(slots, pick, sdState) {
+  var best = { natBat: 0, natPit: 0, catchLead: 0 };
+  slots.forEach(function(sl) {
+    var pl = pick(sl);
+    if (!pl) return;
+    var isBat = pl.role === "타자";
+    var cat = isBat ? "타자" : pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
+    var pts = (sdState && sdState["pts_" + sl]) || [];
+    var mn = isLvManual(pl);
+    for (var k = 1; k <= 3; k++) {
+      var nm = pl["skill" + k];
+      if (!nm) continue;
+      /* "포수 리드" 처럼 띄어쓰기만 다른 옛 이름도 잡는다 (canonSkillName 과 같은 취지) */
+      var flat = String(nm).replace(/\s+/g, "");
+      var key = flat.indexOf("국대에이스") >= 0 ? (isBat ? "natBat" : "natPit")
+        : flat.indexOf("포수리드") >= 0 ? "catchLead" : null;
+      if (!key) continue;
+      var lv = effSkillLv(nm, pl["s" + k + "Lv"], mn, pl.cardType, k, cat, pts);
+      if (lv >= 5 && lv > best[key]) best[key] = lv;
+    }
+  });
+  var fmt = function(n) { return n ? n + "렙" : "없음"; };
+  return { natBat: fmt(best.natBat), natPit: fmt(best.natPit), catchLead: fmt(best.catchLead) };
+}
+
 /* 라인업 편성에서 세트덱 계산에 필요한 값을 구한다.
    pick(slot) 은 그 슬롯의 (병합된) 선수를 돌려주는 함수.
    sdState 에 파생값(_synCounts, _autoNatBat 등)을 채우고 총 세트덱 점수를 돌려준다.
@@ -545,10 +576,9 @@ function computeLineupSetDeck(pickRaw, sdState) {
     var allSlotsForSyn = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP","BN1","BN2","BN3","BN4","BN5","BN6"]);
     allSlotsForSyn.forEach(function(sl) { var pl2 = pick(sl); if (pl2) { synCounts[pl2.cardType] = (synCounts[pl2.cardType]||0) + 1; } });
     sdState._synCounts = synCounts;
-    /* Auto-detect special skills */
-    var autoNB="없음",autoNP="없음",autoCC="없음";
-    allSlotsForSyn.forEach(function(sl){var pl4=pick(sl);if(!pl4)return;var sks=[pl4.skill1,pl4.skill2,pl4.skill3],lvs=[pl4.s1Lv||0,pl4.s2Lv||0,pl4.s3Lv||0];for(var i=0;i<3;i++){if(!sks[i])continue;if(sks[i].indexOf("국대에이스")>=0&&lvs[i]>=5){var lv=lvs[i]+"렙";if(pl4.role==="타자"){if(lvs[i]>parseInt(autoNB)||autoNB==="없음")autoNB=lv;}else{if(lvs[i]>parseInt(autoNP)||autoNP==="없음")autoNP=lv;}}if(sks[i].indexOf("포수리드")>=0&&lvs[i]>=5){var lv2=lvs[i]+"렙";if(lvs[i]>parseInt(autoCC)||autoCC==="없음")autoCC=lv2;}}});
-    sdState._autoNatBat=autoNB;sdState._autoNatPit=autoNP;sdState._autoCatch=autoCC;
+    /* 팀 버프 스킬 자동 감지 (detectTeamBuffs) — 세트덱 패널도 이 값을 그대로 보여 준다 */
+    var buffs = detectTeamBuffs(allSlotsForSyn, pick, sdState);
+    sdState._autoNatBat = buffs.natBat; sdState._autoNatPit = buffs.natPit; sdState._autoCatch = buffs.catchLead;
       return calcSetPoint() + (sdState.liveSetPo || 0);
 }
 
@@ -3210,38 +3240,25 @@ function SetDeckPanel(p) {
           {/* Special skills (auto-detect + manual) */}
           <div style={{ padding: "10px 14px 4px", fontSize: 13, fontWeight: 800, color: "#2E86C1", fontFamily: "var(--h)", borderTop: "1px solid var(--bd)", marginTop: 6 }}>{"특수 스킬"}</div>
           {(function() {
-            /* Auto-detect from lineup */
-            var autoNatBat = "없음"; var autoNatPit = "없음"; var autoCatch = "없음";
-            var allSlots3 = ["C","1B","2B","3B","SS","LF","CF","RF","DH","SP1","SP2","SP3","SP4","SP5","RP1","RP2","RP3","RP4","RP5","RP6","CP","BN1","BN2","BN3","BN4","BN5","BN6"];
-            allSlots3.forEach(function(sl) {
-              var pid = p.lineupMap && p.lineupMap[sl]; if (!pid) return;
-              var pl3 = null; if(p.players){for(var i=0;i<p.players.length;i++){if(p.players[i].id===pid){pl3=p.players[i];break;}}} if(!pl3)return;
-              var skills3 = [pl3.skill1,pl3.skill2,pl3.skill3];
-              var lvs3 = [pl3.s1Lv||0,pl3.s2Lv||0,pl3.s3Lv||0];
-              for(var si=0;si<3;si++){
-                if(!skills3[si])continue; var sn=skills3[si]; var slv=lvs3[si];
-                if(sn.indexOf("국대에이스")>=0 && slv>=5){
-                  var lvStr=slv+"렙";
-                  if(pl3.role==="타자"){ if(slv>parseInt(autoNatBat)||autoNatBat==="없음") autoNatBat=lvStr; }
-                  else{ if(slv>parseInt(autoNatPit)||autoNatPit==="없음") autoNatPit=lvStr; }
-                }
-                if(sn.indexOf("포수리드")>=0 && slv>=5){ var lvStr2=slv+"렙"; if(slv>parseInt(autoCatch)||autoCatch==="없음") autoCatch=lvStr2; }
-              }
-            });
+            /* 자동 감지값은 라인업 화면이 computeLineupSetDeck(detectTeamBuffs)으로 채운 값이다 — 점수 계산과 같은 값.
+               "자동" 을 고르면 직접 고른 값을 지우고 자동 감지로 돌아간다 */
             var specials = [
-              {key:"natBat",label:"국대에이스(타자)",opts:["없음","5렙","6렙"],auto:autoNatBat},
-              {key:"natPit",label:"국대에이스(투수)",opts:["없음","5렙","6렙"],auto:autoNatPit},
-              {key:"catchLead",label:"포수리드",opts:["없음","5렙","6렙","7렙","8렙","9렙","10렙"],auto:autoCatch}
+              {key:"natBat",label:"국대에이스(타자)",opts:["없음","5렙","6렙"],auto:sdState._autoNatBat||"없음"},
+              {key:"natPit",label:"국대에이스(투수)",opts:["없음","5렙","6렙"],auto:sdState._autoNatPit||"없음"},
+              {key:"catchLead",label:"포수리드",opts:["없음","5렙","6렙","7렙","8렙","9렙","10렙"],auto:sdState._autoCatch||"없음"}
             ];
             return specials.map(function(sp) {
-              var cur = sdState[sp.key] || sp.auto;
+              var manual = sdState[sp.key] || "";
+              var cur = manual || sp.auto;
+              var tip = "자동 감지: " + sp.auto + (manual ? " · 직접 고른 " + manual + " 적용 중 (자동을 고르면 되돌아감)" : "");
               return (
                 <div key={sp.key} style={{ padding: "4px 14px", display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 12, color: "var(--t2)", flex: 1 }}>{sp.label}</span>
-                  <select value={cur} onChange={function(e) { upd(sp.key, e.target.value); }} style={{ width: 65, padding: "3px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: cur!=="없음"?"#2E86C1":"var(--t1)", fontWeight: cur!=="없음"?700:400, outline: "none" }}>
+                  <select value={cur} title={tip} onChange={function(e) { upd(sp.key, e.target.value); }} style={{ width: 65, padding: "3px", fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: cur!=="없음"?"#2E86C1":"var(--t1)", fontWeight: cur!=="없음"?700:400, outline: "none" }}>
+                    <option value="">{"자동"}</option>
                     {sp.opts.map(function(o) { return (<option key={o} value={o}>{o}</option>); })}
                   </select>
-                  {sp.auto!=="없음" && !sdState[sp.key] && (<span style={{ fontSize: 7, color: "#4CAF50", background: "rgba(76,175,80,0.1)", padding: "1px 4px", borderRadius: 3 }}>{"AUTO"}</span>)}
+                  {sp.auto!=="없음" && !manual && (<span title={tip} style={{ fontSize: 7, color: "#4CAF50", background: "rgba(76,175,80,0.1)", padding: "1px 4px", borderRadius: 3 }}>{"AUTO"}</span>)}
                 </div>
               );
             });

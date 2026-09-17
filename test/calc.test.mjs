@@ -7,7 +7,7 @@ import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
-  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck,
+  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs,
   isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
 } from './calc-extract.mjs';
@@ -1199,6 +1199,53 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   const pitSD = (sd) => calcPit(pit, lu(pit), calcSDBonus(pit, 'SP1', sd, 0)).total;
   eq('고점 포수의 포수리드 6렙이 투수 점수에 들어간다 (변화 1.05 + 구위 1.35)',
     pitSD(peakBuffState({ _autoCatch: '없음' }, { _autoCatch: '6렙' })) - pitSD({ _autoCatch: '없음' }), 2.4, 0.011);
+}
+
+console.log('\n[특수 스킬 자동 감지] 2026-09-18 — 점수 계산과 같은 실제 적용 레벨(effSkillLv)로 본다');
+{
+  const S27 = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'SP1', 'SP2', 'SP3', 'SP4', 'SP5',
+    'RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6', 'CP', 'BN1', 'BN2', 'BN3', 'BN4', 'BN5', 'BN6'];
+  const find = (d, sd) => detectTeamBuffs(S27, (s) => d[s] || null, sd || {});
+  /* 레벨을 "자동"으로 둔 선수 (신규 선수 기본값) */
+  const auto = (o) => ({ sLvManual: false, ...o });
+  const natB = (o) => auto({ role: '타자', cardType: '국가대표', ...o });
+  const natP = (o) => auto({ role: '투수', position: '선발', cardType: '국가대표', ...o });
+  const catcher = (ct, o) => auto({ role: '타자', cardType: ct, skill1: '포수리드', ...o });
+
+  eq('국대에이스 1옵 · 자동 레벨 국가대표 → 6렙', find({ DH: natB({ skill1: '국대에이스' }) }).natBat === '6렙' ? 1 : 0, 1);
+  eq('국대에이스 2옵 · 자동 레벨 → 5렙', find({ DH: natB({ skill2: '국대에이스' }) }).natBat === '5렙' ? 1 : 0, 1);
+  eq('새 이름(국대에이스(버프X))도 같다', find({ DH: natB({ skill1: '국대에이스(버프X)' }) }).natBat === '6렙' ? 1 : 0, 1);
+  eq('투수 카드면 투수용으로 잡는다', (() => { const r = find({ SP1: natP({ skill1: '국대에이스' }) }); return r.natPit === '6렙' && r.natBat === '없음'; })() ? 1 : 0, 1);
+  eq('레벨을 직접 넣은 선수는 그 레벨 (5렙)', find({ DH: { role: '타자', cardType: '국가대표', sLvManual: true, skill1: '국대에이스', s1Lv: 5 } }).natBat === '5렙' ? 1 : 0, 1);
+  eq('직접 넣었는데 레벨이 0이면 없음', find({ DH: { role: '타자', cardType: '국가대표', sLvManual: true, skill1: '국대에이스', s1Lv: 0 } }).natBat === '없음' ? 1 : 0, 1);
+  eq('국대에이스는 6렙 상한 — 옛 저장값 10렙도 6렙',
+    find({ DH: { role: '타자', cardType: '국가대표', sLvManual: true, skill1: '국대에이스', s1Lv: 10 } }).natBat === '6렙' ? 1 : 0, 1);
+  eq('버프 스킬이 아니면 안 잡는다', find({ DH: auto({ role: '타자', cardType: '라이브', skill1: '정밀타격' }) }).natBat === '없음' ? 1 : 0, 1);
+
+  eq('포수리드 · 자동 레벨 골든글러브 1옵 → 6렙', find({ C: catcher('골든글러브') }).catchLead === '6렙' ? 1 : 0, 1);
+  eq('포수리드 · 자동 레벨 라이브 1옵 → 7렙', find({ C: catcher('라이브') }).catchLead === '7렙' ? 1 : 0, 1);
+  eq('포수리드 · 자동 레벨 올스타 1옵 → 8렙', find({ C: catcher('올스타') }).catchLead === '8렙' ? 1 : 0, 1);
+  eq('포수리드 · 포지션 특훈 스킬 보너스 +1 (라이브 7 → 8)',
+    find({ C: catcher('라이브') }, { pts_C: ['포수리드', ''] }).catchLead === '8렙' ? 1 : 0, 1);
+  eq('포수리드 · 10렙 상한 (수동 10 + 특훈 보너스)',
+    find({ C: { role: '타자', cardType: '라이브', sLvManual: true, skill1: '포수리드', s1Lv: 10 } }, { pts_C: ['포수리드'] }).catchLead === '10렙' ? 1 : 0, 1);
+  eq('포수리드 · 옛 이름 "포수 리드" 도 잡는다', find({ C: catcher('라이브', { skill1: '포수 리드' }) }).catchLead === '7렙' ? 1 : 0, 1);
+  eq('후보 칸도 본다', find({ BN3: natB({ skill1: '국대에이스' }) }).natBat === '6렙' ? 1 : 0, 1);
+  eq('여럿이면 가장 높은 레벨', find({ C: catcher('골든글러브'), BN1: catcher('올스타'), BN2: catcher('라이브') }).catchLead === '8렙' ? 1 : 0, 1);
+  eq('빈 라인업은 모두 없음', (() => { const r = find({}); return r.natBat === '없음' && r.natPit === '없음' && r.catchLead === '없음'; })() ? 1 : 0, 1);
+
+  /* computeLineupSetDeck 이 sdState 에 채우고, 그 값이 점수에 들어간다 */
+  const sd = { liveSetPo: 0 };
+  computeLineupSetDeck((s) => ({ C: catcher('라이브'), DH: natB({ skill1: '국대에이스' }), SP1: natP({ skill2: '국대에이스' }) })[s] || null, sd);
+  eq('sdState 에 채운다', sd._autoCatch === '7렙' && sd._autoNatBat === '6렙' && sd._autoNatPit === '5렙' ? 1 : 0, 1);
+  const pitOnly = { role: '투수', position: '선발', cardType: '골든글러브', change: 100, stuff: 100 };
+  const luP = (p) => ({ enhance: p.enhance, trainC: 0, trainS: 0, skill1: '', s1Lv: 0, skill2: '', s2Lv: 0, skill3: '', s3Lv: 0 });
+  const pitWith = (s) => calcPit(pitOnly, luP(pitOnly), calcSDBonus(pitOnly, 'SP1', s, 0)).total;
+  eq('자동 레벨 포수의 포수리드 7렙이 투수 점수에 들어간다 (변화 1.05 + 구위 1.35)',
+    pitWith(sd) - pitWith({ liveSetPo: 0, _autoCatch: '없음', _autoNatPit: '없음' }),
+    1.05 + 1.35 + (1.05 + 1.35), 0.011);   /* 포수리드 7렙 + 국대에이스(투수) 5렙 */
+  eq('패널에서 직접 고른 값이 자동 감지보다 우선',
+    pitWith({ ...sd, catchLead: '없음', natPit: '없음' }) - pitWith({ liveSetPo: 0 }), 0, 0.011);
 }
 
 console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선택 팀 · 드림/나눔 · 올스타 · 연도');
