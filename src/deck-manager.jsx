@@ -2422,6 +2422,26 @@ function getRPWeight(bpcIdx, slot, tactic) {
   return si < 0 ? 0 : (a[si] || 0);
 }
 
+/* 투수 묶음 상자 — 카드를 가로로 눕히고 상자는 사람 수만큼만 차지한다.
+   예전처럼 네 칸을 같은 너비로 두고 카드를 세로로 쌓으면, 1명인 묶음에 빈 자리가 크게 남았다.
+   창이 좁아지면 상자 단위로 다음 줄에 접힌다 */
+function PitchGroup(p) {
+  return (
+    <div style={{ alignSelf: "flex-start", background: "var(--inner)", borderRadius: 8, border: "1px solid var(--bd)", borderTop: "2px solid " + p.color, padding: "5px 8px 7px" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: p.color, letterSpacing: 0.5, marginBottom: 4, whiteSpace: "nowrap" }}>
+        {p.label}
+        {p.count !== undefined && (<span style={{ fontSize: 11, color: "var(--td)", fontWeight: 500 }}>{" " + p.count}</span>)}
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{p.children}</div>
+    </div>
+  );
+}
+/* 빈 자리 — 카드와 같은 크기의 점선 칸 */
+function PitSlot(p) {
+  return (<div onClick={p.onClick} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: p.onClick ? "pointer" : "default", background: "var(--re)" }}>
+    <span style={{ fontSize: 11, color: "var(--td)" }}>{p.slot}</span></div>);
+}
+
 function BullpenLayout(p) {
   var mob = p.mobile;
   var rps = p.relievers;
@@ -2436,7 +2456,6 @@ function BullpenLayout(p) {
   var setRpActive = p.setRpActive || function(){};
   var _o = useState(false); var open = _o[0]; var setOpen = _o[1];
   var cfg = BPC[idx];
-  var cs = { flex: 1, minWidth: 0, background: "var(--inner)", borderRadius: 6, padding: "6px 2px", border: "1px solid var(--bd)" };
 
   return (
     <div>
@@ -2460,25 +2479,20 @@ function BullpenLayout(p) {
         )}
         <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명과 추격조 " + cfg.l + "명의 능력치가 1씩 오릅니다. 대신 선발 배율이 7.00 에서 6.66 으로 깎이고 그만큼 중계 몫이 커집니다. 분업과는 함께 켤 수 없습니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {[
           { label: "승리조", count: cfg.w, color: "#4CAF50", slots: rpSlots.slice(0, cfg.w) },
           { label: "패전조", count: cfg.l, color: "#FF7043", slots: rpSlots.slice(cfg.w, cfg.w + cfg.l) },
           { label: "롱릴리프", count: cfg.r, color: "#42A5F5", slots: rpSlots.slice(cfg.w + cfg.l) },
-          { label: "마무리", count: cps.length, color: "#EF5350", slots: [{ slot: "CP", pl: cps[0] || null }] },
+          { label: "마무리", count: 1, color: "#EF5350", slots: [{ slot: "CP", pl: cps[0] || null }] },
         ].map(function(col) {
           return (
-            <div key={col.label} style={cs}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: col.color, letterSpacing: 1, marginBottom: 4, textAlign: "center" }}>{col.label + " (" + col.count + ")"}</div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                {col.slots.map(function(s) {
-                  if (s.pl) {
-                    return (<div key={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ cursor: onSlotClick ? "pointer" : "default" }}><PCard p={s.pl} /></div>);
-                  }
-                  return (<div key={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--re)" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{s.slot}</span></div>);
-                })}
-              </div>
-            </div>
+            <PitchGroup key={col.label} label={col.label} count={col.count} color={col.color}>
+              {col.slots.map(function(s) {
+                if (s.pl) return (<div key={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ cursor: onSlotClick ? "pointer" : "default" }}><PCard p={s.pl} /></div>);
+                return (<PitSlot key={s.slot} slot={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} />);
+              })}
+            </PitchGroup>
           );
         })}
       </div>
@@ -3811,8 +3825,7 @@ function LineupPage(p) {
           {!mob && (<React.Fragment>
             <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} />{wtTag(slot, idx, true, calc.total, false)}</div>
             <StatBox max={batBarMax} items={[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]]} />
-            {/* 훈련 — 이 라인업에서 얼마나 투자했는지는 아래 선 색으로 (열 제목은 맨 위에 한 번만) */}
-            <div title={"훈련 (파·정 / 선·인)"} style={{ minWidth: 0, borderBottom: "2px solid " + pctColor((pl.trainP||0)*getW().p+(pl.trainA||0)*getW().a+(pl.trainE||0)*getW().e+(pl.trainN||0)*(getW().n||0), allBatTrainScores, "gold"), paddingBottom: 2 }}>
+            <div title={"훈련 (파·정 / 선·인)"} style={{ minWidth: 0 }}>
               <NumBox items={[[pl.trainP || 0, "#EF5350"], [pl.trainA || 0, "#42A5F5"], [pl.trainE || 0, "#66BB6A"], [pl.trainN || 0, "#FFA726"]]} />
             </div>
             <div title={"특훈 (파·정 / 선·인)"} style={{ minWidth: 0 }}>
@@ -3898,7 +3911,7 @@ function LineupPage(p) {
           {!mob && (<React.Fragment>
             <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, false)}</div>
             <StatBox barH={8} max={pitBarMax} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"]]} />
-            <div title={"훈련 (변·구)"} style={{ minWidth: 0, borderBottom: "2px solid " + pctColor((pl.trainC||0)*getW().c+(pl.trainS||0)*getW().s, allPitTrainScores, "gold"), paddingBottom: 2 }}>
+            <div title={"훈련 (변·구)"} style={{ minWidth: 0 }}>
               <NumBox items={[[pl.trainC || 0, "#AB47BC"], [pl.trainS || 0, "#FF7043"]]} />
             </div>
             <div title={"특훈 (변·구)"} style={{ minWidth: 0 }}>
@@ -4010,13 +4023,12 @@ function LineupPage(p) {
         <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14 }}>
           <DiamondView mobile={mob} slotMap={batSlotMap} onSlotClick={function(pos) { setPickerSlot(pos); }} />
         </div>
-        <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t2)", letterSpacing: 1, marginBottom: 8 }}>{"STARTING ROTATION"}</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {SP_SLOTS.map(function(pos) { var pl = pick(pos); return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} /></div>) : (<div key={pos} onClick={function() { setPickerSlot(pos); }} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--re)" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{pos}</span></div>); })}
-            </div>
-          </div>
+        <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: "8px 14px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <PitchGroup label="선발" count={spPl.length + "/5"} color="#AB47BC">
+            {SP_SLOTS.map(function(pos) { var pl = pick(pos);
+              return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} /></div>)
+                        : (<PitSlot key={pos} slot={pos} onClick={function() { setPickerSlot(pos); }} />); })}
+          </PitchGroup>
           <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} rpActive={rpActive} setRpActive={setRpActive} />
         </div>
       </div>
