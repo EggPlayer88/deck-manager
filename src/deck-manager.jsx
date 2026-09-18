@@ -3024,7 +3024,6 @@ function parseManagerWorkbook(wb) {
    버튼에는 짧은 줄임말(l · r · s)을 쓰고, 인게임 원문(lDesc · rDesc · desc)은 마우스를 올리면 보인다.
    줄임말 — 파워 파 · 정확 정 · 선구 선 · 인내 인 · 주루 주 · 수비 수 / 변화 변 · 구위 구 · 구속 속 · 제구 제 · 지구력 지
             시라올 = 시즌·라이브·올스타, 임국시골 = 임팩트·국가대표·시그니처·골든글러브, 불펜 = 중계·마무리
-   auto: 인게임은 좌/우 택1이지만 좌(선택 팀)가 압도적이라 좌로 고정했다
    yearLR: 좌/우를 고른 뒤 연도 / lrYear: 좌는 버튼만, 우는 연도까지 */
 /* 연도 구간(55·75·180·185·190)에서 고를 수 있는 연도 */
 var SD_YEARS = (function(){ var a = []; for (var y = 1982; y <= 2026; y++) a.push(y); return a; })();
@@ -3064,6 +3063,53 @@ var SD_ROWS = [
   {sp:200,type:"lr",l:"타자 +2",r:"투수 +2",lDesc:"선택 팀 타자 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"선택 팀 투수 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
 ];
 
+/* 연도 구간이 어느 연도덱에 속하는가 (2026-09-18 사용자 확인)
+   투수 연도덱 = 55·190 우 / 타자 연도덱 = 180·185 우 / 75 는 타자(좌)·투수(우)가 갈리는 자리라 둘을 견준다 */
+var SD_YEAR_ROWS = { 55: "pit", 190: "pit", 180: "bat", 185: "bat", 75: "both" };
+/* 덱이 어떻든 한쪽이 이기는 구간 — 좌·우 총점이 같을 때만 기본값으로 쓴다.
+   실제 덱 150 개로 확인했다: 50·130·105·165·195·115·95 우 / 125·175 좌 가 90~100% 한쪽이다.
+   70·135 는 덱에 따라 갈려서 뺐다. 값은 언제나 총점을 견줘서 정한다. */
+var SD_TIE_SIDE = { 50: "R", 130: "R", 105: "R", 165: "R", 195: "R", 115: "R", 95: "R", 125: "L", 175: "L" };
+
+/* 자동 최적화 — 구간마다 좌/우로 두고 덱 총점을 견줘 높은 쪽을 고른다.
+   scoreOf(sdState) 는 그 설정일 때의 덱 총점이다 (라인업 화면과 같은 식을 넘겨야 한다 — 타순·배율 포함).
+   opts.batOn / pitOn 은 연도덱 체크, batYears / pitYears 는 후보 연도다 (여럿이면 총점이 높은 연도를 고른다).
+   체크하지 않은 연도덱의 구간은 비워 두고 blanks 로 알려 준다 — 화면에서 안내를 띄운다.
+   110(드림/나눔)은 덱 구단이 정하므로 건드리지 않는다. */
+function optimizeSetDeck(sdState, totalSP, scoreOf, opts) {
+  opts = opts || {};
+  var next = Object.assign({}, sdState);
+  var blanks = [];
+  var scoreWith = function(k, v) { var t = Object.assign({}, next); t[k] = v; return scoreOf(t); };
+  var pickBest = function(k, cands) {
+    var best = cands[0], bestScore = scoreWith(k, cands[0]);
+    for (var i = 1; i < cands.length; i++) {
+      var s = scoreWith(k, cands[i]);
+      if (s > bestScore + 1e-9) { bestScore = s; best = cands[i]; }
+    }
+    return best;
+  };
+  SD_ROWS.forEach(function(r) {
+    if (totalSP < r.sp) return;
+    var k = "s" + r.sp;
+    var yr = SD_YEAR_ROWS[r.sp];
+    if (yr) {
+      var cands = [];
+      /* 75 는 타자면 좌, 투수면 우다. 나머지 연도 구간은 우가 연도 쪽이다 */
+      if (yr !== "pit" && opts.batOn) (opts.batYears || [""]).forEach(function(y) { cands.push((r.sp === 75 ? "L:" : "R:") + y); });
+      if (yr !== "bat" && opts.pitOn) (opts.pitYears || [""]).forEach(function(y) { cands.push("R:" + y); });
+      if (!cands.length) { next[k] = ""; blanks.push(r.sp); return; }
+      next[k] = cands.length === 1 ? cands[0] : pickBest(k, cands);
+      return;
+    }
+    if (r.sp === 110) return;
+    var sL = scoreWith(k, "L"), sR = scoreWith(k, "R");
+    /* 좌·우가 같으면(전원 자팀 스페셜 덱의 30·90·150·170 처럼) 굳어 있는 쪽을 지킨다 */
+    next[k] = Math.abs(sL - sR) < 1e-9 ? (SD_TIE_SIDE[r.sp] || "L") : (sL > sR ? "L" : "R");
+  });
+  return { next: next, blanks: blanks };
+}
+
 function SetDeckPanel(p) {
   var open = p.open;
   var onClose = p.onClose;
@@ -3072,6 +3118,8 @@ function SetDeckPanel(p) {
   var sdState = p.sdState;
   var setSdState = p.setSdState;
 
+  /* 자동 최적화 결과 안내 (연도덱을 안 골라 비운 구간 등) */
+  var _optMsg = React.useState(""); var optMsg = _optMsg[0]; var setOptMsg = _optMsg[1];
   /* val 을 안 주면 그 칸을 지운다 = 자동 감지로 되돌린다 (시너지·특수 스킬) */
   var upd = function(key, val) {
     setSdState(function(prev) { var c = Object.assign({}, prev); if (val === undefined) delete c[key]; else c[key] = val; return c; });
@@ -3243,33 +3291,49 @@ function SetDeckPanel(p) {
               <div style={{ fontSize: 18, fontWeight: 900, fontFamily: "var(--h)", color: "var(--acc)" }}>{totalSP}</div>
             </div>
           </div>
+          {/* 연도덱 — 체크한 쪽만 연도 구간을 채운다 (55·190 투수 / 180·185 타자 / 75 는 견줘서) */}
+          <div style={{ marginTop: 8, padding: "6px 8px", background: "var(--inner)", borderRadius: 6, border: "1px solid var(--bd)" }}>
+            <div style={{ fontSize: 8, color: "var(--td)", marginBottom: 4 }}>{"연도덱"}</div>
+            {[{ on: "yearBat", yr: "yearBatYr", label: "타자", tip: "타자 연도덱 — 180·185 우를 그 연도로 채웁니다 (75 는 투수와 견줘서)" },
+              { on: "yearPit", yr: "yearPitYr", label: "투수", tip: "투수 연도덱 — 55·190 우를 그 연도로 채웁니다 (75 는 타자와 견줘서)" }].map(function(y) {
+              var on = !!sdState[y.on];
+              return (<div key={y.on} title={y.tip} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                <div onClick={function(){ upd(y.on, on ? undefined : true); }} style={{ width: 24, height: 14, borderRadius: 7, background: on ? "#4CAF50" : "var(--card)", border: "1px solid " + (on ? "#4CAF50" : "var(--bd)"), position: "relative", flexShrink: 0, cursor: "pointer" }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: on ? "#fff" : "var(--td)", position: "absolute", top: 1, left: on ? 12 : 1, transition: "left 0.2s" }} />
+                </div>
+                <span style={{ fontSize: 11, color: on ? "var(--t1)" : "var(--td)", fontWeight: on ? 700 : 400, flex: 1 }}>{y.label}</span>
+                <select value={sdState[y.yr] || ""} onChange={function(e){ upd(y.yr, e.target.value || undefined); }}
+                  title={"연도를 고르지 않으면 라인업에 있는 연도 중 총점이 가장 높은 것으로 채웁니다"}
+                  style={{ width: 66, padding: "2px", fontSize: 11, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: on ? "#FFD54F" : "var(--td)", outline: "none" }}>
+                  <option value="">{"자동"}</option>
+                  {SD_YEARS.map(function(v) { return (<option key={v} value={String(v)}>{v}</option>); })}
+                </select>
+              </div>);
+            })}
+          </div>
           <button onClick={function(){
-            /* Auto-optimize: try each LR row both ways, pick highest total */
-            var best = Object.assign({}, sdState);
-            var lrRows = SD_ROWS.filter(function(r){return r.type==="lr"||r.type==="lOnly"||r.type==="rOnly";});
-            lrRows.forEach(function(r){
-              if(totalSP < r.sp) return;
-              var k="s"+r.sp;
-              var scores=[];
-              ["","L","R"].forEach(function(v){
-                var test=Object.assign({},best);test[k]=v;
-                var ts=0;
-                if(p.players&&p.lineupMap){
-                  var bSlots=["C","1B","2B","3B","SS","LF","CF","RF","DH"];
-                  var pSlots=["SP1","SP2","SP3","SP4","SP5","RP1","RP2","RP3","RP4","RP5","RP6","CP"];
-                  var findPl=function(id){if(!id)return null;for(var i=0;i<p.players.length;i++){if(p.players[i].id===id)return p.players[i];}return null;};
-                  test._synCounts=sdState._synCounts||{};
-                  test._autoNatBat=sdState._autoNatBat||"없음";test._autoNatPit=sdState._autoNatPit||"없음";test._autoCatch=sdState._autoCatch||"없음";
-                  bSlots.forEach(function(sl){var pl2=findPl(p.lineupMap[sl]);if(pl2){var sd2=calcSDBonus(pl2,sl,test,totalSP);var lu2={trainP:pl2.trainP||0,trainA:pl2.trainA||0,trainE:pl2.trainE||0,trainN:pl2.trainN||0,specPower:pl2.specPower||0,specAccuracy:pl2.specAccuracy||0,specEye:pl2.specEye||0,specPatience:pl2.specPatience||0};var c2=calcBat(pl2,lu2,sd2);ts+=c2.total;}});
-                  pSlots.forEach(function(sl){var pl2=findPl(p.lineupMap[sl]);if(pl2){var sd2=calcSDBonus(pl2,sl,test,totalSP);var lu2={trainC:pl2.trainC||0,trainS:pl2.trainS||0,specChange:pl2.specChange||0,specStuff:pl2.specStuff||0};var c2=calcPit(pl2,lu2,sd2);ts+=c2.total;}});
-                }
-                scores.push({v:v,ts:ts});
+            /* 자동 최적화 (optimizeSetDeck) — 구간마다 좌/우 총점을 견주고, 연도 구간은 연도덱 설정을 따른다.
+               총점은 라인업 화면과 같은 식으로 계산한다 (타순 x 강함, 선발·중계·마무리 배율) */
+            var years = function(role) {
+              var fixed = sdState[role === "bat" ? "yearBatYr" : "yearPitYr"];
+              if (fixed) return [String(fixed)];
+              var seen = {}, out = [];
+              (p.lineupPlayers || []).forEach(function(x) {
+                if (!x.pl || !x.pl.year) return;
+                if ((x.pl.role === "타자") !== (role === "bat")) return;
+                var y = String(x.pl.year);
+                if (!seen[y]) { seen[y] = 1; out.push(y); }
               });
-              scores.sort(function(a,b){return b.ts-a.ts;});
-              best[k]=scores[0].v;
-            });
-            setSdState(function(prev){return Object.assign({},prev,best);});
+              return out.length ? out : [""];
+            };
+            var res = optimizeSetDeck(sdState, totalSP, p.totalScoreOf || function(){ return 0; }, {
+              batOn: !!sdState.yearBat, pitOn: !!sdState.yearPit, batYears: years("bat"), pitYears: years("pit") });
+            setSdState(function(prev){ return Object.assign({}, prev, res.next); });
+            setOptMsg(res.blanks.length
+              ? "연도덱을 안 골라서 " + res.blanks.join("·") + " 를 비웠습니다. 위에서 타자·투수 연도덱을 체크하세요"
+              : "구간을 모두 채웠습니다");
           }} style={{ marginTop: 8, width: "100%", padding: "8px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg,rgba(255,213,79,0.15),rgba(255,143,0,0.08))", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 6, color: "var(--acc)", cursor: "pointer" }}>{"⚡ 자동 최적화"}</button>
+          {optMsg && (<div style={{ marginTop: 4, fontSize: 9, lineHeight: 1.4, color: optMsg.indexOf("비웠") >= 0 ? "#FFA726" : "var(--td)" }}>{optMsg}</div>)}
         </div>
 
         {/* Scrollable toggle list */}
@@ -3968,7 +4032,10 @@ function LineupPage(p) {
       {/* Set Deck Panel */}
       <SetDeckPanel open={sdOpen} onClose={function() { setSdOpen(false); }} mobile={mob}
         setPoint={setPoint} liveSetPo={sdState.liveSetPo || 0}
-        sdState={sdState} setSdState={setSdState} players={players} lineupMap={lm} />
+        sdState={sdState} setSdState={setSdState} players={players} lineupMap={lm}
+        /* 자동 최적화가 쓰는 총점 — 화면에 보이는 총점과 같은 식이어야 한다 (타순 x 강함, 선발·중계 배율) */
+        totalScoreOf={function(sd) { return calcTotalWith(realPick, sd); }}
+        lineupPlayers={BAT_SLOTS.concat(SP_SLOTS, RP_SLOTS, ["CP"]).map(function(s) { return { slot: s, pl: realPick(s) }; })} />
 
       {/* Player Selector Popup */}
       {pickerSlot && (

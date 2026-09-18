@@ -706,6 +706,7 @@ function sdWho(w, x) {
   if (w.pos === "outfield" && !x.outfield) return false;
   return true;
 }
+var SD_YEARS = (function(){ var a = []; for (var y = 1982; y <= 2026; y++) a.push(y); return a; })();
 var SD_ROWS = [
   {sp:30,type:"lr",l:"모두 +1",r:"임국시골 +1",lDesc:"선택 팀 선수 모두 +1 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"임팩트/국가대표/시그니처/골든글러브 +1 (라이브/스페셜 세트덱 효과 모두 적용 — POTM 라이브 카드도 받는다)"},
   {sp:40,type:"lr",l:"타자 +1",r:"투수 +1",lDesc:"타자 +1",rDesc:"투수 +1"},
@@ -741,6 +742,41 @@ var SD_ROWS = [
   {sp:195,type:"lr",l:"라올국 +1",r:"시그 +1",lDesc:"선택 팀 라이브/올스타/국가대표 +1 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"선택 팀 시그니처 +1 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
   {sp:200,type:"lr",l:"타자 +2",r:"투수 +2",lDesc:"선택 팀 타자 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)",rDesc:"선택 팀 투수 +2 (선택 팀: 덱 구단 선수·골든글러브·FA로 쓴 타팀 선수·와일드카드 국가대표)"},
 ];
+var SD_YEAR_ROWS = { 55: "pit", 190: "pit", 180: "bat", 185: "bat", 75: "both" };
+var SD_TIE_SIDE = { 50: "R", 130: "R", 105: "R", 165: "R", 195: "R", 115: "R", 95: "R", 125: "L", 175: "L" };
+function optimizeSetDeck(sdState, totalSP, scoreOf, opts) {
+  opts = opts || {};
+  var next = Object.assign({}, sdState);
+  var blanks = [];
+  var scoreWith = function(k, v) { var t = Object.assign({}, next); t[k] = v; return scoreOf(t); };
+  var pickBest = function(k, cands) {
+    var best = cands[0], bestScore = scoreWith(k, cands[0]);
+    for (var i = 1; i < cands.length; i++) {
+      var s = scoreWith(k, cands[i]);
+      if (s > bestScore + 1e-9) { bestScore = s; best = cands[i]; }
+    }
+    return best;
+  };
+  SD_ROWS.forEach(function(r) {
+    if (totalSP < r.sp) return;
+    var k = "s" + r.sp;
+    var yr = SD_YEAR_ROWS[r.sp];
+    if (yr) {
+      var cands = [];
+      /* 75 는 타자면 좌, 투수면 우다. 나머지 연도 구간은 우가 연도 쪽이다 */
+      if (yr !== "pit" && opts.batOn) (opts.batYears || [""]).forEach(function(y) { cands.push((r.sp === 75 ? "L:" : "R:") + y); });
+      if (yr !== "bat" && opts.pitOn) (opts.pitYears || [""]).forEach(function(y) { cands.push("R:" + y); });
+      if (!cands.length) { next[k] = ""; blanks.push(r.sp); return; }
+      next[k] = cands.length === 1 ? cands[0] : pickBest(k, cands);
+      return;
+    }
+    if (r.sp === 110) return;
+    var sL = scoreWith(k, "L"), sR = scoreWith(k, "R");
+    /* 좌·우가 같으면(전원 자팀 스페셜 덱의 30·90·150·170 처럼) 굳어 있는 쪽을 지킨다 */
+    next[k] = Math.abs(sL - sR) < 1e-9 ? (SD_TIE_SIDE[r.sp] || "L") : (sL > sR ? "L" : "R");
+  });
+  return { next: next, blanks: blanks };
+}
 var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
 var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
@@ -1541,4 +1577,4 @@ function toDeckFormat(all, list, fallbackId) {
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, POTM_LIVE_STAT, POTM_OLSTAR, POTM_SPECIAL_STAT, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, hasPtSkill, skillCatOf, normPlayerSkills, normPlayerList, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, toDeckFormat, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, detectTeamBuffs, KBO_LEAGUE, KBO_TEAMS, sdSideOf, isSelTeam, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, OLSTAR_SET_POINTS, NO_AWAKEN_CARDS, awakenScore, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS };
+export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, POTM_LIVE_STAT, POTM_OLSTAR, POTM_SPECIAL_STAT, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, hasPtSkill, skillCatOf, normPlayerSkills, normPlayerList, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, toDeckFormat, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, detectTeamBuffs, KBO_LEAGUE, KBO_TEAMS, sdSideOf, isSelTeam, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, OLSTAR_SET_POINTS, NO_AWAKEN_CARDS, awakenScore, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS, SD_YEAR_ROWS, SD_TIE_SIDE, optimizeSetDeck };

@@ -7,7 +7,7 @@ import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
-  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills, normPlayerList, hasPtSkill,
+  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
   isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
 } from './calc-extract.mjs';
@@ -1286,6 +1286,67 @@ console.log('\n[스킬 레벨 저장] 2026-09-18 사용자 확인 — 자동이�
   eq('특훈 보너스 — 다른 스킬은 아님', hasPtSkill(['정밀타격'], '포수리드') ? 1 : 0, 0);
   eq('효과 레벨에도 반영 (라이브 7 + 보너스 = 8)',
     effSkillLv('포수리드', 0, false, '라이브', 1, '타자', ['포수 리드']), 8);
+}
+
+console.log('\n[자동 최적화] 2026-09-18 — 구간마다 총점을 견주고, 연도 구간은 연도덱 설정을 따른다');
+{
+  /* 가짜 총점: 켠 쪽마다 미리 정한 점수를 더한다. 연도가 붙으면 그 연도 점수를 쓴다 */
+  const mk = (table) => (sd) => {
+    let t = 0;
+    for (const k of Object.keys(sd)) {
+      if (!/^s\d+$/.test(k) || !sd[k]) continue;
+      const side = String(sd[k]).charAt(0), yr = String(sd[k]).split(':')[1] || '';
+      t += (table[k.slice(1) + side + (yr ? ':' + yr : '')] || 0);
+    }
+    return t;
+  };
+  const base = { s95: '', s125: '', s110: '', teamName: '키움' };
+
+  /* 높은 쪽을 고른다 */
+  let r = optimizeSetDeck(base, 200, mk({ '40L': 5, '40R': 9, '60L': 3, '60R': 1 }), {});
+  eq('총점이 높은 쪽을 고른다 (40 우, 60 좌)', r.next.s40 === 'R' && r.next.s60 === 'L' ? 1 : 0, 1);
+  eq('110 은 건드리지 않는다 (덱 구단이 정함)', r.next.s110 === '' ? 1 : 0, 1);
+  eq('연도덱을 안 고르면 다섯 구간을 비운다',
+    r.blanks.join('·') === '55·75·180·185·190' && [55, 75, 180, 185, 190].every((sp) => r.next['s' + sp] === '') ? 1 : 0, 1);
+
+  /* 좌·우가 같으면 굳어 있는 쪽 (전원 자팀 스페셜 덱의 30·90·150·170 처럼) */
+  r = optimizeSetDeck(base, 200, mk({}), {});
+  eq('같으면 30·90·150·170 은 좌', [30, 90, 150, 170].every((sp) => r.next['s' + sp] === 'L') ? 1 : 0, 1);
+  eq('같으면 50·130·105·165·195·115·95 는 우',
+    [50, 130, 105, 165, 195, 115, 95].every((sp) => r.next['s' + sp] === 'R') ? 1 : 0, 1);
+  eq('같으면 125·175 는 좌', [125, 175].every((sp) => r.next['s' + sp] === 'L') ? 1 : 0, 1);
+  eq('70·135 는 굳어 있지 않다 (덱에 따라 갈림)', SD_TIE_SIDE[70] === undefined && SD_TIE_SIDE[135] === undefined ? 1 : 0, 1);
+
+  /* 열리지 않은 구간은 그대로 둔다 */
+  r = optimizeSetDeck(base, 100, mk({ '40L': 5 }), {});
+  eq('셋포가 모자란 구간은 손대지 않는다', r.next.s120 === undefined && r.next.s40 === 'L' ? 1 : 0, 1);
+
+  /* 연도덱 — 체크한 쪽만 채운다 */
+  r = optimizeSetDeck(base, 200, mk({}), { pitOn: true, pitYears: ['2024'] });
+  eq('투수 연도덱 — 55·190 우에 그 연도', r.next.s55 === 'R:2024' && r.next.s190 === 'R:2024' ? 1 : 0, 1);
+  eq('투수만 체크하면 75 는 우', r.next.s75 === 'R:2024' ? 1 : 0, 1);
+  eq('투수만 체크하면 타자 구간은 비운다', r.blanks.join('·') === '180·185' ? 1 : 0, 1);
+  r = optimizeSetDeck(base, 200, mk({}), { batOn: true, batYears: ['2026'] });
+  eq('타자 연도덱 — 180·185 우에 그 연도', r.next.s180 === 'R:2026' && r.next.s185 === 'R:2026' ? 1 : 0, 1);
+  eq('타자만 체크하면 75 는 좌', r.next.s75 === 'L:2026' ? 1 : 0, 1);
+  eq('타자만 체크하면 투수 구간은 비운다', r.blanks.join('·') === '55·190' ? 1 : 0, 1);
+
+  /* 둘 다 체크하면 75 는 좌·우를 견준다 */
+  r = optimizeSetDeck(base, 200, mk({ '75L:2026': 10, '75R:2024': 4 }), { batOn: true, batYears: ['2026'], pitOn: true, pitYears: ['2024'] });
+  eq('둘 다 체크 — 75 는 총점이 높은 쪽 (타자)', r.next.s75 === 'L:2026' ? 1 : 0, 1);
+  r = optimizeSetDeck(base, 200, mk({ '75L:2026': 3, '75R:2024': 12 }), { batOn: true, batYears: ['2026'], pitOn: true, pitYears: ['2024'] });
+  eq('둘 다 체크 — 75 는 총점이 높은 쪽 (투수)', r.next.s75 === 'R:2024' ? 1 : 0, 1);
+  eq('둘 다 체크하면 비우는 구간이 없다', r.blanks.length, 0);
+
+  /* 연도 후보가 여럿이면 총점이 가장 높은 연도 */
+  r = optimizeSetDeck(base, 200, mk({ '185R:2020': 4, '185R:2026': 11, '180R:2020': 9, '180R:2026': 2 }),
+    { batOn: true, batYears: ['2020', '2026'] });
+  eq('연도 자동 — 구간마다 가장 높은 연도', r.next.s185 === 'R:2026' && r.next.s180 === 'R:2020' ? 1 : 0, 1);
+
+  /* 원본 sdState 는 그대로 */
+  const keep = JSON.stringify(base);
+  optimizeSetDeck(base, 200, mk({ '40R': 9 }), {});
+  eq('sdState 는 건드리지 않고 새 객체', JSON.stringify(base) === keep ? 1 : 0, 1);
 }
 
 console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선택 팀 · 드림/나눔 · 올스타 · 연도');
