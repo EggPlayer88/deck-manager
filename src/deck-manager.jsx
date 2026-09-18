@@ -1366,10 +1366,45 @@ function PotmBadge(p) {
     </span>
   );
 }
-function GS(p){return(<div style={{fontSize:p.size||16,fontWeight:900,fontFamily:"var(--h)",background:p.grad||"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{p.val}</div>);}
+function GS(p){return(<div style={{fontSize:p.size||16,fontWeight:900,fontFamily:"var(--h)",fontVariantNumeric:"tabular-nums",background:p.grad||"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{p.val}</div>);}
 function SH(p){return(<div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"linear-gradient(90deg,"+p.color+"15,transparent)",borderLeft:"3px solid "+p.color,borderBottom:"1px solid var(--bd)"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:15,fontWeight:800,color:"var(--t1)",fontFamily:"var(--h)",letterSpacing:1}}>{p.title}</span><span style={{fontSize:12,color:"var(--td)",fontFamily:"var(--m)"}}>{"("+p.count+")"}</span></div>);}
 
-function Bar(p){return(<div style={{width:"100%",height:6,background:"var(--bar)",borderRadius:3,overflow:"hidden"}}><div style={{width:Math.min((p.value/200)*100,100)+"%",height:"100%",borderRadius:3,background:"linear-gradient(90deg,"+p.color+"77,"+p.color+")",transition:"width 0.5s ease"}}/></div>);}
+function Bar(p){var h=p.h||6;return(<div style={{width:"100%",height:h,background:"var(--bar)",borderRadius:h/2,overflow:"hidden"}}><div style={{width:Math.min((p.value/200)*100,100)+"%",height:"100%",borderRadius:h/2,background:"linear-gradient(90deg,"+p.color+"77,"+p.color+")",transition:"width 0.5s ease"}}/></div>);}
+
+/* ── 라인업 줄의 가운데 칸들 ────────────────────────────────
+   타자 줄과 투수 줄이 같은 세로선에 오도록 칸 너비를 여기서 한 번만 정한다.
+   능력치는 네 개를 한 줄에 늘어놓으면 타자 인내가 밀려 잘려서 파·정 / 선·인 두 줄로 놓는다. */
+var LINEUP_COLS = "minmax(0,32px) minmax(0,68px) minmax(56px,1fr) minmax(0,88px) minmax(0,204px) minmax(0,78px) minmax(0,66px) minmax(0,116px) minmax(0,46px) minmax(0,80px)";
+var LINEUP_GAP = 14;
+/* 능력치 칸 — 타자는 2열(파 정 / 선 인), 투수는 1열이라 변·구 막대가 넓게 보인다 */
+function StatBox(p){
+  var cols = p.cols || 2;
+  return (<div style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",columnGap:12,rowGap:cols===1?5:3}}>
+    {p.items.map(function(it){return(
+      <div key={it[0]} style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}>
+        <span style={{width:13,flexShrink:0,fontSize:13,fontWeight:700,color:it[2]}}>{it[0]}</span>
+        <Bar value={it[1]} color={it[2]} h={p.barH||6} />
+        <span style={{width:26,flexShrink:0,fontSize:14,color:"var(--t2)",fontFamily:"var(--m)",textAlign:"right"}}>{it[1]}</span>
+      </div>);})}
+  </div>);
+}
+/* 훈련·특훈 숫자 칸 — 능력치와 같은 순서(파 정 / 선 인)로 2열 */
+function NumBox(p){
+  return (<div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",columnGap:6,rowGap:2,fontFamily:"var(--m)",fontSize:14,lineHeight:1.35}}>
+    {p.items.map(function(it,i){return(<span key={i} style={{color:it[1],textAlign:"right"}}>{it[0]}</span>);})}
+  </div>);
+}
+/* 잠재력 — 높은 등급일수록 눈에 띄게 (SR+ 분홍 · SS 보라 · S 금색) */
+var POT_COLORS = {"SR+":"#FF4081","SR":"#E040FB","SS+":"#B388FF","SS":"#9575CD","S+":"#FFD54F","S":"#FFC107","A+":"#4FC3F7","A":"#81C784"};
+function PotVal(p){
+  var g = p.grade || "";
+  var c = POT_COLORS[g] || "var(--t2)";
+  var hot = !!POT_COLORS[g];
+  return (<span style={{whiteSpace:"nowrap"}}>
+    <span style={{fontSize:11,color:"var(--td)"}}>{p.label}</span>
+    <span style={{color:c,fontWeight:hot?800:500,textShadow:hot?"0 0 7px "+c+"66":"none"}}>{g||"-"}</span>
+  </span>);
+}
 
 function SkBadge(p){var c={10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[p.lv]||"#aaa";return(
   <div style={{display:"inline-flex",alignItems:"center",gap:3,background:"var(--inner)",borderRadius:3,padding:"2px 5px",border:"1px solid "+c+"33",fontSize:12,lineHeight:1.3}}>
@@ -3718,7 +3753,7 @@ function LineupPage(p) {
         + " (이 라인업에서 " + (batRanks[idx] + 1) + "번째로 강함) = " + fmtWt(w)
       : "이 자리의 배율은 " + fmtWt(w);
     return (<div title={why + ". 총점에는 " + total.toFixed(1) + " x " + fmtWt(w) + " = " + (total * w).toFixed(1) + " 로 들어갑니다."}
-      style={{ fontSize: 11, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, textAlign: center ? "center" : "left", cursor: "help" }}>
+      style={{ fontSize: 11, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, textAlign: center ? "center" : "inherit", cursor: "help" }}>
       {"×" + fmtWt(w)}</div>);
   };
 
@@ -3741,7 +3776,7 @@ function LineupPage(p) {
           onDrop={function(e) { e.preventDefault(); if (dragSlot !== null && dragSlot !== idx) swapOrder(dragSlot, idx); }}
           onDragEnd={function() { setDragSlot(null); setDragOverSlot(null); }}
           onClick={function() { setSelId(isSel ? null : pl.id); }}
-          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,120px) minmax(0,110px) minmax(0,86px) minmax(0,110px) minmax(0,52px) minmax(0,58px)", alignItems: "center", gap: 22, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
+          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : LINEUP_COLS, alignItems: "center", gap: mob ? 6 : LINEUP_GAP, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acc)", fontFamily: "var(--h)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             {idx > 0 && (<span onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx-1); }} style={{ fontSize: 12, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
             <span>{idx + 1}</span>
@@ -3754,19 +3789,15 @@ function LineupPage(p) {
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} />{wtTag(slot, idx, true, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
-            <div style={{ textAlign: "left" }}><GS val={calc.total.toFixed(1)} size={28} />{wtTag(slot, idx, true, calc.total, false)}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: 40 }}>
-              {[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]].map(function(it) {
-                return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 15, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
-              })}
+            <div style={{ textAlign: "right" }}><GS val={calc.total.toFixed(1)} size={28} />{wtTag(slot, idx, true, calc.total, false)}</div>
+            <StatBox items={[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]]} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, marginBottom: 2, color: pctColor((pl.trainP||0)*getW().p+(pl.trainA||0)*getW().a+(pl.trainE||0)*getW().e+(pl.trainN||0)*(getW().n||0), allBatTrainScores, "gold") }}>{"훈련"}</div>
+              <NumBox items={[["+" + (pl.trainP || 0), "#EF5350"], ["+" + (pl.trainA || 0), "#42A5F5"], ["+" + (pl.trainE || 0), "#66BB6A"], ["+" + (pl.trainN || 0), "#FFA726"]]} />
             </div>
-            <div style={{ textAlign: "center", whiteSpace: "nowrap", paddingRight: 2, overflow: "hidden" }}>
-              <div style={{ fontSize: 13, color: pctColor((pl.trainP||0)*getW().p+(pl.trainA||0)*getW().a+(pl.trainE||0)*getW().e+(pl.trainN||0)*(getW().n||0), allBatTrainScores, "gold") }}>{"훈련"}</div>
-              <span style={{ fontSize: 15, fontFamily: "var(--m)" }}><span style={{ color: "#EF5350" }}>{"+" + (pl.trainP || 0)}</span>{" "}<span style={{ color: "#42A5F5" }}>{"+" + (pl.trainA || 0)}</span>{" "}<span style={{ color: "#66BB6A" }}>{"+" + (pl.trainE || 0)}</span>{" "}<span style={{ color: "#FFA726" }}>{"+" + (pl.trainN || 0)}</span></span>
-            </div>
-            <div style={{ textAlign: "center", paddingLeft: 18, borderLeft: "1px solid var(--bd)", overflow: "hidden" }}>
-              <div style={{ fontSize: 13, color: "var(--td)" }}>{"특훈"}</div>
-              <span style={{ fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specPower || 0) + "/" + (pl.specAccuracy || 0) + "/" + (pl.specEye || 0) + "/" + (pl.specPatience || 0)}</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 2 }}>{"특훈"}</div>
+              <NumBox items={[[pl.specPower || 0, "#EF5350"], [pl.specAccuracy || 0, "#42A5F5"], [pl.specEye || 0, "#66BB6A"], [pl.specPatience || 0, "#FFA726"]]} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }}>
               {[1,2,3].map(function(k){
@@ -3780,10 +3811,10 @@ function LineupPage(p) {
               var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
               return (<div style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: pctColor(skSc, allBatSkillScores, "gold"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
             })()}
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 13, color: "var(--td)" }}>{"잠재"}</div>
-              <div style={{ fontSize: 15, color: "var(--t2)" }}>{(<span><span style={{fontSize:11,color:"var(--td)"}}>풀</span>{pl.pot1||"-"} <span style={{fontSize:11,color:"var(--td)"}}>클</span>{pl.pot2||"-"}</span>)}</div>
-              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={pl.potType3} style={{ fontSize: 12, color: "#FFA726", whiteSpace: "nowrap" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{awkShort(pl.potType3)}</span>{" " + pl.pot3}</div>)}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 2 }}>{"잠재"}</div>
+              <div style={{ fontSize: 14, fontFamily: "var(--m)", display: "flex", gap: 6 }}><PotVal label={"풀"} grade={pl.pot1} /><PotVal label={"클"} grade={pl.pot2} /></div>
+              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={"각성 " + pl.potType3} style={{ fontSize: 13, fontFamily: "var(--m)", marginTop: 1 }}><PotVal label={awkShort(pl.potType3)} grade={pl.pot3} /></div>)}
             </div>
           </React.Fragment>)}
         </div>
@@ -3837,7 +3868,7 @@ function LineupPage(p) {
     var isSel = selId === pl.id;
     return (
       <React.Fragment key={pl.id}>
-        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : "minmax(0,32px) minmax(0,68px) minmax(60px,1fr) minmax(0,80px) minmax(0,96px) minmax(0,74px) minmax(0,64px) minmax(0,110px) minmax(0,52px) minmax(0,58px)", alignItems: "center", gap: 22, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
+        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : LINEUP_COLS, alignItems: "center", gap: mob ? 6 : LINEUP_GAP, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
@@ -3846,19 +3877,15 @@ function LineupPage(p) {
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
-            <div style={{ textAlign: "left" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, false)}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3, marginLeft: 40 }}>
-              {[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"]].map(function(it) {
-                return (<div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 14, fontSize: 15, color: it[2], fontWeight: 700 }}>{it[0]}</span><Bar value={it[1]} color={it[2]} /><span style={{ width: 26, fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)", textAlign: "right" }}>{it[1]}</span></div>);
-              })}
+            <div style={{ textAlign: "right" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, false)}</div>
+            <StatBox cols={1} barH={9} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"]]} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, marginBottom: 2, color: pctColor((pl.trainC||0)*getW().c+(pl.trainS||0)*getW().s, allPitTrainScores, "gold") }}>{"훈련"}</div>
+              <NumBox items={[["+" + (pl.trainC || 0), "#AB47BC"], ["+" + (pl.trainS || 0), "#FF7043"]]} />
             </div>
-            <div style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-              <div style={{ fontSize: 13, color: pctColor((pl.trainC||0)*getW().c+(pl.trainS||0)*getW().s, allPitTrainScores, "gold") }}>{"훈련"}</div>
-              <span style={{ fontSize: 15, fontFamily: "var(--m)" }}><span style={{ color: "#AB47BC" }}>{"+" + (pl.trainC || 0)}</span>{" "}<span style={{ color: "#FF7043" }}>{"+" + (pl.trainS || 0)}</span></span>
-            </div>
-            <div style={{ textAlign: "center", paddingLeft: 18, borderLeft: "1px solid var(--bd)", overflow: "hidden" }}>
-              <div style={{ fontSize: 13, color: "var(--td)" }}>{"특훈"}</div>
-              <span style={{ fontSize: 15, color: "var(--t2)", fontFamily: "var(--m)" }}>{(pl.specChange || 0) + "/" + (pl.specStuff || 0)}</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 2 }}>{"특훈"}</div>
+              <NumBox items={[[pl.specChange || 0, "#AB47BC"], [pl.specStuff || 0, "#FF7043"]]} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }}>
               {[1,2,3].map(function(k){
@@ -3875,10 +3902,10 @@ function LineupPage(p) {
               var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
               return (<div style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: pctColor(skSc, allPitSkillScores, "blue"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
             })()}
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 13, color: "var(--td)" }}>{"잠재"}</div>
-              <div style={{ fontSize: 15, color: "var(--t2)" }}>{(<span><span style={{fontSize:11,color:"var(--td)"}}>장</span>{pl.pot1||"-"} <span style={{fontSize:11,color:"var(--td)"}}>침</span>{pl.pot2||"-"}</span>)}</div>
-              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={pl.potType3} style={{ fontSize: 12, color: "#FFA726", whiteSpace: "nowrap" }}><span style={{ fontSize: 11, color: "var(--td)" }}>{awkShort(pl.potType3)}</span>{" " + pl.pot3}</div>)}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 2 }}>{"잠재"}</div>
+              <div style={{ fontSize: 14, fontFamily: "var(--m)", display: "flex", gap: 6 }}><PotVal label={"장"} grade={pl.pot1} /><PotVal label={"침"} grade={pl.pot2} /></div>
+              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={"각성 " + pl.potType3} style={{ fontSize: 13, fontFamily: "var(--m)", marginTop: 1 }}><PotVal label={awkShort(pl.potType3)} grade={pl.pot3} /></div>)}
             </div>
           </React.Fragment>)}
         </div>
