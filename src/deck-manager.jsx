@@ -2208,7 +2208,7 @@ function PCard(p) {
   var d = p.p;
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <PlayerCard player={Object.assign({},d,{photoUrl:d.photoUrl||getPhotoUrl(d.name)})} size="md" showPhoto={true} />
+      <PlayerCard player={Object.assign({},d,{photoUrl:d.photoUrl||getPhotoUrl(d.name)})} size={p.size || "md"} showPhoto={true} />
     </div>
   );
 }
@@ -2427,18 +2427,19 @@ function getRPWeight(bpcIdx, slot, tactic) {
    창이 좁아지면 상자 단위로 다음 줄에 접힌다 */
 function PitchGroup(p) {
   return (
-    <div style={{ alignSelf: "flex-start", background: "var(--inner)", borderRadius: 8, border: "1px solid var(--bd)", borderTop: "2px solid " + p.color, padding: "5px 8px 7px" }}>
+    <div style={{ alignSelf: p.stretch ? "stretch" : "flex-start", background: "var(--inner)", borderRadius: 8, border: "1px solid var(--bd)", borderTop: "2px solid " + p.color, padding: "5px 8px 7px" }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: p.color, letterSpacing: 0.5, marginBottom: 4, whiteSpace: "nowrap" }}>
         {p.label}
         {p.count !== undefined && (<span style={{ fontSize: 11, color: "var(--td)", fontWeight: 500 }}>{" " + p.count}</span>)}
       </div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{p.children}</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: p.spread ? "space-between" : "flex-start" }}>{p.children}</div>
     </div>
   );
 }
-/* 빈 자리 — 카드와 같은 크기의 점선 칸 */
+/* 빈 자리 — 카드와 같은 크기의 점선 칸 (md 64x88 · lg 80x110) */
 function PitSlot(p) {
-  return (<div onClick={p.onClick} style={{ width: 52, height: 72, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: p.onClick ? "pointer" : "default", background: "var(--re)" }}>
+  var lg = p.size === "lg";
+  return (<div onClick={p.onClick} style={{ width: lg ? 80 : 64, height: lg ? 110 : 88, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", cursor: p.onClick ? "pointer" : "default", background: "var(--re)" }}>
     <span style={{ fontSize: 11, color: "var(--td)" }}>{p.slot}</span></div>);
 }
 
@@ -4025,12 +4026,16 @@ function LineupPage(p) {
           <DiamondView mobile={mob} slotMap={batSlotMap} onSlotClick={function(pos) { setPickerSlot(pos); }} />
         </div>
         <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: "10px 14px 12px", display: "flex", flexDirection: "column", gap: 8, justifyContent: "space-evenly" }}>
-          <PitchGroup label="선발" count={spPl.length + "/5"} color="#AB47BC">
+          {/* 선발 줄과 불펜 줄의 가로폭을 맞추려고 한 덩어리로 감싼다 — 덩어리는 넓은 쪽(불펜)에 맞춰지고,
+              선발 상자는 그 폭까지 늘어나며 카드 사이가 고르게 벌어진다 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "fit-content", maxWidth: "100%", margin: "0 auto" }}>
+          <PitchGroup label="선발" count={spPl.length + "/5"} color="#AB47BC" stretch={true} spread={true}>
             {SP_SLOTS.map(function(pos) { var pl = pick(pos);
-              return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} /></div>)
-                        : (<PitSlot key={pos} slot={pos} onClick={function() { setPickerSlot(pos); }} />); })}
+              return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} size="lg" /></div>)
+                        : (<PitSlot key={pos} slot={pos} size="lg" onClick={function() { setPickerSlot(pos); }} />); })}
           </PitchGroup>
           <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} rpActive={rpActive} setRpActive={setRpActive} />
+          </div>
         </div>
       </div>
 
