@@ -1399,6 +1399,23 @@ function NumBox(p){
       return (<span key={i} style={{color:zero?"var(--td)":it[1],opacity:zero?0.55:1,textAlign:"right"}}>{it[0]}</span>);})}
   </div>);
 }
+/* 좁은 화면용 스킬 칩 — 레벨과 이름 네 글자. 마우스를 올리면(길게 누르면) 전체 이름 */
+function MiniSk(p) {
+  var c = {10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[p.lv] || "#aaa";
+  var short = String(p.name || "").replace(/\(.*?\)/g, "").trim().slice(0, 4);
+  return (<span title={p.name} style={{ display: "inline-flex", alignItems: "center", gap: 2, background: "var(--inner)", border: "1px solid " + c + "33", borderRadius: 3, padding: "0 3px", fontSize: 10, lineHeight: 1.6, whiteSpace: "nowrap" }}>
+    <span style={{ color: c, fontWeight: 800, fontFamily: "var(--m)" }}>{p.lv}</span>
+    <span style={{ color: "var(--t2)" }}>{short}</span>
+  </span>);
+}
+/* 좁은 화면용 한 줄 — 이름표와 값 (훈련·특훈·스킬점수·잠재) */
+function MiniLine(p) {
+  return (<span style={{ display: "inline-flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
+    <span style={{ fontSize: 9, color: "var(--td)" }}>{p.label}</span>
+    <span style={{ fontSize: 11, fontFamily: "var(--m)", color: p.color || "var(--t2)", fontWeight: p.bold ? 800 : 500 }}>{p.value}</span>
+  </span>);
+}
+
 /* 목록 맨 위 열 제목 — 줄마다 라벨을 되풀이하지 않으려고 한 번만 놓는다 */
 function LineupHead(p){
   var cell = function(t, k){ return (<div key={k} style={{fontSize:11,color:"var(--td)",letterSpacing:1,textAlign:k <= 2 ? "left" : "center"}}>{t}</div>); };
@@ -2427,7 +2444,10 @@ function getRPWeight(bpcIdx, slot, tactic) {
    창이 좁아지면 상자 단위로 다음 줄에 접힌다 */
 function PitchGroup(p) {
   return (
-    <div style={{ alignSelf: p.stretch ? "stretch" : "flex-start", background: "var(--inner)", borderRadius: 8, border: "1px solid var(--bd)", borderTop: "2px solid " + p.color, padding: "5px 8px 7px" }}>
+    <div style={{ alignSelf: p.stretch ? "stretch" : "flex-start", flex: p.grow ? 1 : "none", minWidth: 0,
+      background: p.accent ? p.color + "14" : "var(--inner)", borderRadius: 8,
+      border: "1px solid " + (p.accent ? p.color + "55" : "var(--bd)"), borderTop: "2px solid " + p.color,
+      boxShadow: p.accent ? "0 0 0 1px " + p.color + "22" : "none", padding: "5px 8px 7px" }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: p.color, letterSpacing: 0.5, marginBottom: 4, whiteSpace: "nowrap" }}>
         {p.label}
         {p.count !== undefined && (<span style={{ fontSize: 11, color: "var(--td)", fontWeight: 500 }}>{" " + p.count}</span>)}
@@ -2485,13 +2505,12 @@ function BullpenLayout(p) {
           { label: "승리조", count: cfg.w, color: "#4CAF50", slots: rpSlots.slice(0, cfg.w) },
           { label: "패전조", count: cfg.l, color: "#FF7043", slots: rpSlots.slice(cfg.w, cfg.w + cfg.l) },
           { label: "롱릴리프", count: cfg.r, color: "#42A5F5", slots: rpSlots.slice(cfg.w + cfg.l) },
-          { label: "마무리", count: 1, color: "#EF5350", slots: [{ slot: "CP", pl: cps[0] || null }] },
         ].map(function(col) {
           return (
             <PitchGroup key={col.label} label={col.label} count={col.count} color={col.color}>
               {col.slots.map(function(s) {
-                if (s.pl) return (<div key={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ cursor: onSlotClick ? "pointer" : "default" }}><PCard p={s.pl} /></div>);
-                return (<PitSlot key={s.slot} slot={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} />);
+                if (s.pl) return (<div key={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ cursor: onSlotClick ? "pointer" : "default" }}><PCard p={s.pl} size="lg" /></div>);
+                return (<PitSlot key={s.slot} slot={s.slot} size="lg" onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} />);
               })}
             </PitchGroup>
           );
@@ -3819,8 +3838,23 @@ function LineupPage(p) {
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
-            {/* 좁은 화면에서는 이름 아래에 능력치를 숫자로 접어 넣는다 */}
-            {mob && (<div style={{ marginTop: 3 }}><StatBox mini={true} items={[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]]} /></div>)}
+            {/* 좁은 화면에서는 이름 아래로 접어 넣는다 — 능력치 · 스킬(네 글자) · 훈련/특훈 · 스킬점수/잠재 */}
+            {mob && (<div style={{ marginTop: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+              <StatBox mini={true} cols={4} items={[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]]} />
+              <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                {[1,2,3].map(function(k){ var nm = pl["skill" + k]; if(!nm) return null;
+                  return (<MiniSk key={k} name={nm} lv={effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), pl.cardType, k, "타자", (sdState["pts_" + slot] || []))} />); })}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <MiniLine label="훈" value={[pl.trainP||0, pl.trainA||0, pl.trainE||0, pl.trainN||0].join("·")} />
+                <MiniLine label="특" value={[pl.specPower||0, pl.specAccuracy||0, pl.specEye||0, pl.specPatience||0].join("·")} />
+                <MiniLine label="스" value={calc.skillScore || 0} bold={true} />
+                <span style={{ display: "inline-flex", gap: 4, fontSize: 11, fontFamily: "var(--m)" }}>
+                  <PotVal label="풀" grade={pl.pot1} /><PotVal label="클" grade={pl.pot2} />
+                  {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<PotVal label={awkShort(pl.potType3)} grade={pl.pot3} />)}
+                </span>
+              </div>
+            </div>)}
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} />{wtTag(slot, idx, true, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
@@ -3906,7 +3940,23 @@ function LineupPage(p) {
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
-            {mob && (<div style={{ marginTop: 3 }}><StatBox mini={true} cols={2} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"]]} /></div>)}
+            {mob && (<div style={{ marginTop: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+              <StatBox mini={true} cols={4} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"]]} />
+              <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                {[1,2,3].map(function(k){ var nm = pl["skill" + k]; if(!nm) return null;
+                  var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
+                  return (<MiniSk key={k} name={nm} lv={effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), pl.cardType, k, pcat, (sdState["pts_" + slot] || []))} />); })}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <MiniLine label="훈" value={[pl.trainC||0, pl.trainS||0].join("·")} />
+                <MiniLine label="특" value={[pl.specChange||0, pl.specStuff||0].join("·")} />
+                <MiniLine label="스" value={calc.skillScore || 0} bold={true} />
+                <span style={{ display: "inline-flex", gap: 4, fontSize: 11, fontFamily: "var(--m)" }}>
+                  <PotVal label="장" grade={pl.pot1} /><PotVal label="침" grade={pl.pot2} />
+                  {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<PotVal label={awkShort(pl.potType3)} grade={pl.pot3} />)}
+                </span>
+              </div>
+            </div>)}
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
@@ -4029,11 +4079,20 @@ function LineupPage(p) {
           {/* 선발 줄과 불펜 줄의 가로폭을 맞추려고 한 덩어리로 감싼다 — 덩어리는 넓은 쪽(불펜)에 맞춰지고,
               선발 상자는 그 폭까지 늘어나며 카드 사이가 고르게 벌어진다 */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "fit-content", maxWidth: "100%", margin: "0 auto" }}>
-          <PitchGroup label="선발" count={spPl.length + "/5"} color="#AB47BC" stretch={true} spread={true}>
-            {SP_SLOTS.map(function(pos) { var pl = pick(pos);
-              return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} size="lg" /></div>)
-                        : (<PitSlot key={pos} slot={pos} size="lg" onClick={function() { setPickerSlot(pos); }} />); })}
-          </PitchGroup>
+          {/* 위 줄 여섯 명 — 선발 다섯에 마무리 하나. 아래 불펜 여섯과 수가 맞는다 */}
+          <div style={{ display: "flex", gap: 16, alignItems: "stretch", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 300px", minWidth: 0, display: "flex" }}>
+              <PitchGroup label="선발" count={spPl.length + "/5"} color="#AB47BC" stretch={true} spread={true} grow={true}>
+                {SP_SLOTS.map(function(pos) { var pl = pick(pos);
+                  return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} size="lg" /></div>)
+                            : (<PitSlot key={pos} slot={pos} size="lg" onClick={function() { setPickerSlot(pos); }} />); })}
+              </PitchGroup>
+            </div>
+            <PitchGroup label="🔒 마무리" count={cpPl.length + "/1"} color="#EF5350" accent={true}>
+              {lCP.pl ? (<div onClick={function() { setPickerSlot("CP"); }} style={{ cursor: "pointer" }}><PCard p={lCP.pl} size="lg" /></div>)
+                      : (<PitSlot slot="CP" size="lg" onClick={function() { setPickerSlot("CP"); }} />)}
+            </PitchGroup>
+          </div>
           <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} rpActive={rpActive} setRpActive={setRpActive} />
           </div>
         </div>
