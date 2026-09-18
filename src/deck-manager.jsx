@@ -1369,41 +1369,41 @@ function PotmBadge(p) {
 function GS(p){return(<div style={{fontSize:p.size||16,fontWeight:900,fontFamily:"var(--h)",fontVariantNumeric:"tabular-nums",background:p.grad||"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{p.val}</div>);}
 function SH(p){return(<div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"linear-gradient(90deg,"+p.color+"15,transparent)",borderLeft:"3px solid "+p.color,borderBottom:"1px solid var(--bd)"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:15,fontWeight:800,color:"var(--t1)",fontFamily:"var(--h)",letterSpacing:1}}>{p.title}</span><span style={{fontSize:12,color:"var(--td)",fontFamily:"var(--m)"}}>{"("+p.count+")"}</span></div>);}
 
-function Bar(p){var h=p.h||6;var mx=p.max||200;return(<div style={{width:"100%",height:h,background:"var(--bar)",borderRadius:h/2,overflow:"hidden"}}><div style={{width:Math.min((p.value/mx)*100,100)+"%",height:"100%",borderRadius:h/2,background:"linear-gradient(90deg,"+p.color+"77,"+p.color+")",transition:"width 0.5s ease"}}/></div>);}
+function Bar(p){var h=p.h||6;var mx=p.max||200;return(<div style={{width:p.w||"100%",flexShrink:0,height:h,background:"var(--bar)",borderRadius:h/2,overflow:"hidden"}}><div style={{width:Math.min((p.value/mx)*100,100)+"%",height:"100%",borderRadius:h/2,background:"linear-gradient(90deg,"+p.color+"77,"+p.color+")",transition:"width 0.5s ease"}}/></div>);}
 
 /* ── 라인업 줄의 가운데 칸들 ────────────────────────────────
    타자 줄과 투수 줄이 같은 세로선에 오도록 칸 너비를 여기서 한 번만 정한다.
    능력치는 네 개를 한 줄에 늘어놓으면 타자 인내가 밀려 잘려서 파·정 / 선·인 두 줄로 놓는다. */
-var LINEUP_COLS = "minmax(0,30px) minmax(0,68px) minmax(56px,1fr) minmax(0,86px) minmax(0,204px) minmax(0,76px) minmax(0,64px) minmax(0,148px) minmax(0,44px) minmax(0,80px)";
+var LINEUP_COLS = "minmax(0,30px) minmax(0,68px) minmax(56px,1fr) minmax(0,84px) minmax(0,88px) minmax(0,62px) minmax(0,54px) minmax(0,196px) minmax(0,62px) minmax(0,92px)";
 var LINEUP_GAP = 14;
 /* 능력치 칸 — 타자는 2열(파 정 / 선 인), 투수는 1열이라 변·구 막대가 넓게 보인다.
    max 는 막대 길이의 기준. 라인업에서 가장 높은 값을 주면 선수 사이 차이가 또렷해진다.
    mini 는 좁은 화면용 — 막대 없이 숫자만 */
 function StatBox(p){
-  var cols = p.cols || 2;
-  return (<div style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",columnGap:p.mini?8:12,rowGap:p.mini?1:(cols===1?5:3)}}>
+  var cols = p.cols || 1;
+  return (<div style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",columnGap:p.mini?8:10,rowGap:p.mini?1:3}}>
     {p.items.map(function(it){return(
       <div key={it[0]} style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}>
         <span style={{width:p.mini?12:13,flexShrink:0,fontSize:p.mini?11:13,fontWeight:700,color:it[2]}}>{it[0]}</span>
-        {!p.mini && (<Bar value={it[1]} color={it[2]} h={p.barH||6} max={p.max} />)}
-        <span style={{width:p.mini?24:26,flexShrink:0,fontSize:p.mini?12:14,color:"var(--t2)",fontFamily:"var(--m)",textAlign:"right"}}>{it[1]}</span>
+        {!p.mini && (<Bar value={it[1]} color={it[2]} h={p.barH||6} max={p.max} w={p.barW||30} />)}
+        <span style={{width:p.mini?24:28,flexShrink:0,fontSize:p.mini?12:14,color:"var(--t2)",fontFamily:"var(--m)",textAlign:"right"}}>{it[1]}</span>
       </div>);})}
   </div>);
 }
 /* 훈련·특훈 숫자 칸 — 능력치와 같은 순서(파 정 / 선 인)로 2열.
    0 은 흐리게 둔다 — 실제로 넣은 값만 눈에 들어오게 */
 function NumBox(p){
-  return (<div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",columnGap:6,rowGap:2,fontFamily:"var(--m)",fontSize:14,lineHeight:1.35}}>
+  return (<div style={{display:"grid",gridTemplateColumns:"repeat(2,auto)",columnGap:8,rowGap:2,justifyContent:"center",fontFamily:"var(--m)",fontSize:14,lineHeight:1.35}}>
     {p.items.map(function(it,i){
-      var zero = String(it[0]).replace("+","") === "0";
+      var zero = String(it[0]) === "0";
       return (<span key={i} style={{color:zero?"var(--td)":it[1],opacity:zero?0.55:1,textAlign:"right"}}>{it[0]}</span>);})}
   </div>);
 }
 /* 목록 맨 위 열 제목 — 줄마다 라벨을 되풀이하지 않으려고 한 번만 놓는다 */
 function LineupHead(p){
-  var cell = function(t, k){ return (<div key={k} style={{fontSize:11,color:"var(--td)",letterSpacing:1,textAlign:k===3?"right":"left"}}>{t}</div>); };
+  var cell = function(t, k){ return (<div key={k} style={{fontSize:11,color:"var(--td)",letterSpacing:1,textAlign:k <= 2 ? "left" : "center"}}>{t}</div>); };
   return (<div style={{display:"grid",gridTemplateColumns:LINEUP_COLS,gap:LINEUP_GAP,padding:"5px 10px 4px",borderBottom:"1px solid var(--bd)",background:"rgba(255,255,255,0.015)"}}>
-    {["", "", p.first || "선수", "점수", p.stat || "능력치", "훈련", "특훈", "스킬", "스점", "잠재"].map(cell)}
+    {["", "", p.first || "선수", "점수", p.stat || "능력치", "훈련", "특훈", "스킬", "스킬점수", "잠재"].map(cell)}
   </div>);
 }
 /* 잠재력 — 높은 등급일수록 눈에 띄게 (SR+ 분홍 · SS 보라 · S 금색) */
@@ -1413,7 +1413,7 @@ function PotVal(p){
   var c = POT_COLORS[g] || "var(--t2)";
   var hot = !!POT_COLORS[g];
   return (<span style={{whiteSpace:"nowrap"}}>
-    <span style={{fontSize:11,color:"var(--td)"}}>{p.label}</span>
+    <span style={{fontSize:12,color:"var(--td)"}}>{p.label}</span>
     <span style={{color:c,fontWeight:hot?800:500,textShadow:hot?"0 0 7px "+c+"66":"none"}}>{g||"-"}</span>
   </span>);
 }
@@ -3809,11 +3809,11 @@ function LineupPage(p) {
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} />{wtTag(slot, idx, true, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
-            <div style={{ textAlign: "right" }}><GS val={calc.total.toFixed(1)} size={28} />{wtTag(slot, idx, true, calc.total, false)}</div>
+            <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} />{wtTag(slot, idx, true, calc.total, false)}</div>
             <StatBox max={batBarMax} items={[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]]} />
             {/* 훈련 — 이 라인업에서 얼마나 투자했는지는 아래 선 색으로 (열 제목은 맨 위에 한 번만) */}
             <div title={"훈련 (파·정 / 선·인)"} style={{ minWidth: 0, borderBottom: "2px solid " + pctColor((pl.trainP||0)*getW().p+(pl.trainA||0)*getW().a+(pl.trainE||0)*getW().e+(pl.trainN||0)*(getW().n||0), allBatTrainScores, "gold"), paddingBottom: 2 }}>
-              <NumBox items={[["+" + (pl.trainP || 0), "#EF5350"], ["+" + (pl.trainA || 0), "#42A5F5"], ["+" + (pl.trainE || 0), "#66BB6A"], ["+" + (pl.trainN || 0), "#FFA726"]]} />
+              <NumBox items={[[pl.trainP || 0, "#EF5350"], [pl.trainA || 0, "#42A5F5"], [pl.trainE || 0, "#66BB6A"], [pl.trainN || 0, "#FFA726"]]} />
             </div>
             <div title={"특훈 (파·정 / 선·인)"} style={{ minWidth: 0 }}>
               <NumBox items={[[pl.specPower || 0, "#EF5350"], [pl.specAccuracy || 0, "#42A5F5"], [pl.specEye || 0, "#66BB6A"], [pl.specPatience || 0, "#FFA726"]]} />
@@ -3828,11 +3828,11 @@ function LineupPage(p) {
             </div>
             {(function(){
               var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
-              return (<div style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: pctColor(skSc, allBatSkillScores, "gold"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
+              return (<div style={{ textAlign: "center", fontSize: 17, fontWeight: 800, color: pctColor(skSc, allBatSkillScores, "gold"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
             })()}
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontFamily: "var(--m)", display: "flex", gap: 6 }}><PotVal label={"풀"} grade={pl.pot1} /><PotVal label={"클"} grade={pl.pot2} /></div>
-              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={"각성 " + pl.potType3} style={{ fontSize: 13, fontFamily: "var(--m)", marginTop: 1 }}><PotVal label={awkShort(pl.potType3)} grade={pl.pot3} /></div>)}
+            <div style={{ minWidth: 0, textAlign: "center" }}>
+              <div style={{ fontSize: 16, fontFamily: "var(--m)", display: "flex", gap: 8, justifyContent: "center" }}><PotVal label={"풀"} grade={pl.pot1} /><PotVal label={"클"} grade={pl.pot2} /></div>
+              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={"각성 " + pl.potType3} style={{ fontSize: 15, fontFamily: "var(--m)", marginTop: 2 }}><PotVal label={awkShort(pl.potType3)} grade={pl.pot3} /></div>)}
             </div>
           </React.Fragment>)}
         </div>
@@ -3896,10 +3896,10 @@ function LineupPage(p) {
           </div>
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
-            <div style={{ textAlign: "right" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, false)}</div>
-            <StatBox cols={1} barH={9} max={pitBarMax} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"]]} />
+            <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, false)}</div>
+            <StatBox barH={8} max={pitBarMax} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"]]} />
             <div title={"훈련 (변·구)"} style={{ minWidth: 0, borderBottom: "2px solid " + pctColor((pl.trainC||0)*getW().c+(pl.trainS||0)*getW().s, allPitTrainScores, "gold"), paddingBottom: 2 }}>
-              <NumBox items={[["+" + (pl.trainC || 0), "#AB47BC"], ["+" + (pl.trainS || 0), "#FF7043"]]} />
+              <NumBox items={[[pl.trainC || 0, "#AB47BC"], [pl.trainS || 0, "#FF7043"]]} />
             </div>
             <div title={"특훈 (변·구)"} style={{ minWidth: 0 }}>
               <NumBox items={[[pl.specChange || 0, "#AB47BC"], [pl.specStuff || 0, "#FF7043"]]} />
@@ -3917,11 +3917,11 @@ function LineupPage(p) {
             </div>
             {(function(){
               var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
-              return (<div style={{ textAlign: "center", fontSize: 15, fontWeight: 800, color: pctColor(skSc, allPitSkillScores, "blue"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
+              return (<div style={{ textAlign: "center", fontSize: 17, fontWeight: 800, color: pctColor(skSc, allPitSkillScores, "blue"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
             })()}
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontFamily: "var(--m)", display: "flex", gap: 6 }}><PotVal label={"장"} grade={pl.pot1} /><PotVal label={"침"} grade={pl.pot2} /></div>
-              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={"각성 " + pl.potType3} style={{ fontSize: 13, fontFamily: "var(--m)", marginTop: 1 }}><PotVal label={awkShort(pl.potType3)} grade={pl.pot3} /></div>)}
+            <div style={{ minWidth: 0, textAlign: "center" }}>
+              <div style={{ fontSize: 16, fontFamily: "var(--m)", display: "flex", gap: 8, justifyContent: "center" }}><PotVal label={"장"} grade={pl.pot1} /><PotVal label={"침"} grade={pl.pot2} /></div>
+              {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<div title={"각성 " + pl.potType3} style={{ fontSize: 15, fontFamily: "var(--m)", marginTop: 2 }}><PotVal label={awkShort(pl.potType3)} grade={pl.pot3} /></div>)}
             </div>
           </React.Fragment>)}
         </div>
