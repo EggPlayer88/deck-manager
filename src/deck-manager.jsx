@@ -4019,11 +4019,12 @@ function LineupPage(p) {
       )}
 
       {/* Diamond + Pitching */}
-      <div style={{ display: "grid", gridTemplateColumns: (mob) ? "1fr" : "420px 1fr", gap: 14, marginBottom: 16 }}>
-        <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: (mob) ? "1fr" : "380px 1fr", gap: 14, marginBottom: 16 }}>
+        {/* 투수 칸이 더 길어지는 폭에서도 다이아몬드가 가운데 오도록 */}
+        <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <DiamondView mobile={mob} slotMap={batSlotMap} onSlotClick={function(pos) { setPickerSlot(pos); }} />
         </div>
-        <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: "8px 14px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", padding: "10px 14px 12px", display: "flex", flexDirection: "column", gap: 8, justifyContent: "space-evenly" }}>
           <PitchGroup label="선발" count={spPl.length + "/5"} color="#AB47BC">
             {SP_SLOTS.map(function(pos) { var pl = pick(pos);
               return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} /></div>)
