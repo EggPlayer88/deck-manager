@@ -1347,6 +1347,25 @@ console.log('\n[자동 최적화] 2026-09-18 — 구간마다 총점을 견주�
   const keep = JSON.stringify(base);
   optimizeSetDeck(base, 200, mk({ '40R': 9 }), {});
   eq('sdState 는 건드리지 않고 새 객체', JSON.stringify(base) === keep ? 1 : 0, 1);
+
+  /* 구간끼리 영향을 주는 덱(발사각 문턱·강함 순위처럼) — 한 번 눌러도 제자리에 와야 한다.
+     여기서는 200 을 우로 둘 때만 40 의 우가 커지도록 얽어 둔다. 한 바퀴만 훑으면 40 을 먼저 보고
+     좌로 굳은 뒤 200 이 우가 되어, 다시 누르면 40 이 우로 바뀐다 */
+  const linked = (sd) => {
+    let t = 0;
+    if (sd.s200 === 'R') t += 20;
+    t += sd.s40 === 'R' ? (sd.s200 === 'R' ? 12 : 1) : 5;
+    return t;
+  };
+  const one = optimizeSetDeck(base, 200, linked, {});
+  eq('얽힌 구간도 한 번에 제자리 (40 우 · 200 우)', one.next.s40 === 'R' && one.next.s200 === 'R' ? 1 : 0, 1);
+  const twice = optimizeSetDeck(one.next, 200, linked, {});
+  eq('다시 눌러도 그대로', JSON.stringify(twice.next) === JSON.stringify(one.next) ? 1 : 0, 1);
+  eq('점수도 그대로', linked(twice.next) - linked(one.next), 0);
+  /* 번갈아 나오는 경우에도 가장 높은 판을 남긴다 */
+  const flip = (sd) => (sd.s40 === 'R' ? 10 : 0) + (sd.s60 === (sd.s40 === 'R' ? 'L' : 'R') ? 3 : 0);
+  const fr = optimizeSetDeck(base, 200, flip, {});
+  eq('오락가락해도 점수가 가장 높은 판', flip(fr.next) >= 10 ? 1 : 0, 1);
 }
 
 console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선택 팀 · 드림/나눔 · 올스타 · 연도');

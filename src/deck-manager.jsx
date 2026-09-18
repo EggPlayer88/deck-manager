@@ -3076,6 +3076,10 @@ var SD_TIE_SIDE = { 50: "R", 130: "R", 105: "R", 165: "R", 195: "R", 115: "R", 9
    opts.batOn / pitOn 은 연도덱 체크, batYears / pitYears 는 후보 연도다 (여럿이면 총점이 높은 연도를 고른다).
    체크하지 않은 연도덱의 구간은 비워 두고 blanks 로 알려 준다 — 화면에서 안내를 띄운다.
    110(드림/나눔)은 덱 구단이 정하므로 건드리지 않는다. */
+/* 구간은 서로 영향을 준다 — 발사각 보너스는 파워가 문턱을 넘어야 붙고, 타자 강함 순위(strMult)는
+   능력치가 바뀌면 뒤집힌다. 그래서 한 바퀴만 훑으면 뒤 구간의 옛 값을 보고 앞 구간을 정하게 되어
+   누를 때마다 값이 조금씩 달라진다. 더 바뀌지 않을 때까지 다시 훑어 한 번만 눌러도 제자리에 오게 한다. */
+var SD_OPT_PASSES = 8;
 function optimizeSetDeck(sdState, totalSP, scoreOf, opts) {
   opts = opts || {};
   var next = Object.assign({}, sdState);
@@ -3089,25 +3093,39 @@ function optimizeSetDeck(sdState, totalSP, scoreOf, opts) {
     }
     return best;
   };
-  SD_ROWS.forEach(function(r) {
-    if (totalSP < r.sp) return;
-    var k = "s" + r.sp;
-    var yr = SD_YEAR_ROWS[r.sp];
-    if (yr) {
-      var cands = [];
-      /* 75 는 타자면 좌, 투수면 우다. 나머지 연도 구간은 우가 연도 쪽이다 */
-      if (yr !== "pit" && opts.batOn) (opts.batYears || [""]).forEach(function(y) { cands.push((r.sp === 75 ? "L:" : "R:") + y); });
-      if (yr !== "bat" && opts.pitOn) (opts.pitYears || [""]).forEach(function(y) { cands.push("R:" + y); });
-      if (!cands.length) { next[k] = ""; blanks.push(r.sp); return; }
-      next[k] = cands.length === 1 ? cands[0] : pickBest(k, cands);
-      return;
-    }
-    if (r.sp === 110) return;
-    var sL = scoreWith(k, "L"), sR = scoreWith(k, "R");
-    /* 좌·우가 같으면(전원 자팀 스페셜 덱의 30·90·150·170 처럼) 굳어 있는 쪽을 지킨다 */
-    next[k] = Math.abs(sL - sR) < 1e-9 ? (SD_TIE_SIDE[r.sp] || "L") : (sL > sR ? "L" : "R");
-  });
-  return { next: next, blanks: blanks };
+  var onePass = function() {
+    var changed = false;
+    blanks = [];
+    SD_ROWS.forEach(function(r) {
+      if (totalSP < r.sp) return;
+      var k = "s" + r.sp;
+      var was = next[k];
+      var yr = SD_YEAR_ROWS[r.sp];
+      if (yr) {
+        var cands = [];
+        /* 75 는 타자면 좌, 투수면 우다. 나머지 연도 구간은 우가 연도 쪽이다 */
+        if (yr !== "pit" && opts.batOn) (opts.batYears || [""]).forEach(function(y) { cands.push((r.sp === 75 ? "L:" : "R:") + y); });
+        if (yr !== "bat" && opts.pitOn) (opts.pitYears || [""]).forEach(function(y) { cands.push("R:" + y); });
+        if (!cands.length) { next[k] = ""; blanks.push(r.sp); }
+        else next[k] = cands.length === 1 ? cands[0] : pickBest(k, cands);
+      } else if (r.sp !== 110) {
+        var sL = scoreWith(k, "L"), sR = scoreWith(k, "R");
+        /* 좌·우가 같으면(전원 자팀 스페셜 덱의 30·90·150·170 처럼) 굳어 있는 쪽을 지킨다 */
+        next[k] = Math.abs(sL - sR) < 1e-9 ? (SD_TIE_SIDE[r.sp] || "L") : (sL > sR ? "L" : "R");
+      }
+      if (next[k] !== was) changed = true;
+    });
+    return changed;
+  };
+  /* 제자리에 올 때까지 (보통 2~3바퀴). 혹시 두 값이 번갈아 나오더라도 가장 높은 판을 남긴다 */
+  var best = null, bestScore = -Infinity, bestBlanks = [];
+  for (var pass = 0; pass < SD_OPT_PASSES; pass++) {
+    var changed2 = onePass();
+    var sc = scoreOf(next);
+    if (sc > bestScore + 1e-9) { bestScore = sc; best = Object.assign({}, next); bestBlanks = blanks.slice(); }
+    if (!changed2) break;
+  }
+  return { next: best || next, blanks: bestBlanks };
 }
 
 function SetDeckPanel(p) {

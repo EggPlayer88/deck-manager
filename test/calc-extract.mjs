@@ -744,6 +744,7 @@ var SD_ROWS = [
 ];
 var SD_YEAR_ROWS = { 55: "pit", 190: "pit", 180: "bat", 185: "bat", 75: "both" };
 var SD_TIE_SIDE = { 50: "R", 130: "R", 105: "R", 165: "R", 195: "R", 115: "R", 95: "R", 125: "L", 175: "L" };
+var SD_OPT_PASSES = 8;
 function optimizeSetDeck(sdState, totalSP, scoreOf, opts) {
   opts = opts || {};
   var next = Object.assign({}, sdState);
@@ -757,25 +758,39 @@ function optimizeSetDeck(sdState, totalSP, scoreOf, opts) {
     }
     return best;
   };
-  SD_ROWS.forEach(function(r) {
-    if (totalSP < r.sp) return;
-    var k = "s" + r.sp;
-    var yr = SD_YEAR_ROWS[r.sp];
-    if (yr) {
-      var cands = [];
-      /* 75 는 타자면 좌, 투수면 우다. 나머지 연도 구간은 우가 연도 쪽이다 */
-      if (yr !== "pit" && opts.batOn) (opts.batYears || [""]).forEach(function(y) { cands.push((r.sp === 75 ? "L:" : "R:") + y); });
-      if (yr !== "bat" && opts.pitOn) (opts.pitYears || [""]).forEach(function(y) { cands.push("R:" + y); });
-      if (!cands.length) { next[k] = ""; blanks.push(r.sp); return; }
-      next[k] = cands.length === 1 ? cands[0] : pickBest(k, cands);
-      return;
-    }
-    if (r.sp === 110) return;
-    var sL = scoreWith(k, "L"), sR = scoreWith(k, "R");
-    /* 좌·우가 같으면(전원 자팀 스페셜 덱의 30·90·150·170 처럼) 굳어 있는 쪽을 지킨다 */
-    next[k] = Math.abs(sL - sR) < 1e-9 ? (SD_TIE_SIDE[r.sp] || "L") : (sL > sR ? "L" : "R");
-  });
-  return { next: next, blanks: blanks };
+  var onePass = function() {
+    var changed = false;
+    blanks = [];
+    SD_ROWS.forEach(function(r) {
+      if (totalSP < r.sp) return;
+      var k = "s" + r.sp;
+      var was = next[k];
+      var yr = SD_YEAR_ROWS[r.sp];
+      if (yr) {
+        var cands = [];
+        /* 75 는 타자면 좌, 투수면 우다. 나머지 연도 구간은 우가 연도 쪽이다 */
+        if (yr !== "pit" && opts.batOn) (opts.batYears || [""]).forEach(function(y) { cands.push((r.sp === 75 ? "L:" : "R:") + y); });
+        if (yr !== "bat" && opts.pitOn) (opts.pitYears || [""]).forEach(function(y) { cands.push("R:" + y); });
+        if (!cands.length) { next[k] = ""; blanks.push(r.sp); }
+        else next[k] = cands.length === 1 ? cands[0] : pickBest(k, cands);
+      } else if (r.sp !== 110) {
+        var sL = scoreWith(k, "L"), sR = scoreWith(k, "R");
+        /* 좌·우가 같으면(전원 자팀 스페셜 덱의 30·90·150·170 처럼) 굳어 있는 쪽을 지킨다 */
+        next[k] = Math.abs(sL - sR) < 1e-9 ? (SD_TIE_SIDE[r.sp] || "L") : (sL > sR ? "L" : "R");
+      }
+      if (next[k] !== was) changed = true;
+    });
+    return changed;
+  };
+  /* 제자리에 올 때까지 (보통 2~3바퀴). 혹시 두 값이 번갈아 나오더라도 가장 높은 판을 남긴다 */
+  var best = null, bestScore = -Infinity, bestBlanks = [];
+  for (var pass = 0; pass < SD_OPT_PASSES; pass++) {
+    var changed2 = onePass();
+    var sc = scoreOf(next);
+    if (sc > bestScore + 1e-9) { bestScore = sc; best = Object.assign({}, next); bestBlanks = blanks.slice(); }
+    if (!changed2) break;
+  }
+  return { next: best || next, blanks: bestBlanks };
 }
 var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
