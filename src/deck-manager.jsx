@@ -721,11 +721,26 @@ function specDistKey(pl, isBat) {
 }
 /* 세트덱의 "선택 팀" — 덱 구단 선수. 골든글러브 카드, FA 로 쓴 타팀 선수,
    와일드카드로 쓴 국가대표 선수도 선택 팀으로 친다.
+   올스타는 드림·나눔 군 단위 카드라 덱 구단과 같은 군이면 선택 팀이다 (2026-09-19 사용자 확인).
    덱 구단은 덱마다 반드시 고른다 — 구단 없는 예전 '내 덱'은 열 때 고르게 한다 (TeamPickModal) */
 function isSelTeam(pl, sdState) {
   var team = teamKey(sdState && sdState.teamName);
+  var lg = KBO_LEAGUE[team] || "";
   var f = applyTeamFlags(pl, team);
-  return (!!KBO_LEAGUE[team] && teamKey(pl.team) === team) || pl.cardType === "골든글러브" || !!f.isFa || !!f.isWildcard;
+  if (lg && teamKey(pl.team) === team) return true;
+  if (pl.cardType === "골든글러브") return true;
+  if (f.isFa || f.isWildcard) return true;
+  return pl.cardType === "올스타" && !!lg && KBO_LEAGUE[teamKey(pl.team)] === lg;
+}
+/* 110 구간(드림/나눔)에서 볼 군. 골든글러브는 어느 군도 되는 카드라 좌·우 어느 쪽을 골라도 받고("*"),
+   FA·와일드카드로 쓴 선수는 덱 구단 선수로 보아 덱 구단의 군을 따른다 (2026-09-19 사용자 확인) */
+function sdLeagueOf(pl, sdState) {
+  if (!pl) return "";
+  if (pl.cardType === "골든글러브") return "*";
+  var team = teamKey(sdState && sdState.teamName);
+  var f = applyTeamFlags(pl, team);
+  if (f.isFa || f.isWildcard) return KBO_LEAGUE[team] || "";
+  return KBO_LEAGUE[teamKey(pl.team)] || "";
 }
 
 /* 세트덱 효과 — 인게임 표기 그대로 (2026-09-17 사용자 대조).
@@ -816,7 +831,7 @@ function sdWho(w, x) {
   if (w.selTeam && !x.selTeam) return false;
   if (w.stars && x.stars !== w.stars) return false;
   if (w.cards && w.cards.indexOf(x.ct) < 0 && !(w.potmLive && x.potmLive)) return false;
-  if (w.league && x.league !== w.league) return false;
+  if (w.league && x.league !== "*" && x.league !== w.league) return false;
   if (w.order && !(x.order >= w.order[0] && x.order <= w.order[1])) return false;
   if (w.pos === "starter" && !x.starter) return false;
   if (w.pos === "relief" && !x.relief) return false;
@@ -842,7 +857,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
 
   /* 세트덱 구간 효과 (SD_RULES) */
   var S = { p: 0, a: 0, e: 0, n: 0, run: 0, def: 0, c: 0, s: 0, vel: 0, ctl: 0, sta: 0 };
-  var x = { ct: ct, stars: stars, selTeam: isSelTeam(pl, sdState), league: KBO_LEAGUE[teamKey(pl.team)] || "",
+  var x = { ct: ct, stars: stars, selTeam: isSelTeam(pl, sdState), league: sdLeagueOf(pl, sdState),
     order: isBat && batIdx >= 0 ? batIdx + 1 : 0, outfield: isBat && isOF,
     starter: !isBat && !isRP && !isCP, relief: !isBat && (isRP || isCP),
     potmLive: !!potm.liveAsSpecial };
@@ -2246,7 +2261,9 @@ var GLOBAL_POTM_LIST = [];
    · 라이브 — 자팀만. 능력치 5성 +8 · 4성 +14 · 1~3성 +18, 셋포 10 (이미 10이면 11),
              잠재력 모두 A · 각성 없음, 50·130 우(임국시골)를 골라도 받는다
    · 올스타 — 2026 카드만. 자팀 +6 · 셋포 12 / 같은 군(드림·나눔) +3 · 셋포 8 / 다른 군 +3 · 셋포 4,
-             잠재력 모두 A (타자 클러치 · 투수 침착은 SR+). 평소 셋포는 자팀 8 · 타팀 4 (cardSetScore)
+             잠재력 모두 A (타자 클러치 · 투수 침착은 SR+).
+             평소 셋포는 자팀 8 · 같은 군 4 · 다른 군 2 (cardSetScore).
+             세트덱 "선택 팀" 은 같은 군까지 (isSelTeam)
    라이브·올스타는 각성 잠재력이 없는 카드다 (NO_AWAKEN_CARDS)
    · 스페셜(임팩트·시그니처·국가대표·골든글러브) — 자팀만, FA·와일드카드로 쓴 선수도 자팀.
              능력치 임팩트·시그·국대 +2, 골글 +1, 셋포 +1
@@ -2744,17 +2761,18 @@ function SkillPicker(p) {
 /* ================================================================
    SET DECK SYSTEM
    ================================================================ */
-/* 올스타는 덱 구단에 따라 다르다 — cardSetScore 가 OLSTAR_SET_POINTS 를 쓴다 (여기 4 는 타팀 값) */
+/* 올스타는 덱 구단에 따라 다르다 — cardSetScore 가 OLSTAR_SET_POINTS 를 쓴다 (여기 4 는 같은 군 값) */
 var SET_POINTS = {"골든글러브":6,"시그니처":8,"임팩트":7,"국가대표":8,"시즌":0,"라이브":0,"올스타":4};
-/* 올스타 기본 셋포 — 자팀 8, 타팀 4 (2026-09-18 사용자 확인). POTM 은 potmEffect 가 따로 정한다 */
-var OLSTAR_SET_POINTS = { own: 8, other: 4 };
+/* 올스타 기본 셋포 — 자팀 8, 같은 군 4, 다른 군 2 (2026-09-19 사용자 확인).
+   POTM 은 potmEffect 가 따로 정한다 (자팀 12 / 같은 군 8 / 다른 군 4) */
+var OLSTAR_SET_POINTS = { own: 8, league: 4, other: 2 };
 /* FA 카드는 세트덱 점수가 깎인다 — 시그니처 -1, 임팩트 -2 */
 var FA_SET_PENALTY = {"시그니처":1,"임팩트":2};
 /* 와일드카드 국가대표 — 기본 셋포 4 에서 3 깎이고 특훈이 4 → 6레벨이 되어, 다 채우면 8 → 7 (-1) */
 var WILDCARD_SET_PENALTY = {"국가대표":1};
 /* 카드 한 장의 세트덱 점수 (POTM 가산 전). 총 셋포 계산과 화면 표시가 모두 이 값을 쓴다.
    FA·와일드카드는 applyTeamFlags 를 거친 선수 기준이다.
-   teamName(덱 구단)은 올스타에만 쓰인다 — 자팀 8, 타팀·모름 4 */
+   teamName(덱 구단)은 올스타에만 쓰인다 — 자팀 8, 같은 군 4, 다른 군·모름 2 */
 function cardSetPenalty(pl) {
   if (!pl) return 0;
   if (pl.isFa) return FA_SET_PENALTY[pl.cardType] || 0;
@@ -2767,7 +2785,10 @@ function cardSetScore(pl, teamName) {
   if (pl.cardType === "라이브") sc = pl.setScore || 0;
   else if (pl.cardType === "올스타") {
     var deck = teamKey(teamName);
-    sc = (KBO_LEAGUE[deck] && teamKey(pl.team) === deck) ? OLSTAR_SET_POINTS.own : OLSTAR_SET_POINTS.other;
+    var lgD = KBO_LEAGUE[deck] || "";
+    sc = (lgD && teamKey(pl.team) === deck) ? OLSTAR_SET_POINTS.own
+       : (lgD && KBO_LEAGUE[teamKey(pl.team)] === lgD) ? OLSTAR_SET_POINTS.league
+       : OLSTAR_SET_POINTS.other;
   }
   else sc = SET_POINTS[pl.cardType] || 0;
   var pen = cardSetPenalty(pl);

@@ -8,7 +8,7 @@ import {
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
-  isSelTeam, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
+  isSelTeam, sdLeagueOf, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
 } from './calc-extract.mjs';
 
@@ -603,7 +603,7 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('올스타 같은 군 +3 · 셋포 8', eLg.stat === 3 && eLg.setScore === 8 && eLg.setDelta === 4 && eLg.rel === 'league' ? 1 : 0, 1);
   const ds = ol({ team: '두산' }); /* 두산은 드림 */
   const eDs = potmEffect(ds, on(ds));
-  eq('올스타 다른 군 +3 · 셋포 4 (차이 0)', eDs.stat === 3 && eDs.setScore === 4 && eDs.setDelta === 0 && eDs.rel === 'other' ? 1 : 0, 1);
+  eq('올스타 다른 군 +3 · 셋포 4 (평소 2 에서 +2)', eDs.stat === 3 && eDs.setScore === 4 && eDs.setDelta === 2 && eDs.rel === 'other' ? 1 : 0, 1);
   eq('올스타 2025 카드는 효과 없음', potmEffect(ol({ year: '2025' }), on(ol())).on ? 1 : 0, 0);
   eq('올스타 연도 숫자도 인식', potmEffect(ol({ year: 2026 }), on(ol())).on ? 1 : 0, 1);
   const op = applyPotmPot(ol({ pot1: 'C', pot2: 'B', potType2: '풀스윙', pot3: '', potType3: '' }), on(ol()));
@@ -641,15 +641,16 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('총 셋포 — 덱에서 끈 선수는 평소 셋포 (10 + 8)', total(deck, { teamName: K, potmOff: ['올|키움'] }), 18);
   __setGlobalPotm([]);
 
-  /* 올스타 평소 셋포 — 자팀 8, 타팀 4 (2026-09-18) */
+  /* 올스타 평소 셋포 — 자팀 8, 같은 군 4, 다른 군 2 (2026-09-19) */
   eq('올스타 평소 셋포 — 자팀 8', cardSetScore(ol(), K), 8);
   eq('올스타 평소 셋포 — 같은 군 타팀 4', cardSetScore(ol({ team: 'LG' }), K), 4);
-  eq('올스타 평소 셋포 — 다른 군 타팀 4', cardSetScore(ol({ team: '두산' }), K), 4);
-  eq('올스타 평소 셋포 — 덱 구단 모르면 4', cardSetScore(ol(), ''), 4);
+  eq('올스타 평소 셋포 — 다른 군 타팀 2', cardSetScore(ol({ team: '두산' }), K), 2);
+  eq('올스타 평소 셋포 — 덱 구단 모르면 2 (다른 군과 같게)', cardSetScore(ol(), ''), 2);
   eq('올스타 평소 셋포 — KIA 는 기아로 (자팀 8)', cardSetScore(ol({ team: 'KIA' }), '기아'), 8);
   eq('올스타 평소 셋포 — 2025 자팀도 8', cardSetScore(ol({ year: '2025' }), K), 8);
-  eq('총 셋포 — 타팀 올스타 4', total({ C: ol({ team: '두산' }) }, { teamName: K }), 4);
-  eq('올스타 다른 군 POTM — 셋포 4 그대로 (평소 4)', potmEffect(ol({ team: '두산' }), on(ol({ team: '두산' }))).setDelta, 0);
+  eq('총 셋포 — 다른 군 올스타 2', total({ C: ol({ team: '두산' }) }, { teamName: K }), 2);
+  eq('총 셋포 — 같은 군 올스타 4', total({ C: ol({ team: 'LG' }) }, { teamName: K }), 4);
+  eq('올스타 다른 군 POTM — 셋포 2 → 4', potmEffect(ol({ team: '두산' }), on(ol({ team: '두산' }))).setDelta, 2);
 
   /* 라이브·올스타는 각성 잠재력이 없다 — 입력값이 있어도 점수에 넣지 않는다 */
   const lu0 = { enhance: '' };
@@ -1394,6 +1395,36 @@ console.log('\n[세트덱 인게임 대조] 2026-09-17 사용자 확인 — 선�
   eq('선택 팀 — 덱 구단이 없어도 골든글러브는 선택 팀', isSelTeam(bat({ team: '두산', cardType: '골든글러브' }), { teamName: '내 덱' }) ? 1 : 0, 1);
   eq('선택 팀 — 빈 덱 구단과 구단 없는 선수는 같은 팀이 아님', isSelTeam(bat({ team: '' }), { teamName: '' }) ? 1 : 0, 0);
   eq('선택 팀 — sdState 가 없어도 오류 없이 아님', isSelTeam(bat({ team: '두산' }), undefined) ? 1 : 0, 0);
+
+  /* 2026-09-19 사용자 확인 — 올스타는 드림·나눔 군 단위 카드다.
+     같은 군이면 선택 팀 효과를 받고 다른 군이면 못 받는다 (키움·LG·기아 나눔 / 두산 드림) */
+  eq('선택 팀 — 자팀 올스타', isSelTeam(bat({ cardType: '올스타' }), { teamName: K }) ? 1 : 0, 1);
+  eq('선택 팀 — 같은 군 올스타', isSelTeam(bat({ team: 'LG', cardType: '올스타' }), { teamName: K }) ? 1 : 0, 1);
+  eq('선택 팀 — 다른 군 올스타는 아님', isSelTeam(bat({ team: '두산', cardType: '올스타' }), { teamName: K }) ? 1 : 0, 0);
+  eq('선택 팀 — 덱 구단이 없으면 올스타도 아님', isSelTeam(bat({ team: 'LG', cardType: '올스타' }), { teamName: '내 덱' }) ? 1 : 0, 0);
+  eq('선택 팀 — 같은 군이어도 올스타가 아니면 아님', isSelTeam(bat({ team: 'LG' }), { teamName: K }) ? 1 : 0, 0);
+
+  /* 110 구간에서 볼 군 — 골든글러브는 어느 군도 되고(깍두기), FA·와일드카드는 덱 구단 선수로 본다 */
+  eq('군 — 그냥 타팀 선수는 원 소속팀의 군', sdLeagueOf(bat({ team: '두산' }), { teamName: K }) === '드림' ? 1 : 0, 1);
+  eq('군 — 골든글러브는 어느 군도 된다', sdLeagueOf(bat({ team: '두산', cardType: '골든글러브' }), { teamName: K }) === '*' ? 1 : 0, 1);
+  eq('군 — FA 로 쓴 타팀 선수는 덱 구단의 군', sdLeagueOf(bat({ team: '두산', cardType: '임팩트', isFa: true }), { teamName: K }) === '나눔' ? 1 : 0, 1);
+  eq('군 — 와일드카드 국가대표도 덱 구단의 군', sdLeagueOf(bat({ team: '두산', cardType: '국가대표', isWildcard: true }), { teamName: K }) === '나눔' ? 1 : 0, 1);
+  eq('군 — 자팀 선수에게 켜 둔 FA 표시는 무시된다', sdLeagueOf(bat({ cardType: '임팩트', isFa: true }), { teamName: K }) === '나눔' ? 1 : 0, 1);
+  eq('군 — 올스타는 원 소속팀의 군 그대로', sdLeagueOf(bat({ team: '두산', cardType: '올스타' }), { teamName: K }) === '드림' ? 1 : 0, 1);
+
+  /* 110 — 좌 드림 / 우 나눔. 골든글러브는 어느 쪽을 골라도 받는다 */
+  const g110 = (pl, side) => calcSDBonus(pl, 'DH', on(110, side), 110, 8).p - calcSDBonus(pl, 'DH', on(110, side), 109, 8).p;
+  eq('110 — 나눔 선수는 우에서 받는다', g110(bat({ team: 'LG' }), 'R'), 1);
+  eq('110 — 드림 선수는 우에서 못 받는다', g110(bat({ team: '두산' }), 'R'), 0);
+  eq('110 — 골든글러브는 좌에서도 받는다', g110(bat({ team: '기아', cardType: '골든글러브' }), 'L'), 1);
+  eq('110 — 골든글러브는 우에서도 받는다', g110(bat({ team: '두산', cardType: '골든글러브' }), 'R'), 1);
+  eq('110 — FA 로 쓴 드림 선수는 우(덱 구단 군)에서 받는다', g110(bat({ team: '두산', cardType: '임팩트', isFa: true }), 'R'), 1);
+  eq('110 — FA 로 쓴 드림 선수는 좌에서는 못 받는다', g110(bat({ team: '두산', cardType: '임팩트', isFa: true }), 'L'), 0);
+
+  /* 선택 팀 구간 — 같은 군 올스타가 실제로 받는지 (30 좌 "모두 +1") */
+  const g30 = (pl) => calcSDBonus(pl, 'DH', on(30, 'L'), 30, 8).p - calcSDBonus(pl, 'DH', on(30, 'L'), 29, 8).p;
+  eq('30 좌 — 같은 군 올스타는 받는다', g30(bat({ team: 'LG', cardType: '올스타' })), 1);
+  eq('30 좌 — 다른 군 올스타는 못 받는다', g30(bat({ team: '두산', cardType: '올스타' })), 0);
   const at30 = (team, sp) => calcSDBonus(bat(), 'DH', on(30, undefined, team), sp, 8).p;
   eq('30 — 키움 덱의 키움 선수는 +1', at30(K, 30) - at30(K, 29), 1);
   eq('30 — 구단 없는 덱의 선수는 안 받음', at30('내 덱', 30) - at30('내 덱', 29), 0);
@@ -1558,7 +1589,7 @@ console.log('\n[세트덱 점수] FA 는 시그니처 -1, 임팩트 -2 — 총 �
   eq('임팩트 7', cardSetScore({ cardType: '임팩트' }), 7);
   eq('임팩트 FA 5 (-2)', cardSetScore({ cardType: '임팩트', isFa: true }), 5);
   eq('국가대표 8', cardSetScore({ cardType: '국가대표' }), 8);
-  eq('올스타 4', cardSetScore({ cardType: '올스타' }), 4);
+  eq('올스타 — 덱 구단 없으면 2', cardSetScore({ cardType: '올스타' }), 2);
   eq('라이브는 카드에 적힌 점수', cardSetScore({ cardType: '라이브', setScore: 9 }), 9);
   eq('FA 가 없는 카드는 FA 표시가 있어도 그대로 (골글 6)', cardSetScore({ cardType: '골든글러브', isFa: true }), 6);
   eq('빈 칸 0', cardSetScore(null), 0);
