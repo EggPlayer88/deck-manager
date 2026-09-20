@@ -573,15 +573,23 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('50 좌 — POTM 라이브도 라이브로 +1', sd50(live(), 'L', on(live())) - sd50(live(), '', on(live())), 1);
   eq('130 우 — POTM 라이브 +1', calcSDBonus(live(), 'DH', Object.assign({ s95: '', s125: '', s110: '', s130: 'R' }, on(live())), 130, 8).a
      - calcSDBonus(live(), 'DH', Object.assign({ s95: '', s125: '', s110: '', s130: '' }, on(live())), 130, 8).a, 1);
-  eq('50 우 — 올스타 POTM 은 받지 않음', sd50(ol(), 'R', on(ol())) - sd50(ol(), '', on(ol())), 0);
+  /* 2026-09-20 사용자 확인 — POTM 으로 뽑힌 선수는 카드 종류와 무관하게 우쪽 "모두 적용" 구간을 받는다 */
+  eq('50 우 — 올스타 POTM 도 받는다', sd50(ol(), 'R', on(ol())) - sd50(ol(), '', on(ol())), 1);
+  eq('50 우 — POTM 아닌 올스타는 못 받는다', sd50(ol(), 'R', { teamName: K }) - sd50(ol(), '', { teamName: K }), 0);
   /* "라이브/스페셜 세트덱 효과 모두 적용" 은 30·50·90·130·150·170 의 우에만 있다 (2026-09-18 사용자 확인) */
   const sdAt = (sp, v, st) => calcSDBonus(live(), 'DH', Object.assign({ s95: '', s125: '', s110: '', s30: '', s90: '', s150: '', s170: '', ['s' + sp]: v }, st), sp, 8).p;
   eq('30·90·150·170 우 — POTM 라이브도 받는다',
     [30, 90, 150, 170].every((sp) => sdAt(sp, 'R', on(live())) - sdAt(sp, '', on(live())) > 0) ? 1 : 0, 1);
+  /* 올스타 POTM 도 같은 여섯 구간을 받는다 (올러 사례 — 50·130 우에서 각 +1) */
+  const sdOl = (sp, v, st) => calcSDBonus(ol(), 'DH', Object.assign({ s95: '', s125: '', s110: '', s30: '', s50: '', s90: '', s130: '', s150: '', s170: '', ['s' + sp]: v }, st), sp, 8).p;
+  eq('여섯 구간 우 — POTM 올스타도 받는다',
+    [30, 50, 90, 130, 150, 170].every((sp) => sdOl(sp, 'R', on(ol())) - sdOl(sp, '', on(ol())) > 0) ? 1 : 0, 1);
+  eq('여섯 구간 우 — POTM 아닌 올스타는 0',
+    [30, 50, 90, 130, 150, 170].every((sp) => sdOl(sp, 'R', { teamName: K }) - sdOl(sp, '', { teamName: K }) === 0) ? 1 : 0, 1);
   eq('그 구간 우 — POTM 아닌 라이브는 0',
     [30, 90, 150, 170].every((sp) => sdAt(sp, 'R', { teamName: K }) - sdAt(sp, '', { teamName: K }) === 0) ? 1 : 0, 1);
   eq('모두 적용 표시는 우에만 · 여섯 구간뿐',
-    SD_RULES.filter((r) => r.who && r.who.potmLive).map((r) => r.sp + r.side).join() === '30R,50R,90R,130R,150R,170R' ? 1 : 0, 1);
+    SD_RULES.filter((r) => r.who && r.who.potm).map((r) => r.sp + r.side).join() === '30R,50R,90R,130R,150R,170R' ? 1 : 0, 1);
 
   /* 능력치 +N 은 모든 능력치 (인내·주루·수비 포함) */
   const b0 = calcSDBonus(live(), 'DH', { teamName: K, s95: '', s125: '', s110: '' }, 0, 8);
