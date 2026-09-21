@@ -8,7 +8,7 @@ import {
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
-  isSelTeam, sdLeagueOf, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
+  isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
 } from './calc-extract.mjs';
 
@@ -1793,5 +1793,34 @@ console.log('\n[덱 저장기] 선수·라인업·세트덱을 늘 최신 한 �
   eq('멈춘 요청은 30ms 만 기다린다', waited >= 25 && waited < 1000 ? 1 : 0, 1);
 }
 
+console.log('');
+console.log('[시트 가져오기 — 라이브 V1/V2 구분] 2026-09-21');
+{
+  /* 라이브는 같은 선수·팀·연도에 V1 과 V2 두 장이 있다. 관리기 시트에는 V1/V2 칸이 없어서
+     적어 온 기본 능력치로 갈라야 한다. 이 갈래가 없던 동안 라이브 카드가 전부 "직접 선택" 으로 떨어졌다 */
+  const v1 = { id: 'v1', cardType: '라이브', role: '타자', name: '나성범', team: '기아', year: '2026',
+    liveType: 'V1', power: 80, accuracy: 70, eye: 60, patience: 50 };
+  const v2 = { id: 'v2', cardType: '라이브', role: '타자', name: '나성범', team: '기아', year: '2026',
+    liveType: 'V2', power: 85, accuracy: 75, eye: 65, patience: 55 };
+  const ix = buildIndex([v1, v2]);
+  const ent = (b) => ({ name: '나성범', role: '타자', year: '2026', types: ['올스타', '라이브'], base: b });
+  const mV1 = matchOne(ent({ 파워: 80, 정확: 70, 선구: 60, 인내: 50 }), ix);
+  const mV2 = matchOne(ent({ 파워: 85, 정확: 75, 선구: 65, 인내: 55 }), ix);
+  eq('V1 능력치를 적으면 V1 이 붙는다', mV1.rec && mV1.rec.id === 'v1' ? 1 : 0, 1);
+  eq('V2 능력치를 적으면 V2 가 붙는다', mV2.rec && mV2.rec.id === 'v2' ? 1 : 0, 1);
+  eq('자동으로 붙는다 (직접 선택 아님)', (mV1.needsPick || mV2.needsPick) ? 1 : 0, 0);
+  /* 올스타가 없으면 라이브로 넘어간다 */
+  eq('올스타가 없으면 라이브를 본다', mV2.rec && mV2.rec.cardType === '라이브' ? 1 : 0, 1);
+  /* 어느 쪽과도 안 맞으면 예전처럼 직접 고르게 둔다 */
+  const mX = matchOne(ent({ 파워: 1, 정확: 2, 선구: 3, 인내: 4 }), ix);
+  eq('둘 다 안 맞으면 직접 선택', mX.needsPick && !mX.rec ? 1 : 0, 1);
+  eq('직접 선택일 때 후보 둘을 돌려준다', (mX.candidates || []).length, 2);
+  /* 한 장뿐이면 예전 그대로 */
+  const ix1 = buildIndex([v1]);
+  const m1 = matchOne(ent({ 파워: 80, 정확: 70, 선구: 60, 인내: 50 }), ix1);
+  eq('카드가 하나뿐이면 이름+연도로 붙는다', m1.rec && m1.rec.id === 'v1' ? 1 : 0, 1);
+}
+
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
+

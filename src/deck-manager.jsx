@@ -3007,7 +3007,16 @@ function matchOne(e, index) {
     }
     var yr = byName.filter(function (r) { return miTxt(r.year) === e.year; });
     if (yr.length === 1) return { rec: yr[0], how: "이름+연도" };
-    if (yr.length > 1) return { rec: null, how: "연도까지 같은 카드 여럿-직접선택", candidates: miRanked(yr, e, isBat), needsPick: true };
+    if (yr.length > 1) {
+      /* 라이브는 같은 선수·팀·연도에 V1 과 V2 두 장이 있다 (2026-09 V2 추가).
+         시트에는 V1/V2 칸이 없으므로 적어 온 기본 능력치로 가른다 — 둘은 값이 다르다.
+         이 갈래가 없던 동안 라이브 카드가 전부 "직접 선택" 으로 떨어졌다 (2026-09-21) */
+      var wantY = entryStatKey(e);
+      var hitY = yr.filter(function (r) { return statKey(r, isBat) === wantY; });
+      if (hitY.length === 1) return { rec: hitY[0], how: "이름+연도+스탯" };
+      if (hitY.length > 1) return { rec: hitY[0], how: "스탯동일-임의배정", candidates: hitY };
+      return { rec: null, how: "연도까지 같은 카드 여럿-직접선택", candidates: miRanked(yr, e, isBat), needsPick: true };
+    }
     /* 라이브·올스타는 연도가 한 종류뿐이라 연도가 어긋나도 이름으로 붙인다 */
     if (byName.length === 1) return { rec: byName[0], how: "이름만(연도 무시)" };
     if (byName.length > 1) {
