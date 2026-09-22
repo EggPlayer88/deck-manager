@@ -7,7 +7,8 @@ import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
-  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
+  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills,
+  ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
   isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
 } from './calc-extract.mjs';
@@ -290,11 +291,24 @@ eq('임팩트 3번', autoSkillLv('정밀타격', '임팩트', 3, '타자', []), 
 /* 포지션 특훈 스킬 보너스 → +1 */
 eq('보너스 걸리면 +1', autoSkillLv('정밀타격', '시즌', 1, '타자', ['정밀타격']), 7);
 eq('다른 스킬이면 그대로', autoSkillLv('정밀타격', '시즌', 1, '타자', ['대도']), 6);
+/* 2026-09-23 사용자 확인 — 보너스는 3개 묶음 둘이라 같은 스킬이 최대 두 번 들어가고,
+   들어간 수만큼 레벨이 오른다 (예전에는 몇 개를 골라도 +1 이었다) */
+eq('두 묶음에 같은 스킬 → +2', autoSkillLv('정밀타격', '시즌', 1, '타자', ['정밀타격', '대도', '', '정밀타격', '', '']), 8);
+eq('한 묶음에만 → +1', autoSkillLv('정밀타격', '시즌', 1, '타자', ['정밀타격', '대도', '', '호타준족', '', '']), 7);
+eq('띄어쓰기가 달라도 같은 스킬로 센다', autoSkillLv('정밀타격', '시즌', 1, '타자', ['정밀 타격', '정밀타격']), 8);
+eq('셋 이상 들어 있어도 최대 +2', autoSkillLv('정밀타격', '시즌', 1, '타자', ['정밀타격', '정밀타격', '정밀타격']), 8);
+eq('개수 세기 — 0/1/2', [ptSkillCount([], '정밀타격'), ptSkillCount(['정밀타격'], '정밀타격'),
+  ptSkillCount(['정밀타격', '정밀타격'], '정밀타격')].join() === '0,1,2' ? 1 : 0, 1);
+eq('hasPtSkill 은 그대로 동작', hasPtSkill(['정밀타격'], '정밀타격') && !hasPtSkill(['대도'], '정밀타격') ? 1 : 0, 1);
+eq('묶음 3칸 · 묶음 2개 · 같은 스킬 최대 2', [PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME].join() === '3,2,2' ? 1 : 0, 1);
+/* 적용 레벨(effSkillLv)도 같은 규칙 */
+eq('적용 레벨도 +2', effSkillLv('정밀타격', 0, false, '시즌', 1, '타자', ['정밀타격', '', '', '정밀타격', '', '']), 8);
 /* 스킬 최고 레벨을 넘지 않는다 — 황금세대는 Lv6 까지만 값이 있다 */
 eq('황금세대 최고 레벨', maxSkillLv('황금세대', '타자'), 6);
 eq('정밀타격 최고 레벨', maxSkillLv('정밀타격', '타자'), 10);
 eq('올스타 황금세대는 6에서 멈춤', autoSkillLv('황금세대', '올스타', 1, '타자', []), 6);
 eq('보너스 있어도 6 초과 안 함', autoSkillLv('황금세대', '올스타', 1, '타자', ['황금세대']), 6);
+eq('두 번 걸려도 최고 레벨은 못 넘는다', autoSkillLv('황금세대', '올스타', 1, '타자', ['황금세대', '', '', '황금세대', '', '']), 6);
 eq('스킬 없으면 0', autoSkillLv('', '올스타', 1, '타자', []), 0);
 /* 수동 지정이면 저장값을 그대로 쓴다 */
 eq('수동 우선', effSkillLv('정밀타격', 10, true, '시즌', 1, '타자', ['정밀타격']), 10);

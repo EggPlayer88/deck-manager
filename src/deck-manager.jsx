@@ -426,19 +426,27 @@ function isLvManual(pl){ return !pl || pl.sLvManual === undefined ? true : !!pl.
 
 /* 이 스킬이 그 자리의 포지션 특훈 스킬 보너스(+1)에 걸리는가.
    띄어쓰기만 다른 이름도 같은 스킬로 본다 */
-function hasPtSkill(ptSkills, name){
-  if(!ptSkills || !ptSkills.length || !name) return false;
+/* 포지션 특훈 스킬 보너스는 3개 + 3개 두 묶음이고, 한 묶음 안에서는 같은 스킬을 못 고른다.
+   그래서 한 포지션에 같은 스킬이 최대 두 번 들어가고, 들어간 수만큼 레벨이 오른다
+   (2026-09-23 사용자 확인. 예전에는 몇 개를 골라도 +1 이었다) */
+var PT_GROUP_SIZE = 3;      /* 한 묶음의 칸 수 */
+var PT_GROUPS = 2;          /* 묶음 수 */
+var PT_MAX_SAME = PT_GROUPS;  /* 같은 스킬이 들어갈 수 있는 최대 횟수 */
+function ptSkillCount(ptSkills, name){
+  if(!ptSkills || !ptSkills.length || !name) return 0;
   var f = String(name).replace(/\s+/g, "");
+  var n = 0;
   for(var i = 0; i < ptSkills.length; i++){
-    if(String(ptSkills[i] || "").replace(/\s+/g, "") === f) return true;
+    if(String(ptSkills[i] || "").replace(/\s+/g, "") === f) n++;
   }
-  return false;
+  return n > PT_MAX_SAME ? PT_MAX_SAME : n;
 }
+function hasPtSkill(ptSkills, name){ return ptSkillCount(ptSkills, name) > 0; }
 
 function autoSkillLv(name, cardType, num, cat, ptSkills){
   if(!name) return 0;
   var base = (CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5;
-  if(hasPtSkill(ptSkills, name)) base += 1;
+  base += ptSkillCount(ptSkills, name);
   var mx = maxSkillLv(name, cat);
   return mx ? Math.min(base, mx) : base;
 }
@@ -499,7 +507,7 @@ function effSkillLv(name, storedLv, manual, cardType, num, cat, ptSkills){
     ? (storedLv || 0)
     : ((CARD_SKILL_BASE_LV[cardType] || DEFAULT_SKILL_BASE_LV)[num-1] || 5);
   if(!base) return 0;   /* 수동인데 레벨을 안 넣었으면 스킬 없는 것으로 본다 */
-  if(hasPtSkill(ptSkills, name)) base += 1;
+  base += ptSkillCount(ptSkills, name);
   var mx = maxSkillLv(name, cat);
   return mx ? Math.min(base, mx) : base;
 }
@@ -4288,19 +4296,38 @@ function PosTrainRow(rp) {
         {(skOpen ? "▼ " : "▶ ") + "스킬 보너스 " + chosen + "/" + slots}
       </button>
       {skOpen && (
-        <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 6, padding: "8px 0 4px" }}>
-          {Array.from({ length: slots }).map(function(_, si) {
+        <div style={{ gridColumn: "1 / -1", padding: "8px 0 4px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {Array.from({ length: PT_GROUPS }).map(function(_, gi) {
+            /* 한 묶음 안에서는 같은 스킬을 두 번 고를 수 없다 — 이미 고른 것은 목록에서 뺀다 */
+            var from = gi * PT_GROUP_SIZE;
+            var mine = [];
+            for (var q = from; q < from + PT_GROUP_SIZE; q++) if (ptSkills[q]) mine.push(ptSkills[q]);
             return (
-              <div key={si} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: 10, color: "var(--td)", width: 12, textAlign: "right" }}>{si + 1}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <SkillPicker value={ptSkills[si] || ""} options={rp.skillOptions || []} majorOptions={rp.majorOptions || []}
-                    width="100%" fontSize={11}
-                    onChange={function(v){ rp.updSkill(pos, si, v); }} />
+              <div key={gi}>
+                <div style={{ fontSize: 10, color: "var(--td)", marginBottom: 3 }}>{(gi + 1) + "묶음"}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 6 }}>
+                  {Array.from({ length: PT_GROUP_SIZE }).map(function(__, k) {
+                    var si = from + k;
+                    var cur = ptSkills[si] || "";
+                    var opts = (rp.skillOptions || []).filter(function(n) {
+                      return n === cur || mine.indexOf(n) < 0;
+                    });
+                    return (
+                      <div key={si} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 10, color: "var(--td)", width: 12, textAlign: "right" }}>{si + 1}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <SkillPicker value={cur} options={opts} majorOptions={rp.majorOptions || []}
+                            width="100%" fontSize={11}
+                            onChange={function(v){ rp.updSkill(pos, si, v); }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
+          <div style={{ fontSize: 10, color: "var(--td)" }}>{"묶음 안에서는 같은 스킬을 고를 수 없습니다. 두 묶음에 같은 스킬을 넣으면 그 스킬은 레벨이 2 오릅니다."}</div>
         </div>
       )}
     </div>
@@ -4334,8 +4361,9 @@ function PosTrainPage(p) {
     });
   };
 
-  /* 포지션별 스킬 보너스 — 포지션당 6개까지. 지정된 스킬은 레벨 +1 로 계산된다. */
-  var PT_SKILL_SLOTS = 6;
+  /* 포지션별 스킬 보너스 — 3개 묶음 둘, 모두 6개.
+     한 묶음 안에서는 같은 스킬을 못 고르고, 두 묶음에 같은 스킬을 넣으면 레벨이 2 오른다 */
+  var PT_SKILL_SLOTS = PT_GROUP_SIZE * PT_GROUPS;
   var skills = p.skills || {};
   var ptsKey = function(pos) { return "pts_" + pos; };
   var getPTS = function(pos) {
@@ -4356,7 +4384,7 @@ function PosTrainPage(p) {
   return (
     <div style={{ padding: mob ? 12 : 18, maxWidth: 900, paddingBottom: mob ? 80 : 18 }}>
       <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: "0 0 4px" }}>{"포지션 특훈"}</h2>
-      <p style={{ fontSize: 12, color: "var(--td)", margin: "0 0 12px" }}>{"계정 귀속 - 포지션별 레벨과 재설정 효과를 입력하세요. 스킬 보너스는 포지션당 6개까지 지정할 수 있고, 지정한 스킬은 레벨이 1 올라간 것으로 계산됩니다."}</p>
+      <p style={{ fontSize: 12, color: "var(--td)", margin: "0 0 12px" }}>{"계정 귀속 - 포지션별 레벨과 재설정 효과를 입력하세요. 스킬 보너스는 3개씩 두 묶음, 모두 6개입니다. 한 묶음 안에서는 같은 스킬을 고를 수 없고, 두 묶음에 같은 스킬을 넣으면 그 스킬은 레벨이 2 올라간 것으로 계산됩니다."}</p>
       {groups.map(function(grp) {
         return (
           <div key={grp.label} style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 14 }}>
