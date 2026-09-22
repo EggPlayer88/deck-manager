@@ -500,15 +500,70 @@ function skillCatOf(pl){
   return pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
 }
 var SEED_PLAYERS = [];
+var CUSTOM_PLAYERS = [];
+var CUSTOM_MAX = 5;
+function dexAll() { return CUSTOM_PLAYERS.length ? SEED_PLAYERS.concat(CUSTOM_PLAYERS) : SEED_PLAYERS; }
+function setCustomPlayers(list) {
+  CUSTOM_PLAYERS.length = 0;
+  (Array.isArray(list) ? list : []).slice(0, CUSTOM_MAX).forEach(function(p) { if (p && p.id) CUSTOM_PLAYERS.push(p); });
+}
+function isCustomCard(pl) {
+  if (!pl) return false;
+  var k = pl.dbId || pl.id;
+  for (var i = 0; i < CUSTOM_PLAYERS.length; i++) if (CUSTOM_PLAYERS[i].id === k) return true;
+  return false;
+}
+function mergePl(userPl) {
+  if (!userPl) return null;
+  if (!userPl.dbId) return normPlayerSkills(userPl);
+  var seed = null;
+  var _dx = dexAll();
+  for (var i = 0; i < _dx.length; i++) { if (_dx[i].id === userPl.dbId) { seed = _dx[i]; break; } }
+  /* seed 못 찾으면 userPl 자체 반환 (name/cardType 등이 직접 저장돼 있으면 그대로 표시) */
+  if (!seed) return normPlayerSkills(userPl);
+  return normPlayerSkills(Object.assign({}, seed, {
+    id: userPl.id, dbId: userPl.dbId,
+    trainP: userPl.trainP||0, trainA: userPl.trainA||0, trainE: userPl.trainE||0, trainN: userPl.trainN||0,
+    trainC: userPl.trainC||0, trainS: userPl.trainS||0,
+    specPower: userPl.specPower||0, specAccuracy: userPl.specAccuracy||0, specEye: userPl.specEye||0, specPatience: userPl.specPatience||0,
+    specChange: userPl.specChange||0, specStuff: userPl.specStuff||0,
+    /* 값이 없는 기존 선수는 저장된 레벨을 지키기 위해 수동으로 본다.
+       신규 선수는 생성 시 sLvManual:false 로 만들어져 자동이 된다. */
+    /* 흰존·콜존은 최종적으로 도감(DB)에 들어갈 값이다.
+       도감 값을 기본으로 쓰고, 유저가 직접 넣은 값이 있으면 그것이 이긴다.
+       (유저 제보를 모아 도감에 정식 등재하는 절차는 추후 별도 진행) */
+    whiteZone: userPl.whiteZone !== undefined ? userPl.whiteZone : (seed.whiteZone || 0),
+    coldZone:  userPl.coldZone  !== undefined ? userPl.coldZone  : (seed.coldZone  || 0),
+    sLvManual: userPl.sLvManual === undefined ? true : !!userPl.sLvManual,
+    skill1: userPl.skill1||"", s1Lv: userPl.s1Lv||0,
+    skill2: userPl.skill2||"", s2Lv: userPl.s2Lv||0,
+    skill3: userPl.skill3||"", s3Lv: userPl.s3Lv||0,
+    enhance: userPl.enhance||"",
+    pot1: userPl.pot1||"", pot2: userPl.pot2||"", pot3: userPl.pot3||"",
+    potType1: userPl.potType1||"", potType2: userPl.potType2||"", potType3: userPl.potType3||"",
+    isFa: userPl.isFa||false,
+    isWildcard: userPl.isWildcard||false,
+    liveType: userPl.liveType||seed.liveType||"",
+    photoUrl: userPl.photoUrl||seed.photoUrl||"",
+    /* subPosition/position: 투수만 처리, 타자는 seed 값 그대로 */
+    subPosition: seed.role === "투수"
+      ? (userPl.subPosition || (seed.position === "마무리" ? "CP" : seed.position === "중계" ? "RP1" : "SP1"))
+      : (userPl.subPosition || seed.subPosition || ""),
+    position: seed.role === "투수"
+      ? (userPl.position || seed.position || "선발")
+      : (seed.position || ""),
+  }));
+}
 function normPlayerSkills(pl){
   if(!pl || !SKILL_DATA) return pl;
   if(!pl.skill1 && !pl.skill2 && !pl.skill3) return pl;
   /* 저장 줄에는 카드 종류·역할이 없을 수 있다 — 그때는 도감에서 본다 (mergePl 과 같은 기준) */
   var info = pl;
   if((!pl.cardType || !pl.role) && pl.dbId){
-    for(var i = 0; i < SEED_PLAYERS.length; i++){
-      if(SEED_PLAYERS[i].id === pl.dbId){
-        var sd = SEED_PLAYERS[i];
+    var _dx2 = dexAll();
+    for(var i = 0; i < _dx2.length; i++){
+      if(_dx2[i].id === pl.dbId){
+        var sd = _dx2[i];
         info = { cardType: pl.cardType || sd.cardType, role: pl.role || sd.role, position: pl.position || sd.position };
         break;
       }
@@ -1688,4 +1743,4 @@ function toDeckFormat(all, list, fallbackId) {
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
-export { __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, POTM_LIVE_STAT, POTM_OLSTAR, POTM_SPECIAL_STAT, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, hasPtSkill, ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME, skillCatOf, normPlayerSkills, normPlayerList, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, toDeckFormat, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, detectTeamBuffs, KBO_LEAGUE, KBO_TEAMS, sdSideOf, isSelTeam, sdLeagueOf, miTxt, statKey, entryStatKey, statDist, miRanked, matchOne, buildIndex, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, OLSTAR_SET_POINTS, NO_AWAKEN_CARDS, awakenScore, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS, SD_YEAR_ROWS, SD_TIE_SIDE, optimizeSetDeck };
+export { dexAll, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, POTM_LIVE_STAT, POTM_OLSTAR, POTM_SPECIAL_STAT, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, hasPtSkill, ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME, skillCatOf, normPlayerSkills, normPlayerList, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, toDeckFormat, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, detectTeamBuffs, KBO_LEAGUE, KBO_TEAMS, sdSideOf, isSelTeam, sdLeagueOf, miTxt, statKey, entryStatKey, statDist, miRanked, matchOne, buildIndex, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, OLSTAR_SET_POINTS, NO_AWAKEN_CARDS, awakenScore, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS, SD_YEAR_ROWS, SD_TIE_SIDE, optimizeSetDeck };

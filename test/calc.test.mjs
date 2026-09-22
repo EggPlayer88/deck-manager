@@ -8,7 +8,8 @@ import {
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills,
-  ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
+  ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME,
+  dexAll, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
   isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
 } from './calc-extract.mjs';
@@ -1848,6 +1849,27 @@ console.log('[도감 오타 이름] 2026-09-23 사용자 확인');
     .every((n) => canonPlayerName(n, '') === n) ? 1 : 0, 1);
   /* 홍성흔은 두산 포수와 롯데 지명타자 둘 다 있다 — 팀이 달라도 같은 이름으로 모인다 */
   eq('팀이 달라도 같은 이름', canonPlayerName('홍성훈', '두산') === canonPlayerName('홍성훈', '롯데') ? 1 : 0, 1);
+}
+
+console.log('');
+console.log('[직접 등록 카드] 2026-09-23 사용자 확인 — 계정에만 있고 계산은 도감 카드와 같다');
+{
+  const mine = { id: 'c1', custom: true, cardType: '임팩트', role: '타자', name: '홍길동', team: '키움',
+    subPosition: 'DH', power: 90, accuracy: 85, eye: 80, patience: 70, stars: 4 };
+  setCustomPlayers([mine]);
+  eq('도감 조회에 같이 들어간다', dexAll().some((p) => p.id === 'c1') ? 1 : 0, 1);
+  eq('직접 등록 카드로 알아본다', isCustomCard({ dbId: 'c1' }) && isCustomCard(mine) ? 1 : 0, 1);
+  eq('도감 카드는 아니라고 본다', isCustomCard({ dbId: '없는id' }) ? 1 : 0, 0);
+  /* 내 선수 줄이 dbId 로 가리키면 mergePl 이 능력치를 붙여 준다 — 이게 되면 아래 계산은 저절로 같다 */
+  const row = { id: 'p1', dbId: 'c1', name: '홍길동', cardType: '임팩트', role: '타자', subPosition: 'DH' };
+  const m = mergePl(row);
+  eq('mergePl 이 능력치를 붙인다', [m.power, m.accuracy, m.eye, m.patience].join() === '90,85,80,70' ? 1 : 0, 1);
+  eq('내 선수 줄의 id 는 지킨다', m.id === 'p1' && m.dbId === 'c1' ? 1 : 0, 1);
+  /* 상한 */
+  setCustomPlayers([1,2,3,4,5,6,7].map((n) => ({ id: 'x' + n, name: 'n' + n })));
+  eq('최대 ' + CUSTOM_MAX + '장까지만', dexAll().filter((p) => String(p.id).startsWith('x')).length, CUSTOM_MAX);
+  setCustomPlayers([]);
+  eq('비우면 도감만 남는다', dexAll().some((p) => p.id === 'c1') ? 1 : 0, 0);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);

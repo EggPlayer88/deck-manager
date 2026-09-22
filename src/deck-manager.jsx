@@ -34,6 +34,22 @@ var saveGlobalPotmList = _SB.saveGlobalPotmList || function(){ return Promise.re
    ================================================================ */
 var KBO_TEAMS = ["키움","삼성","LG","두산","KT","SSG","롯데","한화","NC","기아"];
 var SEED_PLAYERS = [];
+/* 유저가 직접 등록한 카드 — 그 계정에서만 보이고, 계산은 도감 카드와 완전히 같다.
+   갈래를 만들지 않으려고 카드 조회는 전부 dexAll() 하나로 모았다 (2026-09-23 사용자 확인).
+   mergePl 이 이걸 보면 그 아래 계산(세트덱·선택 팀·군·셋포·POTM·시너지)은 저절로 같아진다 */
+var CUSTOM_PLAYERS = [];
+var CUSTOM_MAX = 5;
+function dexAll() { return CUSTOM_PLAYERS.length ? SEED_PLAYERS.concat(CUSTOM_PLAYERS) : SEED_PLAYERS; }
+function setCustomPlayers(list) {
+  CUSTOM_PLAYERS.length = 0;
+  (Array.isArray(list) ? list : []).slice(0, CUSTOM_MAX).forEach(function(p) { if (p && p.id) CUSTOM_PLAYERS.push(p); });
+}
+function isCustomCard(pl) {
+  if (!pl) return false;
+  var k = pl.dbId || pl.id;
+  for (var i = 0; i < CUSTOM_PLAYERS.length; i++) if (CUSTOM_PLAYERS[i].id === k) return true;
+  return false;
+}
 var PHOTO_CACHE = {};
 var PHOTO_POS_MAP = {}; /* {선수이름: 위치(0~100)} - 관리자 설정, 전역 적용 */
 
@@ -106,7 +122,8 @@ function mergePl(userPl) {
   if (!userPl) return null;
   if (!userPl.dbId) return normPlayerSkills(userPl);
   var seed = null;
-  for (var i = 0; i < SEED_PLAYERS.length; i++) { if (SEED_PLAYERS[i].id === userPl.dbId) { seed = SEED_PLAYERS[i]; break; } }
+  var _dx = dexAll();
+  for (var i = 0; i < _dx.length; i++) { if (_dx[i].id === userPl.dbId) { seed = _dx[i]; break; } }
   /* seed 못 찾으면 userPl 자체 반환 (name/cardType 등이 직접 저장돼 있으면 그대로 표시) */
   if (!seed) return normPlayerSkills(userPl);
   return normPlayerSkills(Object.assign({}, seed, {
@@ -469,9 +486,10 @@ function normPlayerSkills(pl){
   /* 저장 줄에는 카드 종류·역할이 없을 수 있다 — 그때는 도감에서 본다 (mergePl 과 같은 기준) */
   var info = pl;
   if((!pl.cardType || !pl.role) && pl.dbId){
-    for(var i = 0; i < SEED_PLAYERS.length; i++){
-      if(SEED_PLAYERS[i].id === pl.dbId){
-        var sd = SEED_PLAYERS[i];
+    var _dx2 = dexAll();
+    for(var i = 0; i < _dx2.length; i++){
+      if(_dx2[i].id === pl.dbId){
+        var sd = _dx2[i];
         info = { cardType: pl.cardType || sd.cardType, role: pl.role || sd.role, position: pl.position || sd.position };
         break;
       }
@@ -1026,6 +1044,8 @@ function useData(userId, sdState, setSdState, curDeckId){
   var _lm=useState({});var lineupMap=_lm[0];var setLineupMap=_lm[1];
   var _sk=useState(DEFAULT_SKILLS);var skills=_sk[0];var setSkills=_sk[1];
   var _pt=useState([]);var potmList=_pt[0];var setPotmListState=_pt[1];
+  /* 직접 등록 카드 — 덱이 아니라 계정에 붙는다 (덱을 바꿔도 그대로 쓴다) */
+  var _cd=useState([]);var customDex=_cd[0];var setCustomDexState=_cd[1];
   var _lo=useState(true);var loading=_lo[0];var setLoading=_lo[1];
   var uidRef=React.useRef(userId);uidRef.current=userId;
   var deckIdRef=React.useRef(curDeckId);deckIdRef.current=curDeckId;
@@ -1047,6 +1067,21 @@ function useData(userId, sdState, setSdState, curDeckId){
       return { players: all.players||[], lineupMap: all.lineupMap||{}, sdConfig: all.sdConfig||{liveSetPo:0} };
     }
     return all.decks[deckId] || null;
+  };
+
+  /* 직접 등록 카드 저장 — sd_state 뿌리에 둔다 (deckList·decks 와 같은 층) */
+  var saveCustomDex = async function(list) {
+    var arr = (Array.isArray(list) ? list : []).slice(0, CUSTOM_MAX);
+    setCustomPlayers(arr);          /* 화면과 계산에 즉시 반영 */
+    setCustomDexState(arr);
+    var uid = uidRef.current;
+    if (!supabase || !uid) { await sSet("deck-custom-dex", arr); return true; }
+    var all = allDataRef.current;
+    if (!all) { all = await loadUserData(uid) || {}; allDataRef.current = all; }
+    all.customDex = arr;
+    allDataRef.current = all;
+    await saveUserData(uid, all);
+    return true;
   };
 
   /* 저장: 캐시 사용 → 쓰기 1번만 */
@@ -1084,6 +1119,10 @@ function useData(userId, sdState, setSdState, curDeckId){
         } else {
           setPlayers([]); setLineupMap({}); setSdState({liveSetPo:0});
         }
+        /* 직접 등록 카드 — 계정 것이라 덱을 바꿔도 다시 읽지 않아도 되지만,
+           allDataRef 가 새로 채워질 때마다 맞춰 둔다 */
+        var cdx = (allDataRef.current && allDataRef.current.customDex) || [];
+        setCustomPlayers(cdx); setCustomDexState(cdx.slice(0, CUSTOM_MAX));
         /* 선수도감/스킬: 로그인 후 딱 1번만 로드 */
         if(!globalLoadedRef.current){
           globalLoadedRef.current = true;
@@ -1098,6 +1137,8 @@ function useData(userId, sdState, setSdState, curDeckId){
           setPotmListState(GLOBAL_POTM_LIST);
         }
       } else {
+        var cdxL = await sGet("deck-custom-dex");
+        setCustomPlayers(cdxL || []); setCustomDexState((cdxL || []).slice(0, CUSTOM_MAX));
         var ver=await sGet(SK.version);var needReset=(!ver||ver<DATA_VERSION);
         if(needReset){await sSet(SK.version,DATA_VERSION);}
         var p2=await sGet("deck-players-"+curDeckId);
@@ -1180,7 +1221,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     }
   },[]);
 
-  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
+  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
 }
 
 /* ================================================================
@@ -3134,7 +3175,7 @@ function parseManagerWorkbook(wb) {
 
   var origin = sheetOrigin(wb.Sheets[sn]);
   var entries = readStore(grid, hB, true, origin).concat(readStore(grid, hP, false, origin));
-  var index = buildIndex(SEED_PLAYERS);
+  var index = buildIndex(dexAll());
   entries.forEach(function (e) {
     var m = matchOne(e, index);
     e.match = m.rec; e.how = m.how; e.candidates = m.candidates || null;
@@ -6000,6 +6041,71 @@ function MyPlayersPage(p) {
   var _sel = useState(null); var selId = _sel[0]; var setSelId = _sel[1];
   var _filter = useState("타자"); var filter = _filter[0]; var setFilter = _filter[1];
   var _addOpen = useState(false); var addOpen = _addOpen[0]; var setAddOpen = _addOpen[1];
+  /* 직접 등록 — 도감에 없는 카드를 유저가 만든다. 계정에 최대 CUSTOM_MAX 장 */
+  var _cdOpen = useState(false); var cdOpen = _cdOpen[0]; var setCdOpen = _cdOpen[1];
+  var _cdForm = useState(null); var cdForm = _cdForm[0]; var setCdForm = _cdForm[1];
+  var _cdMsg = useState(""); var cdMsg = _cdMsg[0]; var setCdMsg = _cdMsg[1];
+  var myDex = Array.isArray(p.customDex) ? p.customDex : [];
+  var saveMyDex = p.saveCustomDex || function(){ return Promise.resolve(false); };
+  var cdUUID = function(){ return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c){
+    var r = Math.random()*16|0; return (c === "x" ? r : (r&0x3|0x8)).toString(16); }); };
+  var cdBlank = function(role, nm) {
+    var b = { id: cdUUID(), custom: true, cardType: "임팩트", role: role, name: nm || "",
+      year: "", team: "", hand: "우", stars: 4 };
+    if (role === "타자") Object.assign(b, { subPosition: "DH", power: 0, accuracy: 0, eye: 0, patience: 0,
+      running: 0, defense: 0, launchAngle: 0, whiteZone: 0, coldZone: 0, hotColdZone: 0 });
+    else Object.assign(b, { position: "선발", subPosition: "SP1", change: 0, stuff: 0, speed: 0,
+      control: 0, stamina: 0, defense: 0 });
+    return b;
+  };
+  var cdUf = function(k, v) { setCdForm(function(prev){ var c = Object.assign({}, prev); c[k] = v; return c; }); };
+  var cdOpenNew = function(nm) {
+    if (myDex.length >= CUSTOM_MAX) { setCdMsg("직접 등록은 " + CUSTOM_MAX + "장까지입니다. 아래 목록에서 하나를 지우고 만들어 주세요."); }
+    else setCdMsg("");
+    setCdForm(cdBlank("타자", nm || "")); setAddOpen(false); setCdOpen(true);
+  };
+  var cdEdit = function(c) { setCdMsg(""); setCdForm(Object.assign({}, c)); setCdOpen(true); };
+  var cdDel = function(c) {
+    var used = players.filter(function(x){ return x.dbId === c.id; });
+    var warn = "'" + (c.name || "이름 없음") + "' 을(를) 직접 등록 목록에서 지웁니다."
+      + (used.length ? "\n\n이 덱의 " + used.map(function(x){return x.name;}).join(", ") + " 은(는) 그대로 남고 값도 유지됩니다." : "")
+      + "\n다른 덱에서 쓰고 있어도 그 선수는 그대로 남습니다.";
+    if (!window.confirm(warn)) return;
+    saveMyDex(myDex.filter(function(x){ return x.id !== c.id; }));
+  };
+  /* 만든 카드를 바로 내 선수에 넣는다 — 도감 추가와 같은 모양으로.
+     직접 등록 카드는 능력치도 같이 박아 둔다. 나중에 목록에서 지워도 선수가 안 깨진다 */
+  var cdAddToRoster = function(src) {
+    var id2 = "p" + Date.now() + "_" + Math.random().toString(36).slice(2,5);
+    var np = { id: id2, dbId: src.id, name: src.name, cardType: src.cardType,
+      role: src.role || "", position: src.position || "",
+      subPosition: src.subPosition || (src.role === "타자" ? "DH" : "SP1"),
+      year: src.year || "", team: src.team || "", liveType: src.liveType || "",
+      impactType: src.impactType || "", hand: src.hand || "우", stars: src.stars || 4,
+      sLvManual: false,
+      trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0,
+      specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0,
+      skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
+      enhance: "9각성", pot1: "", pot2: "", isFa: false, isWildcard: false };
+    ["power","accuracy","eye","patience","running","defense","launchAngle","whiteZone","coldZone",
+     "change","stuff","speed","control","stamina","setScore"].forEach(function(k){
+      if (src[k] !== undefined) np[k] = src[k];
+    });
+    save(players.concat([np]));
+    setSelId(id2);
+  };
+  var cdSave = function() {
+    var f = cdForm; if (!f) return;
+    if (!String(f.name || "").trim()) { setCdMsg("이름을 넣어 주세요."); return; }
+    var editing = myDex.some(function(x){ return x.id === f.id; });
+    if (!editing && myDex.length >= CUSTOM_MAX) { setCdMsg("직접 등록은 " + CUSTOM_MAX + "장까지입니다."); return; }
+    var card = Object.assign({}, f, { custom: true, name: String(f.name).trim() });
+    if (f.role !== "타자") card.subPosition = f.position === "마무리" ? "CP" : f.position === "중계" ? "RP1" : "SP1";
+    var next = editing ? myDex.map(function(x){ return x.id === card.id ? card : x; }) : myDex.concat([card]);
+    saveMyDex(next);
+    setCdOpen(false); setCdForm(null); setCdMsg("");
+    if (!editing) cdAddToRoster(card);
+  };
   var _addQuery = useState(""); var addQuery = _addQuery[0]; var setAddQuery = _addQuery[1];
   /* 도감 검색 — 칩 필터와 보여줄 줄 수. 조건이 바뀌면 다시 위에서부터 본다. */
   var _addType = useState(""); var addType = _addType[0]; var setAddType = _addType[1];
@@ -6008,8 +6114,8 @@ function MyPlayersPage(p) {
   var _addLimit = useState(40); var addLimit = _addLimit[0]; var setAddLimit = _addLimit[1];
   /* 검색 인덱스는 창을 열 때 한 번만 만든다. 도감이 갱신되면 길이가 달라져 다시 만들어진다. */
   var dexIndex = useMemo(function () {
-    return addOpen ? buildDexIndex(SEED_PLAYERS, getW()) : [];
-  }, [addOpen, SEED_PLAYERS.length]);
+    return addOpen ? buildDexIndex(dexAll(), getW()) : [];
+  }, [addOpen, SEED_PLAYERS.length, CUSTOM_PLAYERS.length, p.customDex]);
   /* 글자를 칠 때 다시 도는 건 여기까지다. 화면에 그리는 줄은 addLimit 으로 끊는다. */
   var dexHits = useMemo(function () {
     return addOpen ? dexSearch(dexIndex, filter, addQuery, addType, addTeam) : [];
@@ -6089,7 +6195,7 @@ function MyPlayersPage(p) {
     var snapData = { players: players, lineupMap: lm, sdState: sdState };
     await saveDeckSnapshot(curDeckId, "시트 가져오기 전", snapData);
     setSnap({ ts: Date.now(), label: "시트 가져오기 전", data: snapData });
-    var byId = {}; SEED_PLAYERS.forEach(function(sp) { byId[sp.id] = sp; });
+    var byId = {}; dexAll().forEach(function(sp) { byId[sp.id] = sp; });
     var made = [], nameToId = {}, stamp = Date.now();
     R.entries.forEach(function(en, idx) {
       var dbId = R.picks[en.row] || "";
@@ -6370,6 +6476,7 @@ function MyPlayersPage(p) {
           {/* Name */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <Badge type={pl.cardType} />
+            {isCustomCard(pl) && (<span title="직접 등록한 카드입니다 (내 계정에만 있음)" style={{ fontSize: 9, fontWeight: 800, color: "#FFD54F", background: "rgba(255,213,79,0.12)", border: "1px solid rgba(255,213,79,0.35)", borderRadius: 3, padding: "0 3px" }}>{"직접"}</span>)}
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
                 <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span>
@@ -6631,7 +6738,7 @@ function MyPlayersPage(p) {
         var needPick = ents.filter(function(e) { return !impPrev.picks[e.row]; });
         var okCnt = ents.length - needPick.length;
         var imps = ents.filter(function(e) { return e.match && e.match.cardType === "임팩트"; });
-        var byId = {}; SEED_PLAYERS.forEach(function(sp) { byId[sp.id] = sp; });
+        var byId = {}; dexAll().forEach(function(sp) { byId[sp.id] = sp; });
         var byIdEnt = function(e) { return byId[impPrev.picks[e.row]] || e.match || null; };
         /* 국가대표 전용 스킬이 국대가 아닌 카드에 적혀 있으면 시트 쪽 실수다 — 지우지 않고 알려만 준다 */
         var natBad = [];
@@ -6814,10 +6921,20 @@ function MyPlayersPage(p) {
               </div>
 
               <div style={{ overflowY: "auto", flex: 1 }}>
+                {/* 결과가 있어도 직접 등록으로 갈 수 있게 — 목록 맨 아래 한 줄 */}
                 {shown.length === 0 ? (
                   <div style={{ padding: "28px 18px", textAlign: "center", color: "var(--td)", fontSize: 14, lineHeight: 1.6 }}>
                     {dexIndex.length === 0 ? "도감을 불러오는 중입니다." : "찾는 카드가 없습니다."}
                     {dexIndex.length > 0 && (<div style={{ fontSize: 12, marginTop: 6 }}>{"검색어나 칩을 바꿔 보세요."}</div>)}
+                    {dexIndex.length > 0 && (
+                      <button onClick={function(){ cdOpenNew(addQuery); }}
+                        title="도감에 없는 카드를 직접 만듭니다. 내 계정에만 저장됩니다"
+                        style={{ marginTop: 14, padding: "8px 16px", fontSize: 13, fontWeight: 700,
+                          background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6,
+                          color: "#1a1a1a", cursor: "pointer" }}>
+                        {"+ 직접 등록"}
+                      </button>)}
+                    {dexIndex.length > 0 && (<div style={{ fontSize: 11, marginTop: 6 }}>{"도감에 없는 카드를 직접 만듭니다 (" + myDex.length + "/" + CUSTOM_MAX + ")"}</div>)}
                   </div>
                 ) : shown.map(function(e) {
                   var sp = e.sp;
@@ -6828,6 +6945,7 @@ function MyPlayersPage(p) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
                           <Badge type={sp.cardType} />
+                          {sp.custom && (<span title="직접 등록한 카드입니다 (내 계정에만 있음)" style={{ fontSize: 9, fontWeight: 800, color: "#FFD54F", background: "rgba(255,213,79,0.12)", border: "1px solid rgba(255,213,79,0.35)", borderRadius: 3, padding: "0 3px" }}>{"직접"}</span>)}
                           <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 15 }}>{sp.name}</span>
                           {sp.year && (<span style={{ fontSize: 11, color: "var(--td)" }}>{sp.year}</span>)}
                           {sp.cardType === "임팩트" && sp.impactType && (<span style={{ fontSize: 11, color: "#a78bfa", marginLeft: 2 }}>{"(" + sp.impactType + ")"}</span>)}
@@ -6848,10 +6966,99 @@ function MyPlayersPage(p) {
                   </button>
                 )}
               </div>
+              {shown.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                    padding: "10px 18px", borderTop: "1px solid var(--bd)", background: "var(--inner)" }}>
+                    <span style={{ fontSize: 12, color: "var(--td)" }}>{"찾는 카드가 없나요?"}</span>
+                    <button onClick={function(){ cdOpenNew(addQuery); }}
+                      title="도감에 없는 카드를 직접 만듭니다. 내 계정에만 저장됩니다"
+                      style={{ padding: "5px 12px", fontSize: 12, fontWeight: 700, background: "var(--card)",
+                        border: "1px solid rgba(255,213,79,0.4)", borderRadius: 5, color: "var(--acc)", cursor: "pointer", whiteSpace: "nowrap" }}>
+                      {"+ 직접 등록 " + myDex.length + "/" + CUSTOM_MAX}
+                    </button>
+                </div>)}
             </div>
           </div>
         );
       })()}
+
+      {/* 직접 등록 — 도감에 없는 카드를 유저가 만든다. 계정에만 저장되고 계산은 도감 카드와 같다 */}
+      {cdOpen && cdForm && (
+        <div onClick={function(){ setCdOpen(false); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={function(e){ e.stopPropagation(); }} style={{ background: "var(--card)", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 560, width: "100%", maxHeight: "88vh", overflow: "auto" }}>
+            <div style={{ padding: "14px 18px 10px", borderBottom: "1px solid var(--bd)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"직접 등록"}</div>
+                <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>
+                  {"내 계정에만 저장됩니다. 계산은 도감 카드와 똑같이 됩니다 (" + myDex.length + "/" + CUSTOM_MAX + ")"}
+                </div>
+              </div>
+              <button onClick={function(){ setCdOpen(false); }} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18 }}>{"\u2715"}</button>
+            </div>
+            <div style={{ padding: "12px 18px" }}>
+              {cdMsg && (<div style={{ fontSize: 12, color: "#FF8A80", marginBottom: 8 }}>{cdMsg}</div>)}
+              <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "1fr 1fr 1fr", gap: 8 }}>
+                <Inp label="카드 종류" type="select" value={cdForm.cardType} onChange={function(v){ cdUf("cardType", v); }}
+                  options={CARD_TYPES} />
+                <Inp label="역할" type="select" value={cdForm.role} onChange={function(v){
+                  setCdForm(Object.assign(cdBlank(v, cdForm.name), { cardType: cdForm.cardType, team: cdForm.team, year: cdForm.year, hand: cdForm.hand, id: cdForm.id })); }}
+                  options={["타자", "투수"]} />
+                <Inp label="이름" value={cdForm.name} onChange={function(v){ cdUf("name", v); }} ph="선수 이름" />
+                <Inp label="팀" type="select" value={cdForm.team || ""} onChange={function(v){ cdUf("team", v); }} options={[""].concat(KBO_TEAMS)} />
+                <Inp label="연도" value={cdForm.year || ""} onChange={function(v){ cdUf("year", v); }} ph="2026" />
+                <Inp label="손잡이" type="select" value={cdForm.hand} onChange={function(v){ cdUf("hand", v); }} options={["우", "좌", "양"]} />
+                <Inp label="별" type="select" value={String(cdForm.stars || 4)} onChange={function(v){ cdUf("stars", parseInt(v)); }} options={["1","2","3","4","5"]} />
+                {cdForm.role === "타자"
+                  ? (<Inp label="포지션" type="select" value={cdForm.subPosition || "DH"} onChange={function(v){ cdUf("subPosition", v); }} options={BAT_POS} />)
+                  : (<Inp label="역할(투수)" type="select" value={cdForm.position || "선발"} onChange={function(v){ cdUf("position", v); }} options={["선발", "중계", "마무리"]} />)}
+                {cdForm.cardType === "임팩트" && (<Inp label="임팩트 종류" value={cdForm.impactType || ""} onChange={function(v){ cdUf("impactType", v); }} ph="예: 소방수" />)}
+                {cdForm.cardType === "라이브" && (<Inp label="세트덱 스코어" type="number" value={cdForm.setScore || 0} onChange={function(v){ cdUf("setScore", parseInt(v) || 0); }} />)}
+                {cdForm.cardType === "라이브" && (<Inp label="라이브 종류" type="select" value={cdForm.liveType || ""} onChange={function(v){ cdUf("liveType", v); }} options={["", "V1", "V2"]} />)}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--td)", margin: "6px 0 4px", fontWeight: 700 }}>{"능력치"}</div>
+              <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 8 }}>
+                {(cdForm.role === "타자"
+                  ? [["파워","power"],["정확","accuracy"],["선구","eye"],["인내","patience"],["주루","running"],["수비","defense"],["발사각","launchAngle"],["흰존","whiteZone"],["콜존","coldZone"]]
+                  : [["변화","change"],["구위","stuff"],["구속","speed"],["제구","control"],["지구력","stamina"],["수비","defense"]]
+                ).map(function(f) {
+                  return (<Inp key={f[1]} label={f[0]} type="number" value={cdForm[f[1]] || 0}
+                    onChange={function(v){ cdUf(f[1], parseInt(v) || 0); }} />);
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <button onClick={cdSave} style={{ flex: 1, padding: "9px", fontSize: 14, fontWeight: 800,
+                  background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6, color: "#1a1a1a", cursor: "pointer" }}>
+                  {myDex.some(function(x){ return x.id === cdForm.id; }) ? "고치기" : "만들고 내 선수에 넣기"}
+                </button>
+                <button onClick={function(){ setCdOpen(false); }} style={{ padding: "9px 14px", fontSize: 13, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t2)", cursor: "pointer" }}>{"닫기"}</button>
+              </div>
+            </div>
+            {myDex.length > 0 && (
+              <div style={{ borderTop: "1px solid var(--bd)" }}>
+                <div style={{ padding: "8px 18px 4px", fontSize: 12, color: "var(--td)", fontWeight: 700 }}>{"내가 만든 카드 " + myDex.length + "/" + CUSTOM_MAX}</div>
+                {myDex.map(function(c) {
+                  return (
+                    <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 18px", borderTop: "1px solid var(--bd)" }}>
+                      <Badge type={c.cardType} />
+                      <span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 14 }}>{c.name || "(이름 없음)"}</span>
+                      <span style={{ fontSize: 11, color: "var(--td)" }}>
+                        {[c.team || "-", c.year || "", c.role === "타자" ? (c.subPosition || "") : (c.position || "")].filter(Boolean).join(" · ")}
+                      </span>
+                      <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                        <button onClick={function(){ cdEdit(c); }} style={{ padding: "3px 8px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--t2)", cursor: "pointer" }}>{"고치기"}</button>
+                        <button onClick={function(){ cdDel(c); }} style={{ padding: "3px 8px", fontSize: 11, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: "#FF8A80", cursor: "pointer" }}>{"지우기"}</button>
+                      </span>
+                    </div>
+                  );
+                })}
+                <div style={{ padding: "6px 18px 12px", fontSize: 11, color: "var(--td)" }}>
+                  {"지워도 이미 내 선수에 넣은 카드는 그대로 남습니다."}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", overflow: "hidden" }}>
         {/* Header */}
@@ -8894,7 +9101,7 @@ export default function App(){
 
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId}/>);
-  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
+  else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} customDex={store.customDex} saveCustomDex={store.saveCustomDex} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} potmList={store.potmList} setPotmList={store.savePotmList} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
