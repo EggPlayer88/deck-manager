@@ -1225,6 +1225,126 @@ function useData(userId, sdState, setSdState, curDeckId){
   return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
 }
 
+/* ── 전력공유 ─────────────────────────────────────────────────
+   덱 한 장을 1080x1920 그림으로 그려 내려받는다. 화면을 캡처하지 않고
+   캔버스에 직접 그려서, 창 크기·테마·기기와 상관없이 늘 같은 그림이 나온다.
+   (2026-09-23 사용자 확인 — 한 줄 상세형, 잠재력은 풀스윙/장타억제 + 각성) */
+var SHARE_W = 1080, SHARE_H = 1920;
+/* 한 줄 높이 — 타자 9 + 투수 12 = 21 줄이 들어가고 아래에 꼬리 자리가 남는 값 */
+var SHARE_ROW = 62;
+var SHARE_CT = { "골든글러브": "골글", "시그니처": "시그", "임팩트": "임팩",
+  "국가대표": "국대", "라이브": "라이브", "올스타": "올스타", "시즌": "시즌" };
+var SHARE_COL = { bg: "#12161f", line: "#1e2634", rule: "#2a3344",
+  t1: "#e8edf5", t2: "#8fa0b8", stat: "#b9c6d8", score: "#FFD54F", skill: "#7FD4FF", pot: "#FF80AB" };
+/* 잠재력 표기 — 풀스윙(투수는 장타억제)과 각성만. 클러치·침착은 뺀다 */
+function sharePot(pl) {
+  if (!pl) return "";
+  var a = pl.pot1 || "";
+  var b = (pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType]) ? pl.pot3 : "";
+  return b ? (a + " " + b) : a;
+}
+function shareCardName(ct) { return SHARE_CT[ct] || ct || ""; }
+
+function drawShareCanvas(d) {
+  var cv = document.createElement("canvas");
+  cv.width = SHARE_W; cv.height = SHARE_H;
+  var x = cv.getContext("2d");
+  var F = function(sz, w) { return (w || 400) + " " + sz + "px 'Noto Sans KR', sans-serif"; };
+  x.fillStyle = SHARE_COL.bg; x.fillRect(0, 0, SHARE_W, SHARE_H);
+  x.textBaseline = "alphabetic";
+  var PAD = 44, R = SHARE_W - PAD;
+
+  /* 머리 */
+  x.fillStyle = SHARE_COL.t1; x.font = F(54, 500); x.textAlign = "left";
+  x.fillText(d.team || "내 덱", PAD, 104);
+  x.fillStyle = SHARE_COL.t2; x.font = F(24);
+  x.fillText(d.sub || "", PAD, 142);
+  x.textAlign = "right";
+  x.fillStyle = SHARE_COL.t2; x.font = F(20); x.fillText("TOTAL SCORE", R, 76);
+  x.fillStyle = SHARE_COL.score; x.font = F(66, 500); x.fillText(d.total, R, 140);
+  x.fillStyle = SHARE_COL.rule; x.fillRect(PAD, 166, R - PAD, 2);
+
+  /* 열 자리 — 타자와 투수가 같은 자리를 쓴다 */
+  var cName = 176, cStat = 430, cSk = 742, cPot = 828, cSc = R;
+  var statW = 74;
+
+  var head = function(y, first, statLabs) {
+    x.font = F(20); x.fillStyle = SHARE_COL.t2;
+    x.textAlign = "left"; x.fillText(first, PAD, y); x.fillText("선수", cName, y);
+    x.textAlign = "center";
+    statLabs.forEach(function(L, i) { x.fillText(L, cStat + statW * i + statW / 2, y); });
+    x.fillText("스킬", cSk + 30, y); x.fillText("잠재", cPot + 78, y);
+    x.textAlign = "right"; x.fillText("점수", cSc, y);
+    x.fillStyle = SHARE_COL.line; x.fillRect(PAD, y + 10, R - PAD, 1);
+  };
+  var line = function(y, left, p) {
+    x.textAlign = "left"; x.font = F(24); x.fillStyle = SHARE_COL.t2;
+    x.fillText(left, PAD, y);
+    x.fillStyle = SHARE_COL.t1; x.font = F(27);
+    x.fillText(p.name, cName, y);
+    var w = x.measureText(p.name).width;
+    x.font = F(20); x.fillStyle = CARD_COLORS[p.ct] || SHARE_COL.t2;
+    x.fillText(shareCardName(p.ct), cName + w + 9, y);
+    x.textAlign = "center"; x.font = F(24); x.fillStyle = SHARE_COL.stat;
+    p.vals.forEach(function(v, i) { x.fillText(String(v), cStat + statW * i + statW / 2, y); });
+    x.fillStyle = SHARE_COL.skill; x.fillText(String(p.sk), cSk + 30, y);
+    x.font = F(21); x.fillStyle = SHARE_COL.pot; x.fillText(p.pot, cPot + 78, y);
+    x.textAlign = "right"; x.font = F(27, 500); x.fillStyle = SHARE_COL.score;
+    x.fillText(String(p.score), cSc, y);
+    x.fillStyle = SHARE_COL.line; x.fillRect(PAD, y + 13, R - PAD, 1);
+  };
+
+  var y = 212;
+  x.textAlign = "left"; x.font = F(22, 500); x.fillStyle = SHARE_COL.t2;
+  x.fillText("타선", PAD, y); y += 34;
+  head(y, "타순", ["파", "정", "선", "인"]); y += 46;
+  d.bats.forEach(function(p) { line(y, p.left, p); y += SHARE_ROW; });
+
+  y += 26;
+  x.textAlign = "left"; x.font = F(22, 500); x.fillStyle = SHARE_COL.t2;
+  x.fillText("마운드", PAD, y); y += 34;
+  head(y, "자리", ["변화", "구위", "", ""]); y += 46;
+  d.pits.forEach(function(p) { line(y, p.left, p); y += SHARE_ROW; });
+
+  /* 꼬리 — 카드 종류 범례와 팀 버프 */
+  var fy = SHARE_H - 92;
+  x.fillStyle = SHARE_COL.rule; x.fillRect(PAD, fy - 36, R - PAD, 2);
+  x.textAlign = "left"; x.font = F(21);
+  var lx = PAD;
+  ["골든글러브", "시그니처", "임팩트", "국가대표", "라이브", "올스타"].forEach(function(ct) {
+    x.fillStyle = CARD_COLORS[ct] || SHARE_COL.t2;
+    var t = shareCardName(ct);
+    x.fillText(t, lx, fy);
+    lx += x.measureText(t).width + 22;
+  });
+  if (d.buff) { x.textAlign = "right"; x.fillStyle = SHARE_COL.t2; x.fillText(d.buff, R, fy); }
+  x.textAlign = "left"; x.font = F(19); x.fillStyle = SHARE_COL.t2;
+  x.fillText("컴투스 프로야구 v26 덱 매니저", PAD, fy + 40);
+  return cv;
+}
+
+/* 그려서 내려받는다. 파일 이름은 구단과 날짜로 */
+function downloadShareImage(d) {
+  var go = function() {
+    var cv = drawShareCanvas(d);
+    var name = "전력_" + (d.team || "내덱") + "_" + new Date().toISOString().slice(0, 10) + ".png";
+    if (cv.toBlob) {
+      cv.toBlob(function(b) {
+        if (!b) { alert("이미지를 만들지 못했습니다."); return; }
+        var url = URL.createObjectURL(b);
+        var a = document.createElement("a"); a.href = url; a.download = name;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
+      }, "image/png");
+    } else {
+      var a2 = document.createElement("a"); a2.href = cv.toDataURL("image/png"); a2.download = name; a2.click();
+    }
+  };
+  /* 글꼴이 다 실리기 전에 그리면 네모로 나온다 */
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(go).catch(go);
+  else go();
+}
+
 /* ================================================================
    UI COMPONENTS
    ================================================================ */
@@ -4111,6 +4231,45 @@ function LineupPage(p) {
     );
   };
 
+  /* 전력공유 — 지금 라인업을 1080x1920 그림으로 뽑는다.
+     화면에 보이는 값 그대로 쓴다 (고점판독 중이면 고점 값이 나간다) */
+  var shareNow = function() {
+    var bats = batOrder.map(function(sl, i) {
+      var pl = pick(sl); if (!pl) return null;
+      var c = calcBatSD(pl, sl);
+      return { left: String(i + 1) + "번 " + sl, name: pl.name, ct: pl.cardType,
+        vals: [c.power, c.accuracy, c.eye, c.patience], sk: c.skillScore,
+        pot: sharePot(pl), score: c.total.toFixed(1) };
+    }).filter(Boolean);
+    var pits = SP_SLOTS.concat(["CP"]).concat(RP_SLOTS).map(function(sl) {
+      var pl = pick(sl); if (!pl) return null;
+      var c = calcPitSD(pl, sl);
+      return { left: sl, name: pl.name, ct: pl.cardType, vals: [c.change, c.stuff, "", ""],
+        sk: c.skillScore, pot: sharePot(pl), score: c.total.toFixed(1) };
+    }).filter(Boolean);
+    if (!bats.length && !pits.length) { alert("라인업에 선수를 먼저 넣어 주세요."); return; }
+    var yb = sdSideOf(sdPick(sdState, 185)).year || sdSideOf(sdPick(sdState, 75)).year || "";
+    var bpc = BPC[sdState.bpcIdx === undefined ? 4 : sdState.bpcIdx] || BPC[4];
+    var sub = [(yb ? yb + " 연도덱" : ""), "셋포 " + totalSP,
+      rpTactic(sdState) + " " + bpc.label].filter(Boolean).join(" · ");
+    var bf = [];
+    if (sdCalc.natBat && sdCalc.natBat !== "없음") bf.push("국대에이스(타) " + sdCalc.natBat);
+    if (sdCalc.natPit && sdCalc.natPit !== "없음") bf.push("국대에이스(투) " + sdCalc.natPit);
+    if (sdCalc.catchLead && sdCalc.catchLead !== "없음") bf.push("포수리드 " + sdCalc.catchLead);
+    downloadShareImage({ team: sdState.teamName || "내 덱", sub: sub + (peakOn ? " · 고점판독" : ""),
+      total: totalScore.toFixed(1), bats: bats, pits: pits, buff: bf.join(" · ") });
+  };
+  var shareBtn = (
+    <button onClick={shareNow} title="지금 라인업을 1080x1920 그림으로 내려받습니다 (커뮤니티 전력공유용)"
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: mob ? "5px 9px" : "6px 12px",
+        fontSize: mob ? 12 : 13, fontWeight: 800,
+        background: "linear-gradient(135deg,rgba(126,231,255,0.15),rgba(56,189,248,0.08))",
+        border: "1px solid rgba(126,231,255,0.35)", borderRadius: 8,
+        color: "#7FD4FF", cursor: "pointer", fontFamily: "var(--h)", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+      <span aria-hidden="true" style={{ fontSize: mob ? 13 : 14 }}>{"\uD83D\uDCE4"}</span>{"전력공유"}
+    </button>
+  );
+
   /* 고점판독기 버튼 — PC 는 TOTAL SCORE 왼쪽, 모바일은 덱 선택 줄 오른쪽 끝.
      켜져 있는 동안은 "현실로 돌아오기" 가 된다 */
   var peakBtn = (
@@ -4132,12 +4291,13 @@ function LineupPage(p) {
         <div style={mob ? { width: "100%" } : undefined}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <DeckDropdown decks={p.decks||[]} curDeckId={p.curDeckId} onSwitch={p.onSwitchDeck} onAdd={p.onAddDeck} onDelete={p.onDeleteDeck} onChangeTeam={p.onChangeTeam}/>
-            {mob && (<div style={{ marginLeft: "auto" }}>{peakBtn}</div>)}
+            {mob && (<div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>{shareBtn}{peakBtn}</div>)}
           </div>
           <p title={"가중치 — 파워 " + wNow.p + " / 정확 " + wNow.a + " / 선구 " + wNow.e + " / 인내 " + wNow.n + " / 변화 " + wNow.c + " / 구위 " + wNow.s}
             style={{ margin: "2px 0 0", fontSize: 12, color: "var(--td)" }}>{"가중치: 파 " + wNow.p + " / 정 " + wNow.a + " / 선 " + wNow.e + " / 인 " + wNow.n + " / 변 " + wNow.c + " / 구 " + wNow.s}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {!mob && shareBtn}
           {!mob && peakBtn}
           <div style={{ textAlign: mob ? "left" : "right" }}>
             <div style={{ fontSize: 11, color: "var(--td)", letterSpacing: 1 }}>{peakOn ? "TOTAL SCORE · 고점" : "TOTAL SCORE"}</div>
