@@ -1230,8 +1230,10 @@ function useData(userId, sdState, setSdState, curDeckId){
    캔버스에 직접 그려서, 창 크기·테마·기기와 상관없이 늘 같은 그림이 나온다.
    (2026-09-23 사용자 확인 — 한 줄 상세형, 잠재력은 풀스윙/장타억제 + 각성) */
 var SHARE_W = 1080, SHARE_H = 1920;
-/* 한 줄 높이 — 타자 9 + 투수 12 = 21 줄이 들어가고 아래에 꼬리 자리가 남는 값 */
-var SHARE_ROW = 62;
+/* 한 줄 높이 — 타자 9 + 투수 12 = 21 줄에 세트덱 33구간 줄까지 들어가는 값 */
+var SHARE_ROW = 58;
+/* 좌·우 색은 앱의 세트덱 버튼과 같게 */
+var SHARE_SIDE = { L: "#FFD54F", R: "#CE93D8", "": "#4a5568" };
 var SHARE_CT = { "골든글러브": "골글", "시그니처": "시그", "임팩트": "임팩",
   "국가대표": "국대", "라이브": "라이브", "올스타": "올스타", "시즌": "시즌" };
 var SHARE_COL = { bg: "#12161f", line: "#1e2634", rule: "#2a3344",
@@ -1305,6 +1307,31 @@ function drawShareCanvas(d) {
   x.fillText("마운드", PAD, y); y += 34;
   head(y, "자리", ["변화", "구위", "", ""]); y += 46;
   d.pits.forEach(function(p) { line(y, p.left, p); y += SHARE_ROW; });
+
+  /* 세트덱 33구간 — 구간 번호 아래 고른 쪽을 색으로. 한 줄에 다 들어간다 */
+  if (d.sd && d.sd.length) {
+    y += 30;
+    x.textAlign = "left"; x.font = F(22, 500); x.fillStyle = SHARE_COL.t2;
+    x.fillText("세트덱 33구간", PAD, y);
+    x.textAlign = "right"; x.font = F(19); x.fillStyle = SHARE_COL.t2;
+    x.fillText("좌", R - 52, y); x.fillText("우", R - 16, y);
+    x.fillStyle = SHARE_SIDE.L; x.fillRect(R - 46, y - 13, 14, 14);
+    x.fillStyle = SHARE_SIDE.R; x.fillRect(R - 10, y - 13, 14, 14);
+    var cw = (R - PAD) / d.sd.length;
+    x.textAlign = "center";
+    d.sd.forEach(function(g, i) {
+      var cx = PAD + cw * i + cw / 2;
+      x.font = F(15); x.fillStyle = SHARE_COL.t2;
+      x.fillText(String(g.sp), cx, y + 32);
+      x.fillStyle = SHARE_SIDE[g.side] || SHARE_SIDE[""];
+      x.fillRect(cx - cw / 2 + 2, y + 42, cw - 4, 20);
+      if (g.side) {
+        x.font = F(15, 500); x.fillStyle = "#12161f";
+        x.fillText(g.side === "L" ? "좌" : "우", cx, y + 57);
+      }
+    });
+    y += 62;
+  }
 
   /* 꼬리 — 카드 종류 범례와 팀 버프 */
   var fy = SHARE_H - 92;
@@ -4256,8 +4283,12 @@ function LineupPage(p) {
     if (sdCalc.natBat && sdCalc.natBat !== "없음") bf.push("국대에이스(타) " + sdCalc.natBat);
     if (sdCalc.natPit && sdCalc.natPit !== "없음") bf.push("국대에이스(투) " + sdCalc.natPit);
     if (sdCalc.catchLead && sdCalc.catchLead !== "없음") bf.push("포수리드 " + sdCalc.catchLead);
+    var sps = []; SD_ROWS.forEach(function(r) { if (sps.indexOf(r.sp) < 0) sps.push(r.sp); });
+    var sd33 = sps.map(function(sp) {
+      return { sp: sp, side: totalSP >= sp ? sdSideOf(sdPick(sdState, sp)).side : "" };
+    });
     downloadShareImage({ team: sdState.teamName || "내 덱", sub: sub + (peakOn ? " · 고점판독" : ""),
-      total: totalScore.toFixed(1), bats: bats, pits: pits, buff: bf.join(" · ") });
+      total: totalScore.toFixed(1), bats: bats, pits: pits, buff: bf.join(" · "), sd: sd33 });
   };
   var shareBtn = (
     <button onClick={shareNow} title="지금 라인업을 1080x1920 그림으로 내려받습니다 (커뮤니티 전력공유용)"
