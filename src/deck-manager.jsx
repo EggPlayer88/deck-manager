@@ -40,6 +40,14 @@ var SEED_PLAYERS = [];
 var CUSTOM_PLAYERS = [];
 var CUSTOM_MAX = 5;
 function dexAll() { return CUSTOM_PLAYERS.length ? SEED_PLAYERS.concat(CUSTOM_PLAYERS) : SEED_PLAYERS; }
+/* 한 장을 id 로 찾을 때는 dexAll() 을 쓰지 않는다 — 선수마다 매 렌더 부르는 자리라
+   그때마다 5,000 장짜리 배열을 새로 이어붙이면 느려진다. 직접 등록분(최대 5장)을 먼저 보고 도감을 본다 */
+function findCard(id) {
+  if (!id) return null;
+  for (var i = 0; i < CUSTOM_PLAYERS.length; i++) if (CUSTOM_PLAYERS[i].id === id) return CUSTOM_PLAYERS[i];
+  for (var j = 0; j < SEED_PLAYERS.length; j++) if (SEED_PLAYERS[j].id === id) return SEED_PLAYERS[j];
+  return null;
+}
 function setCustomPlayers(list) {
   CUSTOM_PLAYERS.length = 0;
   (Array.isArray(list) ? list : []).slice(0, CUSTOM_MAX).forEach(function(p) { if (p && p.id) CUSTOM_PLAYERS.push(p); });
@@ -122,8 +130,7 @@ function mergePl(userPl) {
   if (!userPl) return null;
   if (!userPl.dbId) return normPlayerSkills(userPl);
   var seed = null;
-  var _dx = dexAll();
-  for (var i = 0; i < _dx.length; i++) { if (_dx[i].id === userPl.dbId) { seed = _dx[i]; break; } }
+  seed = findCard(userPl.dbId);
   /* seed 못 찾으면 userPl 자체 반환 (name/cardType 등이 직접 저장돼 있으면 그대로 표시) */
   if (!seed) return normPlayerSkills(userPl);
   return normPlayerSkills(Object.assign({}, seed, {
@@ -486,14 +493,8 @@ function normPlayerSkills(pl){
   /* 저장 줄에는 카드 종류·역할이 없을 수 있다 — 그때는 도감에서 본다 (mergePl 과 같은 기준) */
   var info = pl;
   if((!pl.cardType || !pl.role) && pl.dbId){
-    var _dx2 = dexAll();
-    for(var i = 0; i < _dx2.length; i++){
-      if(_dx2[i].id === pl.dbId){
-        var sd = _dx2[i];
-        info = { cardType: pl.cardType || sd.cardType, role: pl.role || sd.role, position: pl.position || sd.position };
-        break;
-      }
-    }
+    var sd = findCard(pl.dbId);
+    if(sd) info = { cardType: pl.cardType || sd.cardType, role: pl.role || sd.role, position: pl.position || sd.position };
   }
   var cat = skillCatOf(info);
   var manual = isLvManual(pl);
