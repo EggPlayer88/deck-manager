@@ -13,6 +13,8 @@ import {
   isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
+  LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_BPC_IDX, LAB_SLOTS,
+  labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 
@@ -1965,6 +1967,91 @@ console.log('\n[덱 연구소] 능력치 가정 티어 — 2026-09-23 사용자 
   eq('타자 분류', labCat({ role: '타자' }) === '타자' ? 1 : 0, 1);
   eq('중계 분류', labCat({ role: '투수', position: '중계' }) === '중계' ? 1 : 0, 1);
   eq('마무리 분류', labCat({ role: '투수', position: '마무리' }) === '마무리' ? 1 : 0, 1);
+}
+
+
+console.log('\n[덱 연구소] 라인업 규칙 — 2026-09-18 사용자 확정 기획');
+{
+  var mkB = function (n, o) { return Object.assign({ id: 'd_' + n, name: n, role: '타자', cardType: '임팩트',
+    team: '기아', year: '2024', hand: '우', stars: 5, subPosition: 'DH',
+    power: 150, accuracy: 140, eye: 130, patience: 120 }, o || {}); };
+  /* 도감 줄 -> 연구소 카드 */
+  var c1 = labCard(mkB('가'), '기아');
+  eq('강화는 최대로 둔다', c1.enhance === '9각성' ? 1 : 0, 1);
+  eq('스킬·훈련·특훈은 비워 둔다 (티어가 채운다)',
+    (c1.skill1 === '' && c1.trainP === 0 && c1.specPower === 0) ? 1 : 0, 1);
+  eq('자팀 카드는 FA 가 아니다', (!c1.isFa && !c1.isWildcard) ? 1 : 0, 1);
+  eq('타팀 임팩트는 FA 로 붙는다', labCard(mkB('나', { team: 'LG' }), '기아').isFa ? 1 : 0, 1);
+  eq('타팀 국대는 와일드카드로 붙는다',
+    labCard(mkB('다', { team: 'LG', cardType: '국가대표' }), '기아').isWildcard ? 1 : 0, 1);
+  eq('타팀 골글은 그냥 쓴다',
+    (function () { var c = labCard(mkB('라', { team: 'LG', cardType: '골든글러브' }), '기아'); return (!c.isFa && !c.isWildcard) ? 1 : 0; })(), 1);
+  /* 골든글러브 장수 — 자팀 골글을 쓰면 한 장 더 */
+  var mkPk = function (list) { var m = {}; list.forEach(function (c, i2) { m[LAB_SLOTS[i2]] = c; }); return function (sl) { return m[sl] || null; }; };
+  var gg = function (team) { return labCard(mkB('골' + Math.random(), { team: team, cardType: '골든글러브' }), '기아'); };
+  eq('타팀 골글만이면 5장까지', labLimits(mkPk([gg('LG'), gg('LG')]), '기아').ggMax, LAB_GG_BASE);
+  eq('자팀 골글을 쓰면 6장까지', labLimits(mkPk([gg('기아'), gg('LG')]), '기아').ggMax, LAB_GG_BASE + LAB_GG_OWN_BONUS);
+  eq('자팀1 + 타팀5 는 된다', labLimits(mkPk([gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').ok ? 1 : 0, 1);
+  eq('자팀1 + 타팀6 은 넘친다', labLimits(mkPk([gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').ok ? 1 : 0, 0);
+  eq('자팀2 + 타팀4 는 된다', labLimits(mkPk([gg('기아'), gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').ok ? 1 : 0, 1);
+  eq('자팀2 + 타팀5 는 넘친다', labLimits(mkPk([gg('기아'), gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').ok ? 1 : 0, 0);
+  /* FA·와일드카드는 합쳐 2장 */
+  var fa = function () { return labCard(mkB('f' + Math.random(), { team: 'LG' }), '기아'); };
+  var wc = function () { return labCard(mkB('w' + Math.random(), { team: 'LG', cardType: '국가대표' }), '기아'); };
+  eq('FA 2장은 된다', labLimits(mkPk([fa(), fa()]), '기아').ok ? 1 : 0, 1);
+  eq('FA 3장은 넘친다', labLimits(mkPk([fa(), fa(), fa()]), '기아').ok ? 1 : 0, 0);
+  eq('FA 1 + 와일드카드 1 은 된다', labLimits(mkPk([fa(), wc()]), '기아').fa, 2);
+  eq('FA 1 + 와일드카드 2 는 넘친다', labLimits(mkPk([fa(), wc(), wc()]), '기아').ok ? 1 : 0, 0);
+  /* 자팀도 골글도 아니고 FA·와일드카드도 못 되는 카드 */
+  var live = labCard(mkB('라이브', { team: 'LG', cardType: '라이브' }), '기아');
+  eq('타팀 라이브는 쓸 수 없다고 짚는다', labLimits(mkPk([live]), '기아').bad.length, 1);
+  eq('자팀 라이브는 괜찮다', labLimits(mkPk([labCard(mkB('라이브2', { cardType: '라이브' }), '기아')]), '기아').bad.length, 0);
+  /* 세트덱 상태 — 불펜 3/3/0 분업, 버프·시너지 최대 */
+  var sd = labSdState('기아');
+  eq('불펜은 3/3/0', sd.bpcIdx, LAB_BPC_IDX);
+  eq('3/3/0 은 분업이 켜진다', rpTactic(sd) === '분업' ? 1 : 0, 1);
+  eq('포수리드 6렙', sd.catchLead === '6렙' ? 1 : 0, 1);
+  eq('국대에이스 6렙', (sd.natBat === '6렙' && sd.natPit === '6렙') ? 1 : 0, 1);
+  eq('시너지는 모두 받는다', (sd.synLive && sd.synImpact && sd.synSig) ? 1 : 0, 1);
+  eq('연도덱을 켜 둔다', (sd.yearBat && sd.yearPit) ? 1 : 0, 1);
+  /* 자리 순서 — 1위를 3번, 2위를 4번, 3위를 1번, 4위를 2번 */
+  var seats = labSeatOrder();
+  eq('1위는 3번 자리', seats[0], 2);
+  eq('2위는 4번 자리', seats[1], 3);
+  eq('3위·4위는 1번·2번 자리', (seats[2] < 2 && seats[3] < 2) ? 1 : 0, 1);
+  eq('5위부터는 순서대로', seats.slice(4).join() === '4,5,6,7,8' ? 1 : 0, 1);
+  eq('자리는 아홉 개', seats.length, 9);
+  /* 자동 타순 — 센 타자가 배율 높은 자리로 간다 */
+  var strong = labCard(mkB('센', { subPosition: 'C', power: 200, accuracy: 190, eye: 180, patience: 170 }), '기아');
+  var weak = labCard(mkB('약', { subPosition: '1B', power: 80, accuracy: 70, eye: 60, patience: 50 }), '기아');
+  var pk3 = function (sl) { return sl === 'C' ? labPl(strong, sl, 0.1) : sl === '1B' ? labPl(weak, sl, 0.1) : null; };
+  var od = labBestOrder(pk3, sd, 0);
+  eq('센 타자가 3번', od[2] === 'C' ? 1 : 0, 1);
+  eq('약한 타자가 4번', od[3] === '1B' ? 1 : 0, 1);
+  /* 연도 모으기 */
+  var yk = function (sl) { return sl === 'C' ? mkB('가', { year: '2024' }) : sl === '1B' ? mkB('나', { year: '2019' }) : sl === 'SP1' ? mkB('투', { role: '투수', position: '선발', year: '2011' }) : null; };
+  eq('타자 연도만 모은다', labYears(yk, true).sort().join() === '2019,2024' ? 1 : 0, 1);
+  eq('투수 연도만 모은다', labYears(yk, false).join(), '2011');
+  eq('없으면 빈 연도 하나', labYears(function () { return null; }, true).join(), '');
+  /* 한 판 돌려 보기 */
+  var cards = {};
+  ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'].forEach(function (sl, i2) {
+    cards[sl] = labCard(mkB('타' + i2, { subPosition: sl, power: 150 + i2 * 3 }), '기아');
+  });
+  ['SP1', 'SP2', 'SP3', 'SP4', 'SP5'].forEach(function (sl, i2) {
+    cards[sl] = labCard({ id: 'p' + sl, name: '선' + i2, role: '투수', position: '선발', cardType: '임팩트',
+      team: '기아', year: '2024', hand: '우', stars: 5, change: 150, stuff: 145 }, '기아');
+  });
+  cards.CP = labCard({ id: 'pCP', name: '마', role: '투수', position: '마무리', cardType: '임팩트',
+    team: '기아', year: '2024', hand: '우', stars: 5, change: 150, stuff: 145 }, '기아');
+  var r = labRun(cards, '기아');
+  eq('세 티어가 나온다', r.tiers.length, 3);
+  eq('티어 순서는 0.1 · 5 · 20', r.tiers.map(function (x) { return x.tier; }).join() === '0.1,5,20' ? 1 : 0, 1);
+  eq('0.1% 가 5% 보다 높다', r.tiers[0].total > r.tiers[1].total ? 1 : 0, 1);
+  eq('5% 가 20% 보다 높다', r.tiers[1].total > r.tiers[2].total ? 1 : 0, 1);
+  eq('세트덱 점수는 티어와 무관하다', r.sp > 0 ? 1 : 0, 1);
+  eq('타순은 아홉 자리 전부', r.tiers[0].order.slice().sort().join() === BAT_SLOTS.slice().sort().join() ? 1 : 0, 1);
+  eq('빈 라인업도 터지지 않는다', labRun({}, '기아').tiers[0].total, 0);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);

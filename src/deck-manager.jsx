@@ -333,6 +333,8 @@ var DEFAULT_SKILLS = {"타자":{"스위치히터(양타)":[21.9,25.65,30.2,35.3,
 DEFAULT_SKILLS._major = DEFAULT_MAJOR;
 async function sGet(k){try{var r=await window.storage.get(k);return r?JSON.parse(r.value):null;}catch(e){return null;}}
 async function sSet(k,d){try{await window.storage.set(k,JSON.stringify(d));return true;}catch(e){return false;}}
+/* 게스트 id 는 uuid 가 아니라 서버가 받지 않는다 — 브라우저에만 담아야 한다 */
+function isGuestUid(uid){ return !uid || String(uid).indexOf("guest_") === 0; }
 
 /* 되돌리기용 스냅샷 — 시트 가져오기처럼 한 번에 많이 갈아엎는 작업 직전에 남긴다.
    덱마다 마지막 하나만 들고 있으면 충분하다. 브라우저에만 저장한다. */
@@ -1051,6 +1053,8 @@ function useData(userId, sdState, setSdState, curDeckId){
   var _pt=useState([]);var potmList=_pt[0];var setPotmListState=_pt[1];
   /* 직접 등록 카드 — 덱이 아니라 계정에 붙는다 (덱을 바꿔도 그대로 쓴다) */
   var _cd=useState([]);var customDex=_cd[0];var setCustomDexState=_cd[1];
+  /* 연구소 실험본 — 덱마다 3개. 뿌리에 덱 id 로 담아 덱 저장기와 부딪히지 않게 한다 */
+  var _lab=useState([]);var labSaves=_lab[0];var setLabSaves=_lab[1];
   var _lo=useState(true);var loading=_lo[0];var setLoading=_lo[1];
   var uidRef=React.useRef(userId);uidRef.current=userId;
   var deckIdRef=React.useRef(curDeckId);deckIdRef.current=curDeckId;
@@ -1084,6 +1088,22 @@ function useData(userId, sdState, setSdState, curDeckId){
     var all = allDataRef.current;
     if (!all) { all = await loadUserData(uid) || {}; allDataRef.current = all; }
     all.customDex = arr;
+    allDataRef.current = all;
+    await saveUserData(uid, all);
+    return true;
+  };
+
+  /* 연구소 실험본 저장 — sd_state 뿌리의 lab[덱id] */
+  var saveLab = async function(list) {
+    var arr = (Array.isArray(list) ? list : []).slice(0, LAB_MAX_SAVES);
+    setLabSaves(arr);
+    var uid = uidRef.current, did = deckIdRef.current;
+    if (!did) return false;
+    if (!supabase || isGuestUid(uid)) { var loc = (await sGet("deck-lab")) || {}; loc[did] = arr; await sSet("deck-lab", loc); return true; }
+    var all = allDataRef.current;
+    if (!all) { all = await loadUserData(uid) || {}; allDataRef.current = all; }
+    all.lab = all.lab || {};
+    all.lab[did] = arr;
     allDataRef.current = all;
     await saveUserData(uid, all);
     return true;
@@ -1128,6 +1148,9 @@ function useData(userId, sdState, setSdState, curDeckId){
            allDataRef 가 새로 채워질 때마다 맞춰 둔다 */
         var cdx = (allDataRef.current && allDataRef.current.customDex) || [];
         setCustomPlayers(cdx); setCustomDexState(cdx.slice(0, CUSTOM_MAX));
+        var lab = (allDataRef.current && allDataRef.current.lab && allDataRef.current.lab[curDeckId]) || null;
+        if (!lab) lab = ((await sGet("deck-lab")) || {})[curDeckId] || [];
+        setLabSaves(Array.isArray(lab) ? lab.slice(0, LAB_MAX_SAVES) : []);
         /* 선수도감/스킬: 로그인 후 딱 1번만 로드 */
         if(!globalLoadedRef.current){
           globalLoadedRef.current = true;
@@ -1144,6 +1167,8 @@ function useData(userId, sdState, setSdState, curDeckId){
       } else {
         var cdxL = await sGet("deck-custom-dex");
         setCustomPlayers(cdxL || []); setCustomDexState((cdxL || []).slice(0, CUSTOM_MAX));
+        var labL = ((await sGet("deck-lab")) || {})[curDeckId] || [];
+        setLabSaves(Array.isArray(labL) ? labL.slice(0, LAB_MAX_SAVES) : []);
         var ver=await sGet(SK.version);var needReset=(!ver||ver<DATA_VERSION);
         if(needReset){await sSet(SK.version,DATA_VERSION);}
         var p2=await sGet("deck-players-"+curDeckId);
@@ -1226,7 +1251,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     }
   },[]);
 
-  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
+  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
 }
 
 /* ── 전력공유 ─────────────────────────────────────────────────
@@ -5415,7 +5440,9 @@ function TeamPickModal(p){
 
 function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
-  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",icon:"👥"},{id:"postrain",label:"포지션 특훈",icon:"🏋️"},{id:"locker",label:"라커룸",icon:"🏠"},{id:"datacenter",label:"데이터센터",icon:"📊"},{id:"clublounge",label:"클럽라운지",icon:"🎙️",soon:true}];
+  /* short 는 모바일 아래 탭 전용 줄임말 — 일곱 칸이라 원말이 들어가면 줄이 접힌다.
+     원말은 title 로 붙는다 */
+  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"lab",label:"연구소",icon:"🔬"},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",soon:true}];
   if(p.isAdmin){tabs.splice(4,0,{id:"db",label:"선수도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
   var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck,onChangeTeam:p.onChangeTeam};
 
@@ -5427,7 +5454,7 @@ function Nav(p){
         <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px"}}>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18}}>{t.icon}</span><span style={{fontSize:11,fontWeight:p.tab===t.id?700:500,display:"flex",alignItems:"center"}}>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}</span></button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} title={t.label+(t.soon?" (준비중)":"")} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18,lineHeight:1}}>{t.icon}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}</span></button>);})}
       </div>
     </React.Fragment>
   );}
@@ -6251,6 +6278,277 @@ function dexSearch(index, slot, q, cardType, team) {
     return (a.r - b.r) || (b.e.score - a.e.score) || (a.e.name < b.e.name ? -1 : a.e.name > b.e.name ? 1 : 0);
   });
   return hit.map(function (x) { return x.e; });
+}
+
+/* ── 덱 연구소 화면 ───────────────────────────────────────────
+   보유 카드와 상관없이 도감 전체로 라인업을 짜 보고, 능력치 가정 세 티어의
+   점수를 한눈에 견준다. 규칙(골글 장수·FA·불펜 3/3/0·자동 타순)은 labRun 이 쥔다 */
+var LAB_MAX_SAVES = 3;
+var LAB_TIER_COLOR = { 0.1: "#FFD54F", 5: "#7FD4FF", 20: "#A5D6A7" };
+var LAB_TIER_NAME = { 0.1: "상위 0.1%", 5: "상위 5%", 20: "상위 20%" };
+/* 타자 자리에 넣을 수 있는 카드 — 도감에 적힌 포지션만. 지명타자는 아무 타자나 */
+function labFitsBatSlot(sp, slot) {
+  if (sp.role !== "타자") return false;
+  if (slot === "DH") return true;
+  return (sp.subPosition || "") === slot;
+}
+function labPitKind(slot) { return slot === "CP" ? "마무리" : slot.charAt(0) === "S" ? "선발" : "중계"; }
+
+function LabPage(p) {
+  var mob = p.mobile;
+  var saves = Array.isArray(p.labSaves) ? p.labSaves : [];
+  var _team = useState(teamKey(p.teamName) || KBO_TEAMS[0]); var team = _team[0]; var setTeam = _team[1];
+  var _slots = useState({}); var slots = _slots[0]; var setSlots = _slots[1];   /* {자리: dbId} */
+  var _pick = useState(null); var pickSlot = _pick[0]; var setPickSlot = _pick[1];
+  var _q = useState(""); var q = _q[0]; var setQ = _q[1];
+  var _ct = useState(""); var ctF = _ct[0]; var setCtF = _ct[1];
+  var _tf = useState(""); var teamF = _tf[0]; var setTeamF = _tf[1];
+  var _res = useState(null); var res = _res[0]; var setRes = _res[1];
+  var _busy = useState(false); var busy = _busy[0]; var setBusy = _busy[1];
+  var _msg = useState(""); var msg = _msg[0]; var setMsg = _msg[1];
+
+  var dexIdx = React.useMemo(function () { return buildDexIndex(dexAll(), getW()); }, [p.skills, SEED_PLAYERS.length]);
+  var byId = React.useMemo(function () {
+    var m = {}; dexAll().forEach(function (sp) { m[sp.id] = sp; }); return m;
+  }, [p.skills, SEED_PLAYERS.length]);
+  var rowOf = function (sl) { return slots[sl] ? byId[slots[sl]] : null; };
+  var cards = React.useMemo(function () {
+    var c = {};
+    LAB_SLOTS.forEach(function (sl) { var r = rowOf(sl); if (r) c[sl] = labCard(r, team); });
+    return c;
+  }, [slots, team, byId]);
+  var filled = LAB_SLOTS.filter(function (sl) { return cards[sl]; }).length;
+  var limits = labLimits(function (sl) { return cards[sl] || null; }, team);
+
+  var touch = function (fn) { setRes(null); setMsg(""); fn(); };
+  var putCard = function (sl, sp) {
+    touch(function () {
+      setSlots(function (prev) {
+        var n = Object.assign({}, prev);
+        /* 같은 카드를 두 자리에 넣지 않는다 */
+        Object.keys(n).forEach(function (k) { if (n[k] === sp.id) delete n[k]; });
+        n[sl] = sp.id; return n;
+      });
+    });
+    setPickSlot(null); setQ("");
+  };
+  var clearSlot = function (sl) { touch(function () { setSlots(function (prev) { var n = Object.assign({}, prev); delete n[sl]; return n; }); }); };
+
+  var run = function () {
+    if (filled < 1) { setMsg("카드를 먼저 넣어 주세요."); return; }
+    setBusy(true); setMsg("");
+    /* 계산이 0.2초쯤 걸린다 — 버튼이 눌린 티를 먼저 내고 다음 틱에 돈다 */
+    setTimeout(function () {
+      try { setRes(labRun(cards, team)); }
+      catch (e) { setMsg("계산에 실패했습니다: " + (e && e.message)); }
+      setBusy(false);
+    }, 20);
+  };
+
+  var saveAs = function (i) {
+    var list = saves.slice();
+    list[i] = { name: "실험 " + (i + 1), team: team, slots: Object.assign({}, slots), at: Date.now() };
+    (p.saveLab || function () {})(list.slice(0, LAB_MAX_SAVES));
+    setMsg("실험 " + (i + 1) + " 에 담았습니다.");
+  };
+  var loadFrom = function (i) {
+    var v = saves[i]; if (!v) return;
+    touch(function () { setTeam(teamKey(v.team) || team); setSlots(Object.assign({}, v.slots || {})); });
+    setMsg("실험 " + (i + 1) + " 을 불러왔습니다.");
+  };
+  var dropSave = function (i) {
+    var list = saves.slice(); list[i] = null;
+    (p.saveLab || function () {})(list);
+    setMsg("실험 " + (i + 1) + " 을 비웠습니다.");
+  };
+
+  /* 자동 타순 — 점수를 내고 나면 자리마다 몇 번 타자인지 보여 준다 (0.1% 기준) */
+  var orderOf = {};
+  if (res && res.tiers[0]) res.tiers[0].order.forEach(function (sl, i) { if (cards[sl]) orderOf[sl] = i + 1; });
+
+  var Row = function (sl, label) {
+    var r = rowOf(sl);
+    var c = cards[sl];
+    var flag = c && (c.isFa ? "FA" : c.isWildcard ? "WC" : "");
+    return (
+      <div key={sl} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px",
+        borderBottom: "1px solid var(--bd)", background: r ? "transparent" : "var(--re)" }}>
+        <span style={{ width: 42, flexShrink: 0, fontSize: 11, color: "var(--td)", fontFamily: "var(--m)" }}>
+          {label}{orderOf[sl] ? (<span style={{ color: "var(--acc)", fontWeight: 700 }}>{" " + orderOf[sl] + "번"}</span>) : ""}
+        </span>
+        <button onClick={function () { setPickSlot(sl); setQ(""); }}
+          title={r ? "카드 바꾸기" : "카드 넣기"}
+          style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, padding: "4px 6px",
+            background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}>
+          {r ? (<React.Fragment>
+            <Badge type={r.cardType} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
+            <span style={{ fontSize: 10, color: "var(--td)", whiteSpace: "nowrap" }}>{[r.team, r.year].filter(Boolean).join(" ")}</span>
+            {flag && (<span style={{ fontSize: 9, fontWeight: 800, color: "#FF8A80", border: "1px solid rgba(255,138,128,0.4)", borderRadius: 3, padding: "0 3px" }}>{flag}</span>)}
+          </React.Fragment>) : (<span style={{ fontSize: 12, color: "var(--td)" }}>{"+ 카드"}</span>)}
+        </button>
+        {r && (<button onClick={function () { clearSlot(sl); }} title="비우기"
+          style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 13, padding: "0 4px" }}>{"\u2715"}</button>)}
+      </div>
+    );
+  };
+
+  var limitChip = function (label, n, max, tip) {
+    var over = n > max;
+    return (
+      <span title={tip} style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+        background: over ? "rgba(239,83,80,0.15)" : "var(--inner)", border: "1px solid " + (over ? "#ef5350" : "var(--bd)"),
+        color: over ? "#ef5350" : "var(--t2)", whiteSpace: "nowrap" }}>{label + " " + n + "/" + max}</span>
+    );
+  };
+
+  return (
+    <div style={{ padding: mob ? 10 : 16, maxWidth: 1180, margin: "0 auto" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <span style={{ fontSize: mob ? 17 : 20, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"🔬 덱 연구소"}</span>
+        <span style={{ fontSize: 11, color: "var(--td)" }}>{"도감 전체로 짜 보는 실험실 — 내 카드와 상관없습니다"}</span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        <select value={team} onChange={function (e) { touch(function () { setTeam(e.target.value); }); }}
+          title="이 구단 덱으로 봅니다 — 선택 팀·군 셋포가 여기에 걸립니다"
+          style={{ padding: "5px 8px", fontSize: 13, fontWeight: 700, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--acc)", outline: "none" }}>
+          {KBO_TEAMS.map(function (t) { return (<option key={t} value={t}>{t}</option>); })}
+        </select>
+        <span style={{ fontSize: 11, color: "var(--td)" }}>{filled + "/" + LAB_SLOTS.length + "자리"}</span>
+        {limitChip("골글", limits.gg, limits.ggMax, "골든글러브 5장까지. 자팀 골글을 쓰면 6장까지 (자팀 " + limits.ggOwn + " · 타팀 " + limits.ggOther + ")")}
+        {limitChip("FA·WC", limits.fa, limits.faMax, "자팀도 골글도 아닌 카드는 FA(임팩트·시그니처) 또는 와일드카드(국가대표)로만 쓸 수 있고, 둘을 합쳐 2장까지입니다")}
+        <button onClick={run} disabled={busy}
+          title="셋포를 자동으로 최적화하고 타순을 자동으로 잡아 세 티어 점수를 냅니다"
+          style={{ marginLeft: mob ? 0 : "auto", padding: "6px 14px", fontSize: 13, fontWeight: 800,
+            background: busy ? "var(--inner)" : "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6,
+            color: busy ? "var(--td)" : "#1a1a1a", cursor: busy ? "default" : "pointer" }}>
+          {busy ? "계산 중…" : "⚡ 점수 내기"}
+        </button>
+      </div>
+
+      {limits.bad.length > 0 && (
+        <div style={{ fontSize: 11, color: "#FF8A80", marginBottom: 8 }}>
+          {"자팀도 골글도 아니고 FA·와일드카드로도 쓸 수 없는 카드: "
+            + limits.bad.map(function (b) { return b.name + "(" + b.cardType + ")"; }).join(", ")}
+        </div>)}
+      {msg && (<div style={{ fontSize: 11, color: "var(--td)", marginBottom: 8 }}>{msg}</div>)}
+
+      {/* 세 티어 점수 */}
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr 1fr" : "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
+        {LAB_TIERS.map(function (t, i) {
+          var r = res && res.tiers[i];
+          var col = LAB_TIER_COLOR[t];
+          return (
+            <div key={t} style={{ background: "var(--card)", border: "1px solid " + col + "44", borderTop: "2px solid " + col,
+              borderRadius: 8, padding: mob ? "8px 6px" : "10px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: mob ? 10 : 12, color: col, fontWeight: 800, letterSpacing: 0.5 }}>{LAB_TIER_NAME[t]}</div>
+              <div style={{ fontSize: mob ? 19 : 26, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--m)", lineHeight: 1.3 }}>
+                {r ? r.total.toFixed(1) : "—"}
+              </div>
+              {r && i > 0 && res.tiers[0].total > 0 && (
+                <div style={{ fontSize: 10, color: "var(--td)" }}>
+                  {(r.total - res.tiers[0].total).toFixed(1) + " (" + (r.total / res.tiers[0].total * 100).toFixed(1) + "%)"}
+                </div>)}
+            </div>
+          );
+        })}
+      </div>
+      {res && (
+        <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 10, lineHeight: 1.6 }}>
+          {"세트덱 점수 " + res.sp + " · 불펜 3/3/0 분업 · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지 모두 적용 · 타순 자동"}
+          {res.tiers[0].blanks.length > 0 && (<span style={{ color: "#FFA726" }}>{" · 연도덱을 안 골라 " + res.tiers[0].blanks.join("·") + " 구간은 비었습니다"}</span>)}
+        </div>)}
+
+      {/* 실험본 3개 */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {[0, 1, 2].map(function (i) {
+          var v = saves[i];
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--inner)",
+              border: "1px solid var(--bd)", borderRadius: 6, padding: "3px 6px" }}>
+              <span style={{ fontSize: 11, color: v ? "var(--t2)" : "var(--td)", whiteSpace: "nowrap" }}>
+                {"실험 " + (i + 1) + (v ? " · " + v.team + " " + Object.keys(v.slots || {}).length + "장" : " · 빔")}
+              </span>
+              <button onClick={function () { saveAs(i); }} title="지금 라인업을 이 자리에 담습니다"
+                style={{ padding: "2px 6px", fontSize: 11, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--acc)", cursor: "pointer" }}>{"담기"}</button>
+              {v && (<button onClick={function () { loadFrom(i); }} title="이 실험본을 불러옵니다"
+                style={{ padding: "2px 6px", fontSize: 11, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--t2)", cursor: "pointer" }}>{"열기"}</button>)}
+              {v && (<button onClick={function () { dropSave(i); }} title="이 실험본을 비웁니다"
+                style={{ padding: "2px 5px", fontSize: 11, background: "none", border: "none", color: "var(--td)", cursor: "pointer" }}>{"\u2715"}</button>)}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 라인업 */}
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 10 }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ padding: "6px 10px", fontSize: 12, fontWeight: 800, color: "var(--t2)", borderBottom: "1px solid var(--bd)" }}>
+            {"타선"}<span style={{ fontWeight: 400, color: "var(--td)", marginLeft: 6 }}>{"도감 포지션 그대로 · 타순은 자동"}</span>
+          </div>
+          {BAT_SLOTS.map(function (sl) { return Row(sl, sl); })}
+        </div>
+        <div style={{ background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ padding: "6px 10px", fontSize: 12, fontWeight: 800, color: "var(--t2)", borderBottom: "1px solid var(--bd)" }}>
+            {"마운드"}<span style={{ fontWeight: 400, color: "var(--td)", marginLeft: 6 }}>{"불펜 3/3/0 분업 고정"}</span>
+          </div>
+          {SP_SLOTS.concat(["CP"]).concat(RP_SLOTS).map(function (sl) { return Row(sl, sl); })}
+        </div>
+      </div>
+
+      {/* 카드 고르기 */}
+      {pickSlot && (function () {
+        var isBat = BAT_SLOTS.indexOf(pickSlot) >= 0;
+        var list = isBat
+          ? dexSearch(dexIdx, "타자", q, ctF, teamF).filter(function (e) { return labFitsBatSlot(e.sp, pickSlot); })
+          : dexSearch(dexIdx, labPitKind(pickSlot), q, ctF, teamF);
+        var shown = list.slice(0, 120);
+        return (
+          <div onClick={function () { setPickSlot(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <div onClick={function (e) { e.stopPropagation(); }} style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", maxWidth: 640, width: "100%", maxHeight: "86vh", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "12px 16px 8px", borderBottom: "1px solid var(--bd)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{pickSlot + " 자리"}</span>
+                  <span style={{ fontSize: 11, color: "var(--td)" }}>{isBat ? (pickSlot === "DH" ? "타자 아무나" : "도감 포지션이 " + pickSlot + " 인 카드만") : labPitKind(pickSlot)}</span>
+                  <button onClick={function () { setPickSlot(null); }} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 17 }}>{"\u2715"}</button>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                  <input value={q} onChange={function (e) { setQ(e.target.value); }} placeholder="이름 · 초성 · 팀"
+                    style={{ flex: 1, minWidth: 120, padding: "5px 8px", fontSize: 13, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 5, color: "var(--t1)", outline: "none" }} />
+                  <select value={ctF} onChange={function (e) { setCtF(e.target.value); }} style={{ padding: "5px", fontSize: 12, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 5, color: "var(--t2)", outline: "none" }}>
+                    <option value="">{"종류 전체"}</option>
+                    {CARD_TYPES.map(function (c) { return (<option key={c} value={c}>{c}</option>); })}
+                  </select>
+                  <select value={teamF} onChange={function (e) { setTeamF(e.target.value); }} style={{ padding: "5px", fontSize: 12, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 5, color: "var(--t2)", outline: "none" }}>
+                    <option value="">{"팀 전체"}</option>
+                    {KBO_TEAMS.map(function (t) { return (<option key={t} value={t}>{t}</option>); })}
+                  </select>
+                </div>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                {shown.length === 0 ? (
+                  <div style={{ padding: 30, textAlign: "center", fontSize: 13, color: "var(--td)" }}>{"맞는 카드가 없습니다."}</div>
+                ) : shown.map(function (e) {
+                  return (
+                    <button key={e.sp.id} onClick={function () { putCard(pickSlot, e.sp); }}
+                      style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "7px 14px", background: "transparent", border: "none", borderBottom: "1px solid var(--bd)", cursor: "pointer", textAlign: "left" }}>
+                      <Badge type={e.sp.cardType} />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)" }}>{e.sp.name}</span>
+                      <span style={{ fontSize: 11, color: "var(--td)" }}>{[e.sp.team, e.sp.year, e.sp.role === "타자" ? e.sp.subPosition : e.sp.position].filter(Boolean).join(" · ")}</span>
+                      <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--acc)", fontFamily: "var(--m)" }}>{e.score}</span>
+                    </button>
+                  );
+                })}
+                {list.length > shown.length && (
+                  <div style={{ padding: "8px 14px", fontSize: 11, color: "var(--td)" }}>{"…" + (list.length - shown.length) + "장 더 있습니다. 검색으로 좁혀 보세요"}</div>)}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
 }
 
 function MyPlayersPage(p) {
@@ -8676,6 +8974,128 @@ function labPl(pl, slot, top) {
   return out;
 }
 
+/* ── 덱 연구소 — 라인업 규칙과 자동 배치 ───────────────────────
+   2026-09-18 사용자 확정 기획. 카드는 도감 전체에서 고르고, 아래 규칙은 고정이다.
+     · 골든글러브 5장까지. 자팀 골글을 한 장이라도 쓰면 6장까지
+     · FA(임팩트·시그니처) + 와일드카드(국가대표) 합쳐 2장까지
+     · 자팀도 골글도 아니면 FA·와일드카드로만 쓸 수 있다 (자동으로 붙인다)
+     · 불펜은 3/3/0 분업 고정
+     · 타순은 자동 — 유저가 짜지 않는다
+     · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지는 모두 받는 것으로 본다 */
+var LAB_GG_BASE = 5;
+var LAB_GG_OWN_BONUS = 1;
+var LAB_FA_MAX = 2;
+var LAB_BPC_IDX = 8;                 /* BPC 의 "3/3/0" */
+var LAB_SLOTS = BAT_SLOTS.concat(SP_SLOTS).concat(["CP"]).concat(RP_SLOTS);
+
+/* 도감 한 줄을 연구소 카드로. 강화는 최대(9각성 — getEnhVal 이 표 끝으로 자른다),
+   스킬·훈련·특훈은 비워 두고 티어(labPl)가 채운다.
+   자팀도 골글도 아닌 카드는 FA·와일드카드를 자동으로 붙인다 */
+function labCard(row, teamName) {
+  if (!row) return null;
+  var o = Object.assign({}, row, { dbId: row.id, enhance: "9각성", sLvManual: false,
+    trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0,
+    specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0,
+    skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
+    isFa: false, isWildcard: false });
+  if (o.cardType !== "골든글러브" && isOtherTeam(o, teamName)) {
+    if (FA_CARDS[o.cardType]) o.isFa = true;
+    else if (WILDCARD_CARDS[o.cardType]) o.isWildcard = true;
+  }
+  return o;
+}
+/* 연구소 세트덱 상태 — 불펜 3/3/0 분업, 팀 버프와 시너지는 늘 최대 */
+function labSdState(teamName, extra) {
+  return Object.assign({ teamName: teamName || "", bpcIdx: LAB_BPC_IDX, isWinSplit: true,
+    natBat: "6렙", natPit: "6렙", catchLead: "6렙",
+    synLive: true, synImpact: true, synSig: true,
+    /* 연도 구간(55·75…)은 연도덱을 켜지 않으면 통째로 빈다. 어느 연도를 고를지는
+       라인업에 들어간 연도 중에서 optimizeSetDeck 이 점수로 정한다 */
+    yearBat: true, yearPit: true }, extra || {});
+}
+/* 자리 배율이 높은 순서 — 1위 타자를 3번에, 2위를 4번에, 3위를 1번에…
+   calcBat 은 타순을 보지 않으므로 큰 점수를 큰 배율에 붙이면 그게 최대다 */
+function labSeatOrder() {
+  var idx = BAT_SLOTS.map(function (_, i) { return i; });
+  idx.sort(function (a, b) { return (batMult(b) - batMult(a)) || (a - b); });
+  return idx;
+}
+/* 점수가 가장 높은 타순. 세트덱에 타순을 보는 구간이 있어 한 번에 끝나지 않는다 —
+   배치가 굳을 때까지 되풀이하고, 혹시 번갈아 나오면 가장 높은 판을 남긴다 */
+function labBestOrder(pk, sd, totalSP) {
+  var seats = labSeatOrder();
+  var order = BAT_SLOTS.slice(), best = order, bestScore = -Infinity;
+  for (var pass = 0; pass < 4; pass++) {
+    var o = lineupOpts(Object.assign({}, sd, { batOrder: order }), totalSP);
+    var t = calcLineupTotal(pk, sd, o);
+    if (t > bestScore + 1e-9) { bestScore = t; best = order; }
+    var sc = BAT_SLOTS.map(function (sl) { var pl = pk(sl); return { sl: sl, v: pl ? lineupBat(pl, sl, sd, o).total : -1 }; });
+    sc.sort(function (a, b) { return b.v - a.v; });
+    var next = new Array(BAT_SLOTS.length);
+    sc.forEach(function (x, i) { next[seats[i]] = x.sl; });
+    if (next.join() === order.join()) break;
+    order = next;
+  }
+  return best;
+}
+/* 카드 제한 검사. 자팀 카드는 제한이 없다 */
+function labLimits(pk, teamName) {
+  var ggOwn = 0, ggOther = 0, fa = 0, bad = [];
+  LAB_SLOTS.forEach(function (sl) {
+    var pl = pk(sl); if (!pl) return;
+    var other = isOtherTeam(pl, teamName);
+    if (pl.cardType === "골든글러브") { if (other) ggOther++; else ggOwn++; return; }
+    if (!other) return;
+    if (FA_CARDS[pl.cardType] || WILDCARD_CARDS[pl.cardType]) fa++;
+    else bad.push({ slot: sl, name: pl.name, cardType: pl.cardType });
+  });
+  var ggMax = LAB_GG_BASE + (ggOwn > 0 ? LAB_GG_OWN_BONUS : 0);
+  return { gg: ggOwn + ggOther, ggOwn: ggOwn, ggOther: ggOther, ggMax: ggMax,
+    fa: fa, faMax: LAB_FA_MAX, bad: bad,
+    ok: (ggOwn + ggOther) <= ggMax && fa <= LAB_FA_MAX && bad.length === 0 };
+}
+/* 연도덱 후보 — 라인업에 실제로 들어간 연도들 */
+function labYears(pk, isBat) {
+  var seen = {}, out = [];
+  LAB_SLOTS.forEach(function (sl) {
+    var pl = pk(sl); if (!pl || !pl.year) return;
+    if ((pl.role === "타자") !== isBat) return;
+    var y = String(pl.year);
+    if (!seen[y]) { seen[y] = 1; out.push(y); }
+  });
+  return out.length ? out : [""];
+}
+/* 연구소 한 판 — 티어마다 셋포를 최적화하고 타순을 자동으로 잡아 점수를 낸다.
+   cards 는 {자리: 도감카드}. 세트덱 점수(totalSP)는 카드 종류로만 정해져 티어와 무관하다 */
+function labRun(cards, teamName, extra) {
+  var sd0 = labSdState(teamName, extra);
+  /* 카드 사본은 자리마다 한 번만 만든다. 셋포 최적화가 이 함수를 수만 번 부르므로
+     여기서 매번 만들면 계산이 1초를 넘는다 (능력치는 세트덱 상태와 무관하다) */
+  var rawMemo = {};
+  var raw = function (sl) {
+    if (!(sl in rawMemo)) { var c = cards && cards[sl]; rawMemo[sl] = c ? deckPl(c, sd0) : null; }
+    return rawMemo[sl];
+  };
+  var totalSP = computeLineupSetDeck(raw, sd0);
+  var yOpts = { batOn: !!sd0.yearBat, pitOn: !!sd0.yearPit,
+    batYears: labYears(raw, true), pitYears: labYears(raw, false) };
+  var tiers = LAB_TIERS.map(function (t) {
+    var memo = {};
+    var pk = function (sl) {
+      if (!(sl in memo)) { var c = raw(sl); memo[sl] = c ? labPl(c, sl, t) : null; }
+      return memo[sl];
+    };
+    var scoreOf = function (sd) {
+      return calcLineupTotal(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: labBestOrder(pk, sd, totalSP) }), totalSP));
+    };
+    var opt = optimizeSetDeck(sd0, totalSP, scoreOf, yOpts);
+    var order = labBestOrder(pk, opt.next, totalSP);
+    return { tier: t, sd: opt.next, order: order, blanks: opt.blanks,
+      total: calcLineupTotal(pk, opt.next, lineupOpts(Object.assign({}, opt.next, { batOrder: order }), totalSP)) };
+  });
+  return { sp: totalSP, tiers: tiers, limits: labLimits(raw, teamName) };
+}
+
 function SkillCalculator(p) {
   var skills = p.skills || {};
   var mob = p.mobile;
@@ -9397,6 +9817,7 @@ export default function App(){
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} customDex={store.customDex} saveCustomDex={store.saveCustomDex} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
+  else if(tab==="lab")pg=(<LabPage mobile={mob} teamName={curDeckObj&&curDeckObj.teamName} skills={store.skills} labSaves={store.labSaves} saveLab={store.saveLab}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} potmList={store.potmList} setPotmList={store.savePotmList} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
