@@ -1276,6 +1276,46 @@ function sharePot(pl) {
 }
 function shareCardName(ct) { return SHARE_CT[ct] || ct || ""; }
 
+/* 스킬·훈재분 칸은 상위 1% / 5% / 15% 를 경계로 색 진하기를 달리한다.
+   진할수록(어두울수록) 낮은 등급이다 (2026-09-23 사용자 지정) */
+var SHARE_GRADE = {
+  skill: ["#7FD4FF", "#5AA6CC", "#3E7A96", "#2C556B"],
+  train: ["#A8E6A8", "#78B87A", "#557F57", "#3C5C3E"]
+};
+function shareGrade(kind, pct) {
+  var a = SHARE_GRADE[kind];
+  if (pct === null || pct === undefined) return a[3];
+  return pct <= 1 ? a[0] : pct <= 5 ? a[1] : pct <= 15 ? a[2] : a[3];
+}
+/* 분포와 견줄 값은 데이터센터와 같은 규칙으로 뽑는다 — 버프 포함으로 세고,
+   임팩트·올스타는 1옵션이 고정이라 분포에서 빼 둔 것에 맞춰 2옵션부터 센다 */
+var SHARE_SKILL_ALIAS = { "시즌": "시그니처" };
+var SHARE_FIXED_FIRST = { "임팩트": 1, "올스타": 1 };
+function shareSkillCmp(pl, cat, pts) {
+  var mn = isLvManual(pl), t = 0;
+  for (var k = SHARE_FIXED_FIRST[pl.cardType] ? 2 : 1; k <= 3; k++) {
+    var nm = pl["skill" + k];
+    if (nm) t += getSkillScore(nm, effSkillLv(nm, pl["s" + k + "Lv"], mn, pl.cardType, k, cat, pts || []), cat, true);
+  }
+  return t;
+}
+function shareSkillPct(pl, cat, slot, pts) {
+  var ct = SHARE_SKILL_ALIAS[pl.cardType] || pl.cardType;
+  var arr = PREBUILT_SKILL_DIST[skillDistKey(cat, ct, pl.hand, cat === "타자" && slot === "C")];
+  return arr ? pctFromDist(arr, Math.round(shareSkillCmp(pl, cat, pts) * 100) / 100) : null;
+}
+/* 훈련 재분배 점수 — 계산에 들어가는 값 그대로 */
+function shareTrainScore(pl) {
+  var w = getW();
+  return pl.role === "타자"
+    ? (pl.trainP || 0) * w.p + (pl.trainA || 0) * w.a + (pl.trainE || 0) * w.e + (pl.trainN || 0) * (w.n || 0)
+    : (pl.trainC || 0) * w.c + (pl.trainS || 0) * w.s;
+}
+function shareTrainPct(pl) {
+  var arr = PREBUILT_DIST["train_" + (pl.role === "타자" ? "bat" : "pit") + "_" + (pl.cardType || "")];
+  return arr ? getPercentile(arr, Math.round(shareTrainScore(pl) * 100) / 100) : null;
+}
+
 function drawShareCanvas(d) {
   var cv = document.createElement("canvas");
   cv.width = SHARE_W; cv.height = SHARE_H;
@@ -1296,15 +1336,17 @@ function drawShareCanvas(d) {
   x.fillStyle = SHARE_COL.rule; x.fillRect(PAD, 166, R - PAD, 2);
 
   /* 열 자리 — 타자와 투수가 같은 자리를 쓴다 */
-  var cName = 176, cStat = 430, cSk = 742, cPot = 828, cSc = R;
-  var statW = 74;
+  /* 칸 자리 — 훈재 칸이 들어가면서 다시 잡았다. 잠재는 등급 두 개("SR+ C+")가 끝이라
+     여유가 있고, 점수는 네 자리까지 오른쪽 끝에 붙는다 */
+  var cName = 176, cStat = 386, cSk = 708, cTr = 796, cPot = 888, cSc = R;
+  var statW = 70;
 
   var head = function(y, first, statLabs) {
     x.font = F(20); x.fillStyle = SHARE_COL.t2;
     x.textAlign = "left"; x.fillText(first, PAD, y); x.fillText("선수", cName, y);
     x.textAlign = "center";
     statLabs.forEach(function(L, i) { x.fillText(L, cStat + statW * i + statW / 2, y); });
-    x.fillText("스킬", cSk + 30, y); x.fillText("잠재", cPot + 78, y);
+    x.fillText("스킬", cSk, y); x.fillText("훈재", cTr, y); x.fillText("잠재", cPot, y);
     x.textAlign = "right"; x.fillText("점수", cSc, y);
     x.fillStyle = SHARE_COL.line; x.fillRect(PAD, y + 10, R - PAD, 1);
   };
@@ -1318,8 +1360,9 @@ function drawShareCanvas(d) {
     x.fillText(shareCardName(p.ct), cName + w + 9, y);
     x.textAlign = "center"; x.font = F(24); x.fillStyle = SHARE_COL.stat;
     p.vals.forEach(function(v, i) { x.fillText(String(v), cStat + statW * i + statW / 2, y); });
-    x.fillStyle = SHARE_COL.skill; x.fillText(String(p.sk), cSk + 30, y);
-    x.font = F(21); x.fillStyle = SHARE_COL.pot; x.fillText(p.pot, cPot + 78, y);
+    x.fillStyle = shareGrade("skill", p.skPct); x.fillText(String(p.sk), cSk, y);
+    x.fillStyle = shareGrade("train", p.trPct); x.fillText(String(p.tr), cTr, y);
+    x.font = F(20); x.fillStyle = SHARE_COL.pot; x.fillText(p.pot, cPot, y);
     x.textAlign = "right"; x.font = F(27, 500); x.fillStyle = SHARE_COL.score;
     x.fillText(String(p.score), cSc, y);
     x.fillStyle = SHARE_COL.line; x.fillRect(PAD, y + 13, R - PAD, 1);
@@ -1376,6 +1419,8 @@ function drawShareCanvas(d) {
   if (d.buff) { x.textAlign = "right"; x.fillStyle = SHARE_COL.t2; x.fillText(d.buff, R, fy); }
   x.textAlign = "left"; x.font = F(19); x.fillStyle = SHARE_COL.t2;
   x.fillText("컴투스 프로야구 v26 덱 매니저", PAD, fy + 40);
+  x.textAlign = "right";
+  x.fillText("스킬 · 훈재 색 — 진할수록 낮은 등급 (상위 1% · 5% · 15% 기준)", R, fy + 40);
   return cv;
 }
 
@@ -1420,6 +1465,10 @@ var SQ_GRAD = {
    중견수를 가장 높이, 좌·우익수는 조금 내리고, 1루·3루는 유격수·2루보다 더 내렸다.
    포수는 홈 뒤 가운데에서 살짝 왼쪽, 지명타자는 그 오른쪽.
    카드(188x244)가 겹치지 않도록 가로 .092 · 세로 .120 보다 넓게 벌려 두었다 */
+/* 팀 이름 색 — 구단 상징색을 어두운 바탕에서 읽히게 밝힌 값 */
+var SQ_TEAM_COLOR = { "기아": "#F23B52", "삼성": "#4E90E8", "LG": "#E4457E", "두산": "#6E8BE0",
+  "KT": "#C9CFDA", "SSG": "#EF5350", "롯데": "#6C9BD9", "한화": "#FF7A33",
+  "NC": "#D4AF37", "키움": "#C2566B" };
 var SQ_POS = { CF: [.50, .13], LF: [.13, .21], RF: [.87, .21],
   SS: [.34, .46], "2B": [.66, .46], "3B": [.11, .57], "1B": [.89, .57],
   C: [.42, .84], DH: [.70, .84] };
@@ -1490,9 +1539,10 @@ function drawSquadCanvas(d) {
   g.addColorStop(0, "#151b26"); g.addColorStop(1, "#0b0f16");
   x.fillStyle = g; x.fillRect(0, 0, SQ_W, SQ_H);
   /* 머리 — 팀 이름 · 연도 · 총점 */
-  x.textAlign = "left"; x.fillStyle = "#e8edf5"; sqFont(x, 50, 700); x.fillText(d.team, 44, 96);
-  x.textAlign = "right"; x.fillStyle = "#8fa0b8"; sqFont(x, 21); x.fillText("최적화 전력", SQ_W - 44, 58);
-  x.fillStyle = "#FFD54F"; sqFont(x, 72, 900); x.fillText(d.total, SQ_W - 44, 112);
+  x.textAlign = "left";
+  x.fillStyle = SQ_TEAM_COLOR[teamKey(d.team)] || "#e8edf5";
+  sqFont(x, 62, 700); x.fillText(d.team, 44, 104);
+  x.textAlign = "right"; x.fillStyle = "#FFD54F"; sqFont(x, 72, 900); x.fillText(d.total, SQ_W - 44, 104);
   var chips = [];
   if (d.batYear) chips.push("타자 " + d.batYear);
   if (d.pitYear) chips.push("투수 " + d.pitYear);
@@ -4480,13 +4530,18 @@ function LineupPage(p) {
       var c = calcBatSD(pl, sl);
       return { left: String(i + 1) + "번 " + sl, name: pl.name, ct: pl.cardType,
         vals: [c.power, c.accuracy, c.eye, c.patience], sk: c.skillScore,
+        skPct: shareSkillPct(pl, "타자", sl, sdState["pts_" + sl]),
+        tr: Math.round(shareTrainScore(pl) * 10) / 10, trPct: shareTrainPct(pl),
         pot: sharePot(pl), score: c.total.toFixed(1) };
     }).filter(Boolean);
     var pits = SP_SLOTS.concat(["CP"]).concat(RP_SLOTS).map(function(sl) {
       var pl = pick(sl); if (!pl) return null;
       var c = calcPitSD(pl, sl);
+      var pcat = skillCatOf(pl);
       return { left: sl, name: pl.name, ct: pl.cardType, vals: [c.change, c.stuff, "", ""],
-        sk: c.skillScore, pot: sharePot(pl), score: c.total.toFixed(1) };
+        sk: c.skillScore, skPct: shareSkillPct(pl, pcat, sl, sdState["pts_" + sl]),
+        tr: Math.round(shareTrainScore(pl) * 10) / 10, trPct: shareTrainPct(pl),
+        pot: sharePot(pl), score: c.total.toFixed(1) };
     }).filter(Boolean);
     if (!bats.length && !pits.length) { alert("라인업에 선수를 먼저 넣어 주세요."); return; }
     var yb = sdSideOf(sdPick(sdState, 185)).year || sdSideOf(sdPick(sdState, 75)).year || "";

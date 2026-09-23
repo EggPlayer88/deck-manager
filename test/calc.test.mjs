@@ -14,7 +14,7 @@ import {
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
-  LAB_PRESET, KBO_TEAMS, sqName, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
+  LAB_PRESET, KBO_TEAMS, sqName, shareGrade, SHARE_GRADE, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 
@@ -2160,6 +2160,33 @@ console.log('\n[스쿼드 공유] 그림에 쓰는 이름 — 도감 구분용 �
   eq('소문자는 접미사가 아니다', sqName('로하스b') === '로하스b' ? 1 : 0, 1);
   eq('영문 이름은 그대로', sqName('ABC') === 'ABC' ? 1 : 0, 1);
   eq('빈 값도 터지지 않는다', sqName(null) === '' ? 1 : 0, 1);
+}
+
+
+console.log('\n[전력공유] 스킬·훈재 음영 — 상위 1% / 5% / 15% 를 경계로');
+{
+  eq('상위 1% 는 가장 밝게', shareGrade('skill', 0.4) === SHARE_GRADE.skill[0] ? 1 : 0, 1);
+  eq('딱 1% 도 가장 밝게', shareGrade('skill', 1) === SHARE_GRADE.skill[0] ? 1 : 0, 1);
+  eq('1% 를 넘으면 한 단계 어둡게', shareGrade('skill', 1.1) === SHARE_GRADE.skill[1] ? 1 : 0, 1);
+  eq('5% 까지는 둘째 단계', shareGrade('skill', 5) === SHARE_GRADE.skill[1] ? 1 : 0, 1);
+  eq('15% 까지는 셋째 단계', shareGrade('skill', 15) === SHARE_GRADE.skill[2] ? 1 : 0, 1);
+  eq('그 아래는 가장 어둡게', shareGrade('skill', 15.1) === SHARE_GRADE.skill[3] ? 1 : 0, 1);
+  eq('값이 없으면 가장 어둡게', shareGrade('skill', null) === SHARE_GRADE.skill[3] ? 1 : 0, 1);
+  eq('훈재는 다른 색 줄기', SHARE_GRADE.train[0] !== SHARE_GRADE.skill[0] ? 1 : 0, 1);
+  eq('네 단계씩', SHARE_GRADE.skill.length === 4 && SHARE_GRADE.train.length === 4 ? 1 : 0, 1);
+  /* 훈재분 점수 — 계산에 들어가는 값과 같은 가중치 */
+  var w3 = getW();
+  var b = { role: '타자', cardType: '골든글러브', trainP: 20, trainA: 18, trainE: 12, trainN: 10 };
+  eq('타자 훈재 = 파1 정0.85 선0.4 인0.15', Math.round(shareTrainScore(b) * 100) / 100,
+    Math.round((20 * w3.p + 18 * w3.a + 12 * w3.e + 10 * w3.n) * 100) / 100);
+  var p2 = { role: '투수', cardType: '골든글러브', trainC: 16, trainS: 22 };
+  eq('투수 훈재 = 변1.05 구1.35', Math.round(shareTrainScore(p2) * 100) / 100,
+    Math.round((16 * w3.c + 22 * w3.s) * 100) / 100);
+  eq('훈련이 없으면 0', shareTrainScore({ role: '타자', cardType: '임팩트' }), 0);
+  /* 고점 배분은 그 카드 분포의 꼭대기라 상위 0.1% 로 나와야 한다 */
+  eq('골글 타자 고점 배분은 맨 위 등급', shareTrainPct(b) <= 1 ? 1 : 0, 1);
+  eq('훈련 0 이면 꼴찌 쪽', shareTrainPct({ role: '타자', cardType: '골든글러브' }) > 90 ? 1 : 0, 1);
+  eq('모르는 카드 종류는 null', shareTrainPct({ role: '타자', cardType: '없는카드' }) === null ? 1 : 0, 1);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
