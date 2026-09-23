@@ -6449,7 +6449,8 @@ function dexSearch(index, slot, q, cardType, team) {
    in100(전체 순위 1~100위) 집계에서 팀마다 가장 높은 순위 유저의 덱을 그대로 담았다.
    실제로 쓰는 덱이라 골든글러브 장수·FA 장수 같은 제한도 이미 맞춰져 있다.
    자리값은 도감(global_players) 카드 id 다.
-   NC 는 원본에 투수가 유저별로 없고 집계 글만 있어 타자 아홉 자리만 들어 있다.
+   NC 투수만 원본이 유저별 표가 아니라 세 명 집계 글이다. 많이 쓰는 순으로,
+   제한(FA 2장 · 골글/올스타 역시너지)을 지키는 선에서 골라 채웠다.
    (2026-09-23 사용자 제공 자료 — 자세한 것은 docs/IN100_DECKS.md) */
 var LAB_PRESET = {
   "기아": { rank: 6, sp: 200, slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"a01932f7-3b93-4c29-b716-82bd7cd65f0b","SS":"0e72c754-17e7-486d-bbab-59207559e489","LF":"5500ea27-97d1-4a61-bb41-b033ef42f8d9","CF":"5346c4d2-7027-406b-bb69-51286d8f22d8","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"fa863930-4096-43b4-a563-3f18e9cd77a0","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"36a57b19-3dcb-443a-a3b3-5c0042ce8a35","SP3":"82bf7102-30bc-42b0-a176-1477cfd058e3","SP4":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP5":"8e6e3c01-13df-4eca-be27-9b543055e1cc","RP1":"07558eac-cd6c-4712-b74a-1dbb74e2cb0e","RP2":"c91eed98-ba29-4e07-a71a-90925df65a95","RP3":"3f98e1f6-ce40-4ce6-9f91-78e1b71f9f97","RP4":"eb2522fd-e8ac-4ae8-b403-2fa53908db77","RP5":"712bf7d1-60a2-4b59-87f8-64c6440ec567","RP6":"795e573f-ae9b-4f53-a040-c2a57a569adc","CP":"12c77fe4-ab8f-411a-b6f8-92420247dab2"} },
@@ -6460,7 +6461,7 @@ var LAB_PRESET = {
   "SSG": { rank: 5, sp: 201, slots: {"C":"47e7b3de-9966-4e55-8ba1-9bc0443780d2","1B":"326f17bc-e359-4aea-a6a9-ff69e7ddd741","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"7757453a-d217-473f-81d0-d261b7458c29","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"61ef6b87-f198-423b-bcc3-a0ada09b14d0","RF":"111e19ca-0f15-4821-94f5-c37992d286dc","DH":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SP1":"57575fce-be46-42ae-92c1-72662cfec961","SP2":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP3":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP4":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP5":"80ca71bb-b9cf-4141-b2cc-47fdf2a522dc","RP1":"67cd3fb1-3c83-4ab9-9833-074788603e09","RP2":"edf9d4b1-5164-4111-a466-206d4815cbeb","RP3":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP4":"35f1503c-be5d-4e44-ac67-3aa1612bfc8d","RP5":"3fb01b7a-7b01-4c0e-8568-d54824e1e950","RP6":"0000268b-ff4e-43ce-98a7-ce271fb2038d","CP":"db759674-7e03-4461-99ea-1900d57fd3ef"} },
   "롯데": { rank: 1, sp: 200, slots: {"C":"0a7e4cc7-3c76-495c-b557-ee89cf1e24d9","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"5568baff-0d4f-4f5f-84d7-e56fb5f6f82a","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"5500ea27-97d1-4a61-bb41-b033ef42f8d9","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"e393424e-d3f0-44ce-9ebc-113c7be356e2","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP3":"eba7ff7d-f4e7-463e-b92f-3007b1f781b4","SP4":"b20ea873-f851-41df-af87-9bf93727f137","SP5":"52c0cdca-355a-4448-b01d-de48e4ffcebe","RP1":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP2":"f1dd3177-35e7-40ba-9e2e-55a304161940","RP3":"f1270c04-cd46-402d-b508-c6ed50abb3e0","RP4":"19a2c2c0-198a-4c56-92f1-6438dc0b1e11","RP5":"09d32244-b8c5-43fb-bd99-648c3d0b2e59","RP6":"1d421d55-7299-4c3e-a7ac-b16efe27019d","CP":"ae2ea113-6edf-433b-a8a6-85afd30b001e"} },
   "한화": { rank: 4, sp: 200, slots: {"C":"28f4e88a-488b-46cc-a250-87df5373e245","1B":"6ee4b051-fce4-4c3e-86a2-4352e24ea246","2B":"2e783b65-d6e1-486a-8e57-3078ae31502e","3B":"7757453a-d217-473f-81d0-d261b7458c29","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"966cdff3-d332-4fe1-b09d-a13bebe23829","CF":"f443bf93-695a-4586-895d-ef313ec129b5","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"5f86691a-6463-4a65-86a9-5bec6b27ad11","SP1":"07ac79b1-8e8a-4512-bd6f-93fed4344c43","SP2":"c97f66e7-323b-43c6-ba0b-0b02fb0afe66","SP3":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP4":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP5":"d9d8e233-907e-4955-ad0e-34d743037259","RP1":"e542200f-1f0c-413a-818a-28b28e98bd72","RP2":"3e2c7c0a-809d-41e3-b98f-024c3f8983e3","RP3":"4140e10d-f1c4-41be-ad3f-77854ad48c23","RP4":"08ea7467-c981-4881-a24a-867c35b50579","RP5":"94cc50a4-c85b-45cf-9b10-cf295020825b","RP6":"86045978-6150-4dcd-8800-daca0340583b","CP":"7450050b-ea25-4632-902e-96ffded3ccba"} },
-  "NC": { rank: 23, sp: 200, slots: {"C":"20d27998-983f-4d2b-9932-ccc3a70ded06","1B":"1fb099b7-b04b-40a3-a856-dccd305ade03","2B":"5d6f7dc5-2465-4cd2-a7fa-20c625576296","3B":"47ff80b9-baa3-4ced-b0d4-4bac5ef7c454","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"4619f98c-2ca8-42eb-8402-97bdf657459d","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"bdb0c462-e915-4961-9795-2bd1ec0b2004"} },
+  "NC": { rank: 23, sp: 200, slots: {"C":"20d27998-983f-4d2b-9932-ccc3a70ded06","1B":"1fb099b7-b04b-40a3-a856-dccd305ade03","2B":"5d6f7dc5-2465-4cd2-a7fa-20c625576296","3B":"47ff80b9-baa3-4ced-b0d4-4bac5ef7c454","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"4619f98c-2ca8-42eb-8402-97bdf657459d","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"bdb0c462-e915-4961-9795-2bd1ec0b2004","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"0ec33cc9-7989-4966-8fe2-3b40d6d74078","SP3":"7c0e4204-813a-4657-993f-bf88ea8ea618","SP4":"60fd0770-617a-43c4-ac04-20b216053905","SP5":"2c713ea0-df6a-4af7-aa70-abca74a2a524","RP1":"eb5f97b3-3b8e-4a15-a62a-03c70c48331b","RP2":"e7a3aa1e-c651-4fda-af6d-cde0b665e5fa","RP3":"3e45cb71-e612-4b6b-92e5-94a21e15c82e","RP4":"9c3f992e-02f3-4038-8677-f8db1ed581ee","RP5":"64fbc86e-9b41-4f3e-920d-1a10d33e22a5","RP6":"adc0e9fc-d195-414b-a6a1-1eb42c5081b8","CP":"52bd6c83-9b8b-4d2b-bf43-1b3efe09b79b"} },
   "키움": { rank: 27, sp: 200, slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"95b63c08-2366-40c1-9ea7-4317f27c0096","2B":"94fba2a8-505e-44f6-a4d0-da9c6456814e","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"ffcf846b-de6b-434b-92eb-63faa8db6253","LF":"bce438b2-8911-4e5e-ba3d-e4afc4c9b648","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"eaeffeb0-b0eb-43bb-8f3d-4f378b77d63e","SP1":"7a6eb77b-ed50-4046-868c-a34026be8600","SP2":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP3":"5aed71ed-0ff9-4764-ab14-42e284d2060e","SP4":"57575fce-be46-42ae-92c1-72662cfec961","SP5":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","RP1":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP2":"95114e49-4ad4-495f-9563-9c11a3aae93c","RP3":"7a6ef7aa-616c-4055-8eb4-5311e1b782bb","RP4":"6a1d2632-7790-4134-9cab-d6162bbc806b","RP5":"63f4ff6c-4e70-45d2-9bbe-fd648e48be34","RP6":"0e21098b-c90c-4cdf-b906-3f2e5ef2a58d","CP":"6a5f0cc0-2d53-4324-bf87-851d53b8c73f"} }
 };
 var LAB_PRESET_NOTE = "in100 상위 100위 집계에서 그 팀 1등 덱을 그대로 가져옵니다";
@@ -6645,10 +6646,12 @@ function LabPage(p) {
         <span style={{ fontSize: 11, color: "var(--td)" }}>{filled + "/" + LAB_SLOTS.length + "자리"}</span>
         {limitChip("골글", limits.gg, limits.ggMax,
           "골든글러브 5장까지, 자팀 골글을 쓰면 6장까지 (자팀 " + limits.ggOwn + " · 타팀 " + limits.ggOther + ")."
-          + " 더 써도 되지만 한 장마다 모든 선수 모든 능력치가 " + LAB_GG_STEP + " 씩 깎입니다", true)}
+          + " 더 써도 되지만 한 장마다 모든 선수 모든 능력치가 " + LAB_GG_STEP
+          + " 씩 깎입니다 (-" + LAB_GG_ANTI_MAX + " 에서 멈춥니다)", true)}
         {limits.os > 0 && limitChip("올스타", limits.os, limits.osMax,
           "올스타 3장까지, 자팀 올스타를 쓰면 4장까지 (자팀 " + limits.osOwn + " · 타팀 " + limits.osOther + ")."
-          + " 더 써도 되지만 한 장마다 모든 선수 모든 능력치가 " + LAB_OS_STEP + " 씩 깎입니다", true)}
+          + " 더 써도 되지만 한 장마다 모든 선수 모든 능력치가 " + LAB_OS_STEP
+          + " 씩 깎입니다 (-" + LAB_OS_ANTI_MAX + " 에서 멈춥니다)", true)}
         {limitChip("FA·WC", limits.fa, limits.faMax, "자팀도 골글도 아닌 카드는 FA(임팩트·시그니처) 또는 와일드카드(국가대표)로만 쓸 수 있고, 둘을 합쳐 2장까지입니다. 이건 넘을 수 없습니다")}
         {limits.anti > 0 && (
           <span title={"한도를 넘겨 쓴 값입니다 — 골글 " + limits.ggEff + "장" + (limits.ggAnti ? " (-" + limits.ggAnti + ")" : "")
@@ -9231,8 +9234,8 @@ function labPl(pl, slot, top) {
 /* ── 덱 연구소 — 라인업 규칙과 자동 배치 ───────────────────────
    2026-09-18 사용자 확정 기획. 카드는 도감 전체에서 고르고, 아래 규칙은 고정이다.
      · 골든글러브 5장까지. 자팀 골글을 한 장이라도 쓰면 6장까지.
-       더 쓸 수도 있지만 한 장마다 모든 선수 모든 능력치가 2씩 깎인다 (역시너지)
-     · 올스타 3장까지. 자팀 올스타를 쓰면 4장까지. 더 쓰면 한 장마다 3씩 깎인다
+       더 쓸 수도 있지만 한 장마다 모든 선수 모든 능력치가 2씩 깎인다 (역시너지, -6 에서 멈춤)
+     · 올스타 3장까지. 자팀 올스타를 쓰면 4장까지. 더 쓰면 한 장마다 3씩 (-6 에서 멈춤)
      · FA(임팩트·시그니처) + 와일드카드(국가대표) 합쳐 2장까지 (이건 넘을 수 없다)
      · 자팀도 골글도 아니면 FA·와일드카드로만 쓸 수 있다 (자동으로 붙인다)
      · 세트덱 점수는 200 고정 (후보로 다들 채운다)
@@ -9241,16 +9244,18 @@ function labPl(pl, slot, top) {
      · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지는 모두 받는 것으로 본다 */
 /* 골든글러브 — 다섯 장까지는 그냥 쓴다. 자팀 골글을 쓰면 몇 장을 넣든 한 장만큼
    깎아 준다 (자팀2 + 타팀6 = 여덟 장이어도 일곱 장 쓴 것으로 본다).
-   그 위로는 쓸 수는 있는데 한 장마다 모든 선수 모든 능력치가 2씩 깎인다
-   (여섯 장 -2 · 일곱 장 -4 · 여덟 장 -6) */
+   그 위로는 쓸 수는 있는데 한 장마다 모든 선수 모든 능력치가 2씩 깎인다.
+   깎이는 값은 -6 에서 멈춘다 — 여섯 장 -2 · 일곱 장 -4 · 여덟 장 -6 · 아홉 장부터도 -6 */
 var LAB_GG_BASE = 5;
 var LAB_GG_OWN_BONUS = 1;
 var LAB_GG_STEP = 2;
+var LAB_GG_ANTI_MAX = 6;
 /* 올스타도 같은 꼴. 세 장까지 그냥 쓰고 자팀 올스타 한 장은 덤,
-   그 위로는 한 장마다 3씩 깎인다 (네 장 -3 · 다섯 장 -6) */
+   그 위로는 한 장마다 3씩 깎이되 -6 에서 멈춘다 (네 장 -3 · 다섯 장부터 -6) */
 var LAB_OS_BASE = 3;
 var LAB_OS_OWN_BONUS = 1;
 var LAB_OS_STEP = 3;
+var LAB_OS_ANTI_MAX = 6;
 var LAB_FA_MAX = 2;
 var LAB_BPC_IDX = 0;                 /* BPC 의 "1/1/4" */
 /* 세트덱 점수는 라인업에서 재지 않고 200 으로 둔다 — 실제로는 후보 자리로 다들 200 을
@@ -9328,8 +9333,9 @@ function labLimits(pk, teamName) {
   /* 자팀 카드를 쓰면 몇 장을 넣든 한 장만큼만 빼 준다 */
   var ggEff = gg - (ggOwn > 0 ? LAB_GG_OWN_BONUS : 0);
   var osEff = os - (osOwn > 0 ? LAB_OS_OWN_BONUS : 0);
-  var ggAnti = Math.max(0, ggEff - LAB_GG_BASE) * LAB_GG_STEP;
-  var osAnti = Math.max(0, osEff - LAB_OS_BASE) * LAB_OS_STEP;
+  /* 더 쌓이지 않는다 — 막 써도 -6 에서 멈춘다 (2026-09-23 사용자 확인) */
+  var ggAnti = Math.min(LAB_GG_ANTI_MAX, Math.max(0, ggEff - LAB_GG_BASE) * LAB_GG_STEP);
+  var osAnti = Math.min(LAB_OS_ANTI_MAX, Math.max(0, osEff - LAB_OS_BASE) * LAB_OS_STEP);
   return { gg: gg, ggOwn: ggOwn, ggOther: ggOther, ggEff: ggEff,
     ggMax: LAB_GG_BASE + (ggOwn > 0 ? LAB_GG_OWN_BONUS : 0),
     os: os, osOwn: osOwn, osOther: osOther, osEff: osEff,
