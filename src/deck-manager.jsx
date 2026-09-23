@@ -6642,6 +6642,12 @@ function LabPage(p) {
         <span style={{ fontSize: 11, color: "var(--td)" }}>{filled + "/" + LAB_SLOTS.length + "자리"}</span>
         {limitChip("골글", limits.gg, limits.ggMax, "골든글러브 5장까지. 자팀 골글을 쓰면 6장까지 (자팀 " + limits.ggOwn + " · 타팀 " + limits.ggOther + ")")}
         {limitChip("FA·WC", limits.fa, limits.faMax, "자팀도 골글도 아닌 카드는 FA(임팩트·시그니처) 또는 와일드카드(국가대표)로만 쓸 수 있고, 둘을 합쳐 2장까지입니다")}
+        {limits.os > 0 && (
+          <span title="타팀 올스타는 골든글러브처럼 그냥 쓸 수 있습니다 — FA 한도에 넣지 않습니다"
+            style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+              background: "var(--inner)", border: "1px solid var(--bd)", color: "var(--t2)", whiteSpace: "nowrap" }}>
+            {"타팀 올스타 " + limits.os}
+          </span>)}
         <button onClick={run} disabled={busy}
           title="세트덱 200 기준으로 구간 좌·우를 자동 최적화하고, 타순도 자동으로 잡아 세 티어 점수를 냅니다"
           style={{ marginLeft: mob ? 0 : "auto", padding: "6px 14px", fontSize: 13, fontWeight: 800,
@@ -6663,7 +6669,7 @@ function LabPage(p) {
 
       {limits.bad.length > 0 && (
         <div style={{ fontSize: 11, color: "#FF8A80", marginBottom: 8 }}>
-          {"자팀도 골글도 아니고 FA·와일드카드로도 쓸 수 없는 카드: "
+          {"자팀도 골글도 아니고 FA·와일드카드·올스타로도 쓸 수 없는 카드: "
             + limits.bad.map(function (b) { return b.name + "(" + b.cardType + ")"; }).join(", ")}
         </div>)}
       {msg && (<div style={{ fontSize: 11, color: "var(--td)", marginBottom: 8 }}>{msg}</div>)}
@@ -9280,20 +9286,24 @@ function labBestOrder(pk, sd, totalSP) {
   }
   return best;
 }
-/* 카드 제한 검사. 자팀 카드는 제한이 없다 */
+/* 카드 제한 검사. 자팀 카드는 제한이 없다.
+   올스타는 골든글러브처럼 타팀에서도 그냥 쓴다 — FA 한도에 넣지 않는다.
+   in100 100덱으로 확인했다: 타팀 올스타를 쓴 덱이 9개인데, 그것들을 FA 로 세면
+   FA 2장 규칙을 어기는 덱이 2개에서 10개로 늘어난다 (2026-09-23) */
 function labLimits(pk, teamName) {
-  var ggOwn = 0, ggOther = 0, fa = 0, bad = [];
+  var ggOwn = 0, ggOther = 0, fa = 0, os = 0, bad = [];
   LAB_SLOTS.forEach(function (sl) {
     var pl = pk(sl); if (!pl) return;
     var other = isOtherTeam(pl, teamName);
     if (pl.cardType === "골든글러브") { if (other) ggOther++; else ggOwn++; return; }
     if (!other) return;
+    if (pl.cardType === "올스타") { os++; return; }
     if (FA_CARDS[pl.cardType] || WILDCARD_CARDS[pl.cardType]) fa++;
     else bad.push({ slot: sl, name: pl.name, cardType: pl.cardType });
   });
   var ggMax = LAB_GG_BASE + (ggOwn > 0 ? LAB_GG_OWN_BONUS : 0);
   return { gg: ggOwn + ggOther, ggOwn: ggOwn, ggOther: ggOther, ggMax: ggMax,
-    fa: fa, faMax: LAB_FA_MAX, bad: bad,
+    fa: fa, faMax: LAB_FA_MAX, os: os, bad: bad,
     ok: (ggOwn + ggOther) <= ggMax && fa <= LAB_FA_MAX && bad.length === 0 };
 }
 /* 연도덱 후보 — 라인업에 실제로 들어간 연도들 */

@@ -1824,18 +1824,19 @@ function labBestOrder(pk, sd, totalSP) {
   return best;
 }
 function labLimits(pk, teamName) {
-  var ggOwn = 0, ggOther = 0, fa = 0, bad = [];
+  var ggOwn = 0, ggOther = 0, fa = 0, os = 0, bad = [];
   LAB_SLOTS.forEach(function (sl) {
     var pl = pk(sl); if (!pl) return;
     var other = isOtherTeam(pl, teamName);
     if (pl.cardType === "골든글러브") { if (other) ggOther++; else ggOwn++; return; }
     if (!other) return;
+    if (pl.cardType === "올스타") { os++; return; }
     if (FA_CARDS[pl.cardType] || WILDCARD_CARDS[pl.cardType]) fa++;
     else bad.push({ slot: sl, name: pl.name, cardType: pl.cardType });
   });
   var ggMax = LAB_GG_BASE + (ggOwn > 0 ? LAB_GG_OWN_BONUS : 0);
   return { gg: ggOwn + ggOther, ggOwn: ggOwn, ggOther: ggOther, ggMax: ggMax,
-    fa: fa, faMax: LAB_FA_MAX, bad: bad,
+    fa: fa, faMax: LAB_FA_MAX, os: os, bad: bad,
     ok: (ggOwn + ggOther) <= ggMax && fa <= LAB_FA_MAX && bad.length === 0 };
 }
 function labYears(pk, isBat) {

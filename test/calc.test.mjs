@@ -2015,6 +2015,13 @@ console.log('\n[덱 연구소] 라인업 규칙 — 2026-09-18 사용자 확정 
   var live = labCard(mkB('라이브', { team: 'LG', cardType: '라이브' }), '기아');
   eq('타팀 라이브는 쓸 수 없다고 짚는다', labLimits(mkPk([live]), '기아').bad.length, 1);
   eq('자팀 라이브는 괜찮다', labLimits(mkPk([labCard(mkB('라이브2', { cardType: '라이브' }), '기아')]), '기아').bad.length, 0);
+  /* 올스타는 골글처럼 타팀에서도 그냥 쓴다 — FA 한도에 안 들어간다 (in100 100덱으로 확인) */
+  var os = function (team) { return labCard(mkB('올' + Math.random(), { team: team, cardType: '올스타' }), '기아'); };
+  eq('타팀 올스타는 쓸 수 있다', labLimits(mkPk([os('LG')]), '기아').bad.length, 0);
+  eq('타팀 올스타는 FA 로 세지 않는다', labLimits(mkPk([os('LG'), fa(), fa()]), '기아').fa, 2);
+  eq('타팀 올스타를 따로 센다', labLimits(mkPk([os('LG'), os('NC')]), '기아').os, 2);
+  eq('타팀 올스타 둘에 FA 둘도 괜찮다', labLimits(mkPk([os('LG'), os('NC'), fa(), fa()]), '기아').ok ? 1 : 0, 1);
+  eq('자팀 올스타는 세지 않는다', labLimits(mkPk([os('기아')]), '기아').os, 0);
   /* 세트덱 상태 — 불펜 3/3/0 분업, 버프·시너지 최대 */
   var sd = labSdState('기아');
   eq('불펜은 1/1/4', sd.bpcIdx, LAB_BPC_IDX);
