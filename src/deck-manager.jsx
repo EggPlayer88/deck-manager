@@ -542,7 +542,10 @@ function calcBat(pl,lu,sdB){
   var fN=(pl.patience||0)+getEnhVal(pl.cardType,"인내",lu.enhance||"")+(lu.trainN||0)+(pl.specPatience||0)+(sb.n||0)+faAdj;
   var pts=(sb.ptSkills)||[];
   var mn=isLvManual(pl);
-  var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mn,pl.cardType,1,"타자",pts),"타자")
+  /* 연구소 티어는 스킬 이름·레벨로 원하는 점수를 정확히 만들 수 없어 점수를 그대로 받는다.
+     그 밖에는 늘 undefined 라 예전과 똑같이 스킬 세 칸에서 뽑는다 */
+  var ss=lu.ssOverride!==undefined&&lu.ssOverride!==null?lu.ssOverride
+        :getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mn,pl.cardType,1,"타자",pts),"타자")
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mn,pl.cardType,2,"타자",pts),"타자")
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mn,pl.cardType,3,"타자",pts),"타자");
   var t=fP*w.p+fA*w.a+fE*w.e+fN*(w.n||0)+ss;
@@ -570,7 +573,8 @@ function calcPit(pl,lu,sdB){
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
   var ptsP=(sb.ptSkills)||[];
   var mnP=isLvManual(pl);
-  var ss=getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mnP,pl.cardType,1,pt,ptsP),pt)
+  var ss=lu.ssOverride!==undefined&&lu.ssOverride!==null?lu.ssOverride
+        :getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mnP,pl.cardType,1,pt,ptsP),pt)
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mnP,pl.cardType,2,pt,ptsP),pt)
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mnP,pl.cardType,3,pt,ptsP),pt);
   var t=fC*w.c+fS*w.s+ss;
@@ -2657,6 +2661,53 @@ function getRPWeight(bpcIdx, slot, tactic) {
   return si < 0 ? 0 : (a[si] || 0);
 }
 
+/* ── 라인업 총점 ─────────────────────────────────────────────
+   라인업 화면 안에 있던 계산을 그대로 최상위로 옮겼다. 화면이 없어도 같은 점수가
+   나와야 덱 연구소처럼 화면 밖에서 수천 판을 돌려볼 수 있다.
+
+   pk(slot)  그 자리에 선 선수를 돌려주는 함수 (빈 자리는 null)
+   sd        버프 기준이 되는 세트덱 상태. 고점판독 중이면 고점 사본이 들어온다
+   o         lineupOpts() 가 만든, 라인업 바깥에서 정해지는 값 묶음 */
+function lineupLu(pl) {
+  return { enhance: pl.enhance || "9각성",
+    trainP: pl.trainP || 0, trainA: pl.trainA || 0, trainE: pl.trainE || 0,
+    trainN: pl.trainN || 0, trainC: pl.trainC || 0, trainS: pl.trainS || 0,
+    skill1: pl.skill1 || "", s1Lv: pl.s1Lv || 0,
+    skill2: pl.skill2 || "", s2Lv: pl.s2Lv || 0,
+    skill3: pl.skill3 || "", s3Lv: pl.s3Lv || 0,
+    ssOverride: pl.labSkillScore };
+}
+/* 타순·셋포·전술·불펜 편성 — 선수 하나하나가 아니라 라인업 전체에 걸리는 값 */
+function lineupOpts(sdState, totalSP) {
+  var st = sdState || {};
+  return {
+    batOrder: (st.batOrder && st.batOrder.length === 9) ? st.batOrder : BAT_SLOTS.slice(),
+    totalSP: totalSP || 0,
+    tactic: rpTactic(st),
+    bpcIdx: st.bpcIdx !== undefined ? st.bpcIdx : 4
+  };
+}
+function lineupBat(pl, slot, sd, o) {
+  var i = o.batOrder.indexOf(slot);
+  return calcBat(pl, lineupLu(pl), calcSDBonus(pl, slot, sd, o.totalSP, i >= 0 ? i : undefined));
+}
+function lineupPit(pl, slot, sd, o) {
+  return calcPit(pl, lineupLu(pl), calcSDBonus(pl, slot, sd, o.totalSP));
+}
+/* 자리의 값(타순) x 선수의 값(그 라인업 안에서의 강함 순위) 을 타자 아홉에 걸고,
+   투수는 전술별 예산으로 나눈 배율을 건다. 마무리는 늘 0.8 */
+function calcLineupTotal(pk, sd, o) {
+  var bats = o.batOrder.map(function(s) { return { slot: s, pl: pk(s) }; });
+  var sc = bats.map(function(x) { return x.pl ? lineupBat(x.pl, x.slot, sd, o).total : 0; });
+  var ranks = strRanks(sc);
+  var t = 0;
+  bats.forEach(function(x, i) { if (x.pl) t += sc[i] * batMult(i) * strMult(ranks[i]); });
+  SP_SLOTS.forEach(function(s, i) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * spMult(o.tactic, i); });
+  RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.tactic); });
+  var cp = pk("CP"); if (cp) t += lineupPit(cp, "CP", sd, o).total * CP_MULT;
+  return Math.round(t * 100) / 100;
+}
+
 /* 투수 묶음 상자 — 카드를 가로로 눕히고 상자는 사람 수만큼만 차지한다.
    예전처럼 네 칸을 같은 너비로 두고 카드를 세로로 쌓으면, 1명인 묶음에 빈 자리가 크게 남았다.
    창이 좁아지면 상자 단위로 다음 줄에 접힌다 */
@@ -3883,11 +3934,11 @@ function LineupPage(p) {
   /* 세트덱 패널 표시용 — 라이브 추가분을 뺀 순수 세트덱 점수 */
   var setPoint = totalSP - (sdState.liveSetPo || 0);
 
-  /* Helper: build lu + calc with SD bonus */
-  var mkLuB = function(pl) { return { enhance: pl.enhance || "9각성", trainP: pl.trainP || 0, trainA: pl.trainA || 0, trainE: pl.trainE || 0, trainN: pl.trainN || 0, trainC: pl.trainC || 0, trainS: pl.trainS || 0, skill1: pl.skill1 || "", s1Lv: pl.s1Lv || 0, skill2: pl.skill2 || "", s2Lv: pl.s2Lv || 0, skill3: pl.skill3 || "", s3Lv: pl.s3Lv || 0 }; };
+  /* 계산은 최상위 lineupBat/lineupPit/calcLineupTotal 이 한다. 화면은 값만 넘긴다 */
+  var luOpts = lineupOpts(sdState, totalSP);
   /* sd 를 안 주면 화면 기준(고점판독 중이면 고점 버프) */
-  var calcBatSD = function(pl, slot, sd) { var orderIdx = batOrder.indexOf(slot); return calcBat(pl, mkLuB(pl), calcSDBonus(pl, slot, sd || sdCalc, totalSP, orderIdx >= 0 ? orderIdx : undefined)); };
-  var calcPitSD = function(pl, slot, sd) { return calcPit(pl, mkLuB(pl), calcSDBonus(pl, slot, sd || sdCalc, totalSP)); };
+  var calcBatSD = function(pl, slot, sd) { return lineupBat(pl, slot, sd || sdCalc, luOpts); };
+  var calcPitSD = function(pl, slot, sd) { return lineupPit(pl, slot, sd || sdCalc, luOpts); };
 
   /* ── 그라데이션 색상 헬퍼 ── */
   var pctColor = function(val, allVals, baseColor) {
@@ -3946,24 +3997,7 @@ function LineupPage(p) {
   }, [lBats, sdState, players]);
 
   /* pk 로 뽑은 라인업의 총점 — 고점판독 중에는 현실 총점도 같이 구해 비교한다 */
-  var calcTotalWith = function(pk, sd) {
-    var bats = batOrder.map(function(s) { return { slot: s, pl: pk(s) }; });
-    var ranks = strRanks(bats.map(function(x) { return x.pl ? calcBatSD(x.pl, x.slot, sd).total : 0; }));
-    var t = 0;
-    bats.forEach(function(x, i) {
-      if (!x.pl) return;
-      /* 자리의 값(타순) x 선수의 값(그 라인업 안에서의 강함 순위) */
-      t += calcBatSD(x.pl, x.slot, sd).total * batMult(i) * strMult(ranks[i]);
-    });
-    /* 선발 — 중계 전술에 따라 배율이 달라진다 (기본 7.00 / 적극 6.66 / 분업 6.33) */
-    var tac = rpTactic(sdState);
-    SP_SLOTS.forEach(function(s, i) { var pl = pk(s); if (pl) t += calcPitSD(pl, s, sd).total * spMult(tac, i); });
-    /* 중계 — 편성(11종)별 상대비에 전술별 예산을 맞춘 값 */
-    RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += calcPitSD(pl, s, sd).total * getRPWeight(bpcIdx, s, tac); });
-    /* 마무리는 항상 0.8 */
-    var cp = pk("CP"); if (cp) t += calcPitSD(cp, "CP", sd).total * CP_MULT;
-    return Math.round(t * 100) / 100;
-  };
+  var calcTotalWith = function(pk, sd) { return calcLineupTotal(pk, sd || sdCalc, luOpts); };
   var totalScore = calcTotalWith(pick, sdCalc);
   /* 현실 총점은 내 덱 그대로의 선수와 버프로 */
   var realTotal = peakOn ? calcTotalWith(realPick, sdState) : totalScore;
@@ -8570,6 +8604,75 @@ function peakBuffState(real, probe) {
   ["_autoNatBat", "_autoNatPit", "_autoCatch"].forEach(function (k) {
     if ((parseInt(probe[k], 10) || 0) > (parseInt(real[k], 10) || 0)) out[k] = probe[k];
   });
+  return out;
+}
+
+/* ── 덱 연구소 — 능력치 가정 티어 ─────────────────────────────
+   연구소는 "이 카드를 이만큼 키웠다면" 을 가정하고 점수를 낸다. 가정하는 것은
+   스킬 · 훈련 재분배 · 특훈 세 가지뿐이고, 강화·각성·잠재력은 모든 티어에서 고점으로 둔다.
+
+   상위 0.1% 는 고점판독기(peakPl) 그대로다 — PEAK_TRAIN/PEAK_SPEC 의 점수가 실제로
+   분포의 0.1% 지점과 같다는 것을 확인해 두었다. 5% · 20% 는 앱이 "상위 몇 %" 를
+   보여줄 때 쓰는 그 분포에서 해당 분위 점수를 뽑아 맞춘다.
+     · 훈련 · 특훈 — 총점에 그대로 더해지는 값이라 고점 배분을 점수 비율로 줄이면 된다
+     · 스킬 — 이름과 레벨로는 원하는 점수를 정확히 만들 수 없어 점수를 직접 넘긴다
+       (lineupLu -> lu.ssOverride -> calcBat/calcPit) */
+var LAB_TIERS = [0.1, 5, 20];
+/* 분위수 배열에서 "상위 top%" 자리의 값. pctFromDist 의 반대 방향 */
+function distValueAt(arr, top) {
+  if (!arr || !arr.length) return null;
+  var x = (100 - top) / 100 * (arr.length - 1);
+  if (x <= 0) return arr[0];
+  if (x >= arr.length - 1) return arr[arr.length - 1];
+  var lo = Math.floor(x), hi = lo + 1;
+  return arr[lo] + (arr[hi] - arr[lo]) * (x - lo);
+}
+function labCat(pl) {
+  return pl.role === "타자" ? "타자" : pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
+}
+/* 벡터를 목표 점수에 맞춰 통째로 줄인다. 점수가 총점에 선형으로 들어가므로 이 비율이 곧 점수다 */
+function labScale(vec, wts, target) {
+  var cur = 0;
+  for (var i = 0; i < vec.length; i++) cur += vec[i] * wts[i];
+  if (!(cur > 0) || target === null || target === undefined) return null;
+  var k = target / cur;
+  return vec.map(function (v) { return Math.round(v * k * 100) / 100; });
+}
+/* 카드 하나를 그 티어의 가정 값으로 바꾼 사본. 원본은 건드리지 않는다.
+   slot 은 라인업 자리 (포수 스킬 분포 판정용) */
+function labPl(pl, slot, top) {
+  if (!pl) return pl;
+  var isBat = pl.role === "타자";
+  /* 포수도 다른 타자와 같은 스킬 표·분포로 본다. 연구소는 포수리드 6렙을 늘 받는 것으로
+     두므로 포수리드는 공짜고, 포수 칸을 따로 보면 오히려 두 번 세는 꼴이 된다
+     (분포는 버프 포함 값이고 calcBat 은 버프 뺀 값으로 센다) */
+  var pk = peakPl(pl, isBat ? "-" : slot);
+  if (!(top > 0.1)) return pk;           /* 0.1% = 고점판독기 그대로 */
+  var cat = labCat(pl), ct = pl.cardType, w = getW();
+  var out = Object.assign({}, pk);
+  /* 스킬 — 시즌은 스킬 분포에서 시그니처 표를 쓴다 (peakPl 과 같은 규칙) */
+  var sct = ct === "시즌" ? "시그니처" : ct;
+  var hand = isBat ? (pl.hand === "좌" || pl.hand === "양" ? pl.hand : "우") : (pl.hand === "좌" ? "좌" : "우");
+  var sv = distValueAt(PREBUILT_SKILL_DIST[skillDistKey(cat, sct, hand, false)], top);
+  if (sv !== null) out.labSkillScore = Math.round(sv * 100) / 100;
+  /* 훈련 재분배 */
+  var trK = "train_" + (isBat ? "bat" : "pit") + "_" + ct;
+  var trV = isBat ? [pk.trainP || 0, pk.trainA || 0, pk.trainE || 0, pk.trainN || 0] : [pk.trainC || 0, pk.trainS || 0];
+  var trW = isBat ? [w.p, w.a, w.e, w.n || 0] : [w.c, w.s];
+  var tr = labScale(trV, trW, distValueAt(PREBUILT_DIST[trK], top));
+  if (tr) {
+    if (isBat) { out.trainP = tr[0]; out.trainA = tr[1]; out.trainE = tr[2]; out.trainN = tr[3]; }
+    else { out.trainC = tr[0]; out.trainS = tr[1]; }
+  }
+  /* 특훈 — 분포 키는 specDistKey 가 FA·와일드카드까지 갈라 준다 */
+  var spK = specDistKey(pl, isBat);
+  var spV = isBat ? [pk.specPower || 0, pk.specAccuracy || 0, pk.specEye || 0, pk.specPatience || 0]
+                  : [pk.specChange || 0, pk.specStuff || 0];
+  var sp = labScale(spV, trW, distValueAt(PREBUILT_DIST[spK], top));
+  if (sp) {
+    if (isBat) { out.specPower = sp[0]; out.specAccuracy = sp[1]; out.specEye = sp[2]; out.specPatience = sp[3]; }
+    else { out.specChange = sp[0]; out.specStuff = sp[1]; }
+  }
   return out;
 }
 

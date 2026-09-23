@@ -12,6 +12,8 @@ import {
   dexAll, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
   isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
+  LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
+  lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 
 let pass = 0, fail = 0;
@@ -1870,6 +1872,99 @@ console.log('[직접 등록 카드] 2026-09-23 사용자 확인 — 계정에만
   eq('최대 ' + CUSTOM_MAX + '장까지만', dexAll().filter((p) => String(p.id).startsWith('x')).length, CUSTOM_MAX);
   setCustomPlayers([]);
   eq('비우면 도감만 남는다', dexAll().some((p) => p.id === 'c1') ? 1 : 0, 0);
+}
+
+
+console.log('\n[라인업 총점] 최상위로 뺀 계산이 예전 라인업 화면과 같아야 한다');
+{
+  const mk = (n, o) => Object.assign({ name: n, role: '타자', cardType: '골든글러브', team: '기아', year: '2024',
+    hand: '우', stars: 5, power: 150, accuracy: 140, eye: 130, patience: 120, enhance: '9각성' }, o || {});
+  const mkP = (n, o) => Object.assign({ name: n, role: '투수', position: '선발', cardType: '골든글러브', team: '기아',
+    year: '2024', hand: '우', stars: 5, change: 150, stuff: 145, enhance: '9각성' }, o || {});
+  const sd = { teamName: '기아', bpcIdx: 4 };
+  const o = lineupOpts(sd, 0);
+  eq('기본 타순은 도감 자리 순서', o.batOrder.join() === BAT_SLOTS.join() ? 1 : 0, 1);
+  eq('기본 불펜 편성은 4번', o.bpcIdx, 4);
+  eq('전술은 sdState 에서', o.tactic === rpTactic(sd) ? 1 : 0, 1);
+  /* 타자 한 명 · 1번타자 — 타순 x 강함 배율이 걸린다 */
+  const one = { C: mk('가') };
+  const t1 = calcLineupTotal((sl) => one[sl] || null, sd, o);
+  const solo = lineupBat(one.C, 'C', sd, o).total;
+  eq('한 명이면 타순1 x 강함1위', t1, Math.round(solo * batMult(0) * strMult(0) * 100) / 100, 0.011);
+  /* 선발 하나 — 기본 전술 7.00 예산의 1선발 배율 */
+  const sp = { SP1: mkP('나') };
+  const t2 = calcLineupTotal((sl) => sp[sl] || null, sd, o);
+  eq('SP1 은 선발 배율', t2, Math.round(lineupPit(sp.SP1, 'SP1', sd, o).total * spMult(o.tactic, 0) * 100) / 100, 0.011);
+  /* 마무리는 늘 0.8 */
+  const cp = { CP: mkP('다', { position: '마무리' }) };
+  eq('마무리는 0.8', calcLineupTotal((sl) => cp[sl] || null, sd, o),
+    Math.round(lineupPit(cp.CP, 'CP', sd, o).total * CP_MULT * 100) / 100, 0.011);
+  eq('빈 라인업은 0', calcLineupTotal(() => null, sd, o), 0);
+  /* 타순을 바꾸면 점수가 달라진다 — 자리의 값이 곧 배율이다 */
+  const two = { C: mk('가'), '1B': mk('나', { power: 100, accuracy: 100, eye: 100, patience: 100 }) };
+  /* 3번(1.15) 과 5번(1.00) — 센 타자를 앞 배율 자리에 두면 점수가 오른다 */
+  const oA = lineupOpts({ teamName: '기아', batOrder: ['2B', '3B', 'C', 'SS', '1B', 'LF', 'CF', 'RF', 'DH'] }, 0);
+  const oB = lineupOpts({ teamName: '기아', batOrder: ['2B', '3B', '1B', 'SS', 'C', 'LF', 'CF', 'RF', 'DH'] }, 0);
+  const pk2 = (sl) => two[sl] || null;
+  eq('센 타자를 3번에 두면 5번보다 점수가 높다',
+    calcLineupTotal(pk2, sd, oA) > calcLineupTotal(pk2, sd, oB) ? 1 : 0, 1);
+  eq('1번과 2번은 배율이 같다', batMult(0), batMult(1));
+  eq('3번·4번이 가장 높다', batMult(2) > batMult(0) && batMult(3) > batMult(0) ? 1 : 0, 1);
+}
+
+console.log('\n[덱 연구소] 능력치 가정 티어 — 2026-09-23 사용자 확정 기획');
+{
+  eq('티어는 0.1 · 5 · 20 세 가지', LAB_TIERS.join() === '0.1,5,20' ? 1 : 0, 1);
+  /* 분위수 배열에서 상위 % 뽑기 */
+  const arr = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  eq('상위 0% 는 맨 위', distValueAt(arr, 0), 100);
+  eq('상위 100% 는 맨 아래', distValueAt(arr, 100), 0);
+  eq('상위 50% 는 한가운데', distValueAt(arr, 50), 50);
+  eq('상위 20% 지점', distValueAt(arr, 20), 80);
+  eq('빈 배열은 null', distValueAt([], 5) === null ? 1 : 0, 1);
+  /* 목표 점수에 맞춰 벡터 줄이기 — 줄인 뒤 점수가 목표와 같아야 한다 */
+  const v = labScale([20, 18, 12, 10], [1.0, 0.85, 0.4, 0.15], 20.8);
+  const got = v[0] * 1.0 + v[1] * 0.85 + v[2] * 0.4 + v[3] * 0.15;
+  eq('벡터를 목표 점수에 맞춘다', Math.round(got * 10) / 10, 20.8, 0.05);
+  eq('비율이 같게 줄어든다', Math.round(v[0] / 20 * 100) / 100, Math.round(v[1] / 18 * 100) / 100, 0.02);
+  eq('0 벡터는 손대지 않는다', labScale([0, 0], [1, 1], 5) === null ? 1 : 0, 1);
+  /* 분포가 PEAK 표와 맞물린다 — 훈련 0.1% 지점이 고점 배분의 점수와 같다 */
+  const w2 = getW();
+  const pkT = PEAK_TRAIN['bat_골든글러브'];
+  const pkScore = pkT[0] * w2.p + pkT[1] * w2.a + pkT[2] * w2.e + pkT[3] * w2.n;
+  eq('훈련 고점표가 분포의 0.1% 지점', Math.round(distValueAt(PREBUILT_DIST['train_bat_골든글러브'], 0.1) * 100) / 100,
+    Math.round(pkScore * 100) / 100, 0.02);
+  /* 카드 하나를 세 티어로 — 위 티어가 늘 더 높아야 한다 */
+  const card = { name: '실험', role: '타자', cardType: '골든글러브', team: '기아', year: '2024', hand: '우',
+    stars: 5, power: 150, accuracy: 140, eye: 130, patience: 120, launchAngle: 0 };
+  const tot = LAB_TIERS.map((t) => { const p = labPl(card, '3B', t); return calcBat(p, lineupLu(p), null).total; });
+  eq('0.1% 가 5% 보다 높다', tot[0] > tot[1] ? 1 : 0, 1);
+  eq('5% 가 20% 보다 높다', tot[1] > tot[2] ? 1 : 0, 1);
+  eq('0.1% 는 고점판독기 그대로', tot[0], (function () { const p = peakPl(card, '-'); return calcBat(p, lineupLu(p), null).total; })());
+  /* 5%·20% 는 스킬 점수를 직접 받는다 */
+  const p5 = labPl(card, '3B', 5);
+  eq('5% 스킬 점수는 분포의 5% 지점', p5.labSkillScore,
+    Math.round(distValueAt(PREBUILT_SKILL_DIST[skillDistKey('타자', '골든글러브', '우', false)], 5) * 100) / 100, 0.011);
+  eq('lineupLu 가 그 점수를 넘긴다', lineupLu(p5).ssOverride, p5.labSkillScore);
+  eq('calcBat 이 그 점수를 그대로 쓴다', calcBat(p5, lineupLu(p5), null).skillScore, p5.labSkillScore, 0.011);
+  /* 포수도 다른 타자와 같은 표로 본다 — 포수리드 6렙은 어차피 늘 받는다 */
+  const cat = Object.assign({}, card, { subPosition: 'C' });
+  eq('포수 0.1% 도 포수 아닌 표', calcBat(labPl(cat, 'C', 0.1), lineupLu(labPl(cat, 'C', 0.1)), null).total,
+    calcBat(labPl(cat, 'DH', 0.1), lineupLu(labPl(cat, 'DH', 0.1)), null).total);
+  eq('포수 5% 도 역전되지 않는다',
+    calcBat(labPl(cat, 'C', 0.1), lineupLu(labPl(cat, 'C', 0.1)), null).total
+      > calcBat(labPl(cat, 'C', 5), lineupLu(labPl(cat, 'C', 5)), null).total ? 1 : 0, 1);
+  /* 평소 카드에는 아무 영향이 없어야 한다 */
+  eq('티어를 안 쓰면 ssOverride 없음', lineupLu(card).ssOverride === undefined ? 1 : 0, 1);
+  /* 투수도 같은 모양 */
+  const pit = { name: '실험투', role: '투수', position: '선발', cardType: '시그니처', team: '삼성', year: '2024',
+    hand: '우', stars: 5, change: 150, stuff: 145 };
+  const pt = LAB_TIERS.map((t) => { const p = labPl(pit, 'SP1', t); return calcPit(p, lineupLu(p), null).total; });
+  eq('투수도 티어가 뒤집히지 않는다', pt[0] > pt[1] && pt[1] > pt[2] ? 1 : 0, 1);
+  eq('선발 분류', labCat(pit) === '선발' ? 1 : 0, 1);
+  eq('타자 분류', labCat({ role: '타자' }) === '타자' ? 1 : 0, 1);
+  eq('중계 분류', labCat({ role: '투수', position: '중계' }) === '중계' ? 1 : 0, 1);
+  eq('마무리 분류', labCat({ role: '투수', position: '마무리' }) === '마무리' ? 1 : 0, 1);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
