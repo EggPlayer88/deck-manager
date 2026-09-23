@@ -14,7 +14,7 @@ import {
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_BPC_IDX, LAB_SLOTS,
-  labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
+  LAB_PRESET, KBO_TEAMS, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 
@@ -2061,6 +2061,51 @@ console.log('\n[덱 연구소] 라인업 규칙 — 2026-09-18 사용자 확정 
   eq('세트덱 점수는 티어와 무관하다', r.sp > 0 ? 1 : 0, 1);
   eq('타순은 아홉 자리 전부', r.tiers[0].order.slice().sort().join() === BAT_SLOTS.slice().sort().join() ? 1 : 0, 1);
   eq('빈 라인업도 터지지 않는다', labRun({}, '기아').tiers[0].total, 0);
+}
+
+
+console.log('\n[덱 연구소] 팀별 추천덱 — in100 1등 덱 (2026-09-23 사용자 제공)');
+{
+  var TEAMS10 = ['기아', '삼성', 'LG', '두산', 'KT', 'SSG', '롯데', '한화', 'NC', '키움'];
+  eq('열 구단 모두 있다', TEAMS10.filter(function (t) { return LAB_PRESET[t]; }).length, 10);
+  eq('덱 매니저가 아는 구단 이름만 쓴다',
+    Object.keys(LAB_PRESET).every(function (t) { return KBO_TEAMS.indexOf(t) >= 0; }) ? 1 : 0, 1);
+  /* 자리 이름은 연구소가 쓰는 것과 같아야 한다 */
+  var badSlot = [];
+  Object.keys(LAB_PRESET).forEach(function (t) {
+    Object.keys(LAB_PRESET[t].slots).forEach(function (s) { if (LAB_SLOTS.indexOf(s) < 0) badSlot.push(t + '/' + s); });
+  });
+  eq('모르는 자리 이름이 없다', badSlot.length, 0);
+  /* 한 덱에 같은 카드를 두 번 넣지 않는다 */
+  var dupTeam = [];
+  Object.keys(LAB_PRESET).forEach(function (t) {
+    var ids = Object.keys(LAB_PRESET[t].slots).map(function (s) { return LAB_PRESET[t].slots[s]; });
+    if (ids.length !== ids.filter(function (v, i2) { return ids.indexOf(v) === i2; }).length) dupTeam.push(t);
+  });
+  eq('겹치는 카드가 없다', dupTeam.length, 0);
+  /* 카드 id 는 도감 uuid 꼴 */
+  var badId = [];
+  Object.keys(LAB_PRESET).forEach(function (t) {
+    Object.keys(LAB_PRESET[t].slots).forEach(function (s) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(LAB_PRESET[t].slots[s])) badId.push(t + '/' + s);
+    });
+  });
+  eq('카드 id 가 모두 도감 uuid 꼴', badId.length, 0);
+  /* 순위와 셋포 */
+  eq('순위는 1~100 안', Object.keys(LAB_PRESET).every(function (t) {
+    var r = LAB_PRESET[t].rank; return r >= 1 && r <= 100; }) ? 1 : 0, 1);
+  eq('순위가 겹치지 않는다', (function () {
+    var r = Object.keys(LAB_PRESET).map(function (t) { return LAB_PRESET[t].rank; });
+    return r.filter(function (v, i2) { return r.indexOf(v) === i2; }).length; })(), 10);
+  eq('셋포는 200 이상', Object.keys(LAB_PRESET).every(function (t) { return LAB_PRESET[t].sp >= 200; }) ? 1 : 0, 1);
+  /* NC 만 타자 아홉 자리, 나머지는 스물한 자리 */
+  eq('NC 는 타자 아홉 자리', Object.keys(LAB_PRESET.NC.slots).length, 9);
+  eq('NC 말고는 스물한 자리', Object.keys(LAB_PRESET).filter(function (t) {
+    return t !== 'NC' && Object.keys(LAB_PRESET[t].slots).length === LAB_SLOTS.length; }).length, 9);
+  eq('NC 는 투수 자리가 비어 있다', LAB_PRESET.NC.slots.SP1 === undefined ? 1 : 0, 1);
+  /* 롯데 1등은 1위 덱 */
+  eq('롯데는 1위 덱', LAB_PRESET['롯데'].rank, 1);
+  eq('삼성은 2위 덱', LAB_PRESET['삼성'].rank, 2);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
