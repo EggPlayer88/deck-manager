@@ -6610,12 +6610,15 @@ function LabPage(p) {
     );
   };
 
-  var limitChip = function (label, n, max, tip) {
+  /* 칩 — soft 면 넘겨도 쓸 수 있다는 뜻이라 빨강 대신 주황으로 */
+  var limitChip = function (label, n, max, tip, soft) {
     var over = n > max;
+    var col = !over ? null : soft ? "#FFA726" : "#ef5350";
     return (
       <span title={tip} style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
-        background: over ? "rgba(239,83,80,0.15)" : "var(--inner)", border: "1px solid " + (over ? "#ef5350" : "var(--bd)"),
-        color: over ? "#ef5350" : "var(--t2)", whiteSpace: "nowrap" }}>{label + " " + n + "/" + max}</span>
+        background: over ? (soft ? "rgba(255,167,38,0.14)" : "rgba(239,83,80,0.15)") : "var(--inner)",
+        border: "1px solid " + (col || "var(--bd)"),
+        color: col || "var(--t2)", whiteSpace: "nowrap" }}>{label + " " + n + "/" + max}</span>
     );
   };
 
@@ -6640,13 +6643,20 @@ function LabPage(p) {
           {"\u2B50 추천덱"}
         </button>
         <span style={{ fontSize: 11, color: "var(--td)" }}>{filled + "/" + LAB_SLOTS.length + "자리"}</span>
-        {limitChip("골글", limits.gg, limits.ggMax, "골든글러브 5장까지. 자팀 골글을 쓰면 6장까지 (자팀 " + limits.ggOwn + " · 타팀 " + limits.ggOther + ")")}
-        {limitChip("FA·WC", limits.fa, limits.faMax, "자팀도 골글도 아닌 카드는 FA(임팩트·시그니처) 또는 와일드카드(국가대표)로만 쓸 수 있고, 둘을 합쳐 2장까지입니다")}
-        {limits.os > 0 && (
-          <span title="타팀 올스타는 골든글러브처럼 그냥 쓸 수 있습니다 — FA 한도에 넣지 않습니다"
-            style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
-              background: "var(--inner)", border: "1px solid var(--bd)", color: "var(--t2)", whiteSpace: "nowrap" }}>
-            {"타팀 올스타 " + limits.os}
+        {limitChip("골글", limits.gg, limits.ggMax,
+          "골든글러브 5장까지, 자팀 골글을 쓰면 6장까지 (자팀 " + limits.ggOwn + " · 타팀 " + limits.ggOther + ")."
+          + " 더 써도 되지만 한 장마다 모든 선수 모든 능력치가 " + LAB_GG_STEP + " 씩 깎입니다", true)}
+        {limits.os > 0 && limitChip("올스타", limits.os, limits.osMax,
+          "올스타 3장까지, 자팀 올스타를 쓰면 4장까지 (자팀 " + limits.osOwn + " · 타팀 " + limits.osOther + ")."
+          + " 더 써도 되지만 한 장마다 모든 선수 모든 능력치가 " + LAB_OS_STEP + " 씩 깎입니다", true)}
+        {limitChip("FA·WC", limits.fa, limits.faMax, "자팀도 골글도 아닌 카드는 FA(임팩트·시그니처) 또는 와일드카드(국가대표)로만 쓸 수 있고, 둘을 합쳐 2장까지입니다. 이건 넘을 수 없습니다")}
+        {limits.anti > 0 && (
+          <span title={"한도를 넘겨 쓴 값입니다 — 골글 " + limits.ggEff + "장" + (limits.ggAnti ? " (-" + limits.ggAnti + ")" : "")
+              + " · 올스타 " + limits.osEff + "장" + (limits.osAnti ? " (-" + limits.osAnti + ")" : "")
+              + ". 자팀 카드를 쓰면 몇 장을 넣든 한 장만큼 빼 줍니다"}
+            style={{ fontSize: 11, fontWeight: 800, padding: "2px 7px", borderRadius: 4,
+              background: "rgba(255,167,38,0.14)", border: "1px solid #FFA726", color: "#FFA726", whiteSpace: "nowrap" }}>
+            {"역시너지 모든 능력치 −" + limits.anti}
           </span>)}
         <button onClick={run} disabled={busy}
           title="세트덱 200 기준으로 구간 좌·우를 자동 최적화하고, 타순도 자동으로 잡아 세 티어 점수를 냅니다"
@@ -6696,7 +6706,8 @@ function LabPage(p) {
       </div>
       {res && (
         <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 10, lineHeight: 1.6 }}>
-          {"세트덱 " + res.sp + " 고정 · 불펜 1/1/4 기본 · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지 모두 적용 · 타순 자동"}
+          {"세트덱 " + res.sp + " 고정 · 불펜 1/1/4 기본 · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지 모두 적용 · 타순 자동"
+            + (res.limits.anti ? " · 역시너지 모든 능력치 −" + res.limits.anti + " 반영" : "")}
           {res.tiers[0].blanks.length > 0 && (<span style={{ color: "#FFA726" }}>{" · 연도덱을 안 골라 " + res.tiers[0].blanks.join("·") + " 구간은 비었습니다"}</span>)}
         </div>)}
 
@@ -9219,15 +9230,27 @@ function labPl(pl, slot, top) {
 
 /* ── 덱 연구소 — 라인업 규칙과 자동 배치 ───────────────────────
    2026-09-18 사용자 확정 기획. 카드는 도감 전체에서 고르고, 아래 규칙은 고정이다.
-     · 골든글러브 5장까지. 자팀 골글을 한 장이라도 쓰면 6장까지
-     · FA(임팩트·시그니처) + 와일드카드(국가대표) 합쳐 2장까지
+     · 골든글러브 5장까지. 자팀 골글을 한 장이라도 쓰면 6장까지.
+       더 쓸 수도 있지만 한 장마다 모든 선수 모든 능력치가 2씩 깎인다 (역시너지)
+     · 올스타 3장까지. 자팀 올스타를 쓰면 4장까지. 더 쓰면 한 장마다 3씩 깎인다
+     · FA(임팩트·시그니처) + 와일드카드(국가대표) 합쳐 2장까지 (이건 넘을 수 없다)
      · 자팀도 골글도 아니면 FA·와일드카드로만 쓸 수 있다 (자동으로 붙인다)
      · 세트덱 점수는 200 고정 (후보로 다들 채운다)
      · 불펜은 1/1/4 기본 고정
      · 타순은 자동 — 유저가 짜지 않는다
      · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지는 모두 받는 것으로 본다 */
+/* 골든글러브 — 다섯 장까지는 그냥 쓴다. 자팀 골글을 쓰면 몇 장을 넣든 한 장만큼
+   깎아 준다 (자팀2 + 타팀6 = 여덟 장이어도 일곱 장 쓴 것으로 본다).
+   그 위로는 쓸 수는 있는데 한 장마다 모든 선수 모든 능력치가 2씩 깎인다
+   (여섯 장 -2 · 일곱 장 -4 · 여덟 장 -6) */
 var LAB_GG_BASE = 5;
 var LAB_GG_OWN_BONUS = 1;
+var LAB_GG_STEP = 2;
+/* 올스타도 같은 꼴. 세 장까지 그냥 쓰고 자팀 올스타 한 장은 덤,
+   그 위로는 한 장마다 3씩 깎인다 (네 장 -3 · 다섯 장 -6) */
+var LAB_OS_BASE = 3;
+var LAB_OS_OWN_BONUS = 1;
+var LAB_OS_STEP = 3;
 var LAB_FA_MAX = 2;
 var LAB_BPC_IDX = 0;                 /* BPC 의 "1/1/4" */
 /* 세트덱 점수는 라인업에서 재지 않고 200 으로 둔다 — 실제로는 후보 자리로 다들 200 을
@@ -9287,24 +9310,33 @@ function labBestOrder(pk, sd, totalSP) {
   return best;
 }
 /* 카드 제한 검사. 자팀 카드는 제한이 없다.
-   올스타는 골든글러브처럼 타팀에서도 그냥 쓴다 — FA 한도에 넣지 않는다.
-   in100 100덱으로 확인했다: 타팀 올스타를 쓴 덱이 9개인데, 그것들을 FA 로 세면
-   FA 2장 규칙을 어기는 덱이 2개에서 10개로 늘어난다 (2026-09-23) */
+   골든글러브와 올스타는 한도를 넘겨도 쓸 수 있고, 넘긴 만큼 역시너지가 붙는다.
+   FA·와일드카드 2장만 넘을 수 없는 선이다.
+   올스타는 FA 한도에 넣지 않는다 — in100 100덱으로 확인했다 (2026-09-23) */
 function labLimits(pk, teamName) {
-  var ggOwn = 0, ggOther = 0, fa = 0, os = 0, bad = [];
+  var ggOwn = 0, ggOther = 0, osOwn = 0, osOther = 0, fa = 0, bad = [];
   LAB_SLOTS.forEach(function (sl) {
     var pl = pk(sl); if (!pl) return;
     var other = isOtherTeam(pl, teamName);
     if (pl.cardType === "골든글러브") { if (other) ggOther++; else ggOwn++; return; }
+    if (pl.cardType === "올스타") { if (other) osOther++; else osOwn++; return; }
     if (!other) return;
-    if (pl.cardType === "올스타") { os++; return; }
     if (FA_CARDS[pl.cardType] || WILDCARD_CARDS[pl.cardType]) fa++;
     else bad.push({ slot: sl, name: pl.name, cardType: pl.cardType });
   });
-  var ggMax = LAB_GG_BASE + (ggOwn > 0 ? LAB_GG_OWN_BONUS : 0);
-  return { gg: ggOwn + ggOther, ggOwn: ggOwn, ggOther: ggOther, ggMax: ggMax,
-    fa: fa, faMax: LAB_FA_MAX, os: os, bad: bad,
-    ok: (ggOwn + ggOther) <= ggMax && fa <= LAB_FA_MAX && bad.length === 0 };
+  var gg = ggOwn + ggOther, os = osOwn + osOther;
+  /* 자팀 카드를 쓰면 몇 장을 넣든 한 장만큼만 빼 준다 */
+  var ggEff = gg - (ggOwn > 0 ? LAB_GG_OWN_BONUS : 0);
+  var osEff = os - (osOwn > 0 ? LAB_OS_OWN_BONUS : 0);
+  var ggAnti = Math.max(0, ggEff - LAB_GG_BASE) * LAB_GG_STEP;
+  var osAnti = Math.max(0, osEff - LAB_OS_BASE) * LAB_OS_STEP;
+  return { gg: gg, ggOwn: ggOwn, ggOther: ggOther, ggEff: ggEff,
+    ggMax: LAB_GG_BASE + (ggOwn > 0 ? LAB_GG_OWN_BONUS : 0),
+    os: os, osOwn: osOwn, osOther: osOther, osEff: osEff,
+    osMax: LAB_OS_BASE + (osOwn > 0 ? LAB_OS_OWN_BONUS : 0),
+    fa: fa, faMax: LAB_FA_MAX,
+    ggAnti: ggAnti, osAnti: osAnti, anti: ggAnti + osAnti,
+    bad: bad, ok: fa <= LAB_FA_MAX && bad.length === 0 };
 }
 /* 연도덱 후보 — 라인업에 실제로 들어간 연도들 */
 function labYears(pk, isBat) {
@@ -9320,7 +9352,12 @@ function labYears(pk, isBat) {
 /* 연구소 한 판 — 티어마다 셋포를 최적화하고 타순을 자동으로 잡아 점수를 낸다.
    cards 는 {자리: 도감카드}. 세트덱 점수(totalSP)는 카드 종류로만 정해져 티어와 무관하다 */
 function labRun(cards, teamName, extra) {
-  var sd0 = labSdState(teamName, extra);
+  var lim = labLimits(function (sl) { return (cards && cards[sl]) || null; }, teamName);
+  /* 역시너지 — 모든 선수 모든 능력치가 깎인다. 유니폼 효과와 같은 자리에 음수로 넣는다
+     (calcSDBonus 가 uni* 를 그대로 더하므로 따로 손댈 곳이 없다) */
+  var anti = lim.anti ? { uniP: -lim.anti, uniA: -lim.anti, uniE: -lim.anti,
+    uniN: -lim.anti, uniC: -lim.anti, uniS: -lim.anti } : null;
+  var sd0 = labSdState(teamName, anti ? Object.assign({}, extra || {}, anti) : extra);
   /* 카드 사본은 자리마다 한 번만 만든다. 셋포 최적화가 이 함수를 수만 번 부르므로
      여기서 매번 만들면 계산이 1초를 넘는다 (능력치는 세트덱 상태와 무관하다) */
   var rawMemo = {};
@@ -9357,7 +9394,7 @@ function labRun(cards, teamName, extra) {
     return { tier: t, sd: sd, order: order, blanks: blanks,
       total: calcLineupTotal(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: order }), totalSP)) };
   });
-  return { sp: totalSP, tiers: tiers, limits: labLimits(raw, teamName) };
+  return { sp: totalSP, tiers: tiers, limits: lim };
 }
 
 function SkillCalculator(p) {

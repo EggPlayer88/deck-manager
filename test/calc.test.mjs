@@ -13,7 +13,7 @@ import {
   isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
-  LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
+  LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
   LAB_PRESET, KBO_TEAMS, sqName, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
@@ -2001,9 +2001,14 @@ console.log('\n[덱 연구소] 라인업 규칙 — 2026-09-18 사용자 확정 
   eq('타팀 골글만이면 5장까지', labLimits(mkPk([gg('LG'), gg('LG')]), '기아').ggMax, LAB_GG_BASE);
   eq('자팀 골글을 쓰면 6장까지', labLimits(mkPk([gg('기아'), gg('LG')]), '기아').ggMax, LAB_GG_BASE + LAB_GG_OWN_BONUS);
   eq('자팀1 + 타팀5 는 된다', labLimits(mkPk([gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').ok ? 1 : 0, 1);
-  eq('자팀1 + 타팀6 은 넘친다', labLimits(mkPk([gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').ok ? 1 : 0, 0);
+  /* 한도를 넘겨도 쓸 수 있다 — 대신 한 장마다 모든 능력치가 깎인다 */
+  eq('자팀1 + 타팀6 은 역시너지 -2', labLimits(mkPk([gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').anti, LAB_GG_STEP);
   eq('자팀2 + 타팀4 는 된다', labLimits(mkPk([gg('기아'), gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').ok ? 1 : 0, 1);
-  eq('자팀2 + 타팀5 는 넘친다', labLimits(mkPk([gg('기아'), gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').ok ? 1 : 0, 0);
+  eq('자팀2 + 타팀5 도 도합 일곱 장 취급 -2', labLimits(mkPk([gg('기아'), gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').anti, LAB_GG_STEP);
+  eq('자팀2 + 타팀6 은 여덟 장 취급 -4', labLimits(mkPk([gg('기아'), gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').anti, LAB_GG_STEP * 2);
+  eq('자팀0 + 타팀6 은 -2', labLimits(mkPk([gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').anti, LAB_GG_STEP);
+  eq('자팀0 + 타팀8 은 -6', labLimits(mkPk([gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').anti, LAB_GG_STEP * 3);
+  eq('한도 안이면 역시너지 없음', labLimits(mkPk([gg('기아'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG')]), '기아').anti, 0);
   /* FA·와일드카드는 합쳐 2장 */
   var fa = function () { return labCard(mkB('f' + Math.random(), { team: 'LG' }), '기아'); };
   var wc = function () { return labCard(mkB('w' + Math.random(), { team: 'LG', cardType: '국가대표' }), '기아'); };
@@ -2021,7 +2026,16 @@ console.log('\n[덱 연구소] 라인업 규칙 — 2026-09-18 사용자 확정 
   eq('타팀 올스타는 FA 로 세지 않는다', labLimits(mkPk([os('LG'), fa(), fa()]), '기아').fa, 2);
   eq('타팀 올스타를 따로 센다', labLimits(mkPk([os('LG'), os('NC')]), '기아').os, 2);
   eq('타팀 올스타 둘에 FA 둘도 괜찮다', labLimits(mkPk([os('LG'), os('NC'), fa(), fa()]), '기아').ok ? 1 : 0, 1);
-  eq('자팀 올스타는 세지 않는다', labLimits(mkPk([os('기아')]), '기아').os, 0);
+  eq('자팀 올스타도 장수에 센다', labLimits(mkPk([os('기아')]), '기아').os, 1);
+  eq('올스타 셋까지는 그냥', labLimits(mkPk([os('LG'), os('NC'), os('두산')]), '기아').anti, 0);
+  eq('올스타 넷이면 -3', labLimits(mkPk([os('LG'), os('NC'), os('두산'), os('KT')]), '기아').anti, LAB_OS_STEP);
+  eq('올스타 다섯이면 -6', labLimits(mkPk([os('LG'), os('NC'), os('두산'), os('KT'), os('SSG')]), '기아').anti, LAB_OS_STEP * 2);
+  eq('자팀 올스타 한 장은 덤 — 넷이어도 그냥', labLimits(mkPk([os('기아'), os('NC'), os('두산'), os('KT')]), '기아').anti, 0);
+  eq('자팀 올스타 둘이어도 덤은 한 장', labLimits(mkPk([os('기아'), os('기아'), os('NC'), os('두산'), os('KT')]), '기아').anti, LAB_OS_STEP);
+  /* 골글과 올스타 역시너지는 더해진다 */
+  eq('골글 여섯 + 올스타 넷이면 -5',
+    labLimits(mkPk([gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'), gg('LG'),
+      os('LG'), os('NC'), os('두산'), os('KT')]), '기아').anti, LAB_GG_STEP + LAB_OS_STEP);
   /* 세트덱 상태 — 불펜 3/3/0 분업, 버프·시너지 최대 */
   var sd = labSdState('기아');
   eq('불펜은 1/1/4', sd.bpcIdx, LAB_BPC_IDX);
@@ -2067,6 +2081,19 @@ console.log('\n[덱 연구소] 라인업 규칙 — 2026-09-18 사용자 확정 
   eq('0.1% 가 5% 보다 높다', r.tiers[0].total > r.tiers[1].total ? 1 : 0, 1);
   eq('5% 가 20% 보다 높다', r.tiers[1].total > r.tiers[2].total ? 1 : 0, 1);
   eq('세트덱 점수는 라인업과 무관하게 200', r.sp, LAB_SET_POINT);
+  /* 역시너지는 labLimits 가 세는 데서 끝나면 안 된다 — 실제 점수까지 내려가야 한다 */
+  var many = Object.assign({}, cards);
+  ['LF', 'CF', 'RF', 'SS', '3B', '1B'].forEach(function (sl, i2) {
+    many[sl] = labCard({ id: 'G' + i2, name: '골' + i2, role: '타자', cardType: '골든글러브',
+      team: 'LG', year: '2018', hand: '우', stars: 5, subPosition: sl,
+      power: 150, accuracy: 140, eye: 130, patience: 120 }, '기아');
+  });
+  var rg = labRun(many, '기아');
+  eq('타팀 골글 여섯이면 역시너지 -2', rg.limits.anti, LAB_GG_STEP);
+  eq('역시너지가 모든 능력치에 걸린다', rg.tiers[0].sd.uniP, -LAB_GG_STEP);
+  eq('투수 능력치에도 같이 걸린다', rg.tiers[0].sd.uniC, -LAB_GG_STEP);
+  eq('역시너지가 걸리면 점수가 내려간다',
+    rg.tiers[0].total < labRun(many, '기아', { uniP: 0 }).tiers[0].total + 1e-9 ? 1 : 0, 1);
   eq('타순은 아홉 자리 전부', r.tiers[0].order.slice().sort().join() === BAT_SLOTS.slice().sort().join() ? 1 : 0, 1);
   eq('빈 라인업도 터지지 않는다', labRun({}, '기아').tiers[0].total, 0);
 }
