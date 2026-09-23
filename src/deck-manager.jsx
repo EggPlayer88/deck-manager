@@ -1416,11 +1416,13 @@ var SQ_GRAD = {
   "올스타": ["#2d0060", "#7B1FA2", "#CE93D8"],
   "시즌": ["#1b3a1b", "#2E7D32", "#81C784"]
 };
-/* 수비 자리 — 카드가 겹치지 않게 외야 3 · 내야 4 · 홈 2 로 펼친다.
-   지명타자는 수비 자리가 없어 포수 옆에 둔다 */
-var SQ_POS = { LF: [.14, .13], CF: [.50, .13], RF: [.86, .13],
-  "3B": [.115, .45], SS: [.33, .45], "2B": [.67, .45], "1B": [.885, .45],
-  DH: [.32, .79], C: [.68, .79] };
+/* 수비 자리 — 실제 그라운드에 선 모양으로. 줄을 맞추면 딱딱해 보여서
+   중견수를 가장 높이, 좌·우익수는 조금 내리고, 1루·3루는 유격수·2루보다 더 내렸다.
+   포수는 홈 뒤 가운데에서 살짝 왼쪽, 지명타자는 그 오른쪽.
+   카드(188x244)가 겹치지 않도록 가로 .092 · 세로 .120 보다 넓게 벌려 두었다 */
+var SQ_POS = { CF: [.50, .13], LF: [.13, .21], RF: [.87, .21],
+  SS: [.34, .46], "2B": [.66, .46], "3B": [.11, .57], "1B": [.89, .57],
+  C: [.42, .84], DH: [.70, .84] };
 
 function sqRound(x, a, b, w, h, r) {
   x.beginPath(); x.moveTo(a + r, b);
@@ -6550,7 +6552,7 @@ function LabPage(p) {
       total: res.tiers[0].total.toFixed(1),
       sub: "상위 5% " + res.tiers[1].total.toFixed(1) + "   ·   상위 20% " + res.tiers[2].total.toFixed(1),
       bats: BAT_SLOTS.map(one).filter(Boolean),
-      pits: SP_SLOTS.concat(["CP"]).concat(RP_SLOTS).map(one).filter(Boolean)
+      pits: SP_SLOTS.concat(RP_SLOTS).concat(["CP"]).map(one).filter(Boolean)
     });
   };
   var saveAs = function (i) {
@@ -6750,7 +6752,7 @@ function LabPage(p) {
           <div style={{ padding: "6px 10px", fontSize: 12, fontWeight: 800, color: "var(--t2)", borderBottom: "1px solid var(--bd)" }}>
             {"마운드"}<span style={{ fontWeight: 400, color: "var(--td)", marginLeft: 6 }}>{"불펜 1/1/4 기본 고정"}</span>
           </div>
-          {SP_SLOTS.concat(["CP"]).concat(RP_SLOTS).map(function (sl) { return Row(sl, sl); })}
+          {SP_SLOTS.concat(RP_SLOTS).concat(["CP"]).map(function (sl) { return Row(sl, sl); })}
         </div>
       </div>
 
