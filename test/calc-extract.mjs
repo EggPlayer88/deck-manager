@@ -1975,7 +1975,13 @@ function calcLineupTotal(pk, sd, o) {
   var ranks = strRanks(sc);
   var t = 0;
   bats.forEach(function(x, i) { if (x.pl) t += sc[i] * batMult(i) * strMult(ranks[i]); });
-  SP_SLOTS.forEach(function(s, i) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * spMult(o.tactic, i); });
+  /* 선발 배율은 자리 번호가 아니라 그 라인업 안에서의 강함 순위로 준다.
+     꼭 이겨야 하는 경기에 센 선발을 붙일 수 있는 게임이라 1선발과 5선발의 값이 다른 것인데,
+     SP1 자리에 늘 가장 센 선발이 있는 것은 아니다 (2026-09-23 사용자 지정) */
+  var spPl = SP_SLOTS.map(pk);
+  var spSc = spPl.map(function(pl, i) { return pl ? lineupPit(pl, SP_SLOTS[i], sd, o).total : -1e9; });
+  var spRk = strRanks(spSc);
+  SP_SLOTS.forEach(function(s, i) { if (spPl[i]) t += spSc[i] * spMult(o.tactic, spRk[i]); });
   RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.tactic); });
   var cp = pk("CP"); if (cp) t += lineupPit(cp, "CP", sd, o).total * CP_MULT;
   return Math.round(t * 100) / 100;

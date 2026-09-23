@@ -1906,6 +1906,34 @@ console.log('\n[라인업 총점] 최상위로 뺀 계산이 예전 라인업 �
   const sp = { SP1: mkP('나') };
   const t2 = calcLineupTotal((sl) => sp[sl] || null, sd, o);
   eq('SP1 은 선발 배율', t2, Math.round(lineupPit(sp.SP1, 'SP1', sd, o).total * spMult(o.tactic, 0) * 100) / 100, 0.011);
+  /* 선발 배율은 자리가 아니라 강함 순위를 따른다 — SP1 이 가장 약하면 1.3 을 받는다 */
+  var five = {};
+  ['SP1', 'SP2', 'SP3', 'SP4', 'SP5'].forEach(function (sl, i2) {
+    five[sl] = mkP('선' + i2, { change: 100 + i2 * 20, stuff: 100 + i2 * 20 });
+  });
+  var pk5 = function (sl) { return five[sl] || null; };
+  var sc5 = SP_SLOTS.map(function (sl) { return lineupPit(five[sl], sl, sd, o).total; });
+  eq('일부러 SP1 을 가장 약하게 만들었다', sc5[0] < sc5[4] ? 1 : 0, 1);
+  var want5 = 0;
+  /* SP5 가 가장 세니 1.5, SP1 이 가장 약하니 1.3, 나머지는 1.4 */
+  [4, 3, 2, 1, 0].forEach(function (slotIdx, rank) { want5 += sc5[slotIdx] * spMult(o.tactic, rank); });
+  eq('센 선발이 1.5, 약한 선발이 1.3 을 받는다',
+    calcLineupTotal(pk5, sd, o), Math.round(want5 * 100) / 100, 0.011);
+  /* 예전처럼 자리 번호로 배율을 주면 값이 달라진다 — 그게 고친 점이다.
+     (자리를 맞바꿔도 총점이 똑같지는 않다. 포지션 특훈 만렙 값이 SP 자리마다 달라서다) */
+  var bySlot = 0;
+  sc5.forEach(function (v, i2) { bySlot += v * spMult(o.tactic, i2); });
+  eq('자리 번호로 주던 예전 셈과는 다르다',
+    Math.abs(calcLineupTotal(pk5, sd, o) - Math.round(bySlot * 100) / 100) > 1 ? 1 : 0, 1);
+  eq('예전 셈이 더 낮게 나온다 (센 선발이 1.3 을 받았으므로)',
+    bySlot < calcLineupTotal(pk5, sd, o) ? 1 : 0, 1);
+  /* 빈 자리는 순위에서 빠진다 — 셋만 넣으면 1.5 · 1.4 · 1.4 */
+  var three = { SP1: five.SP1, SP3: five.SP3, SP5: five.SP5 };
+  var want3 = lineupPit(five.SP5, 'SP5', sd, o).total * spMult(o.tactic, 0)
+    + lineupPit(five.SP3, 'SP3', sd, o).total * spMult(o.tactic, 1)
+    + lineupPit(five.SP1, 'SP1', sd, o).total * spMult(o.tactic, 2);
+  eq('셋만 넣으면 앞 세 배율만 쓴다',
+    calcLineupTotal(function (sl) { return three[sl] || null; }, sd, o), Math.round(want3 * 100) / 100, 0.011);
   /* 마무리는 늘 0.8 */
   const cp = { CP: mkP('다', { position: '마무리' }) };
   eq('마무리는 0.8', calcLineupTotal((sl) => cp[sl] || null, sd, o),

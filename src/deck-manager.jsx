@@ -2932,7 +2932,13 @@ function calcLineupTotal(pk, sd, o) {
   var ranks = strRanks(sc);
   var t = 0;
   bats.forEach(function(x, i) { if (x.pl) t += sc[i] * batMult(i) * strMult(ranks[i]); });
-  SP_SLOTS.forEach(function(s, i) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * spMult(o.tactic, i); });
+  /* 선발 배율은 자리 번호가 아니라 그 라인업 안에서의 강함 순위로 준다.
+     꼭 이겨야 하는 경기에 센 선발을 붙일 수 있는 게임이라 1선발과 5선발의 값이 다른 것인데,
+     SP1 자리에 늘 가장 센 선발이 있는 것은 아니다 (2026-09-23 사용자 지정) */
+  var spPl = SP_SLOTS.map(pk);
+  var spSc = spPl.map(function(pl, i) { return pl ? lineupPit(pl, SP_SLOTS[i], sd, o).total : -1e9; });
+  var spRk = strRanks(spSc);
+  SP_SLOTS.forEach(function(s, i) { if (spPl[i]) t += spSc[i] * spMult(o.tactic, spRk[i]); });
   RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.tactic); });
   var cp = pk("CP"); if (cp) t += lineupPit(cp, "CP", sd, o).total * CP_MULT;
   return Math.round(t * 100) / 100;
@@ -4225,6 +4231,10 @@ function LineupPage(p) {
   var batRanks = React.useMemo(function() {
     return strRanks(lBats.map(function(x) { return x.pl ? calcBatSD(x.pl, x.slot).total : 0; }));
   }, [lBats, sdState, players]);
+  /* 선발도 마찬가지 — 배율은 자리가 아니라 강함 순위를 따른다 */
+  var spRanks = React.useMemo(function() {
+    return strRanks(lSP.map(function(x) { return x.pl ? calcPitSD(x.pl, x.slot).total : -1e9; }));
+  }, [lSP, sdState, players]);
 
   /* pk 로 뽑은 라인업의 총점 — 고점판독 중에는 현실 총점도 같이 구해 비교한다 */
   var calcTotalWith = function(pk, sd) { return calcLineupTotal(pk, sd || sdCalc, luOpts); };
@@ -4289,7 +4299,7 @@ function LineupPage(p) {
     if (isBat) return batMult(idx) * strMult(batRanks[idx]);
     if (slot === "CP") return CP_MULT;
     if (RP_SLOTS.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTactic(sdState));
-    return spMult(rpTactic(sdState), idx);
+    return spMult(rpTactic(sdState), spRanks[idx]);
   };
   var fmtWt = function(w) { var t = w.toFixed(3); return t.charAt(t.length - 1) === "0" ? t.slice(0, -1) : t; };
   var wtTag = function(slot, idx, isBat, total, center) {
@@ -4298,7 +4308,11 @@ function LineupPage(p) {
     var why = isBat
       ? "타순 " + fmtWt(batMult(idx)) + " x 강함 " + fmtWt(strMult(batRanks[idx]))
         + " (이 라인업에서 " + (batRanks[idx] + 1) + "번째로 강함) = " + fmtWt(w)
-      : "이 자리의 배율은 " + fmtWt(w);
+      : SP_SLOTS.indexOf(slot) >= 0
+        ? "선발 중 " + (spRanks[idx] + 1) + "번째로 강해서 배율 " + fmtWt(w)
+          + " (가장 센 선발 " + fmtWt(spMult(rpTactic(sdState), 0))
+          + " · 가장 약한 선발 " + fmtWt(spMult(rpTactic(sdState), SP_SLOTS.length - 1)) + ")"
+        : "이 자리의 배율은 " + fmtWt(w);
     return (<div title={why + ". 총점에는 " + total.toFixed(1) + " x " + fmtWt(w) + " = " + (total * w).toFixed(1) + " 로 들어갑니다."}
       style={{ fontSize: 11, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, textAlign: center ? "center" : "inherit", cursor: "help" }}>
       {"×" + fmtWt(w)}</div>);
