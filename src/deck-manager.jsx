@@ -1401,6 +1401,159 @@ function downloadShareImage(d) {
   else go();
 }
 
+/* ── 스쿼드 공유 ─────────────────────────────────────────────
+   연구소에서 짠 덱을 1080x1920 그림 한 장으로. 전력공유와 달리 능력치는 넣지 않고
+   카드와 총점만 크게 보여 준다. 타자는 구장 위 수비 자리에, 투수는 선발+마무리 /
+   불펜 두 줄로. (2026-09-23 사용자 확인 — B안) */
+var SQ_W = 1080, SQ_H = 1920;
+/* 카드 바탕 — 앱의 CARD_BG 와 같은 색을 캔버스용 세 점으로 */
+var SQ_GRAD = {
+  "골든글러브": ["#7a5c00", "#D4AF37", "#FFF1A8"],
+  "시그니처": ["#6b0022", "#C2003A", "#FF6B9D"],
+  "국가대표": ["#003580", "#1565C0", "#64B5F6"],
+  "임팩트": ["#052e16", "#16a34a", "#86efac"],
+  "라이브": ["#7a2e00", "#E65100", "#FFB74D"],
+  "올스타": ["#2d0060", "#7B1FA2", "#CE93D8"],
+  "시즌": ["#1b3a1b", "#2E7D32", "#81C784"]
+};
+/* 수비 자리 — 카드가 겹치지 않게 외야 3 · 내야 4 · 홈 2 로 펼친다.
+   지명타자는 수비 자리가 없어 포수 옆에 둔다 */
+var SQ_POS = { LF: [.14, .13], CF: [.50, .13], RF: [.86, .13],
+  "3B": [.115, .45], SS: [.33, .45], "2B": [.67, .45], "1B": [.885, .45],
+  DH: [.32, .79], C: [.68, .79] };
+
+function sqRound(x, a, b, w, h, r) {
+  x.beginPath(); x.moveTo(a + r, b);
+  x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r);
+  x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath();
+}
+function sqFont(x, sz, w) { x.font = (w || 400) + " " + sz + "px 'Noto Sans KR', sans-serif"; }
+/* 도감이 동명이인을 가르려고 붙인 한 글자 접미사(로하스B · 반즈S)는 그림에서 뗀다 */
+function sqName(n) { return String(n || "").replace(/^([가-힣]{2,})[A-Z]$/, "$1"); }
+/* 카드 한 장 — 바탕은 카드 종류 색, 아래 띠에 이름, 위에 자리와 종류 */
+function sqCard(x, cx, cy, w, h, p) {
+  var c = SQ_GRAD[p.ct] || ["#2a2a2a", "#555", "#888"];
+  var a = cx - w / 2, b = cy - h / 2, rad = Math.min(14, w * 0.10);
+  x.save();
+  x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 16; x.shadowOffsetY = 6;
+  var g = x.createLinearGradient(a, b, a + w * 0.55, b + h);
+  g.addColorStop(0, c[0]); g.addColorStop(.35, c[1]); g.addColorStop(.55, c[2]);
+  g.addColorStop(.75, c[1]); g.addColorStop(1, c[0]);
+  x.fillStyle = g; sqRound(x, a, b, w, h, rad); x.fill();
+  x.restore();
+  x.strokeStyle = "rgba(255,255,255,.45)"; x.lineWidth = 2;
+  sqRound(x, a + 1, b + 1, w - 2, h - 2, rad - 1); x.stroke();
+  var bh = Math.round(h * 0.28);
+  x.fillStyle = "rgba(0,0,0,.66)"; sqRound(x, a + 4, b + h - bh - 4, w - 8, bh, 10); x.fill();
+  var ns = Math.round(bh * 0.60);
+  x.textAlign = "center"; x.fillStyle = "#fff"; sqFont(x, ns, 700);
+  x.fillText(sqName(p.name), cx, b + h - bh / 2 + ns * 0.36);
+  var badW = Math.max(40, w * 0.40), badH = Math.round(h * 0.115);
+  x.fillStyle = "rgba(0,0,0,.58)"; sqRound(x, a + 6, b + 6, badW, badH, 8); x.fill();
+  x.fillStyle = "#fff"; sqFont(x, Math.round(badH * 0.66), 700);
+  x.textAlign = "left"; x.fillText(p.slot, a + 13, b + 6 + badH * 0.73);
+  x.textAlign = "right"; x.fillStyle = "rgba(255,255,255,.95)";
+  sqFont(x, Math.round(badH * 0.62), 500);
+  x.fillText(SHARE_CT[p.ct] || p.ct, a + w - 11, b + 6 + badH * 0.73);
+}
+/* 구장 — 잔디·내야 흙·마운드·파울선을 그리고 그 위에 타자 카드 */
+function sqField(x, ox, oy, w, h, cw, ch, bats) {
+  x.save();
+  var g = x.createRadialGradient(ox + w / 2, oy + h * 0.86, 60, ox + w / 2, oy + h * 0.86, w * 0.80);
+  g.addColorStop(0, "#1e5230"); g.addColorStop(1, "#0d2617");
+  x.fillStyle = g; sqRound(x, ox, oy, w, h, 18); x.fill();
+  x.save(); sqRound(x, ox, oy, w, h, 18); x.clip();
+  x.strokeStyle = "rgba(255,255,255,.13)"; x.lineWidth = 4;
+  x.beginPath(); x.arc(ox + w / 2, oy + h * 0.95, w * 0.52, Math.PI * 1.06, Math.PI * 1.94); x.stroke();
+  var bx = ox + w / 2, by = oy + h * 0.90, sx = w * 0.30, sy = h * 0.30;
+  x.fillStyle = "#6d4c30";
+  x.beginPath(); x.moveTo(bx, by); x.lineTo(bx + sx, by - sy);
+  x.lineTo(bx, by - 2 * sy); x.lineTo(bx - sx, by - sy); x.closePath(); x.fill();
+  x.strokeStyle = "rgba(255,255,255,.34)"; x.lineWidth = 3; x.stroke();
+  x.fillStyle = "#7d5838"; x.beginPath(); x.arc(bx, by - sy, w * 0.052, 0, 7); x.fill();
+  x.strokeStyle = "rgba(255,255,255,.18)"; x.lineWidth = 3;
+  x.beginPath(); x.moveTo(bx, by); x.lineTo(bx - w * 0.50, by - h * 0.50);
+  x.moveTo(bx, by); x.lineTo(bx + w * 0.50, by - h * 0.50); x.stroke();
+  x.restore(); x.restore();
+  bats.forEach(function (p) {
+    var q = SQ_POS[p.slot]; if (!q) return;
+    sqCard(x, ox + w * q[0], oy + h * q[1], cw, ch, p);
+  });
+}
+function drawSquadCanvas(d) {
+  var cv = document.createElement("canvas");
+  cv.width = SQ_W; cv.height = SQ_H;
+  var x = cv.getContext("2d");
+  var g = x.createLinearGradient(0, 0, 0, SQ_H);
+  g.addColorStop(0, "#151b26"); g.addColorStop(1, "#0b0f16");
+  x.fillStyle = g; x.fillRect(0, 0, SQ_W, SQ_H);
+  /* 머리 — 팀 이름 · 연도 · 총점 */
+  x.textAlign = "left"; x.fillStyle = "#e8edf5"; sqFont(x, 50, 700); x.fillText(d.team, 44, 96);
+  x.textAlign = "right"; x.fillStyle = "#8fa0b8"; sqFont(x, 21); x.fillText("최적화 전력", SQ_W - 44, 58);
+  x.fillStyle = "#FFD54F"; sqFont(x, 72, 900); x.fillText(d.total, SQ_W - 44, 112);
+  var chips = [];
+  if (d.batYear) chips.push("타자 " + d.batYear);
+  if (d.pitYear) chips.push("투수 " + d.pitYear);
+  if (chips.length) {
+    var wid = chips.map(function (t) { sqFont(x, 23, 500); return x.measureText(t).width + 30; });
+    var tot = wid.reduce(function (a2, b2) { return a2 + b2; }, 0) + (chips.length - 1) * 12;
+    var cxp = SQ_W / 2 - tot / 2;
+    chips.forEach(function (t, i) {
+      x.fillStyle = "rgba(255,255,255,.07)"; sqRound(x, cxp, 62, wid[i], 40, 20); x.fill();
+      x.strokeStyle = "rgba(255,255,255,.16)"; x.lineWidth = 1.5;
+      sqRound(x, cxp, 62, wid[i], 40, 20); x.stroke();
+      x.textAlign = "left"; x.fillStyle = "#cdd8e6"; sqFont(x, 23, 500); x.fillText(t, cxp + 15, 89);
+      cxp += wid[i] + 12;
+    });
+  }
+  sqField(x, 30, 145, SQ_W - 60, 1015, 188, 244, d.bats);
+  /* 마운드 — 선발 다섯과 마무리를 한 줄에 (사이를 벌려서), 불펜 여섯을 한 줄에 */
+  var cw = 149, ch = 214, g1 = 14, g2 = 40;
+  var rowW = 6 * cw + 4 * g1 + g2, sx0 = (SQ_W - rowW) / 2;
+  var y = 1214;
+  var byS = {};
+  (d.pits || []).forEach(function (p) { byS[p.slot] = p; });
+  x.textAlign = "left"; x.fillStyle = "#8fa0b8"; sqFont(x, 21, 700);
+  x.fillText("선발", sx0, y);
+  x.fillText("마무리", sx0 + 5 * (cw + g1) + g2 - g1, y);
+  ["SP1", "SP2", "SP3", "SP4", "SP5"].forEach(function (sl, i) {
+    if (byS[sl]) sqCard(x, sx0 + cw / 2 + i * (cw + g1), y + 18 + ch / 2, cw, ch, byS[sl]);
+  });
+  if (byS.CP) sqCard(x, sx0 + cw / 2 + 5 * (cw + g1) + g2 - g1, y + 18 + ch / 2, cw, ch, byS.CP);
+  y += 18 + ch + 44;
+  var g3 = (rowW - 6 * cw) / 5;
+  x.fillStyle = "#8fa0b8"; sqFont(x, 21, 700); x.fillText("불펜", sx0, y);
+  ["RP1", "RP2", "RP3", "RP4", "RP5", "RP6"].forEach(function (sl, i) {
+    if (byS[sl]) sqCard(x, sx0 + cw / 2 + i * (cw + g3), y + 18 + ch / 2, cw, ch, byS[sl]);
+  });
+  y += 18 + ch + 38;
+  x.fillStyle = "#2a3344"; x.fillRect(44, y, SQ_W - 88, 2);
+  x.textAlign = "left"; x.fillStyle = "#8fa0b8"; sqFont(x, 20);
+  x.fillText(d.sub || "", 44, y + 38);
+  x.textAlign = "right"; x.fillStyle = "#6b7a90"; sqFont(x, 19);
+  x.fillText("컴투스 프로야구 v26 덱 매니저 · 덱 연구소", SQ_W - 44, y + 38);
+  return cv;
+}
+function downloadSquadImage(d) {
+  var go = function () {
+    var cv = drawSquadCanvas(d);
+    var name = "스쿼드_" + (d.team || "내덱") + "_" + new Date().toISOString().slice(0, 10) + ".png";
+    if (cv.toBlob) {
+      cv.toBlob(function (b) {
+        if (!b) { alert("이미지를 만들지 못했습니다."); return; }
+        var url = URL.createObjectURL(b);
+        var a = document.createElement("a"); a.href = url; a.download = name;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      }, "image/png");
+    } else {
+      var a2 = document.createElement("a"); a2.href = cv.toDataURL("image/png"); a2.download = name; a2.click();
+    }
+  };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(go).catch(go);
+  else go();
+}
+
 /* ================================================================
    UI COMPONENTS
    ================================================================ */
@@ -6374,6 +6527,31 @@ function LabPage(p) {
     }, 20);
   };
 
+  /* 스쿼드 공유 — 점수를 낸 뒤의 라인업을 1080x1920 그림으로.
+     연도는 최적화가 고른 연도 구간에서 읽는다 (180·185 가 타자, 55·190 이 투수) */
+  var squadNow = function () {
+    if (!res) { setMsg("먼저 ⚡ 점수 내기 를 눌러 주세요."); return; }
+    var sd = res.tiers[0].sd;
+    var yOf = function (list) {
+      for (var i = 0; i < list.length; i++) {
+        var y = sdSideOf(sdPick(sd, list[i])).year;
+        if (y) return y;
+      }
+      return "";
+    };
+    var one = function (sl) {
+      var c = cards[sl]; if (!c) return null;
+      return { slot: sl, name: c.name, ct: c.cardType };
+    };
+    downloadSquadImage({
+      team: team,
+      batYear: yOf([185, 180]), pitYear: yOf([190, 55]),
+      total: res.tiers[0].total.toFixed(1),
+      sub: "상위 5% " + res.tiers[1].total.toFixed(1) + "   ·   상위 20% " + res.tiers[2].total.toFixed(1),
+      bats: BAT_SLOTS.map(one).filter(Boolean),
+      pits: SP_SLOTS.concat(["CP"]).concat(RP_SLOTS).map(one).filter(Boolean)
+    });
+  };
   var saveAs = function (i) {
     var list = saves.slice();
     list[i] = { name: "실험 " + (i + 1), team: team, slots: Object.assign({}, slots), at: Date.now() };
@@ -6470,6 +6648,16 @@ function LabPage(p) {
             background: busy ? "var(--inner)" : "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6,
             color: busy ? "var(--td)" : "#1a1a1a", cursor: busy ? "default" : "pointer" }}>
           {busy ? "계산 중…" : "⚡ 점수 내기"}
+        </button>
+        <button onClick={squadNow} disabled={!res}
+          title={res ? "지금 스쿼드를 1080x1920 그림으로 내려받습니다 (커뮤니티 공유용)" : "먼저 ⚡ 점수 내기 를 눌러 주세요"}
+          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px",
+            fontSize: 13, fontWeight: 800,
+            background: res ? "linear-gradient(135deg,rgba(126,231,255,0.15),rgba(56,189,248,0.08))" : "var(--inner)",
+            border: "1px solid " + (res ? "rgba(126,231,255,0.35)" : "var(--bd)"), borderRadius: 6,
+            color: res ? "#7FD4FF" : "var(--td)", cursor: res ? "pointer" : "default",
+            fontFamily: "var(--h)", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+          <span aria-hidden="true">{"\uD83D\uDCF8"}</span>{"스쿼드 공유"}
         </button>
       </div>
 

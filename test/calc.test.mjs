@@ -14,7 +14,7 @@ import {
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
-  LAB_PRESET, KBO_TEAMS, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
+  LAB_PRESET, KBO_TEAMS, sqName, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 
@@ -2108,6 +2108,19 @@ console.log('\n[덱 연구소] 팀별 추천덱 — in100 1등 덱 (2026-09-23 �
   /* 롯데 1등은 1위 덱 */
   eq('롯데는 1위 덱', LAB_PRESET['롯데'].rank, 1);
   eq('삼성은 2위 덱', LAB_PRESET['삼성'].rank, 2);
+}
+
+
+console.log('\n[스쿼드 공유] 그림에 쓰는 이름 — 도감 구분용 접미사는 뗀다');
+{
+  eq('로하스B -> 로하스', sqName('로하스B') === '로하스' ? 1 : 0, 1);
+  eq('반즈S -> 반즈', sqName('반즈S') === '반즈' ? 1 : 0, 1);
+  eq('김진욱C -> 김진욱', sqName('김진욱C') === '김진욱' ? 1 : 0, 1);
+  eq('접미사 없는 이름은 그대로', sqName('박병호') === '박병호' ? 1 : 0, 1);
+  eq('한 글자 이름은 건드리지 않는다', sqName('가B') === '가B' ? 1 : 0, 1);
+  eq('소문자는 접미사가 아니다', sqName('로하스b') === '로하스b' ? 1 : 0, 1);
+  eq('영문 이름은 그대로', sqName('ABC') === 'ABC' ? 1 : 0, 1);
+  eq('빈 값도 터지지 않는다', sqName(null) === '' ? 1 : 0, 1);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
