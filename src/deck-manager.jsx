@@ -5442,8 +5442,9 @@ function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
   /* short 는 모바일 아래 탭 전용 줄임말 — 일곱 칸이라 원말이 들어가면 줄이 접힌다.
      원말은 title 로 붙는다 */
-  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"lab",label:"연구소",icon:"🔬"},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",soon:true}];
-  if(p.isAdmin){tabs.splice(4,0,{id:"db",label:"선수도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
+  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"lab",label:"연구소",icon:"🔬",beta:true},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",soon:true}];
+  /* 관리자 칸은 라커룸 앞에 — 메뉴 순서가 바뀌어도 자리를 찾아 넣는다 */
+  if(p.isAdmin){var at=tabs.map(function(t){return t.id;}).indexOf("locker");tabs.splice(at<0?tabs.length:at,0,{id:"db",label:"선수도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
   var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck,onChangeTeam:p.onChangeTeam};
 
   if(p.mobile){return(
@@ -5454,7 +5455,7 @@ function Nav(p){
         <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px"}}>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} title={t.label+(t.soon?" (준비중)":"")} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18,lineHeight:1}}>{t.icon}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}</span></button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} title={t.label+(t.soon?" (준비중)":"")} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18,lineHeight:1}}>{t.icon}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}{t.beta&&(<span style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></button>);})}
       </div>
     </React.Fragment>
   );}
@@ -5465,7 +5466,7 @@ function Nav(p){
       {open&&(<div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:150}}/>)}
       <div style={{position:"fixed",left:open?0:-260,top:0,bottom:0,width:240,background:"var(--side)",borderRight:"1px solid var(--bd)",zIndex:160,transition:"left 0.25s ease",display:"flex",flexDirection:"column",padding:"14px 0 16px"}}>
         <div style={{padding:"0 14px 12px"}}><DeckDropdown {...deckProps}/></div>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}</button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}</button>);})}
         <div style={{marginTop:"auto",padding:"12px 16px",borderTop:"1px solid var(--bd)"}}>
           {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
           <button onClick={p.toggleTheme} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:6}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
@@ -5482,7 +5483,7 @@ function Nav(p){
         <DeckDropdown {...deckProps}/>
       </div>
       <div style={{flex:1}}>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:13,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40}}><span style={{fontSize:15}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}</button>);})}
+        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:13,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40}}><span style={{fontSize:15}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}</button>);})}
       </div>
       <div style={{padding:"10px 14px",borderTop:"1px solid var(--bd)"}}>
         {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
@@ -6226,10 +6227,18 @@ function dexHay(sp) {
          .filter(Boolean).join(" ").toLowerCase();
 }
 /* 도감 카드의 맨몸 점수. 강화·스킬 없이 기본 수치만 본다 — 목록 정렬용이다. */
+/* 도감 목록 정렬·표시 점수 — 9각성(그 카드가 오를 수 있는 끝) 기준.
+   기본 능력치로 세면 강화 폭이 큰 카드가 실제보다 낮아 보인다. 9각성 가산이
+   타자 기준 임팩트 +39.3 부터 골든글러브 +73.0 까지 갈리기 때문이다.
+   라이브·올스타는 각성이 없지만 getEnhVal 이 표 끝(10강)으로 잘라 주므로
+   "9각성" 을 넣어도 그 카드의 최대치가 나온다 (2026-09-23 사용자 요청) */
 function dexScore(sp, w) {
+  var ct = sp.cardType;
+  var e = function (stat) { return getEnhVal(ct, stat, "9각성"); };
   return sp.role === "타자"
-    ? (sp.power || 0) * w.p + (sp.accuracy || 0) * w.a + (sp.eye || 0) * w.e + (sp.patience || 0) * w.n
-    : (sp.change || 0) * w.c + (sp.stuff || 0) * w.s;
+    ? ((sp.power || 0) + e("파워")) * w.p + ((sp.accuracy || 0) + e("정확")) * w.a
+      + ((sp.eye || 0) + e("선구")) * w.e + ((sp.patience || 0) + e("인내")) * w.n
+    : ((sp.change || 0) + e("변화")) * w.c + ((sp.stuff || 0) + e("구위")) * w.s;
 }
 /* 검색 인덱스. 창을 열 때 한 번만 만든다. */
 function buildDexIndex(list, w) {
@@ -6349,7 +6358,7 @@ function LabPage(p) {
     var list = saves.slice();
     list[i] = { name: "실험 " + (i + 1), team: team, slots: Object.assign({}, slots), at: Date.now() };
     (p.saveLab || function () {})(list.slice(0, LAB_MAX_SAVES));
-    setMsg("실험 " + (i + 1) + " 에 담았습니다.");
+    setMsg("실험 " + (i + 1) + " 에 저장했습니다.");
   };
   var loadFrom = function (i) {
     var v = saves[i]; if (!v) return;
@@ -6461,6 +6470,9 @@ function LabPage(p) {
         </div>)}
 
       {/* 실험본 3개 */}
+      <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 4 }}>
+        {"실험본 — 지금 짠 라인업을 덱마다 세 개까지 저장해 두고 오가며 견줍니다 (내 덱은 바뀌지 않습니다)"}
+      </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
         {[0, 1, 2].map(function (i) {
           var v = saves[i];
@@ -6468,11 +6480,11 @@ function LabPage(p) {
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--inner)",
               border: "1px solid var(--bd)", borderRadius: 6, padding: "3px 6px" }}>
               <span style={{ fontSize: 11, color: v ? "var(--t2)" : "var(--td)", whiteSpace: "nowrap" }}>
-                {"실험 " + (i + 1) + (v ? " · " + v.team + " " + Object.keys(v.slots || {}).length + "장" : " · 빔")}
+                {"실험 " + (i + 1) + (v ? " · " + v.team + " " + Object.keys(v.slots || {}).length + "장" : " · 비어 있음")}
               </span>
-              <button onClick={function () { saveAs(i); }} title="지금 라인업을 이 자리에 담습니다"
-                style={{ padding: "2px 6px", fontSize: 11, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--acc)", cursor: "pointer" }}>{"담기"}</button>
-              {v && (<button onClick={function () { loadFrom(i); }} title="이 실험본을 불러옵니다"
+              <button onClick={function () { saveAs(i); }} title={"지금 화면의 라인업을 실험 " + (i + 1) + " 자리에 저장합니다 (덮어씁니다)"}
+                style={{ padding: "2px 6px", fontSize: 11, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--acc)", cursor: "pointer" }}>{"저장"}</button>
+              {v && (<button onClick={function () { loadFrom(i); }} title={"실험 " + (i + 1) + " 에 저장해 둔 라인업을 화면으로 불러옵니다"}
                 style={{ padding: "2px 6px", fontSize: 11, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--t2)", cursor: "pointer" }}>{"열기"}</button>)}
               {v && (<button onClick={function () { dropSave(i); }} title="이 실험본을 비웁니다"
                 style={{ padding: "2px 5px", fontSize: 11, background: "none", border: "none", color: "var(--td)", cursor: "pointer" }}>{"\u2715"}</button>)}
@@ -6536,7 +6548,7 @@ function LabPage(p) {
                       <Badge type={e.sp.cardType} />
                       <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)" }}>{e.sp.name}</span>
                       <span style={{ fontSize: 11, color: "var(--td)" }}>{[e.sp.team, e.sp.year, e.sp.role === "타자" ? e.sp.subPosition : e.sp.position].filter(Boolean).join(" · ")}</span>
-                      <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--acc)", fontFamily: "var(--m)" }}>{e.score}</span>
+                      <span title="9각성까지 올렸을 때의 능력치 점수입니다" style={{ marginLeft: "auto", fontSize: 12, color: "var(--acc)", fontFamily: "var(--m)" }}>{e.score}</span>
                     </button>
                   );
                 })}
@@ -7480,7 +7492,7 @@ function MyPlayersPage(p) {
                         </div>
                       </div>
                       {already ? (<span style={{ fontSize: 11, color: "var(--acc)", flexShrink: 0 }}>{"등록됨"}</span>)
-                               : (<span style={{ fontSize: 12, fontWeight: 700, color: "var(--t2)", flexShrink: 0 }}>{e.score.toFixed(1)}</span>)}
+                               : (<span title="9각성까지 올렸을 때의 능력치 점수입니다" style={{ fontSize: 12, fontWeight: 700, color: "var(--t2)", flexShrink: 0 }}>{e.score.toFixed(1)}</span>)}
                     </div>
                   );
                 })}

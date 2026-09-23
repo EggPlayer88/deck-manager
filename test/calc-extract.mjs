@@ -391,9 +391,12 @@ function dexHay(sp) {
          .filter(Boolean).join(" ").toLowerCase();
 }
 function dexScore(sp, w) {
+  var ct = sp.cardType;
+  var e = function (stat) { return getEnhVal(ct, stat, "9각성"); };
   return sp.role === "타자"
-    ? (sp.power || 0) * w.p + (sp.accuracy || 0) * w.a + (sp.eye || 0) * w.e + (sp.patience || 0) * w.n
-    : (sp.change || 0) * w.c + (sp.stuff || 0) * w.s;
+    ? ((sp.power || 0) + e("파워")) * w.p + ((sp.accuracy || 0) + e("정확")) * w.a
+      + ((sp.eye || 0) + e("선구")) * w.e + ((sp.patience || 0) + e("인내")) * w.n
+    : ((sp.change || 0) + e("변화")) * w.c + ((sp.stuff || 0) + e("구위")) * w.s;
 }
 function buildDexIndex(list, w) {
   var out = [];

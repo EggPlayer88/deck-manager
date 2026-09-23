@@ -973,10 +973,19 @@ const ids = (arr) => arr.map(x => x.sp.id).join('');
 eq('인덱스 길이', IX.length, 5);
 eq('검색용 한 줄에 임팩트종류가 들어간다', dexHay(DEX[0]).indexOf('여름사나이') >= 0 ? 1 : 0, 1);
 eq('검색용 한 줄에 팀이 들어간다', dexHay(DEX[0]).indexOf('기아') >= 0 ? 1 : 0, 1);
-eq('타자 점수 = 파1 정0.85 선0.4 인0.15',
-   Math.round(dexScore(DEX[0], W) * 100) / 100, Math.round((90 + 85 * 0.85 + 70 * 0.4 + 60 * 0.15) * 100) / 100);
-eq('투수 점수 = 변1.05 구1.35',
-   Math.round(dexScore(DEX[3], W) * 100) / 100, Math.round((64 * 1.05 + 66 * 1.35) * 100) / 100);
+/* 도감 정렬 점수는 9각성 기준이다 — 기본 능력치로 세면 강화 폭이 큰 카드가 낮아 보인다 */
+const enhB = (ct) => getEnhVal(ct, '파워', '9각성') * W.p + getEnhVal(ct, '정확', '9각성') * W.a
+  + getEnhVal(ct, '선구', '9각성') * W.e + getEnhVal(ct, '인내', '9각성') * W.n;
+const enhP = (ct) => getEnhVal(ct, '변화', '9각성') * W.c + getEnhVal(ct, '구위', '9각성') * W.s;
+eq('타자 점수 = (기본 + 9각성) x 파1 정0.85 선0.4 인0.15',
+   Math.round(dexScore(DEX[0], W) * 100) / 100,
+   Math.round((90 + 85 * 0.85 + 70 * 0.4 + 60 * 0.15 + enhB('임팩트')) * 100) / 100);
+eq('9각성 가산이 실제로 들어간다', dexScore(DEX[0], W) > 90 + 85 * 0.85 + 70 * 0.4 + 60 * 0.15 ? 1 : 0, 1);
+eq('강화 폭이 큰 카드가 더 많이 오른다', enhB('골든글러브') > enhB('임팩트') ? 1 : 0, 1);
+eq('라이브는 각성이 없어도 표 끝으로 잘린다', enhB('라이브') > 0 ? 1 : 0, 1);
+eq('투수 점수 = (기본 + 9각성) x 변1.05 구1.35',
+   Math.round(dexScore(DEX[3], W) * 100) / 100,
+   Math.round((64 * 1.05 + 66 * 1.35 + enhP('임팩트')) * 100) / 100);
 
 /* 자리 구분 — 투수는 보직까지 맞아야 한다 */
 eq('타자 자리엔 타자만', ids(dexSearch(IX, '타자', '', '', '')) === 'acb' ? 1 : 0, 1);
