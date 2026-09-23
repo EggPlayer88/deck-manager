@@ -13,7 +13,7 @@ import {
   isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
-  LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_BPC_IDX, LAB_SLOTS,
+  LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
   LAB_PRESET, KBO_TEAMS, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
@@ -2017,8 +2017,9 @@ console.log('\n[덱 연구소] 라인업 규칙 — 2026-09-18 사용자 확정 
   eq('자팀 라이브는 괜찮다', labLimits(mkPk([labCard(mkB('라이브2', { cardType: '라이브' }), '기아')]), '기아').bad.length, 0);
   /* 세트덱 상태 — 불펜 3/3/0 분업, 버프·시너지 최대 */
   var sd = labSdState('기아');
-  eq('불펜은 3/3/0', sd.bpcIdx, LAB_BPC_IDX);
-  eq('3/3/0 은 분업이 켜진다', rpTactic(sd) === '분업' ? 1 : 0, 1);
+  eq('불펜은 1/1/4', sd.bpcIdx, LAB_BPC_IDX);
+  eq('전술은 기본 (분업·적극을 켜지 않는다)', rpTactic(sd) === '기본' ? 1 : 0, 1);
+  eq('세트덱 점수는 200 고정', LAB_SET_POINT, 200);
   eq('포수리드 6렙', sd.catchLead === '6렙' ? 1 : 0, 1);
   eq('국대에이스 6렙', (sd.natBat === '6렙' && sd.natPit === '6렙') ? 1 : 0, 1);
   eq('시너지는 모두 받는다', (sd.synLive && sd.synImpact && sd.synSig) ? 1 : 0, 1);
@@ -2058,7 +2059,7 @@ console.log('\n[덱 연구소] 라인업 규칙 — 2026-09-18 사용자 확정 
   eq('티어 순서는 0.1 · 5 · 20', r.tiers.map(function (x) { return x.tier; }).join() === '0.1,5,20' ? 1 : 0, 1);
   eq('0.1% 가 5% 보다 높다', r.tiers[0].total > r.tiers[1].total ? 1 : 0, 1);
   eq('5% 가 20% 보다 높다', r.tiers[1].total > r.tiers[2].total ? 1 : 0, 1);
-  eq('세트덱 점수는 티어와 무관하다', r.sp > 0 ? 1 : 0, 1);
+  eq('세트덱 점수는 라인업과 무관하게 200', r.sp, LAB_SET_POINT);
   eq('타순은 아홉 자리 전부', r.tiers[0].order.slice().sort().join() === BAT_SLOTS.slice().sort().join() ? 1 : 0, 1);
   eq('빈 라인업도 터지지 않는다', labRun({}, '기아').tiers[0].total, 0);
 }
@@ -2097,7 +2098,8 @@ console.log('\n[덱 연구소] 팀별 추천덱 — in100 1등 덱 (2026-09-23 �
   eq('순위가 겹치지 않는다', (function () {
     var r = Object.keys(LAB_PRESET).map(function (t) { return LAB_PRESET[t].rank; });
     return r.filter(function (v, i2) { return r.indexOf(v) === i2; }).length; })(), 10);
-  eq('셋포는 200 이상', Object.keys(LAB_PRESET).every(function (t) { return LAB_PRESET[t].sp >= 200; }) ? 1 : 0, 1);
+  eq('원본 셋포는 200 이상 (연구소는 200 으로 본다)',
+    Object.keys(LAB_PRESET).every(function (t) { return LAB_PRESET[t].sp >= LAB_SET_POINT; }) ? 1 : 0, 1);
   /* NC 만 타자 아홉 자리, 나머지는 스물한 자리 */
   eq('NC 는 타자 아홉 자리', Object.keys(LAB_PRESET.NC.slots).length, 9);
   eq('NC 말고는 스물한 자리', Object.keys(LAB_PRESET).filter(function (t) {

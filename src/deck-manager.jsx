@@ -6465,7 +6465,7 @@ function LabPage(p) {
         {limitChip("골글", limits.gg, limits.ggMax, "골든글러브 5장까지. 자팀 골글을 쓰면 6장까지 (자팀 " + limits.ggOwn + " · 타팀 " + limits.ggOther + ")")}
         {limitChip("FA·WC", limits.fa, limits.faMax, "자팀도 골글도 아닌 카드는 FA(임팩트·시그니처) 또는 와일드카드(국가대표)로만 쓸 수 있고, 둘을 합쳐 2장까지입니다")}
         <button onClick={run} disabled={busy}
-          title="셋포를 자동으로 최적화하고 타순을 자동으로 잡아 세 티어 점수를 냅니다"
+          title="세트덱 200 기준으로 구간 좌·우를 자동 최적화하고, 타순도 자동으로 잡아 세 티어 점수를 냅니다"
           style={{ marginLeft: mob ? 0 : "auto", padding: "6px 14px", fontSize: 13, fontWeight: 800,
             background: busy ? "var(--inner)" : "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6,
             color: busy ? "var(--td)" : "#1a1a1a", cursor: busy ? "default" : "pointer" }}>
@@ -6502,7 +6502,7 @@ function LabPage(p) {
       </div>
       {res && (
         <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 10, lineHeight: 1.6 }}>
-          {"세트덱 점수 " + res.sp + " · 불펜 3/3/0 분업 · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지 모두 적용 · 타순 자동"}
+          {"세트덱 " + res.sp + " 고정 · 불펜 1/1/4 기본 · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지 모두 적용 · 타순 자동"}
           {res.tiers[0].blanks.length > 0 && (<span style={{ color: "#FFA726" }}>{" · 연도덱을 안 골라 " + res.tiers[0].blanks.join("·") + " 구간은 비었습니다"}</span>)}
         </div>)}
 
@@ -6540,7 +6540,7 @@ function LabPage(p) {
         </div>
         <div style={{ background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 8, overflow: "hidden" }}>
           <div style={{ padding: "6px 10px", fontSize: 12, fontWeight: 800, color: "var(--t2)", borderBottom: "1px solid var(--bd)" }}>
-            {"마운드"}<span style={{ fontWeight: 400, color: "var(--td)", marginLeft: 6 }}>{"불펜 3/3/0 분업 고정"}</span>
+            {"마운드"}<span style={{ fontWeight: 400, color: "var(--td)", marginLeft: 6 }}>{"불펜 1/1/4 기본 고정"}</span>
           </div>
           {SP_SLOTS.concat(["CP"]).concat(RP_SLOTS).map(function (sl) { return Row(sl, sl); })}
         </div>
@@ -9028,13 +9028,18 @@ function labPl(pl, slot, top) {
      · 골든글러브 5장까지. 자팀 골글을 한 장이라도 쓰면 6장까지
      · FA(임팩트·시그니처) + 와일드카드(국가대표) 합쳐 2장까지
      · 자팀도 골글도 아니면 FA·와일드카드로만 쓸 수 있다 (자동으로 붙인다)
-     · 불펜은 3/3/0 분업 고정
+     · 세트덱 점수는 200 고정 (후보로 다들 채운다)
+     · 불펜은 1/1/4 기본 고정
      · 타순은 자동 — 유저가 짜지 않는다
      · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지는 모두 받는 것으로 본다 */
 var LAB_GG_BASE = 5;
 var LAB_GG_OWN_BONUS = 1;
 var LAB_FA_MAX = 2;
-var LAB_BPC_IDX = 8;                 /* BPC 의 "3/3/0" */
+var LAB_BPC_IDX = 0;                 /* BPC 의 "1/1/4" */
+/* 세트덱 점수는 라인업에서 재지 않고 200 으로 둔다 — 실제로는 후보 자리로 다들 200 을
+   채우기 때문이다. 라인업 스물한 장만 세면 150 언저리라 실제와 한참 다르다.
+   덱끼리 견주는 자리이므로 눈금이 같아야 한다 (2026-09-23 사용자 지정) */
+var LAB_SET_POINT = 200;
 var LAB_SLOTS = BAT_SLOTS.concat(SP_SLOTS).concat(["CP"]).concat(RP_SLOTS);
 
 /* 도감 한 줄을 연구소 카드로. 강화는 최대(9각성 — getEnhVal 이 표 끝으로 자른다),
@@ -9053,9 +9058,9 @@ function labCard(row, teamName) {
   }
   return o;
 }
-/* 연구소 세트덱 상태 — 불펜 3/3/0 분업, 팀 버프와 시너지는 늘 최대 */
+/* 연구소 세트덱 상태 — 불펜 1/1/4 기본, 팀 버프와 시너지는 늘 최대 */
 function labSdState(teamName, extra) {
-  return Object.assign({ teamName: teamName || "", bpcIdx: LAB_BPC_IDX, isWinSplit: true,
+  return Object.assign({ teamName: teamName || "", bpcIdx: LAB_BPC_IDX, isWinSplit: false, rpActive: false,
     natBat: "6렙", natPit: "6렙", catchLead: "6렙",
     synLive: true, synImpact: true, synSig: true,
     /* 연도 구간(55·75…)은 연도덱을 켜지 않으면 통째로 빈다. 어느 연도를 고를지는
@@ -9125,7 +9130,9 @@ function labRun(cards, teamName, extra) {
     if (!(sl in rawMemo)) { var c = cards && cards[sl]; rawMemo[sl] = c ? deckPl(c, sd0) : null; }
     return rawMemo[sl];
   };
-  var totalSP = computeLineupSetDeck(raw, sd0);
+  /* 세트덱 점수는 재지 않고 200 으로 둔다. computeLineupSetDeck 이 얹어 주는
+     시너지·팀 버프 자동값은 연구소가 어차피 전부 직접 켜 두므로 부를 일이 없다 */
+  var totalSP = LAB_SET_POINT;
   var yOpts = { batOn: !!sd0.yearBat, pitOn: !!sd0.yearPit,
     batYears: labYears(raw, true), pitYears: labYears(raw, false) };
   var tiers = LAB_TIERS.map(function (t) {
@@ -9134,13 +9141,23 @@ function labRun(cards, teamName, extra) {
       if (!(sl in memo)) { var c = raw(sl); memo[sl] = c ? labPl(c, sl, t) : null; }
       return memo[sl];
     };
+    /* 셋포와 타순은 서로 맞물린다 — 타순을 보는 세트덱 구간이 있다.
+       한쪽을 잡고 다른 쪽을 맞추기를 번갈아 돌리면 보통 두 바퀴에 굳는다.
+       셋포를 고를 때마다 타순까지 다시 잡으면 같은 답에 네 배 오래 걸린다 */
+    var order = BAT_SLOTS.slice();
     var scoreOf = function (sd) {
-      return calcLineupTotal(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: labBestOrder(pk, sd, totalSP) }), totalSP));
+      return calcLineupTotal(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: order }), totalSP));
     };
-    var opt = optimizeSetDeck(sd0, totalSP, scoreOf, yOpts);
-    var order = labBestOrder(pk, opt.next, totalSP);
-    return { tier: t, sd: opt.next, order: order, blanks: opt.blanks,
-      total: calcLineupTotal(pk, opt.next, lineupOpts(Object.assign({}, opt.next, { batOrder: order }), totalSP)) };
+    var sd = sd0, blanks = [];
+    for (var round = 0; round < 3; round++) {
+      var opt = optimizeSetDeck(sd, totalSP, scoreOf, yOpts);
+      sd = opt.next; blanks = opt.blanks;
+      var nextOrder = labBestOrder(pk, sd, totalSP);
+      if (nextOrder.join() === order.join()) break;
+      order = nextOrder;
+    }
+    return { tier: t, sd: sd, order: order, blanks: blanks,
+      total: calcLineupTotal(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: order }), totalSP)) };
   });
   return { sp: totalSP, tiers: tiers, limits: labLimits(raw, teamName) };
 }
