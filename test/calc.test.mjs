@@ -636,10 +636,19 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   const op = applyPotmPot(ol({ pot1: 'C', pot2: 'B', potType2: '풀스윙', pot3: '', potType3: '' }), on(ol()));
   eq('올스타 타자 잠재력 A · 클러치 SR+', op.pot1 === 'A' && op.pot2 === 'SR+' && op.potType2 === '클러치' && op.potmPot === 'olstar' ? 1 : 0, 1);
   /* 2026-09-27 — 올스타도 각성 잠재력을 가질 수 있게 되었다.
-     POTM 이 고정하는 것은 일반 잠재력뿐이라 각성은 그대로 남아야 한다 */
+     POTM 은 각성에도 A 를 주되, 원래 값이 더 높으면 그쪽을 남긴다 (사용자 지정) */
   const opA = applyPotmPot(ol({ pot1: 'C', pot2: 'B', pot3: 'S', potType3: '뜬공형' }), on(ol()));
-  eq('POTM 올스타 — 각성 잠재력은 그대로', opA.pot3 === 'S' && opA.potType3 === '뜬공형' ? 1 : 0, 1);
+  eq('POTM 올스타 — 내 S 가 A 보다 높아 그대로', opA.pot3 === 'S' && opA.potType3 === '뜬공형' ? 1 : 0, 1);
   eq('POTM 올스타 — 일반 잠재력은 그래도 고정', opA.pot1 === 'A' && opA.pot2 === 'SR+' ? 1 : 0, 1);
+  const opB = applyPotmPot(ol({ pot3: 'C', potType3: '뜬공형' }), on(ol()));
+  eq('POTM 올스타 — 내 C 는 A 로 올라간다', opB.pot3 === 'A' && opB.potType3 === '뜬공형' ? 1 : 0, 1);
+  const opC = applyPotmPot(ol({ pot3: '', potType3: '' }), on(ol()));
+  eq('POTM 올스타 — 각성을 안 적었어도 A 를 받는다', opC.pot3 === 'A' ? 1 : 0, 1);
+  eq('POTM 올스타 — 그때 종류는 첫 종류로', opC.potType3 === awkTypesFor('타자')[0] ? 1 : 0, 1);
+  eq('POTM 올스타 — 각성 점수가 실제로 붙는다', awakenScore(opC) > 0 ? 1 : 0, 1);
+  /* 라이브는 각성이 아예 없어 그대로 비어 있어야 한다 */
+  const lpA = applyPotmPot(live({ pot3: 'S', potType3: '뜬공형' }), on(live()));
+  eq('POTM 라이브 — 각성은 여전히 없음', lpA.pot3 === '' ? 1 : 0, 1);
   const olP = ol({ role: '투수', position: '선발' });
   const opp = applyPotmPot(olP, on(olP));
   eq('올스타 투수 침착 SR+', opp.pot2 === 'SR+' && opp.potType2 === '침착' ? 1 : 0, 1);
@@ -693,8 +702,11 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('각성 반영 — 임팩트는 그대로', calcBat(withAwk(sp()), lu0, { p: 0, a: 0, e: 0, n: 0 }).total - calcBat(Object.assign(withAwk(sp()), { pot3: '' }), lu0, { p: 0, a: 0, e: 0, n: 0 }).total > 0 ? 1 : 0, 1);
   eq('각성 점수 함수 — 라이브만 0', awakenScore(withAwk(live())) === 0 && awakenScore(withAwk(ol())) > 0 ? 1 : 0, 1);
   const pkOl = peakPl(ol({ potType3: '', pot3: '' }), 'DH');
-  /* 고점은 임팩트만 S 고 나머지는 A (PEAK_AWK) — 올스타도 그 나머지에 든다 */
-  eq('고점판독 — 올스타는 각성 A 로 채움', pkOl.pot3 === 'A' && pkOl.potType3 === awkTypesFor('타자')[0] ? 1 : 0, 1);
+  /* 고점 각성은 임팩트·올스타가 S, 나머지는 A (PEAK_AWK · 2026-09-27 사용자 지정) */
+  eq('고점판독 — 올스타는 각성 S 로 채움', pkOl.pot3 === 'S' && pkOl.potType3 === awkTypesFor('타자')[0] ? 1 : 0, 1);
+  eq('고점판독 — 골글은 그대로 A', peakPl(ol({ cardType: '골든글러브', potType3: '', pot3: '' }), 'DH').pot3 === 'A' ? 1 : 0, 1);
+  eq('고점판독 — 올스타가 내 A 보다 높은 S 를 준다',
+    peakPl(ol({ potType3: '뜬공형', pot3: 'A' }), 'DH').pot3 === 'S' ? 1 : 0, 1);
   const pkImp = peakPl(sp({ potType3: '', pot3: '' }), 'DH');
   eq('고점판독 — 임팩트는 각성 S 로 채움', pkImp.pot3 === 'S' && !!pkImp.potType3 ? 1 : 0, 1);
   __setGlobalPotm([]);
@@ -1165,7 +1177,7 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   eq('앱 분포 — 와일드카드 특훈 최솟값은 기본 +6 (구위 6 × 1.35)', TRD['spec_pit_wc_국가대표'][0], 8.1);
 
   eq('잠재력 — 풀스윙·장타억제 SR+, 클러치·침착 A', PEAK_POT['풀스윙'] === 'SR+' && PEAK_POT['장타억제'] === 'SR+' && PEAK_POT['클러치'] === 'A' && PEAK_POT['침착'] === 'A' ? 1 : 0, 1);
-  eq('각성 — 임팩트만 S', PEAK_AWK['임팩트'] === 'S' && Object.keys(PEAK_AWK).length === 1 ? 1 : 0, 1);
+  eq('각성 — 임팩트·올스타가 S, 나머지는 A', PEAK_AWK['임팩트'] === 'S' && PEAK_AWK['올스타'] === 'S' && Object.keys(PEAK_AWK).length === 2 ? 1 : 0, 1);
 
   /* peakPl */
   const bat = { id: 'x', role: '타자', cardType: '골든글러브', hand: '우', name: '가', team: 'LG', power: 80, accuracy: 80, eye: 70, patience: 60,

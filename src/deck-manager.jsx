@@ -113,6 +113,10 @@ function awakenScore(pl) {
   if (!pl || NO_AWAKEN_CARDS[pl.cardType]) return 0;
   return getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
 }
+/* 두 등급 중 점수가 높은 쪽. 종류마다 점수표가 달라 종류를 같이 받는다 */
+function betterPot(g, type, mine) {
+  return getPotScoreByType(g, type, SKILL_DATA) > getPotScoreByType(mine, type, SKILL_DATA) ? g : mine;
+}
 /* 라인업은 칸이 좁으니 앞글자만 — 좌투선호→좌투, 변화구대처→변화구, 땅볼형→땅볼 */
 function awkShort(type){ return type ? String(type).replace(/(선호|대처|연마|형)$/, "") : ""; }
 function getPotScoreByType(grade, type, skills) {
@@ -2791,7 +2795,7 @@ function getPotmBonus(pl, sdState) {
 
 /* POTM 으로 잠재력이 고정되는 카드의 사본.
    라이브는 모두 A, 올스타(2026)는 모두 A 에 타자 클러치 · 투수 침착 SR+.
-   라이브는 각성 잠재력이 없고(NO_AWAKEN_CARDS), 올스타는 있으면 그대로 둔다.
+   라이브는 각성 잠재력이 없고(NO_AWAKEN_CARDS), 올스타는 각성도 A 를 받는다 (높은 쪽).
    potmPot 표시가 붙은 선수는 화면에서 잠재력을 고칠 수 없고 고점판독기도 잠재력을 바꾸지 않는다 */
 function applyPotmPot(pl, sdState) {
   if (!pl) return pl;
@@ -2801,10 +2805,10 @@ function applyPotmPot(pl, sdState) {
   if (e.pot === "olstar") {
     out.potType2 = pl.role === "타자" ? "클러치" : "침착";
     out.pot2 = "SR+";
-    /* POTM 이 고정하는 것은 일반 잠재력뿐이다. 올스타가 따로 가진 각성 잠재력은
-       그 카드의 것이므로 건드리지 않는다 (2026-09-27) */
-    out.pot3 = pl.pot3 || "";
-    out.potType3 = pl.potType3 || "";
+    /* 각성 잠재력도 POTM 이 A 를 준다 — 원래 값과 A 중 높은 쪽 (2026-09-27 사용자 지정).
+       종류를 안 골랐으면 0 점이라 그때는 첫 종류로 채운다 (종류마다 점수는 같다) */
+    out.potType3 = pl.potType3 || awkTypesFor(pl.role)[0];
+    out.pot3 = betterPot("A", out.potType3, pl.pot3);
   }
   return out;
 }
@@ -9179,9 +9183,9 @@ var PEAK_TRAIN = {"bat_골든글러브":[20,18,12,10],"bat_시그니처":[22,17,
 /* 특훈 (기본 보너스 = 특훈 횟수 포함 — 골글·시그·임팩트 +3, 국대 +4, FA +5, 와일드카드 +6): 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위].
    특훈이 없는 카드는 내 값 그대로. 국대·와일드카드는 2026-09-18 정확 계산으로 다시 뽑았다 */
 var PEAK_SPEC = {"bat_골든글러브":[7,2,1,0],"bat_시그니처":[7,2,1,0],"bat_fa_시그니처":[9,5,1,1],"bat_임팩트":[6,2,0,0],"bat_fa_임팩트":[8,4,1,0],"bat_국가대표":[8,3,2,0],"bat_wc_국가대표":[11,5,1,1],"pit_골든글러브":[2,7],"pit_시그니처":[2,7],"pit_fa_시그니처":[2,11],"pit_임팩트":[2,6],"pit_fa_임팩트":[3,9],"pit_국가대표":[2,9],"pit_wc_국가대표":[5,11]};
-/* 잠재력: 종류별 등급 (사용자 지정). 각성 잠재력은 임팩트만 S, 나머지 카드는 A (라이브·올스타는 각성 없음) */
+/* 잠재력: 종류별 등급 (사용자 지정). 각성 잠재력은 임팩트·올스타가 S, 나머지 카드는 A (라이브만 각성 없음) */
 var PEAK_POT = {"풀스윙":"SR+","장타억제":"SR+","클러치":"A","침착":"A"};
-var PEAK_AWK = {"임팩트":"S"};
+var PEAK_AWK = {"임팩트":"S", "올스타":"S"};
 /* 스킬 합 — 스킬 분포와 같은 기준 (팀 버프 포함, 포지션 특훈 보너스 제외) */
 function peakSkillSum(p, cat) {
   var t = 0, mn = isLvManual(p);
@@ -9239,14 +9243,12 @@ function peakPl(pl, slot) {
   /* POTM 으로 잠재력이 고정된 카드(applyPotmPot)는 잠재력을 굴릴 수 없으니 그대로 둔다 */
   if (pl.potmPot) return out;
   /* 잠재력 — 칸마다 그 종류의 고점 등급과 내 등급 중 좋은 쪽 */
-  var better = function (g, type, mine) {
-    return getPotScoreByType(g, type, SKILL_DATA) > getPotScoreByType(mine, type, SKILL_DATA) ? g : mine;
-  };
+  var better = betterPot;
   out.potType1 = pl.potType1 || (isBat ? "풀스윙" : "장타억제");
   out.pot1 = better(PEAK_POT[out.potType1] || "A", out.potType1, pl.pot1);
   out.potType2 = pl.potType2 || (isBat ? "클러치" : "침착");
   out.pot2 = better(PEAK_POT[out.potType2] || "A", out.potType2, pl.pot2);
-  /* 각성 — 라이브만 각성 잠재력이 없다 (NO_AWAKEN_CARDS). 올스타는 임팩트가 아니므로 고점이 A 다.
+  /* 각성 — 라이브만 각성 잠재력이 없다 (NO_AWAKEN_CARDS). 고점은 임팩트·올스타가 S, 나머지는 A.
      종류를 안 골랐으면 0점이라 그때는 첫 종류로 채운다 (종류마다 점수는 같다) */
   if (NO_AWAKEN_CARDS[ct]) return out;
   var awk = PEAK_AWK[ct] || "A";
