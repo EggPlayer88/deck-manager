@@ -105,9 +105,10 @@ POT_TYPES_AWK_ALL.forEach(function(t){
   if(!DEFAULT_POT_SCORES_BY_TYPE[t]) DEFAULT_POT_SCORES_BY_TYPE[t] = Object.assign({}, DEFAULT_AWK_SCORES);
 });
 function awkTypesFor(role){ return role === "타자" ? POT_TYPES_AWK_BAT : POT_TYPES_AWK_PIT; }
-/* 각성 잠재력이 없는 카드 — 라이브와 그 연장선인 올스타 (2026-09-18 사용자 확인).
+/* 각성 잠재력이 없는 카드 — 라이브뿐이다.
+   올스타는 2026-09-27 부터 각성 잠재력을 가질 수 있다 (등급은 다른 카드와 같이 S 까지).
    입력값이 남아 있어도 점수에 넣지 않고, 화면에서도 칸을 보이지 않는다 */
-var NO_AWAKEN_CARDS = {"라이브": 1, "올스타": 1};
+var NO_AWAKEN_CARDS = {"라이브": 1};
 function awakenScore(pl) {
   if (!pl || NO_AWAKEN_CARDS[pl.cardType]) return 0;
   return getPotScoreByType(pl.pot3, pl.potType3 || "", SKILL_DATA);
@@ -1275,6 +1276,22 @@ function sharePot(pl) {
   return b ? (a + " " + b) : a;
 }
 function shareCardName(ct) { return SHARE_CT[ct] || ct || ""; }
+/* 이름 앞 강화·각성 딱지 — 라인업 카드와 같은 모양으로 (각성 ◆N 보라 · 강화 +N 빨강) */
+function shareEnh(pl) {
+  var e = (pl && pl.enhance) || "";
+  var n = e.replace(/[^0-9]/g, "");
+  if (!n) return null;
+  var gak = e.indexOf("각성") >= 0;
+  return { txt: (gak ? "◆" : "+") + n, gak: gak };
+}
+function shareRound(x, rx, ry, w, h, r) {
+  if (x.roundRect) { x.beginPath(); x.roundRect(rx, ry, w, h, r); return; }
+  x.beginPath();
+  x.moveTo(rx + r, ry); x.lineTo(rx + w - r, ry); x.quadraticCurveTo(rx + w, ry, rx + w, ry + r);
+  x.lineTo(rx + w, ry + h - r); x.quadraticCurveTo(rx + w, ry + h, rx + w - r, ry + h);
+  x.lineTo(rx + r, ry + h); x.quadraticCurveTo(rx, ry + h, rx, ry + h - r);
+  x.lineTo(rx, ry + r); x.quadraticCurveTo(rx, ry, rx + r, ry); x.closePath();
+}
 
 /* 스킬·훈재분 칸은 상위 1% / 5% / 15% 를 경계로 색 진하기를 달리한다.
    진할수록(어두울수록) 낮은 등급이다 (2026-09-23 사용자 지정) */
@@ -1338,8 +1355,8 @@ function drawShareCanvas(d) {
   /* 열 자리 — 타자와 투수가 같은 자리를 쓴다 */
   /* 칸 자리 — 훈재 칸이 들어가면서 다시 잡았다. 잠재는 등급 두 개("SR+ C+")가 끝이라
      여유가 있고, 점수는 네 자리까지 오른쪽 끝에 붙는다 */
-  var cName = 176, cStat = 386, cSk = 708, cTr = 796, cPot = 888, cSc = R;
-  var statW = 70;
+  var cName = 208, cStat = 396, cSk = 708, cTr = 796, cPot = 888, cSc = R;
+  var statW = 68;
 
   var head = function(y, first, statLabs) {
     x.font = F(20); x.fillStyle = SHARE_COL.t2;
@@ -1353,6 +1370,15 @@ function drawShareCanvas(d) {
   var line = function(y, left, p) {
     x.textAlign = "left"; x.font = F(24); x.fillStyle = SHARE_COL.t2;
     x.fillText(left, PAD, y);
+    if (p.enh) {
+      x.font = F(18, 700);
+      var ew = x.measureText(p.enh.txt).width, pw = ew + 12, px = cName - 12 - pw;
+      var g = x.createLinearGradient(px, y - 18, px + pw, y + 6);
+      g.addColorStop(0, p.enh.gak ? "#7B1FA2" : "#C62828");
+      g.addColorStop(1, p.enh.gak ? "#AB47BC" : "#E53935");
+      x.fillStyle = g; shareRound(x, px, y - 18, pw, 24, 5); x.fill();
+      x.fillStyle = "#fff"; x.fillText(p.enh.txt, px + 6, y);
+    }
     x.fillStyle = SHARE_COL.t1; x.font = F(27);
     x.fillText(p.name, cName, y);
     var w = x.measureText(p.name).width;
@@ -2699,7 +2725,7 @@ var GLOBAL_POTM_LIST = [];
              잠재력 모두 A (타자 클러치 · 투수 침착은 SR+).
              평소 셋포는 자팀 8 · 같은 군 4 · 다른 군 2 (cardSetScore).
              세트덱 "선택 팀" 은 같은 군까지 (isSelTeam)
-   라이브·올스타는 각성 잠재력이 없는 카드다 (NO_AWAKEN_CARDS)
+   각성 잠재력이 없는 카드는 라이브뿐이다 (NO_AWAKEN_CARDS)
    · 스페셜(임팩트·시그니처·국가대표·골든글러브) — 자팀만, FA·와일드카드로 쓴 선수도 자팀.
              능력치 임팩트·시그·국대 +2, 골글 +1, 셋포 +1
    "능력치 +N" 은 모든 능력치다 (점수에 안 쓰는 능력치도 기록한다) */
@@ -2765,7 +2791,7 @@ function getPotmBonus(pl, sdState) {
 
 /* POTM 으로 잠재력이 고정되는 카드의 사본.
    라이브는 모두 A, 올스타(2026)는 모두 A 에 타자 클러치 · 투수 침착 SR+.
-   둘 다 각성 잠재력이 없는 카드다 (NO_AWAKEN_CARDS).
+   라이브는 각성 잠재력이 없고(NO_AWAKEN_CARDS), 올스타는 있으면 그대로 둔다.
    potmPot 표시가 붙은 선수는 화면에서 잠재력을 고칠 수 없고 고점판독기도 잠재력을 바꾸지 않는다 */
 function applyPotmPot(pl, sdState) {
   if (!pl) return pl;
@@ -2775,6 +2801,10 @@ function applyPotmPot(pl, sdState) {
   if (e.pot === "olstar") {
     out.potType2 = pl.role === "타자" ? "클러치" : "침착";
     out.pot2 = "SR+";
+    /* POTM 이 고정하는 것은 일반 잠재력뿐이다. 올스타가 따로 가진 각성 잠재력은
+       그 카드의 것이므로 건드리지 않는다 (2026-09-27) */
+    out.pot3 = pl.pot3 || "";
+    out.potType3 = pl.potType3 || "";
   }
   return out;
 }
@@ -4545,6 +4575,7 @@ function LineupPage(p) {
       return { left: String(i + 1) + "번 " + sl, name: pl.name, ct: pl.cardType,
         vals: [c.power, c.accuracy, c.eye, c.patience], sk: c.skillScore,
         skPct: shareSkillPct(pl, "타자", sl, sdState["pts_" + sl]),
+        enh: shareEnh(pl),
         tr: Math.round(shareTrainScore(pl) * 10) / 10, trPct: shareTrainPct(pl),
         pot: sharePot(pl), score: c.total.toFixed(1) };
     }).filter(Boolean);
@@ -4554,6 +4585,7 @@ function LineupPage(p) {
       var pcat = skillCatOf(pl);
       return { left: sl, name: pl.name, ct: pl.cardType, vals: [c.change, c.stuff, "", ""],
         sk: c.skillScore, skPct: shareSkillPct(pl, pcat, sl, sdState["pts_" + sl]),
+        enh: shareEnh(pl),
         tr: Math.round(shareTrainScore(pl) * 10) / 10, trPct: shareTrainPct(pl),
         pot: sharePot(pl), score: c.total.toFixed(1) };
     }).filter(Boolean);
@@ -7479,7 +7511,7 @@ function MyPlayersPage(p) {
                   </div>
                 </div>
               </div>
-              {/* 각성 잠재력 — 종류를 직접 고르고 등급은 C~S 만. 라이브·올스타는 각성이 없어 칸을 보이지 않는다 */}
+              {/* 각성 잠재력 — 종류를 직접 고르고 등급은 C~S 만. 라이브는 각성이 없어 칸을 보이지 않는다 */}
               {!NO_AWAKEN_CARDS[pl.cardType] && (
               <div>
                 <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"각성 잠재력"}</div>
@@ -9214,7 +9246,7 @@ function peakPl(pl, slot) {
   out.pot1 = better(PEAK_POT[out.potType1] || "A", out.potType1, pl.pot1);
   out.potType2 = pl.potType2 || (isBat ? "클러치" : "침착");
   out.pot2 = better(PEAK_POT[out.potType2] || "A", out.potType2, pl.pot2);
-  /* 각성 — 라이브·올스타는 각성 잠재력이 없다 (NO_AWAKEN_CARDS).
+  /* 각성 — 라이브만 각성 잠재력이 없다 (NO_AWAKEN_CARDS). 올스타는 임팩트가 아니므로 고점이 A 다.
      종류를 안 골랐으면 0점이라 그때는 첫 종류로 채운다 (종류마다 점수는 같다) */
   if (NO_AWAKEN_CARDS[ct]) return out;
   var awk = PEAK_AWK[ct] || "A";

@@ -14,7 +14,7 @@ import {
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
-  LAB_PRESET, KBO_TEAMS, sqName, shareGrade, SHARE_GRADE, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
+  LAB_PRESET, KBO_TEAMS, sqName, shareGrade, SHARE_GRADE, sharePot, shareEnh, NO_AWAKEN_CARDS, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 
@@ -634,7 +634,12 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('올스타 2025 카드는 효과 없음', potmEffect(ol({ year: '2025' }), on(ol())).on ? 1 : 0, 0);
   eq('올스타 연도 숫자도 인식', potmEffect(ol({ year: 2026 }), on(ol())).on ? 1 : 0, 1);
   const op = applyPotmPot(ol({ pot1: 'C', pot2: 'B', potType2: '풀스윙', pot3: '', potType3: '' }), on(ol()));
-  eq('올스타 타자 잠재력 A · 클러치 SR+ · 각성 없음', op.pot1 === 'A' && op.pot2 === 'SR+' && op.potType2 === '클러치' && op.pot3 === '' && op.potmPot === 'olstar' ? 1 : 0, 1);
+  eq('올스타 타자 잠재력 A · 클러치 SR+', op.pot1 === 'A' && op.pot2 === 'SR+' && op.potType2 === '클러치' && op.potmPot === 'olstar' ? 1 : 0, 1);
+  /* 2026-09-27 — 올스타도 각성 잠재력을 가질 수 있게 되었다.
+     POTM 이 고정하는 것은 일반 잠재력뿐이라 각성은 그대로 남아야 한다 */
+  const opA = applyPotmPot(ol({ pot1: 'C', pot2: 'B', pot3: 'S', potType3: '뜬공형' }), on(ol()));
+  eq('POTM 올스타 — 각성 잠재력은 그대로', opA.pot3 === 'S' && opA.potType3 === '뜬공형' ? 1 : 0, 1);
+  eq('POTM 올스타 — 일반 잠재력은 그래도 고정', opA.pot1 === 'A' && opA.pot2 === 'SR+' ? 1 : 0, 1);
   const olP = ol({ role: '투수', position: '선발' });
   const opp = applyPotmPot(olP, on(olP));
   eq('올스타 투수 침착 SR+', opp.pot2 === 'SR+' && opp.potType2 === '침착' ? 1 : 0, 1);
@@ -683,11 +688,13 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   const lu0 = { enhance: '' };
   const withAwk = (o) => Object.assign({ pot3: 'S', potType3: '뜬공형', power: 80, accuracy: 80, eye: 80 }, o);
   eq('각성 무시 — 라이브', calcBat(withAwk(live()), lu0, { p: 0, a: 0, e: 0, n: 0 }).total - calcBat(Object.assign(withAwk(live()), { pot3: '' }), lu0, { p: 0, a: 0, e: 0, n: 0 }).total, 0);
-  eq('각성 무시 — 올스타', calcBat(withAwk(ol()), lu0, { p: 0, a: 0, e: 0, n: 0 }).total - calcBat(Object.assign(withAwk(ol()), { pot3: '' }), lu0, { p: 0, a: 0, e: 0, n: 0 }).total, 0);
+  /* 올스타는 2026-09-27 부터 각성 잠재력을 가질 수 있다 — 이제 점수에 들어간다 */
+  eq('각성 반영 — 올스타도 점수에 들어간다', calcBat(withAwk(ol()), lu0, { p: 0, a: 0, e: 0, n: 0 }).total - calcBat(Object.assign(withAwk(ol()), { pot3: '' }), lu0, { p: 0, a: 0, e: 0, n: 0 }).total > 0 ? 1 : 0, 1);
   eq('각성 반영 — 임팩트는 그대로', calcBat(withAwk(sp()), lu0, { p: 0, a: 0, e: 0, n: 0 }).total - calcBat(Object.assign(withAwk(sp()), { pot3: '' }), lu0, { p: 0, a: 0, e: 0, n: 0 }).total > 0 ? 1 : 0, 1);
-  eq('각성 점수 함수 — 라이브·올스타 0', awakenScore(withAwk(live())) === 0 && awakenScore(withAwk(ol())) === 0 ? 1 : 0, 1);
+  eq('각성 점수 함수 — 라이브만 0', awakenScore(withAwk(live())) === 0 && awakenScore(withAwk(ol())) > 0 ? 1 : 0, 1);
   const pkOl = peakPl(ol({ potType3: '', pot3: '' }), 'DH');
-  eq('고점판독 — 올스타에 각성을 채우지 않음', pkOl.pot3 === '' && !pkOl.potType3 ? 1 : 0, 1);
+  /* 고점은 임팩트만 S 고 나머지는 A (PEAK_AWK) — 올스타도 그 나머지에 든다 */
+  eq('고점판독 — 올스타는 각성 A 로 채움', pkOl.pot3 === 'A' && pkOl.potType3 === awkTypesFor('타자')[0] ? 1 : 0, 1);
   const pkImp = peakPl(sp({ potType3: '', pot3: '' }), 'DH');
   eq('고점판독 — 임팩트는 각성 S 로 채움', pkImp.pot3 === 'S' && !!pkImp.potType3 ? 1 : 0, 1);
   __setGlobalPotm([]);
@@ -2190,6 +2197,33 @@ console.log('\n[스쿼드 공유] 그림에 쓰는 이름 — 도감 구분용 �
   eq('빈 값도 터지지 않는다', sqName(null) === '' ? 1 : 0, 1);
 }
 
+
+console.log('\n[각성 잠재력] 올스타도 가질 수 있다 (2026-09-27 사용자 확인)');
+{
+  eq('각성이 없는 카드는 라이브뿐', Object.keys(NO_AWAKEN_CARDS).join(',') === '라이브' ? 1 : 0, 1);
+  const mk = (ct) => ({ cardType: ct, role: '타자', pot3: 'S', potType3: '뜬공형' });
+  eq('올스타 각성 S 는 점수가 붙는다', awakenScore(mk('올스타')) > 0 ? 1 : 0, 1);
+  eq('올스타 각성 점수는 다른 카드와 같다', awakenScore(mk('올스타')), awakenScore(mk('골든글러브')));
+  eq('라이브는 여전히 0', awakenScore(mk('라이브')), 0);
+  eq('각성 등급은 S 가 끝', POT_GRADES_AWK[POT_GRADES_AWK.length - 1] === 'S' && POT_GRADES_AWK.indexOf('SS') < 0 ? 1 : 0, 1);
+  /* 전력공유 잠재 칸 — 일반 등급 뒤에 각성 등급이 붙는다 */
+  eq('전력공유 — 올스타도 각성 등급을 같이 낸다',
+    sharePot({ cardType: '올스타', pot1: 'A', pot3: 'S', potType3: '뜬공형' }) === 'A S' ? 1 : 0, 1);
+  eq('전력공유 — 라이브는 일반 등급만',
+    sharePot({ cardType: '라이브', pot1: 'A', pot3: 'S', potType3: '뜬공형' }) === 'A' ? 1 : 0, 1);
+}
+
+console.log('\n[전력공유] 이름 앞 강화·각성 딱지');
+{
+  eq('9각성 → ◆9', shareEnh({ enhance: '9각성' }).txt === '◆9' ? 1 : 0, 1);
+  eq('9각성 은 각성', shareEnh({ enhance: '9각성' }).gak ? 1 : 0, 1);
+  eq('10강 → +10', shareEnh({ enhance: '10강' }).txt === '+10' ? 1 : 0, 1);
+  eq('10강 은 각성 아님', shareEnh({ enhance: '10강' }).gak ? 1 : 0, 0);
+  eq('5강 → +5', shareEnh({ enhance: '5강' }).txt === '+5' ? 1 : 0, 1);
+  eq('1각성 → ◆1', shareEnh({ enhance: '1각성' }).txt === '◆1' ? 1 : 0, 1);
+  eq('값이 없으면 딱지 없음', shareEnh({ enhance: '' }) === null ? 1 : 0, 1);
+  eq('빈 선수도 터지지 않는다', shareEnh(null) === null ? 1 : 0, 1);
+}
 
 console.log('\n[전력공유] 스킬·훈재 음영 — 상위 1% / 5% / 15% 를 경계로');
 {
