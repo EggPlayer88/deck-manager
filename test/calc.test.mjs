@@ -14,7 +14,8 @@ import {
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
-  LAB_PRESET, KBO_TEAMS, sqName, shareGrade, SHARE_GRADE, sharePot, shareEnh, NO_AWAKEN_CARDS, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
+  LAB_PRESET, KBO_TEAMS, sqName, shareGrade, SHARE_GRADE, sharePot, shareEnh, NO_AWAKEN_CARDS,
+  SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 
@@ -230,7 +231,7 @@ eq('소방수는 메이저', DEFAULT_MAJOR['마무리']['소방수'] ? 1 : 0, 1)
 eq('타자엔 없음', DEFAULT_SKILLS['타자']['소방수'] === undefined ? 1 : 0, 1);
 eq('선발엔 없음', DEFAULT_SKILLS['선발']['소방수'] === undefined ? 1 : 0, 1);
 eq('중계엔 없음', DEFAULT_SKILLS['중계']['소방수'] === undefined ? 1 : 0, 1);
-eq('마무리 스킬 수', Object.keys(DEFAULT_SKILLS['마무리']).length, 69);
+eq('마무리 스킬 수', Object.keys(DEFAULT_SKILLS['마무리']).length, 70);
 /* 총점은 파1.0 정0.85 변1.05 구1.35 로 맞아떨어진다 (Lv10: 파7.7 정7.7 변16 구16) */
 eq('소방수 Lv10 검산',
    Math.round((7.7 * 1.0 + 7.7 * 0.85 + 16 * 1.05 + 16 * 1.35) * 100) / 100, 52.65, 0.01);
@@ -2209,6 +2210,38 @@ console.log('\n[스쿼드 공유] 그림에 쓰는 이름 — 도감 구분용 �
   eq('빈 값도 터지지 않는다', sqName(null) === '' ? 1 : 0, 1);
 }
 
+
+console.log('\n[원투펀치] 배치O 는 1·2선발, 배치X 는 3~5선발·중계·마무리 (2026-09-28 사용자 지정)');
+{
+  const X = [8.1, 10.8, 13.5, 16.2, 18.9, 21.6];
+  const O = [13.6, 17.4, 21.2, 25, 28.8, 32.6];
+  eq('선발은 두 벌 다 있다',
+    JSON.stringify(DEFAULT_SKILLS['선발']['원투펀치(배치O)']) === JSON.stringify(O)
+    && JSON.stringify(DEFAULT_SKILLS['선발']['원투펀치(배치X)']) === JSON.stringify(X) ? 1 : 0, 1);
+  for (const cat of ['중계', '마무리']) {
+    eq(cat + ' 는 배치X 만, 값은 선발과 같다',
+      JSON.stringify(DEFAULT_SKILLS[cat]['원투펀치(배치X)']) === JSON.stringify(X)
+      && DEFAULT_SKILLS[cat]['원투펀치(배치O)'] === undefined ? 1 : 0, 1);
+    eq(cat + ' 맨이름은 배치X 로 간다', SKILL_ALIAS[cat]['원투펀치'] === '원투펀치(배치X)' ? 1 : 0, 1);
+    eq(cat + ' 변형은 배치X 하나로 고정', SKILL_FIXED_BY_POS[cat]['원투펀치'] === '원투펀치(배치X)' ? 1 : 0, 1);
+    eq(cat + ' 에 배치X 는 붙는다', skillAllowedAt('원투펀치(배치X)', cat) ? 1 : 0, 1);
+    eq(cat + ' 에 배치O 는 안 붙는다', skillAllowedAt('원투펀치(배치O)', cat) ? 1 : 0, 0);
+    eq(cat + ' 점수 6렙 = 10.8', getSkillScore('원투펀치(배치X)', 6, cat, true), 10.8);
+    eq(cat + ' 10렙 = 21.6', getSkillScore('원투펀치(배치X)', 10, cat, true), 21.6);
+  }
+  eq('선발에는 배치O 도 배치X 도 붙는다',
+    skillAllowedAt('원투펀치(배치O)', '선발') && skillAllowedAt('원투펀치(배치X)', '선발') ? 1 : 0, 1);
+  eq('자리 제한 = 선발·중계·마무리',
+    SKILL_POS_LIMIT['원투펀치'].join(',') === '선발,중계,마무리' ? 1 : 0, 1);
+  eq('배치X 의 역할은 세 자리 모두', (skillRoleOf('원투펀치(배치X)') || []).join(',') === '선발,중계,마무리' ? 1 : 0, 1);
+  eq('배치O 의 역할은 선발뿐', (skillRoleOf('원투펀치(배치O)') || []).join(',') === '선발' ? 1 : 0, 1);
+  /* 뽑기 풀에 들어갈 때 중계는 배치X 한 벌만 보여야 한다 */
+  eq('중계 뽑기 풀 — 배치X 만',
+    variantAllowed('원투펀치(배치X)', { cat: '중계', hand: '우', cardType: '시그니처' })
+    && !variantAllowed('원투펀치(배치O)', { cat: '중계', hand: '우', cardType: '시그니처' }) ? 1 : 0, 1);
+  eq('중계 배치X 는 메이저', DEFAULT_SKILLS._major['중계']['원투펀치(배치X)'] ? 1 : 0, 1);
+  eq('마무리 배치X 는 메이저', DEFAULT_SKILLS._major['마무리']['원투펀치(배치X)'] ? 1 : 0, 1);
+}
 
 console.log('\n[각성 잠재력] 올스타도 가질 수 있다 (2026-09-27 사용자 확인)');
 {
