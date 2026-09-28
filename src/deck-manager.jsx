@@ -400,6 +400,60 @@ function launchAngleGain(la,finalPower){
   var req=launchAngleReq(la);
   return (req!==null && finalPower>=req) ? launchAngleBonus(la) : 0;
 }
+/* 타순을 타는 스킬 — 그 자리에 서면 "타순O" 값을 받고 발사각도 같이 움직인다.
+   · 컨택트히터 : 1·2번에서 타순O, 발사각 -3도
+   · 핵타선     : 3·4·5번에서 타순O, 발사각 +3도
+   도감과 내 선수에 적힌 값은 그대로 두고 그 라인업 안에서만 바꿔 쓴다.
+   (2026-09-28 사용자 지정) */
+var ORDER_SKILLS = {
+  "컨택트히터": { at: [0, 1],    on: "컨택트히터(타순배치)", off: "컨택트히터(타순X)", la: -3 },
+  "핵타선":     { at: [2, 3, 4], on: "핵타선(타순O)",        off: "핵타선(타순X)",     la: 3 }
+};
+/* 그 타순에서 실제로 쓰이는 모습. 바뀔 게 없으면 null — 부르는 쪽이 원래 객체를 그대로 쓴다.
+   반환: { pl, swaps:[{k,from,to}], laBase, la, laDelta } */
+function orderAdjust(pl, batIdx) {
+  if (!pl || pl.role !== "타자") return null;
+  if (batIdx === undefined || batIdx === null || batIdx < 0) return null;
+  var swaps = [], d = 0;
+  for (var k = 1; k <= 3; k++) {
+    var nm = pl["skill" + k]; if (!nm) continue;
+    var r = ORDER_SKILLS[skillBaseName(nm)]; if (!r) continue;
+    var on = r.at.indexOf(batIdx) >= 0;
+    var want = on ? r.on : r.off;
+    if (nm !== want) swaps.push({ k: k, from: nm, to: want });
+    if (on) d += r.la;
+  }
+  /* 발사각이 비어 있으면(정보 없음) 손대지 않는다 — 없는 값을 만들어 내면 안 된다 */
+  var base = pl.launchAngle || 0;
+  var next = (base && d) ? Math.max(0, base + d) : base;
+  if (!swaps.length && next === base) return null;
+  var out = Object.assign({}, pl);
+  swaps.forEach(function(x) { out["skill" + x.k] = x.to; });
+  out.launchAngle = next;
+  return { pl: out, swaps: swaps, laBase: base, la: next, laDelta: next - base };
+}
+/* 점수 계산에 넣을 선수 — 바뀔 게 없으면 원래 객체 그대로 */
+function orderPl(pl, batIdx) { var a = orderAdjust(pl, batIdx); return a ? a.pl : pl; }
+/* 타순 때문에 바뀐 것을 한 줄로 알려 준다. 원래 값에 작대기를 긋고 바뀐 값을 옆에 쓴다 */
+function OrderNote(p) {
+  var a = p.adj; if (!a) return null;
+  var arrow = function (from, to, key) {
+    return (<span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span style={{ textDecoration: "line-through", color: "var(--td)", opacity: 0.8 }}>{from}</span>
+      <span style={{ color: "var(--td)" }}>{"→"}</span>
+      <span style={{ color: "#FFD54F", fontWeight: 700 }}>{to}</span>
+    </span>);
+  };
+  var bits = a.swaps.map(function (x, i) { return arrow(x.from, x.to, "s" + i); });
+  if (a.laDelta) bits.push(arrow(a.laBase + "°", a.la + "°", "la"));
+  if (!bits.length) return null;
+  return (<div title={"타순에 따라 달라지는 스킬입니다. 도감과 내 선수에 적힌 값은 그대로이고, 이 타순에서만 이렇게 셉니다."}
+    style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, fontFamily: "var(--m)", cursor: "help" }}>
+    <span style={{ fontSize: 11, color: "#FFA726", fontWeight: 700, fontFamily: "var(--h)" }}>{"타순 보정"}</span>
+    {bits}
+  </div>);
+}
+
 /* 흰존/콜존 감점 (라인업 기준: 흰존 -1.5, 콜존 -3) */
 function zonePenalty(pl){ return (pl.whiteZone||0)*-1.5 + (pl.coldZone||0)*-3; }
 
@@ -2957,7 +3011,10 @@ function lineupOpts(sdState, totalSP) {
 }
 function lineupBat(pl, slot, sd, o) {
   var i = o.batOrder.indexOf(slot);
-  return calcBat(pl, lineupLu(pl), calcSDBonus(pl, slot, sd, o.totalSP, i >= 0 ? i : undefined));
+  var bi = i >= 0 ? i : undefined;
+  /* 타순을 타는 스킬·발사각을 그 자리에 맞춰 바꿔 놓고 센다 (orderPl) */
+  var p = orderPl(pl, bi);
+  return calcBat(p, lineupLu(p), calcSDBonus(p, slot, sd, o.totalSP, bi));
 }
 function lineupPit(pl, slot, sd, o) {
   return calcPit(pl, lineupLu(pl), calcSDBonus(pl, slot, sd, o.totalSP));
@@ -4365,6 +4422,9 @@ function LineupPage(p) {
       </div>
     );
     var calc = calcBatSD(pl, slot);
+    /* 타순을 타는 스킬·발사각은 이 자리 기준으로 바뀐 모습을 보여 준다 (점수도 그 값으로 센다) */
+    var oAdj = orderAdjust(pl, idx);
+    var epl = oAdj ? oAdj.pl : pl;
     var isSel = selId === pl.id;
     return (
       <React.Fragment key={pl.id}>
@@ -4389,7 +4449,7 @@ function LineupPage(p) {
             {mob && (<div style={{ marginTop: 3, display: "flex", flexDirection: "column", gap: 2 }}>
               <StatBox mini={true} cols={4} items={[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]]} />
               <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                {[1,2,3].map(function(k){ var nm = pl["skill" + k]; if(!nm) return null;
+                {[1,2,3].map(function(k){ var nm = epl["skill" + k]; if(!nm) return null;
                   return (<MiniSk key={k} name={nm} lv={effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), pl.cardType, k, "타자", (sdState["pts_" + slot] || []))} />); })}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -4415,7 +4475,7 @@ function LineupPage(p) {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }}>
               {[1,2,3].map(function(k){
-                var nm = pl["skill" + k]; if(!nm) return null;
+                var nm = epl["skill" + k]; if(!nm) return null;
                 var lv = effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), pl.cardType, k, "타자", (sdState["pts_" + slot] || []));
                 var nb = natSkillMismatch(nm, "타자", pl.cardType) ? "국가대표 전용 스킬입니다. 지금 카드 종류에는 붙을 수 없으니 확인해 주세요" : "";
                 return (<SkBadge key={k} name={nm} lv={lv} note={nb} wide={true} />);
@@ -4432,6 +4492,7 @@ function LineupPage(p) {
           </React.Fragment>)}
         </div>
         {isSel && (<div style={{ padding: "8px 14px", background: "rgba(255,213,79,0.02)", borderBottom: "1px solid var(--bd)" }}>
+          {oAdj && (<div style={{ marginBottom: 8 }}><OrderNote adj={oAdj} /></div>)}
           {/* 사진 선택 UI */}
           {(function(){
             var photos = getPhotos(pl.name);
@@ -7359,7 +7420,13 @@ function MyPlayersPage(p) {
        그래야 배지 레벨과 발사각 달성 여부가 라인업 판정과 어긋나지 않는다. */
     var sdbMy = sdBonusFor(pl);
     var potmMy = potmEffect(pl, sdState);
-    var calc = isBat ? calcBat(pl, lu, sdbMy) : calcPit(pl, lu, sdbMy);
+    /* 라인업에 서 있는 타자면 그 타순에 맞춰 스킬·발사각을 바꿔 놓고 센다 (라인업 화면과 같은 값) */
+    var mySlot = slotOf(pl);
+    var myOi = mySlot ? myBatOrder.indexOf(mySlot) : -1;
+    var oAdj = orderAdjust(pl, myOi >= 0 ? myOi : undefined);
+    var epl = oAdj ? oAdj.pl : pl;
+    if (oAdj) { lu = Object.assign({}, lu, { skill1: epl.skill1 || "", skill2: epl.skill2 || "", skill3: epl.skill3 || "" }); }
+    var calc = isBat ? calcBat(epl, lu, sdbMy) : calcPit(pl, lu, sdbMy);
     var accentC = isBat ? "var(--acc)" : "var(--acp)";
 
     return (
@@ -7412,6 +7479,7 @@ function MyPlayersPage(p) {
         {/* Inline edit panel */}
         {isSel && (
           <div style={{ padding: "10px 14px", background: "rgba(255,213,79,0.02)", borderBottom: "1px solid var(--bd)" }}>
+            {oAdj && (<div style={{ marginBottom: 8 }}><OrderNote adj={oAdj} /></div>)}
             {/* Basic info */}
             <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
               <div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"이름"}</div><span style={{ fontSize: 15, fontWeight: 700, color: "var(--t1)" }}>{pl.name}</span></div>
@@ -7559,13 +7627,18 @@ function MyPlayersPage(p) {
                 </div>
                 <div>
                   <div style={{ fontSize: 13, color: "var(--td)", fontWeight: 700, marginBottom: 4 }}>{"발사각 보너스"}</div>
-                  {!pl.launchAngle ? (
+                  {!epl.launchAngle ? (
                     <span style={{ fontSize: 12, color: "var(--td)" }}>{"발사각 정보 없음"}</span>
                   ) : calc.laReq === null ? (
-                    <span style={{ fontSize: 12, color: "var(--td)" }}>{"발사각 " + pl.launchAngle + "° · 13° 미만은 대상 아님"}</span>
+                    <span style={{ fontSize: 12, color: "var(--td)" }}>{"발사각 " + epl.launchAngle + "° · 13° 미만은 대상 아님"}</span>
                   ) : (
                     <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, fontFamily: "var(--m)", flexWrap: "wrap" }}>
-                      <span style={{ color: "var(--td)" }}>{pl.launchAngle + "°"}</span>
+                      {oAdj && oAdj.laDelta
+                        ? (<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ textDecoration: "line-through", color: "var(--td)", opacity: 0.8 }}>{oAdj.laBase + "°"}</span>
+                            <span style={{ color: "#FFD54F", fontWeight: 700 }}>{oAdj.la + "°"}</span>
+                          </span>)
+                        : (<span style={{ color: "var(--td)" }}>{epl.launchAngle + "°"}</span>)}
                       <span style={{ color: "var(--td)" }}>{"필요파워 " + calc.laReq}</span>
                       <span style={{ color: "var(--td)" }}>{"현재파워 " + calc.power}</span>
                       <span style={{ color: calc.laGain ? "#66BB6A" : "#EF5350", fontWeight: 800 }}>

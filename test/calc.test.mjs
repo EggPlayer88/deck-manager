@@ -15,7 +15,7 @@ import {
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
   LAB_PRESET, KBO_TEAMS, sqName, shareGrade, SHARE_GRADE, sharePot, shareEnh, NO_AWAKEN_CARDS,
-  SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
+  SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 
@@ -2210,6 +2210,90 @@ console.log('\n[스쿼드 공유] 그림에 쓰는 이름 — 도감 구분용 �
   eq('빈 값도 터지지 않는다', sqName(null) === '' ? 1 : 0, 1);
 }
 
+
+console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 — 스킬 변형과 발사각 (2026-09-28 사용자 지정)');
+{
+  const bat = (o) => Object.assign({ role: '타자', cardType: '골든글러브', name: 'ㅇ',
+    power: 150, accuracy: 140, eye: 130, patience: 120, launchAngle: 20 }, o);
+
+  /* ── 컨택트히터: 1·2번에서 타순O + 발사각 -3 ── */
+  const c5 = bat({ skill1: '컨택트히터(타순배치)' });
+  const a0 = orderAdjust(c5, 0);
+  eq('컨택 1번 — 타순배치 그대로, 발사각 20 → 17', a0 && a0.pl.skill1 === '컨택트히터(타순배치)' && a0.la === 17 ? 1 : 0, 1);
+  eq('컨택 2번도 같다', orderAdjust(c5, 1).la, 17);
+  const a4 = orderAdjust(c5, 4);
+  eq('컨택 5번 — 타순X 로 바뀐다', a4.pl.skill1 === '컨택트히터(타순X)' ? 1 : 0, 1);
+  eq('컨택 5번 — 발사각은 원래대로 20', a4.la, 20);
+  const cX = bat({ skill1: '컨택트히터(타순X)' });
+  eq('컨택 5번에 타순X 면 바꿀 게 없다', orderAdjust(cX, 4) === null ? 1 : 0, 1);
+  const cX0 = orderAdjust(cX, 0);
+  eq('컨택 1번에 타순X 면 타순배치로 올라간다', cX0.pl.skill1 === '컨택트히터(타순배치)' ? 1 : 0, 1);
+  eq('그때 발사각도 같이 내려간다', cX0.la, 17);
+
+  /* ── 핵타선: 3·4·5번에서 타순O + 발사각 +3 ── */
+  const h = bat({ skill2: '핵타선(타순X)' });
+  const h2 = orderAdjust(h, 2);
+  eq('핵타선 3번 — 타순O 로', h2.pl.skill2 === '핵타선(타순O)' ? 1 : 0, 1);
+  eq('핵타선 3번 — 발사각 20 → 23', h2.la, 23);
+  eq('핵타선 5번도 같다', orderAdjust(h, 4).la, 23);
+  eq('핵타선 6번은 타순X · 발사각 그대로', orderAdjust(h, 5) === null ? 1 : 0, 1);
+  eq('핵타선 1번도 타순X · 발사각 그대로', orderAdjust(h, 0) === null ? 1 : 0, 1);
+
+  /* ── 둘 다 달고 있어도 겹치지 않는다 (자리가 안 겹친다) ── */
+  const both = bat({ skill1: '컨택트히터(타순X)', skill2: '핵타선(타순X)' });
+  const b0 = orderAdjust(both, 0);
+  eq('1번 — 컨택만 켜진다', b0.pl.skill1 === '컨택트히터(타순배치)' && b0.pl.skill2 === '핵타선(타순X)' && b0.la === 17 ? 1 : 0, 1);
+  const b3 = orderAdjust(both, 3);
+  eq('4번 — 핵타선만 켜진다', b3.pl.skill1 === '컨택트히터(타순X)' && b3.pl.skill2 === '핵타선(타순O)' && b3.la === 23 ? 1 : 0, 1);
+  const b8 = orderAdjust(both, 8);
+  eq('9번 — 둘 다 꺼지고 발사각 그대로', b8 === null ? 1 : 0, 1);
+
+  /* ── 손대면 안 되는 경우 ── */
+  eq('발사각이 비어 있으면 만들어 내지 않는다', orderAdjust(bat({ skill1: '컨택트히터(타순X)', launchAngle: 0 }), 0).la, 0);
+  eq('투수는 대상 아님', orderAdjust({ role: '투수', skill1: '컨택트히터(타순X)', launchAngle: 20 }, 0) === null ? 1 : 0, 1);
+  eq('타순을 모르면 손대지 않는다', orderAdjust(c5, undefined) === null ? 1 : 0, 1);
+  eq('관계없는 스킬만 있으면 그대로', orderAdjust(bat({ skill1: '정밀타격' }), 0) === null ? 1 : 0, 1);
+  eq('발사각은 0 아래로 안 내려간다', orderAdjust(bat({ skill1: '컨택트히터(타순X)', launchAngle: 2 }), 0).la, 0);
+
+  /* ── 원본은 절대 건드리지 않는다 ── */
+  const orig = bat({ skill1: '컨택트히터(타순X)' });
+  const snap = JSON.stringify(orig);
+  orderAdjust(orig, 0); orderPl(orig, 0);
+  eq('도감·내 선수 값은 그대로', JSON.stringify(orig) === snap ? 1 : 0, 1);
+  eq('orderPl 은 바뀔 게 없으면 같은 객체', orderPl(orig, 5) === orig ? 1 : 0, 1);
+  eq('orderPl 은 바뀌면 사본', orderPl(orig, 0) !== orig ? 1 : 0, 1);
+
+  /* ── 규칙 표 ── */
+  eq('컨택은 1·2번', ORDER_SKILLS['컨택트히터'].at.join(',') === '0,1' ? 1 : 0, 1);
+  eq('핵타선은 3·4·5번', ORDER_SKILLS['핵타선'].at.join(',') === '2,3,4' ? 1 : 0, 1);
+  eq('컨택은 발사각 -3', ORDER_SKILLS['컨택트히터'].la, -3);
+  eq('핵타선은 발사각 +3', ORDER_SKILLS['핵타선'].la, 3);
+
+  /* ── 라인업 점수까지 실제로 타는지 (lineupBat 한 군데만 고쳤으니 여기서 확인한다) ── */
+  const sdO = { teamName: '기아', bpcIdx: 4 };
+  /* 발사각 20 을 살리려면 파워가 필요파워(=|16-20|*3+160=172) 를 넘어야 한다 */
+  const big = (o2) => Object.assign({ name: 'ㅋ', role: '타자', cardType: '골든글러브', team: '기아',
+    year: '2024', hand: '우', stars: 5, power: 200, accuracy: 140, eye: 130, patience: 120,
+    enhance: '9각성', launchAngle: 20, sLvManual: false }, o2 || {});
+  /* 컨택트히터를 단 타자를 1번(C)과 5번(C) 자리에 놓고 견준다 — 자리는 같고 타순만 바꾼다 */
+  const cPl = big({ skill1: '컨택트히터(타순X)' });
+  const ord1 = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+  const ord5 = ['1B', '2B', '3B', '4B_none', 'C', 'LF', 'CF', 'RF', 'DH'];
+  const oAt1 = lineupOpts(Object.assign({}, sdO, { batOrder: ord1 }), 0);
+  const oAt5 = lineupOpts(Object.assign({}, sdO, { batOrder: ord5 }), 0);
+  const at1 = lineupBat(cPl, 'C', sdO, oAt1);
+  const at5 = lineupBat(cPl, 'C', sdO, oAt5);
+  eq('컨택 1번 — 발사각 17 로 셈', Math.round(launchAngleReq(17) * 100) / 100, at1.laReq);
+  eq('컨택 5번 — 발사각 20 으로 셈', Math.round(launchAngleReq(20) * 100) / 100, at5.laReq);
+  eq('타순만 바꿔도 총점이 달라진다', at1.total !== at5.total ? 1 : 0, 1);
+  /* 스킬 점수도 같이 바뀐다 — 1번은 타순배치(높은 값), 5번은 타순X */
+  eq('1번 쪽 스킬 점수가 더 높다', at1.skillScore > at5.skillScore ? 1 : 0, 1);
+  eq('그 차이는 표의 차이와 같다', Math.round((at1.skillScore - at5.skillScore) * 100) / 100,
+    Math.round((getSkillScore('컨택트히터(타순배치)', 6, '타자') - getSkillScore('컨택트히터(타순X)', 6, '타자')) * 100) / 100, 0.011);
+  /* 되돌아오는지 — 5번에 뒀다가 다시 1번에 두면 처음 값과 같다 */
+  eq('다시 1번에 두면 처음 값으로 돌아온다', lineupBat(cPl, 'C', sdO, oAt1).total, at1.total);
+  eq('원본 선수는 그대로', cPl.skill1 === '컨택트히터(타순X)' && cPl.launchAngle === 20 ? 1 : 0, 1);
+}
 
 console.log('\n[원투펀치] 배치O 는 1·2선발, 배치X 는 3~5선발·중계·마무리 (2026-09-28 사용자 지정)');
 {
