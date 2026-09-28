@@ -15,7 +15,7 @@ import {
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
   LAB_PRESET, KBO_TEAMS, sqName, shareGrade, SHARE_GRADE, sharePot, shareEnh, NO_AWAKEN_CARDS,
-  SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
+  SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, skillBaseName, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 
@@ -2268,6 +2268,47 @@ console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 �
   eq('핵타선은 3·4·5번', ORDER_SKILLS['핵타선'].at.join(',') === '2,3,4' ? 1 : 0, 1);
   eq('컨택은 발사각 -3', ORDER_SKILLS['컨택트히터'].la, -3);
   eq('핵타선은 발사각 +3', ORDER_SKILLS['핵타선'].la, 3);
+
+  /* ── 나머지 넷 (2026-09-29 사용자 지정) — 발사각은 안 움직이고 변형만 갈린다 ── */
+  const RULE = {
+    '공포의하위타선': { on: [6, 7, 8, 9], v: '공포의하위타선' },
+    '수비안정성':     { on: [1, 2, 6, 7, 8, 9], v: '수비안정성' },
+    '리드오프':       { on: [1, 2], v: '리드오프' },
+    '빈틈없는타선':   { on: [6, 7, 8, 9], v: '빈틈없는타선' },
+  };
+  for (const base of Object.keys(RULE)) {
+    const r = RULE[base];
+    eq(base + ' — 발사각은 안 건드린다', ORDER_SKILLS[base].la, 0);
+    eq(base + ' — 켜지는 타순 ' + r.on.join('·'),
+      ORDER_SKILLS[base].at.map((x) => x + 1).join(',') === r.on.join(',') ? 1 : 0, 1);
+    let good = 1;
+    for (let n = 1; n <= 9; n++) {
+      const on = r.on.indexOf(n) >= 0;
+      const want = r.v + (on ? '(타순O)' : '(타순X)');
+      /* 반대쪽 변형을 달고 들어가면 반드시 바뀌어야 한다 */
+      const start = r.v + (on ? '(타순X)' : '(타순O)');
+      const a = orderAdjust(bat({ skill1: start }), n - 1);
+      if (!a || a.pl.skill1 !== want || a.la !== 20) good = 0;
+      /* 맞는 변형을 이미 달고 있으면 바꿀 게 없다 */
+      if (orderAdjust(bat({ skill1: want }), n - 1) !== null) good = 0;
+    }
+    eq(base + ' — 1~9번 아홉 자리 모두 맞게 갈린다', good, 1);
+    eq(base + ' — 타순O 가 타순X 보다 점수가 높거나 같다',
+      getSkillScore(r.v + '(타순O)', 6, '타자') >= getSkillScore(r.v + '(타순X)', 6, '타자') ? 1 : 0, 1);
+  }
+  /* 여섯 개를 다 챙겼는지 — 도감 타자 표에서 (타순O)/(타순배치) 가 있는 스킬은 모두 규칙이 있어야 한다 */
+  const ordered = Object.keys(DEFAULT_SKILLS['타자'])
+    .filter((k) => /\(타순O\)$|\(타순배치\)$/.test(k)).map(skillBaseName);
+  eq('타순을 타는 스킬은 여섯 개', ordered.length, 6);
+  eq('여섯 개 모두 규칙이 있다', ordered.every((b) => ORDER_SKILLS[b]) ? 1 : 0, 1);
+  eq('규칙에만 있고 표에 없는 것은 없다',
+    Object.keys(ORDER_SKILLS).every((b) => ordered.indexOf(b) >= 0) ? 1 : 0, 1);
+  /* 수비안정성·리드오프가 한 선수에 같이 붙어도 1·2번에서 둘 다 켜진다 */
+  const two = bat({ skill1: '수비안정성(타순X)', skill2: '리드오프(타순X)' });
+  const t0 = orderAdjust(two, 0);
+  eq('1번 — 수비안정성·리드오프 둘 다 켜진다',
+    t0.pl.skill1 === '수비안정성(타순O)' && t0.pl.skill2 === '리드오프(타순O)' ? 1 : 0, 1);
+  eq('그래도 발사각은 그대로', t0.la, 20);
 
   /* ── 라인업 점수까지 실제로 타는지 (lineupBat 한 군데만 고쳤으니 여기서 확인한다) ── */
   const sdO = { teamName: '기아', bpcIdx: 4 };

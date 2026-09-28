@@ -317,8 +317,12 @@ function launchAngleGain(la,finalPower){
   return (req!==null && finalPower>=req) ? launchAngleBonus(la) : 0;
 }
 var ORDER_SKILLS = {
-  "컨택트히터": { at: [0, 1],    on: "컨택트히터(타순배치)", off: "컨택트히터(타순X)", la: -3 },
-  "핵타선":     { at: [2, 3, 4], on: "핵타선(타순O)",        off: "핵타선(타순X)",     la: 3 }
+  "컨택트히터":     { at: [0, 1],                on: "컨택트히터(타순배치)",   off: "컨택트히터(타순X)",   la: -3 },
+  "핵타선":         { at: [2, 3, 4],             on: "핵타선(타순O)",          off: "핵타선(타순X)",       la: 3 },
+  "공포의하위타선": { at: [5, 6, 7, 8],          on: "공포의하위타선(타순O)",  off: "공포의하위타선(타순X)", la: 0 },
+  "수비안정성":     { at: [0, 1, 5, 6, 7, 8],    on: "수비안정성(타순O)",      off: "수비안정성(타순X)",   la: 0 },
+  "리드오프":       { at: [0, 1],                on: "리드오프(타순O)",        off: "리드오프(타순X)",     la: 0 },
+  "빈틈없는타선":   { at: [5, 6, 7, 8],          on: "빈틈없는타선(타순O)",    off: "빈틈없는타선(타순X)", la: 0 }
 };
 function orderAdjust(pl, batIdx) {
   if (!pl || pl.role !== "타자") return null;
