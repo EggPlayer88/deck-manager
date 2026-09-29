@@ -35,12 +35,25 @@ export async function getProfile(userId) {
 }
 
 /* ============ User Data (per-user) ============ */
+/* 읽기 실패와 "아직 저장한 적 없음" 을 구분한다.
+
+   예전에는 둘 다 null 이었다. 그래서 읽기가 한 번 실패하면 화면에 빈 덱이 뜨고,
+   그 상태에서 유저가 카드 하나만 건드려도 빈 덱이 sd_state 를 통째로 덮어써
+   저장해 둔 덱이 사라졌다. 복구할 방법은 프로젝트 전체 백업 복원뿐이었다.
+
+   - 행이 없음(신규 유저)  → null. 정상이다
+   - 읽기가 실패           → throw. 부르는 쪽이 저장을 포기해야 한다 */
 export async function loadUserData(userId) {
   if (!supabase || !userId) return null;
   var r = await supabase.from('user_settings').select('sd_state')
     .eq('user_id', userId).eq('key', 'settings').single();
-  if (r.error || !r.data) return null;
-  return r.data.sd_state || null;
+  if (r.error) {
+    /* PGRST116 = 조건에 맞는 행이 없음. 신규 유저이지 오류가 아니다 */
+    if (r.error.code === 'PGRST116') return null;
+    throw new Error('사용자 데이터를 읽지 못했습니다: '
+      + (r.error.message || r.error.code || '알 수 없는 오류'));
+  }
+  return (r.data && r.data.sd_state) || null;
 }
 
 export async function saveUserData(userId, data) {

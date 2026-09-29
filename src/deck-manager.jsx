@@ -1128,6 +1128,10 @@ function useData(userId, sdState, setSdState, curDeckId){
   /* 연구소 실험본 — 덱마다 3개. 뿌리에 덱 id 로 담아 덱 저장기와 부딪히지 않게 한다 */
   var _lab=useState([]);var labSaves=_lab[0];var setLabSaves=_lab[1];
   var _lo=useState(true);var loading=_lo[0];var setLoading=_lo[1];
+  /* 서버에서 덱을 읽지 못했을 때의 사유. null 이면 정상.
+     이 값이 있으면 화면은 빈 덱 대신 오류를 보여 준다 — 빈 덱을 보여 주면
+     유저가 그 위에 뭔가 저장해 서버의 덱을 덮어쓰기 때문이다. */
+  var _le=useState(null);var loadError=_le[0];var setLoadError=_le[1];
   var uidRef=React.useRef(userId);uidRef.current=userId;
   var deckIdRef=React.useRef(curDeckId);deckIdRef.current=curDeckId;
   /* 덱 저장기 (makeDeckWriter) — 저장할 최신 값과 요청 순서를 붙잡는다 */
@@ -1139,6 +1143,32 @@ function useData(userId, sdState, setSdState, curDeckId){
   /* ── 전체 sd_state 메모리 캐시 (읽기 중복 제거) ── */
   var allDataRef=React.useRef(null);
   var globalLoadedRef=React.useRef(false); /* 선수도감/스킬 1회만 로드 */
+
+  /* 저장 전에 기준이 될 전체 줄(sd_state)을 확보한다.
+     읽기가 실패하면 예외를 그대로 올려 저장을 취소시킨다 — 이것이 핵심이다.
+     예전처럼 `await loadUserData(uid) || {}` 로 빈 객체를 만들어 버리면
+     그 빈 것이 유저의 덱을 통째로 덮어쓴다.
+     행이 없는 신규 유저는 {} 로 시작해도 잃을 것이 없다. */
+  var ensureAllData = async function(uid) {
+    var all = allDataRef.current;
+    if (all) return all;
+    all = (await loadUserData(uid)) || {};   /* 읽기 실패 시 여기서 throw */
+    allDataRef.current = all;
+    return all;
+  };
+
+  /* 저장이 막혔다는 사실은 반드시 알려야 한다 — 조용히 실패하면
+     유저는 저장된 줄 알고 창을 닫는다. 다만 연달아 뜨지 않게 30초에 한 번만. */
+  var saveWarnAtRef = React.useRef(0);
+  var warnSaveBlocked = function(e) {
+    console.error('[저장 취소] 서버에서 기존 데이터를 읽지 못했습니다:', e);
+    var now = Date.now();
+    if (now - saveWarnAtRef.current < 30000) return;
+    saveWarnAtRef.current = now;
+    alert('서버와 연결이 불안정해 방금 변경을 저장하지 못했습니다.\n\n'
+      + '기존에 저장된 덱은 그대로 있습니다.\n'
+      + '잠시 후 다시 시도하거나 새로고침해 주세요.');
+  };
 
   var loadDeckData = async function(uid, deckId) {
     var all = await loadUserData(uid);
@@ -1157,8 +1187,8 @@ function useData(userId, sdState, setSdState, curDeckId){
     setCustomDexState(arr);
     var uid = uidRef.current;
     if (!supabase || !uid) { await sSet("deck-custom-dex", arr); return true; }
-    var all = allDataRef.current;
-    if (!all) { all = await loadUserData(uid) || {}; allDataRef.current = all; }
+    var all;
+    try { all = await ensureAllData(uid); } catch (e) { warnSaveBlocked(e); return false; }
     all.customDex = arr;
     allDataRef.current = all;
     await saveUserData(uid, all);
@@ -1172,8 +1202,8 @@ function useData(userId, sdState, setSdState, curDeckId){
     var uid = uidRef.current, did = deckIdRef.current;
     if (!did) return false;
     if (!supabase || isGuestUid(uid)) { var loc = (await sGet("deck-lab")) || {}; loc[did] = arr; await sSet("deck-lab", loc); return true; }
-    var all = allDataRef.current;
-    if (!all) { all = await loadUserData(uid) || {}; allDataRef.current = all; }
+    var all;
+    try { all = await ensureAllData(uid); } catch (e) { warnSaveBlocked(e); return false; }
     all.lab = all.lab || {};
     all.lab[did] = arr;
     allDataRef.current = all;
@@ -1184,11 +1214,8 @@ function useData(userId, sdState, setSdState, curDeckId){
   /* 저장: 캐시 사용 → 쓰기 1번만 */
   var saveAllData = async function(uid, deckId, deckData) {
     if (!supabase || !uid || !deckId) return;
-    var all = allDataRef.current;
-    if (!all) {
-      all = await loadUserData(uid) || {};
-      allDataRef.current = all;
-    }
+    var all;
+    try { all = await ensureAllData(uid); } catch (e) { warnSaveBlocked(e); return false; }
     if (!all.decks) {
       all = toDeckFormat(all, await sGet("deck-list"), deckId);
       allDataRef.current = all;
@@ -1210,7 +1237,18 @@ function useData(userId, sdState, setSdState, curDeckId){
     (async function(){
       if(supabase){
         /* 아직 가는 중인 저장이 끝난 뒤에 읽는다 — 덱을 바꾸자마자 읽으면 방금 저장한 내용이 빠진다 */
-        var dd = await writer.queue(function(){ return loadDeckData(userId, curDeckId); });
+        var dd = null;
+        try {
+          dd = await writer.queue(function(){ return loadDeckData(userId, curDeckId); });
+        } catch (e) {
+          /* 읽기 실패. 여기서 빈 덱을 그리면 유저가 그 위에 저장해 서버의 덱을 지운다.
+             화면 상태를 건드리지 말고 오류로 멈춘다. */
+          console.error('[덱 읽기 실패]', e);
+          setLoadError((e && e.message) || '알 수 없는 오류');
+          setLoading(false);
+          return;
+        }
+        setLoadError(null);
         if(dd && dd.players && dd.players.length > 0){
           setPlayers(dd.players); setLineupMap(dd.lineupMap||{}); setSdState(dd.sdConfig||{liveSetPo:0});
         } else {
@@ -1323,7 +1361,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     }
   },[]);
 
-  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
+  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,loadError:loadError,setLoadError:setLoadError,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
 }
 
 /* ── 전력공유 ─────────────────────────────────────────────────
@@ -10117,7 +10155,16 @@ export default function App(){
   useEffect(function(){
     if(!userId)return;
     (async function(){
-      var result=await loadDecks(userId);
+      var result;
+      try {
+        result = await loadDecks(userId);
+      } catch (e) {
+        /* 서버를 못 읽었다. localStorage 목록으로 내려가면 안 된다 —
+           그걸로 동기화하면 서버에 있는 덱 목록을 덮어쓴다. 오류로 멈춘다. */
+        console.error('[덱 목록 읽기 실패]', e);
+        store.setLoadError((e && e.message) || '알 수 없는 오류');
+        return;
+      }
       var list=result.list; var savedCurId=result.curId;
       var fromSupabase=result.fromSupabase;
 
@@ -10310,6 +10357,30 @@ export default function App(){
       </div>
     );
   }
+
+  /* 서버에서 덱을 읽지 못한 상태.
+     여기서 빈 덱을 보여 주면 유저가 그 위에 무언가 저장하고, 그 빈 것이
+     서버에 저장된 덱을 통째로 덮어쓴다. 그래서 아무것도 그리지 않고 다시 시도하게 한다. */
+  if(store.loadError)return(
+    <div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)",padding:20}}>
+      <div style={{maxWidth:420,textAlign:"center"}}>
+        <div style={{fontSize:40,marginBottom:14}}>{"🔌"}</div>
+        <div style={{fontSize:18,fontWeight:800,marginBottom:10}}>{"덱을 불러오지 못했습니다"}</div>
+        <div style={{fontSize:14,color:"var(--t2)",lineHeight:1.7,marginBottom:6}}>
+          {"서버와 연결이 잠시 불안정한 것 같습니다."}
+        </div>
+        <div style={{fontSize:14,color:"var(--t2)",lineHeight:1.7,marginBottom:18}}>
+          {"저장해 두신 덱은 그대로 있습니다. 잠시 후 다시 시도해 주세요."}
+        </div>
+        <button onClick={function(){window.location.reload();}}
+          style={{padding:"10px 24px",fontSize:15,fontWeight:700,background:"var(--ta)",border:"1px solid var(--acc)",borderRadius:8,color:"var(--acc)",cursor:"pointer"}}>
+          {"다시 시도"}
+        </button>
+        <div style={{fontSize:11,color:"var(--td)",marginTop:16,fontFamily:"var(--m)",wordBreak:"break-all"}}>{String(store.loadError)}</div>
+      </div>
+      {CSS}
+    </div>
+  );
 
   if(store.loading||!curDeckId)return(<div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
 
