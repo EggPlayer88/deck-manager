@@ -22,10 +22,11 @@ var uploadPlayerPhoto = _SB.uploadPlayerPhoto || function(){ return Promise.reso
 var listPlayerPhotos = _SB.listPlayerPhotos || function(){ return Promise.resolve([]); };
 var deletePlayerPhoto = _SB.deletePlayerPhoto || function(){ return Promise.resolve(false); };
 var listAllPhotos = _SB.listAllPhotos || function(){ return Promise.resolve([]); };
+var loadPhotoManifest = _SB.loadPhotoManifest || function(){ return Promise.resolve(null); };
+var rebuildPhotoManifest = _SB.rebuildPhotoManifest || function(){ return Promise.resolve(false); };
 var getTeamLogoUrl = _SB.getTeamLogoUrl || function(){ return ""; };
 var uploadTeamLogo = _SB.uploadTeamLogo || function(){ return Promise.resolve(null); };
-var loadPhotoPosMap = _SB.loadPhotoPosMap || function(){ return Promise.resolve({}); };
-var savePhotoPosMap = _SB.savePhotoPosMap || function(){ return Promise.resolve(false); };
+
 var loadGlobalPotmList = _SB.loadGlobalPotmList || function(){ return Promise.resolve([]); };
 var saveGlobalPotmList = _SB.saveGlobalPotmList || function(){ return Promise.resolve(false); };
 
@@ -59,7 +60,17 @@ function isCustomCard(pl) {
   return false;
 }
 var PHOTO_CACHE = {};
-var PHOTO_POS_MAP = {}; /* {선수이름: 위치(0~100)} - 관리자 설정, 전역 적용 */
+var PHOTO_MANIFEST_LOADED = false; /* 매니페스트를 받았으면 선수별 버킷 조회를 하지 않는다 */
+
+/* 카드 사진의 세로 맞춤 위치(%). 모든 사진에 같은 값을 쓴다.
+
+   고정이라야 사진을 만들 때 어디가 보일지 미리 알 수 있다.
+   사진마다 자동으로 달라지면 규격에 맞춰 구도를 잡는 것 자체가 불가능해진다.
+   예전에는 선수별 슬라이더까지 있었지만, 사진을 규격대로 만들면 필요가 없어 없앴다.
+
+   2:3 원본 기준으로 카드에 보이는 구간은 세로 6% ~ 75% 다.
+   (카드의 사진 칸이 거의 정사각형이라 2:3 의 약 69% 만 보인다) */
+var PHOTO_POS = 20;
 
 /* ── 팀 로고 결정 함수 ──
    나중에 연도별 조건을 여기에 추가:
@@ -77,6 +88,18 @@ function getPhotoUrl(name) {
   return (urls && urls.length > 0) ? urls[0] : "";
 }
 function getPhotoUrls(name) { return PHOTO_CACHE[name] || null; }
+
+
+/* 사진 매니페스트(_index.json) 한 장으로 전역 캐시를 통째로 채운다.
+   이게 성공하면 라인업을 열 때 선수마다 버킷을 훑던 호출이 전부 사라진다.
+   실패하면 PHOTO_MANIFEST_LOADED 가 false 로 남아 예전 경로(선수별 조회)로 되돌아간다. */
+function applyPhotoManifest(m) {
+  if (!m || !m.photos) return false;
+  /* 합치지 않고 통째로 바꾼다 — 지워진 사진이 캐시에 남지 않도록 */
+  PHOTO_CACHE = m.photos;
+  PHOTO_MANIFEST_LOADED = true;
+  return true;
+}
 var POT_GRADES = ["C","C+","B","B+","A","A+","S","S+","SS","SS+","SR","SR+"];
 var DEFAULT_POT_SCORES = {"C":0,"C+":1,"B":2,"B+":3,"A":4,"A+":5,"S":6,"S+":7,"SS":8,"SS+":9,"SR":10,"SR+":12};
 /* 잠재력 종류별 기본 점수 */
@@ -1857,7 +1880,7 @@ function PlayerCard(p) {
         overflow:"hidden",
         background: photoUrl ? "none" : "rgba(0,0,0,0.25)" }}>
         {photoUrl ? (
-          <img src={photoUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center "+(PHOTO_POS_MAP[pl.name]!==undefined?PHOTO_POS_MAP[pl.name]:20)+"%" }} />
+          <img src={photoUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center "+PHOTO_POS+"%" }} />
         ) : (
           <span style={{ fontSize:size==="lg"?28:20, opacity:0.35 }}>{"⚾"}</span>
         )}
@@ -2279,24 +2302,6 @@ function PlayerDBPage(p){
   var _photoLoading=useState(false);var photoLoading=_photoLoading[0];var setPhotoLoading=_photoLoading[1];
   var _uploading=useState(false);var uploading=_uploading[0];var setUploading=_uploading[1];
   var _uploadMsg=useState("");var uploadMsg=_uploadMsg[0];var setUploadMsg=_uploadMsg[1];
-  /* 사진 위치 맵 */
-  var _posMap=useState({});var posMap=_posMap[0];var setPosMap=_posMap[1];
-  var _posSaving=useState(false);var posSaving=_posSaving[0];var setPosSaving=_posSaving[1];
-
-  /* posMap 로드 + 전역 반영 */
-  useEffect(function(){
-    loadPhotoPosMap().then(function(m){
-      setPosMap(m||{});
-      Object.assign(PHOTO_POS_MAP, m||{});
-    });
-  },[]);
-
-  var savePosMap = async function(newMap) {
-    setPosSaving(true);
-    Object.assign(PHOTO_POS_MAP, newMap);
-    await savePhotoPosMap(newMap);
-    setPosSaving(false);
-  };
 
   /* 사진 목록 로드 */
   var loadPhotos=async function(){
@@ -2307,7 +2312,12 @@ function PlayerDBPage(p){
   };
   useEffect(function(){ if(dbTab==="사진 관리") loadPhotos(); },[dbTab]);
 
-  /* 이미지 압축: Canvas로 리사이즈 + JPEG 변환 */
+  /* 이미지 압축: Canvas 로 축소 + 알파를 지키는 형식으로 변환.
+
+     선수 사진은 배경을 딴(누끼) 투명 이미지다. JPEG 는 알파 채널이 없어서
+     투명한 곳이 검게 칠해진다 — 그래서 JPEG 로는 절대 내보내지 않는다.
+     WebP 를 못 만드는 브라우저에서는 PNG 로 떨어진다 (용량은 크지만 투명도는 지킨다).
+     자르지 않고 축소만 하는 것은 scripts/sync-photos.mjs 와 같은 규칙이다. */
   var compressImage=function(file, maxW, maxH, quality){
     return new Promise(function(resolve, rej){
       var reader=new FileReader();
@@ -2322,11 +2332,16 @@ function PlayerDBPage(p){
           }
           var canvas=document.createElement("canvas");
           canvas.width=w; canvas.height=h;
+          /* alpha:true 가 기본이고, 배경을 칠하지 않으므로 투명한 곳은 투명하게 남는다 */
           var ctx=canvas.getContext("2d");
           ctx.drawImage(img,0,0,w,h);
           canvas.toBlob(function(blob){
-            if(blob){resolve(blob);}else{rej(new Error('압축 실패'));}
-          },"image/jpeg",quality);
+            if(blob && blob.type==="image/webp"){ resolve(blob); return; }
+            /* WebP 미지원 브라우저 — PNG 로 다시 시도 */
+            canvas.toBlob(function(png){
+              if(png){resolve(png);}else{rej(new Error('압축 실패'));}
+            },"image/png");
+          },"image/webp",quality);
         };
         img.onerror=function(){ rej(new Error('이미지 로드 실패')); };
         img.src=e.target.result;
@@ -2344,20 +2359,17 @@ function PlayerDBPage(p){
     for(var i=0;i<files.length;i++){
       var file=files[i];
       var baseName=file.name.replace(/\.[^.]+$/,"");
-      /* 최대 600×900px, JPEG 80% 품질로 압축 후 업로드 */
-      var compressed=await compressImage(file,600,900,0.80);
-      var fileName=baseName+".jpg";
+      /* 최대 600×900px 로 축소 + 알파를 지킨 채 압축 (scripts/sync-photos.mjs 와 같은 규격) */
+      var compressed=await compressImage(file,600,900,0.85);
+      var fileName=baseName+(compressed.type==="image/png"?".png":".webp");
       var url=await uploadPlayerPhoto(compressed,fileName);
       if(url){ok++;}else{fail++;}
     }
     setUploadMsg("완료: "+ok+"장 업로드"+( fail>0?" (실패 "+fail+"장)":""));
-    /* 업로드된 선수 이름들 전역 캐시 초기화 (새 사진 즉시 반영) */
-    for(var j=0;j<files.length;j++){
-      var uploadedBase=files[j].name.replace(/\.[^.]+$/,"").replace(/\d+$/,"");
-      if(uploadedBase){ delete PHOTO_CACHE[uploadedBase]; }
-    }
-    /* Supabase 인덱싱 대기 후 목록 갱신 */
+    /* Supabase 인덱싱을 기다린 뒤 매니페스트를 다시 쓰고, 그 결과로 전역 캐시를 갈아끼운다.
+       (매니페스트가 곧 라인업 카드가 보는 목록이므로 여기서 갱신하지 않으면 새 사진이 안 뜬다) */
     await new Promise(function(r){ setTimeout(r, 1500); });
+    applyPhotoManifest(await rebuildPhotoManifest());
     await loadPhotos();
     setUploading(false);
   };
@@ -2367,8 +2379,8 @@ function PlayerDBPage(p){
     if(!confirm("\""+ph.name+"\" 삭제?"))return;
     /* storageName(인코딩된 실제 파일명)으로 삭제 */
     await deletePlayerPhoto(ph.storageName||ph.name);
-    /* 해당 선수 전역 캐시 초기화 */
-    if(ph.baseName) { delete PHOTO_CACHE[ph.baseName]; }
+    /* 매니페스트를 다시 써야 지운 사진이 카드에서도 사라진다 */
+    applyPhotoManifest(await rebuildPhotoManifest());
     await loadPhotos();
   };
 
@@ -2431,7 +2443,8 @@ function PlayerDBPage(p){
             onDrop={function(e){e.preventDefault();handlePhotoUpload(e.dataTransfer.files);}}>
             <div style={{fontSize:28,marginBottom:8}}>{"📸"}</div>
             <div style={{fontSize:15,fontWeight:700,color:"var(--t1)",marginBottom:4}}>{"사진 파일을 드래그하거나 클릭해서 업로드"}</div>
-            <div style={{fontSize:13,color:"var(--td)",marginBottom:12}}>{"파일명: 이승엽1.jpg, 이승엽2.jpg 형식 | 200×280px 권장 | JPG/PNG/WebP"}</div>
+            <div style={{fontSize:13,color:"var(--td)",marginBottom:4}}>{"파일명: 이승엽1.png, 이승엽2.png 형식"}</div>
+            <div style={{fontSize:13,color:"var(--td)",marginBottom:12}}>{"배경 투명(누끼) PNG · 2:3 세로 비율 · 카드에는 위에서 6~74% 구간만 보입니다"}</div>
             <label style={{display:"inline-block",padding:"8px 20px",background:"var(--ta)",border:"1px solid var(--acc)",borderRadius:8,cursor:"pointer",fontSize:14,fontWeight:700,color:"var(--acc)"}}>
               {"파일 선택 (여러 장 가능)"}
               <input type="file" multiple accept="image/*" style={{display:"none"}} onChange={function(e){handlePhotoUpload(e.target.files);e.target.value="";}} />
@@ -2452,7 +2465,6 @@ function PlayerDBPage(p){
             )}
             {!photoLoading && Object.keys(photoGroups).sort().map(function(name){
               var photos=photoGroups[name];
-              var curPos = posMap[name]!==undefined ? posMap[name] : 20;
               return(
                 <div key={name} style={{marginBottom:16}}>
                   <div style={{fontSize:14,fontWeight:800,color:"var(--t1)",marginBottom:8,paddingBottom:4,borderBottom:"1px solid var(--bd)"}}>{name+" ("+photos.length+"장)"}</div>
@@ -2460,33 +2472,13 @@ function PlayerDBPage(p){
                     {photos.map(function(ph){return(
                       <div key={ph.name} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                         <div style={{position:"relative"}}>
-                          <img src={ph.url} alt={ph.name} style={{width:60,height:84,objectFit:"cover",objectPosition:"center "+curPos+"%",borderRadius:6,border:"1px solid var(--bd)"}} />
+                          <img src={ph.url} alt={ph.name} style={{width:60,height:84,objectFit:"cover",objectPosition:"center "+PHOTO_POS+"%",borderRadius:6,border:"1px solid var(--bd)"}} />
                           <button onClick={function(){handlePhotoDelete(ph);}}
                             style={{position:"absolute",top:-4,right:-4,width:18,height:18,borderRadius:"50%",background:"#EF5350",border:"none",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:900,lineHeight:"18px",textAlign:"center",padding:0}}>{"×"}</button>
                         </div>
                         <span style={{fontSize:11,color:"var(--td)",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ph.name}</span>
                       </div>
                     );})}
-                  </div>
-                  {/* 위치 슬라이더 */}
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:12,color:"var(--td)",flexShrink:0,width:28}}>{"위치"}</span>
-                    <input type="range" min={0} max={100} value={curPos}
-                      onChange={function(e){
-                        var v=parseInt(e.target.value);
-                        var nm=Object.assign({},posMap); nm[name]=v; setPosMap(nm);
-                      }}
-                      onMouseUp={function(e){
-                        var v=parseInt(e.target.value);
-                        var nm=Object.assign({},posMap); nm[name]=v; savePosMap(nm);
-                      }}
-                      onTouchEnd={function(e){
-                        var v=parseInt(e.target.value);
-                        var nm=Object.assign({},posMap); nm[name]=v; savePosMap(nm);
-                      }}
-                      style={{flex:1,accentColor:"var(--acc)",cursor:"pointer"}} />
-                    <span style={{fontSize:12,color:"var(--acc)",fontFamily:"var(--m)",width:32,flexShrink:0,textAlign:"right"}}>{curPos+"%"}</span>
-                    {posSaving&&<span style={{fontSize:11,color:"var(--td)"}}>{"저장중"}</span>}
                   </div>
                 </div>
               );
@@ -4183,7 +4175,13 @@ function LineupPage(p) {
   var loadPhotosForPlayer = React.useCallback(async function(name) {
     if (!name || photoCacheRef.current[name] !== undefined) return;
     photoCacheRef.current[name] = null;
-    var urls = await listPlayerPhotos(name);
+    /* 매니페스트를 이미 받아 뒀으면 네트워크를 다시 타지 않는다.
+       매니페스트에 이름이 없다 = 사진이 없는 선수 이므로 빈 배열로 확정한다.
+       이 함수는 렌더 도중에도 불리므로, 곧바로 값을 알더라도 await 로 한 틱 물러나
+       렌더가 끝난 뒤에 상태를 바꾼다. */
+    var urls = PHOTO_MANIFEST_LOADED
+      ? await Promise.resolve(PHOTO_CACHE[name] || [])
+      : await listPlayerPhotos(name);
     photoCacheRef.current[name] = urls || [];
     PHOTO_CACHE[name] = urls || []; /* 전역 캐시 업데이트 */
     setPhotoCache(function(prev){
@@ -4550,7 +4548,7 @@ function LineupPage(p) {
                 <span style={{fontSize:13,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
                 {photos.map(function(url, i){
                   var isCur = pl.photoUrl === url;
-                  var pos = (PHOTO_POS_MAP[pl.name]!==undefined?PHOTO_POS_MAP[pl.name]:20)+"%";
+                  var pos = PHOTO_POS+"%";
                   return (
                     <div key={i} onClick={function(){updatePl(pl.id,"photoUrl",isCur?"":url);}}
                       style={{cursor:"pointer",borderRadius:5,border:"2px solid "+(isCur?"var(--acc)":"transparent"),overflow:"hidden",opacity:isCur?1:0.6,transition:"all 0.15s"}}>
@@ -4655,7 +4653,7 @@ function LineupPage(p) {
                 <span style={{fontSize:13,color:"var(--td)",flexShrink:0}}>{"선수사진:"}</span>
                 {photos.map(function(url, i){
                   var isCur = pl.photoUrl === url;
-                  var pos = (PHOTO_POS_MAP[pl.name]!==undefined?PHOTO_POS_MAP[pl.name]:20)+"%";
+                  var pos = PHOTO_POS+"%";
                   return (
                     <div key={i} onClick={function(){updatePl(pl.id,"photoUrl",isCur?"":url);}}
                       style={{cursor:"pointer",borderRadius:5,border:"2px solid "+(isCur?"var(--acc)":"transparent"),overflow:"hidden",opacity:isCur?1:0.6,transition:"all 0.15s"}}>
@@ -10079,6 +10077,9 @@ export default function App(){
   var _u=useState("");var user=_u[0];var setUser=_u[1];
   var _t=useState("lineup");var tab=_t[0];var setTab=_t[1];
   var _a=useState(false);var isAdmin=_a[0];var setAdmin=_a[1];
+  /* 사진 캐시는 모듈 전역(PHOTO_CACHE)이라 React 가 변화를 모른다.
+     매니페스트가 도착하면 이 값을 올려 한 번 다시 그리게 한다. */
+  var _pr=useState(0);var setPhotoReady=_pr[1];
   var _at=useState("");var authType=_at[0];var setAuthType=_at[1];
   var _sd=useState({liveSetPo:0});var sdState=_sd[0];var setSdState=_sd[1];
   var _uid=useState(null);var userId=_uid[0];var setUserId=_uid[1];
@@ -10239,6 +10240,20 @@ export default function App(){
     sdTimerRef.current=setTimeout(function(){store.saveSdState(sdState);},800);
     return function(){if(sdTimerRef.current)clearTimeout(sdTimerRef.current);};
   },[sdState,userId,store.loading]);
+
+  /* ── 선수 사진: 매니페스트를 시작할 때 한 번만 받는다 ──
+     사진 목록·자동 크롭 위치·관리자 슬라이더 값이 전부 이 파일 하나에 들어 있다.
+     공개 버킷의 파일이라 로그인 여부와 무관하게 읽히고, 그래서 게스트에게도 똑같이 보인다. */
+  useEffect(function(){
+    if(!supabase) return;
+    (async function(){
+      try {
+        var m = await loadPhotoManifest();
+        if(!applyPhotoManifest(m)) console.warn("[photo] 매니페스트 없음 — 선수별 조회로 동작합니다.");
+      } catch(e) { console.warn("[photo] 매니페스트 로드 실패:", e && e.message); }
+      setPhotoReady(function(n){ return n + 1; });
+    })();
+  },[]);
 
   /* ── Supabase auth 리스너 ── */
   useEffect(function(){

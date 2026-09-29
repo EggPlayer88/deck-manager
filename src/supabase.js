@@ -1,4 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+/* 선수 사진의 이름↔파일명 인코딩 규칙은 scripts/photo-lib.mjs 한 곳에만 둔다.
+   올리는 쪽(npm run photos)과 읽는 쪽(이 파일)이 같은 규칙을 써야 하므로,
+   복사해 두면 한쪽만 바뀌었을 때 이미 올라간 사진을 통째로 못 찾게 된다. */
+import { PHOTO_BUCKET, MANIFEST_FILE, encodeName, decodeName } from '../scripts/photo-lib.mjs';
 
 var SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 var SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -227,47 +231,6 @@ export async function deleteGlobalPlayer(id) {
 }
 
 /* ── 선수 사진 (player-photos 버킷) ── */
-const PHOTO_BUCKET = 'player-photos';
-
-/* 선수 이름 ↔ 파일명 변환
-   원리: 유니코드 코드포인트를 4자리 16진수로 변환
-   "김도영" → "AE40B3C4C601"
-   숫자/영문은 그대로 유지: "김도영1" → "AE40B3C4C6011"
-   디코딩: "AE40" → String.fromCharCode(0xAE40) = "김"
-*/
-function encodeName(name) {
-  var result = '';
-  for (var i = 0; i < name.length; i++) {
-    var code = name.charCodeAt(i);
-    if (code < 128) {
-      result += name[i]; /* ASCII는 그대로 */
-    } else {
-      result += code.toString(16).toUpperCase().padStart(4, '0');
-    }
-  }
-  return result;
-}
-
-function decodeName(encoded) {
-  /* "AE40B3C4C601" → "김도영", 숫자/영문은 그대로 */
-  var result = '';
-  var i = 0;
-  while (i < encoded.length) {
-    /* 4자리 16진수 패턴 확인 (한글 범위: AC00~D7A3) */
-    if (i + 4 <= encoded.length) {
-      var hex = encoded.slice(i, i + 4);
-      var code = parseInt(hex, 16);
-      if (code >= 0xAC00 && code <= 0xD7A3 || code >= 0x3131 && code <= 0x318E) {
-        result += String.fromCharCode(code);
-        i += 4;
-        continue;
-      }
-    }
-    result += encoded[i];
-    i++;
-  }
-  return result;
-}
 
 export async function uploadPlayerPhoto(file, originalFileName) {
   if (!supabase) return null;
@@ -282,10 +245,34 @@ export async function uploadPlayerPhoto(file, originalFileName) {
   return urlData?.publicUrl || null;
 }
 
+/* 버킷 전체 목록.
+   storage.list 의 기본 limit 은 100 이다. 인자를 주지 않으면 101장째부터 조용히 사라지므로
+   반드시 페이지를 넘겨 가며 모아야 한다.
+   이름이 '_' 로 시작하는 것(_index.json)은 사진이 아니라 매니페스트다. */
+async function listAllPhotoFiles() {
+  if (!supabase) return [];
+  var PAGE = 1000;
+  var out = [];
+  for (var offset = 0; ; offset += PAGE) {
+    var r = await supabase.storage.from(PHOTO_BUCKET)
+      .list('', { limit: PAGE, offset: offset, sortBy: { column: 'name', order: 'asc' } });
+    if (r.error || !r.data) break;
+    out = out.concat(r.data);
+    if (r.data.length < PAGE) break;
+  }
+  return out.filter(function (f) {
+    return f.name && f.name.charAt(0) !== '_' && /\.(jpe?g|png|webp)$/i.test(f.name);
+  });
+}
+
+export function photoPublicUrl(storageName) {
+  if (!SUPABASE_URL || !storageName) return '';
+  return SUPABASE_URL + '/storage/v1/object/public/' + PHOTO_BUCKET + '/' + storageName;
+}
+
 export async function listPlayerPhotos(playerName) {
   if (!supabase || !playerName) return [];
-  var { data, error } = await supabase.storage.from(PHOTO_BUCKET).list('');
-  if (error || !data) return [];
+  var data = await listAllPhotoFiles();
   var filtered = data.filter(function(f) {
     /* 확장자 제거 후 디코딩 → 끝 숫자 제거 → 선수이름 비교 */
     var base = f.name.replace(/\.[^.]+$/, '');
@@ -294,9 +281,7 @@ export async function listPlayerPhotos(playerName) {
     return baseName === playerName;
   });
   filtered.sort(function(a, b) { return a.name.localeCompare(b.name); });
-  return filtered.map(function(f) {
-    return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(f.name).data.publicUrl;
-  });
+  return filtered.map(function(f) { return photoPublicUrl(f.name); });
 }
 
 export async function deletePlayerPhoto(fileName) {
@@ -307,8 +292,7 @@ export async function deletePlayerPhoto(fileName) {
 
 export async function listAllPhotos() {
   if (!supabase) return [];
-  var { data, error } = await supabase.storage.from(PHOTO_BUCKET).list('');
-  if (error || !data) return [];
+  var data = await listAllPhotoFiles();
   return data.map(function(f) {
     var base = f.name.replace(/\.[^.]+$/, '');
     /* 디코딩 먼저, 그 다음 끝 숫자 제거 */
@@ -318,9 +302,69 @@ export async function listAllPhotos() {
       storageName: f.name,          /* Supabase Storage 실제 파일명 (삭제 시 사용) */
       name: decoded + f.name.match(/\.[^.]+$/)[0], /* 표시용 원본 한글 파일명 */
       baseName: baseName,
-      url: supabase.storage.from(PHOTO_BUCKET).getPublicUrl(f.name).data.publicUrl
+      url: photoPublicUrl(f.name)
     };
   });
+}
+
+/* ── 사진 매니페스트 (_index.json) ──
+   버킷 전체를 선수마다 훑는 대신, 이름→사진 목록을 담은 파일 하나를 받아 쓴다.
+   npm run photos 가 만들고, 웹 UI 업로드·삭제 때도 다시 쓴다.
+
+   모양: { v:1, updatedAt, photos: { "이승엽": [{ f:"C774C2B9C5FD1.webp" }, ...] } }
+   pos 는 동기화 때 자동 크롭이 찾아낸 세로 위치(%)로, 슬라이더 값이 없을 때의 기본값이 된다. */
+/* MANIFEST_FILE 은 scripts/photo-lib.mjs 에서 가져온다 */
+
+/* 저장 모양(파일명) → 앱이 쓰는 모양(이름별 URL 목록) */
+function normalizeManifest(m) {
+  if (!m || !m.photos) return null;
+  var photos = {};
+  Object.keys(m.photos).forEach(function (name) {
+    var urls = [];
+    (m.photos[name] || []).forEach(function (e) {
+      if (e && e.f) urls.push(photoPublicUrl(e.f));
+    });
+    if (urls.length) photos[name] = urls;
+  });
+  return { photos: photos, updatedAt: m.updatedAt || '' };
+}
+
+export async function loadPhotoManifest() {
+  if (!SUPABASE_URL) return null;
+  try {
+    /* CDN 캐시를 피하려고 분 단위로 바뀌는 값을 붙인다 (업로드 때 cacheControl 60 과 맞춤) */
+    var bust = Math.floor(Date.now() / 60000);
+    var res = await fetch(photoPublicUrl(MANIFEST_FILE) + '?v=' + bust);
+    if (!res.ok) return null;
+    return normalizeManifest(await res.json());
+  } catch (e) {
+    console.warn('[photo] 매니페스트를 읽지 못했습니다 — 버킷 목록으로 대신합니다.', e && e.message);
+    return null;
+  }
+}
+
+/* 웹 UI 에서 사진을 올리거나 지운 뒤 매니페스트를 다시 쓴다.
+   방금 쓴 내용을 loadPhotoManifest 와 같은 모양으로 돌려준다 — CDN 캐시가 갱신되기를
+   기다리지 않고 화면에 바로 반영하기 위해서다. 실패하면 null. */
+export async function rebuildPhotoManifest() {
+  if (!supabase) return null;
+  var files = await listAllPhotoFiles();
+  var photos = {};
+  files.forEach(function (f) {
+    var name = decodeName(f.name.replace(/\.[^.]+$/, '')).replace(/\d+$/, '');
+    if (!name) return;
+    (photos[name] = photos[name] || []).push({ f: f.name });
+  });
+  Object.keys(photos).forEach(function (n) {
+    photos[n].sort(function (a, b) { return a.f.localeCompare(b.f); });
+  });
+
+  var manifest = { v: 1, updatedAt: new Date().toISOString(), photos: photos };
+  var body = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+  var r = await supabase.storage.from(PHOTO_BUCKET)
+    .upload(MANIFEST_FILE, body, { upsert: true, contentType: 'application/json', cacheControl: '60' });
+  if (r.error) { console.error('[photo] 매니페스트 저장 실패:', r.error.message); return null; }
+  return normalizeManifest(manifest);
 }
 
 /* ── 팀 로고 (team-logos 버킷) ── */
@@ -361,34 +405,8 @@ export async function uploadTeamLogo(file, teamName, index) {
   return urlData?.publicUrl || null;
 }
 
-/* ── 선수 사진 위치 전역 관리 ──
-   Supabase user_settings 의 admin 계정에 photo_positions JSON으로 저장
-   key: "photo_positions", value: {"이승엽": 30, "김도영": 15, ...} */
-const PHOTO_POS_KEY = 'photo_positions';
 const ADMIN_UID = '35f45af0-2817-4157-9e41-90b3349a21d4';
 
-export async function loadPhotoPosMap() {
-  if (!supabase) return {};
-  var { data, error } = await supabase
-    .from('user_settings')
-    .select('value')
-    .eq('user_id', ADMIN_UID)
-    .eq('key', PHOTO_POS_KEY)
-    .single();
-  if (error || !data) return {};
-  try { return JSON.parse(data.value) || {}; } catch(e) { return {}; }
-}
-
-export async function savePhotoPosMap(posMap) {
-  if (!supabase) return false;
-  var { error } = await supabase.from('user_settings').upsert({
-    user_id: ADMIN_UID,
-    key: PHOTO_POS_KEY,
-    value: JSON.stringify(posMap),
-    updated_at: new Date().toISOString()
-  }, { onConflict: 'user_id,key' });
-  return !error;
-}
 
 /* ── POTM 전역 명단 ──
    관리자 계정의 user_settings 에 'potm_list' 키로 저장

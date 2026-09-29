@@ -2,3 +2,11 @@ node_modules
 dist
 .vercel
 .DS_Store
+.env
+.env.local
+
+# 사진 원본은 로컬 보관 — 웹에 올라가는 건 Supabase Storage 쪽이다.
+# 규격 문서와 작업 가이드만 저장소에 둔다.
+선수사진/*
+!선수사진/README.md
+!선수사진/사진규격_가이드.png

@@ -21,10 +21,12 @@ import {
   listPlayerPhotos,
   deletePlayerPhoto,
   listAllPhotos,
+  loadPhotoManifest,
+  rebuildPhotoManifest,
+  photoPublicUrl,
   getTeamLogoUrl,
   uploadTeamLogo,
-  loadPhotoPosMap,
-  savePhotoPosMap,
+
   loadGlobalPotmList,
   saveGlobalPotmList,
 } from './supabase.js';
@@ -49,10 +51,12 @@ window._SUPABASE = {
   listPlayerPhotos,
   deletePlayerPhoto,
   listAllPhotos,
+  loadPhotoManifest,
+  rebuildPhotoManifest,
+  photoPublicUrl,
   getTeamLogoUrl,
   uploadTeamLogo,
-  loadPhotoPosMap,
-  savePhotoPosMap,
+
   loadGlobalPotmList,
   saveGlobalPotmList,
 };
