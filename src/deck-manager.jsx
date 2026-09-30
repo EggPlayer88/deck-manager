@@ -5818,9 +5818,11 @@ function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
   /* 게임 공개 전까지 관리자만 — 공개할 때 isAdmin 조건만 빼면 된다 */
   var showGame=p.isAdmin&&p.gameUrl;
-  /* short 는 모바일 아래 탭 전용 줄임말 — 일곱 칸이라 원말이 들어가면 줄이 접힌다.
-     원말은 title 로 붙는다 */
-  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"lab",label:"연구소",icon:"🔬",beta:true},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",soon:true}];
+  /* short 는 모바일 아래 탭 전용 줄임말 — 칸이 좁아 원말이 들어가면 줄이 접힌다.
+     원말은 title 로 붙는다. href 가 있는 항목은 탭이 아니라 바깥으로 나가는 링크다. */
+  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"lab",label:"덱 연구소",short:"연구소",icon:"🔬"},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",soon:true}];
+  /* KBO 구단주 — 클럽라운지 바로 아래. 다른 사이트로 나가므로 탭이 아니라 링크다 */
+  if(showGame)tabs.push({id:"kbogame",label:"KBO 구단주",short:"구단주",icon:"⚾",beta:true,href:p.gameUrl});
   /* 관리자 칸은 라커룸 앞에 — 메뉴 순서가 바뀌어도 자리를 찾아 넣는다 */
   if(p.isAdmin){var at=tabs.map(function(t){return t.id;}).indexOf("locker");tabs.splice(at<0?tabs.length:at,0,{id:"db",label:"선수도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
   var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck,onChangeTeam:p.onChangeTeam};
@@ -5830,11 +5832,16 @@ function Nav(p){
       <div style={{position:"fixed",top:0,left:0,right:0,height:44,zIndex:110,background:"var(--side)",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",padding:"0 10px",gap:8}}>
         <span style={{fontSize:12,fontWeight:900,fontFamily:"var(--h)",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",whiteSpace:"nowrap"}}>{"DECK"}</span>
         <DeckDropdown {...deckProps}/>
-        {showGame&&(<a href={p.gameUrl} target="_blank" rel="noopener" title="KBO 구단주 (새 탭)" style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",textDecoration:"none",flexShrink:0,lineHeight:1}}>{"⚾"}</a>)}
-        <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:showGame?0:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
+
+        <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px"}}>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} title={t.label+(t.soon?" (준비중)":"")} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18,lineHeight:1}}>{t.icon}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}{t.beta&&(<span style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></button>);})}
+        {tabs.map(function(t){
+          var st={flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44};
+          var inner=(<React.Fragment><span style={{fontSize:18,lineHeight:1}}>{t.icon}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}{t.beta&&(<span style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></React.Fragment>);
+          if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} style={Object.assign({},st,{textDecoration:"none"})}>{inner}</a>);
+          return(<button key={t.id} onClick={function(){p.setTab(t.id);}} title={t.label+(t.soon?" (준비중)":"")} style={st}>{inner}</button>);
+        })}
       </div>
     </React.Fragment>
   );}
@@ -5845,10 +5852,15 @@ function Nav(p){
       {open&&(<div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:150}}/>)}
       <div style={{position:"fixed",left:open?0:-260,top:0,bottom:0,width:240,background:"var(--side)",borderRight:"1px solid var(--bd)",zIndex:160,transition:"left 0.25s ease",display:"flex",flexDirection:"column",padding:"14px 0 16px"}}>
         <div style={{padding:"0 14px 12px"}}><DeckDropdown {...deckProps}/></div>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}</button>);})}
+        {tabs.map(function(t){
+          var st={display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44};
+          var inner=(<React.Fragment><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}</React.Fragment>);
+          if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} onClick={function(){setOpen(false);}} style={Object.assign({},st,{textDecoration:"none",boxSizing:"border-box"})}>{inner}</a>);
+          return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={st}>{inner}</button>);
+        })}
         <div style={{marginTop:"auto",padding:"12px 16px",borderTop:"1px solid var(--bd)"}}>
           {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
-          {showGame&&(<a href={p.gameUrl} target="_blank" rel="noopener" title="KBO 구단주 (새 탭)" style={{display:"block",textAlign:"center",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",textDecoration:"none",marginBottom:6}}>{"⚾ KBO 구단주"}</a>)}
+
           <button onClick={p.toggleTheme} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:6}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
           <button onClick={p.logout} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
         </div>
@@ -5863,7 +5875,12 @@ function Nav(p){
         <DeckDropdown {...deckProps}/>
       </div>
       <div style={{flex:1}}>
-        {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:13,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40}}><span style={{fontSize:15}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}</button>);})}
+        {tabs.map(function(t){
+          var st={display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:13,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40};
+          var inner=(<React.Fragment><span style={{fontSize:15}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}</React.Fragment>);
+          if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} style={Object.assign({},st,{textDecoration:"none",boxSizing:"border-box"})}>{inner}</a>);
+          return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={st}>{inner}</button>);
+        })}
       </div>
       <div style={{padding:"10px 14px",borderTop:"1px solid var(--bd)"}}>
         {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
@@ -5877,7 +5894,7 @@ function Nav(p){
           )}
           <div><div style={{fontSize:12,fontWeight:700,color:"var(--t1)"}}>{p.user}</div><div style={{fontSize:9,color:"var(--td)"}}>{p.authType==="google"?"Google 계정":"게스트"}</div></div>
         </div>
-        {showGame&&(<a href={p.gameUrl} target="_blank" rel="noopener" title="KBO 구단주 (새 탭)" style={{display:"block",textAlign:"center",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",textDecoration:"none",marginBottom:4}}>{"⚾ KBO 구단주"}</a>)}
+
         <button onClick={p.toggleTheme} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:4}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
         <button onClick={p.logout} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
       </div>
