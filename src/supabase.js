@@ -52,8 +52,12 @@ export async function loadUserData(userId) {
   var r = await supabase.from('user_settings').select('sd_state')
     .eq('user_id', userId).eq('key', 'settings').single();
   if (r.error) {
-    /* PGRST116 = 조건에 맞는 행이 없음. 신규 유저이지 오류가 아니다 */
-    if (r.error.code === 'PGRST116') return null;
+    /* 아래 둘은 "이 사람에게는 저장된 것이 없다" 는 뜻이지 실패가 아니다.
+       - PGRST116 : 조건에 맞는 행이 없음 (신규 유저)
+       - 22P02    : user_id 가 uuid 형식이 아님. 게스트("guest_1759…")가 여기 걸린다.
+                    형식이 어긋난 id 로는 애초에 행이 있을 수 없으므로 "없음"이 맞다.
+                    이걸 실패로 보면 게스트가 오류 화면에 막혀 앱을 아예 못 쓴다. */
+    if (r.error.code === 'PGRST116' || r.error.code === '22P02') return null;
     throw new Error('사용자 데이터를 읽지 못했습니다: '
       + (r.error.message || r.error.code || '알 수 없는 오류'));
   }
