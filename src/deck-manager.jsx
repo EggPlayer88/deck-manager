@@ -2300,6 +2300,12 @@ function playerNameGroup(n) {
 var BAT_POS=["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var PIT_POS_MAP={"선발":["SP1","SP2","SP3","SP4","SP5"],"중계":["RP1","RP2","RP3","RP4","RP5","RP6"],"마무리":["CP"]};
 
+/* 모바일 아래 탭바는 화면에 붙어 있어(position:fixed) 본문 마지막 줄을 덮는다.
+   탭바 높이는 62px 이고, 홈 인디케이터가 있는 기종은 그만큼 더 먹으므로
+   안전영역(env)을 더해 준다. 화면마다 숫자를 적던 것을 여기 하나로 모았다 —
+   연구소가 이 값을 빠뜨려 마무리(CP) 줄이 통째로 탭바에 가려져 있었다 (2026-09-30) */
+var PAGE_BOTTOM = "calc(80px + env(safe-area-inset-bottom, 0px))";
+
 function PlayerDBPage(p){
   var mob=p.mobile;
   var _dbTab=useState("선수");var dbTab=_dbTab[0];var setDbTab=_dbTab[1];
@@ -2434,7 +2440,7 @@ function PlayerDBPage(p){
   };
 
   return(
-    <div style={{padding:mob?12:18,maxWidth:1000,paddingBottom:mob?80:18}}>
+    <div style={{padding:mob?12:18,maxWidth:1000,paddingBottom:mob?PAGE_BOTTOM:18}}>
       <h2 style={{fontSize:mob?16:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 4px"}}>{"선수도감"}</h2>
       <p style={{fontSize:12,color:"var(--td)",margin:"0 0 12px"}}>{"관리자 전용 - 선수 기본 데이터를 등록/수정합니다"}</p>
 
@@ -4764,7 +4770,7 @@ function LineupPage(p) {
   var wNow = getW();
 
   return (
-    <div style={{ padding: mob ? 12 : 18, maxWidth: 1200, paddingBottom: mob ? 80 : 18 }}>
+    <div style={{ padding: mob ? 12 : 18, maxWidth: 1200, paddingBottom: mob ? PAGE_BOTTOM : 18 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: mob ? "flex-start" : "center", justifyContent: "space-between", flexDirection: mob ? "column" : "row", gap: 8, marginBottom: 14, padding: mob ? 14 : "18px 20px", background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)" }}>
         <div style={mob ? { width: "100%" } : undefined}>
@@ -5063,7 +5069,7 @@ function PosTrainPage(p) {
   };
 
   return (
-    <div style={{ padding: mob ? 12 : 18, maxWidth: 900, paddingBottom: mob ? 80 : 18 }}>
+    <div style={{ padding: mob ? 12 : 18, maxWidth: 900, paddingBottom: mob ? PAGE_BOTTOM : 18 }}>
       <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: "0 0 4px" }}>{"포지션 특훈"}</h2>
       <p style={{ fontSize: 12, color: "var(--td)", margin: "0 0 12px" }}>{"계정 귀속 - 포지션별 레벨과 재설정 효과를 입력하세요. 스킬 보너스는 3개씩 두 묶음, 모두 6개입니다. 한 묶음 안에서는 같은 스킬을 고를 수 없고, 두 묶음에 같은 스킬을 넣으면 그 스킬은 레벨이 2 올라간 것으로 계산됩니다."}</p>
       {groups.map(function(grp) {
@@ -5856,7 +5862,7 @@ function Nav(p){
 
         <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
       </div>
-      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px"}}>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px",paddingBottom:"calc(8px + env(safe-area-inset-bottom, 0px))"}}>
         {tabs.map(function(t){
           var st={flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44};
           var inner=(<React.Fragment><span style={{fontSize:18,lineHeight:1}}>{t.icon}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}{t.beta&&(<span style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></React.Fragment>);
@@ -5931,7 +5937,7 @@ function EnhancePage(p){
   var table=ENHANCE[vt];var stats=Object.keys(table||{});
   var hdrs=(vt==="시즌"||vt==="올스타")?ENHANCE_LEVELS.slice(0,6):ENHANCE_LEVELS;
   return(
-    <div style={{padding:mob?12:18,maxWidth:900,paddingBottom:mob?80:18}}>
+    <div style={{padding:mob?12:18,maxWidth:900,paddingBottom:mob?PAGE_BOTTOM:18}}>
       <h2 style={{fontSize:mob?16:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 12px"}}>{"강화/각성 참조 테이블"}</h2>
       <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
         {Object.keys(ENHANCE).map(function(ct){return(<button key={ct} onClick={function(){setVt(ct);}} style={{padding:"6px 12px",borderRadius:5,fontSize:13,fontWeight:ct===vt?800:500,background:ct===vt?"var(--ta)":"var(--inner)",color:ct===vt?"var(--acc)":"var(--t2)",border:ct===vt?"1px solid var(--acc)":"1px solid var(--bd)",cursor:"pointer"}}>{ct}</button>);})}
@@ -6098,7 +6104,7 @@ function LockerRoomPage(p) {
   };
 
   return (
-    <div style={{ padding: mob ? 12 : 18, maxWidth: 800, paddingBottom: mob ? 80 : 18 }}>
+    <div style={{ padding: mob ? 12 : 18, maxWidth: 800, paddingBottom: mob ? PAGE_BOTTOM : 18 }}>
       <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: "0 0 16px" }}>{"라커룸"}</h2>
 
       {/* Captain selection + bonus */}
@@ -6890,7 +6896,7 @@ function LabPage(p) {
   };
 
   return (
-    <div style={{ padding: mob ? 10 : 16, maxWidth: 1180, margin: "0 auto" }}>
+    <div style={{ padding: mob ? 10 : 16, maxWidth: 1180, margin: "0 auto", paddingBottom: mob ? PAGE_BOTTOM : 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
         <span style={{ fontSize: mob ? 17 : 20, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"🔬 덱 연구소"}</span>
         <span style={{ fontSize: 11, color: "var(--td)" }}>{"도감 전체로 짜 보는 실험실 — 내 카드와 상관없습니다"}</span>
@@ -7763,7 +7769,7 @@ function MyPlayersPage(p) {
   };
 
   return (
-    <div style={{ padding: mob ? 12 : 18, maxWidth: 960, paddingBottom: mob ? 80 : 18 }}>
+    <div style={{ padding: mob ? 12 : 18, maxWidth: 960, paddingBottom: mob ? PAGE_BOTTOM : 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: 0 }}>{"내 선수"}</h2>
         
@@ -8290,7 +8296,7 @@ function SkillManagePage(p) {
   };
 
   return (
-    <div style={{ padding: mob ? 12 : 18, maxWidth: 960, paddingBottom: mob ? 80 : 18 }}>
+    <div style={{ padding: mob ? 12 : 18, maxWidth: 960, paddingBottom: mob ? PAGE_BOTTOM : 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 6 }}>
         <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: 0 }}>{"스킬 관리"}</h2>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -8392,7 +8398,7 @@ function SkillManagePage(p) {
    ================================================================ */
 function ClubLoungePage(p) {
   return (
-    <div style={{padding:p.mobile?12:18,maxWidth:760,paddingBottom:p.mobile?80:18}}>
+    <div style={{padding:p.mobile?12:18,maxWidth:760,paddingBottom:p.mobile?PAGE_BOTTOM:18}}>
       <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"🎙️ 클럽 라운지"}</h2>
       <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:12}}>{"🎙️"}</div>
@@ -8415,7 +8421,7 @@ function DataCenterPage(p) {
   var _tab = React.useState("analysis"); var dcTab = _tab[0]; var setDcTab = _tab[1];
 
   return (
-    <div style={{padding:mob?12:18,maxWidth:800,paddingBottom:mob?80:18}}>
+    <div style={{padding:mob?12:18,maxWidth:800,paddingBottom:mob?PAGE_BOTTOM:18}}>
       <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"📊 데이터 센터"}</h2>
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
         {[{id:"analysis",label:"📈 라인업 분석"},{id:"skill",label:"🎯 스킬 계산기"},{id:"train",label:"🏋️ 훈재분 계산기"},{id:"top",label:"👑 고점덱 정보"}].map(function(t){
@@ -10108,7 +10114,7 @@ function TrainSimulator(p) {
 
 
 function CommunityPage(p){return(
-  <div style={{padding:p.mobile?12:18,maxWidth:760,paddingBottom:p.mobile?80:18}}>
+  <div style={{padding:p.mobile?12:18,maxWidth:760,paddingBottom:p.mobile?PAGE_BOTTOM:18}}>
     <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"정보"}</h2>
     <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}><div style={{fontSize:40,marginBottom:10}}>{"📢"}</div><h3 style={{fontSize:15,fontWeight:700,color:"var(--t1)",margin:"0 0 6px"}}>{"추후 업데이트 예정"}</h3><p style={{fontSize:14,color:"var(--td)",margin:0}}>{"새로운 기능이 준비되면 이 페이지에서 안내드리겠습니다."}</p></div>
   </div>
