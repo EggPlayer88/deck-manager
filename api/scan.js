@@ -30,7 +30,13 @@ export default async function handler(req, res) {
 
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+  /* 이 함수는 서버(Vercel)에서만 돈다. 브라우저로 내려가지 않으므로 비밀 키를 써도 된다.
+     비밀 키를 쓰는 이유: profiles 를 공개 키로 읽으면 그 표를 비로그인에게 열어 두어야 하고,
+     그러면 전체 유저의 이메일이 공개된다. 비밀 키는 RLS 를 지나가므로 표를 닫아 둘 수 있다.
+     아직 환경변수가 없으면 예전처럼 공개 키로 떨어진다 — 배포 순서 때문에 둔 안전장치다.
+     (SUPABASE_SERVICE_ROLE_KEY 를 Vercel 에 넣은 뒤 profiles 정책을 조일 것) */
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const usingSecret = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!GEMINI_API_KEY) {
     return res.status(500).json({ error: 'GEMINI_API_KEY 환경변수가 설정되지 않았습니다.' });
@@ -60,6 +66,9 @@ export default async function handler(req, res) {
     } catch (e) {
       console.error('관리자 여부 확인 오류:', e);
     }
+    /* 비밀 키로 읽는데도 관리자 판정이 안 되면 정책이나 키가 어긋난 것이다.
+       기능은 계속 돌지만(한도 면제만 빠짐) 로그로 남겨 둔다 */
+    if (usingSecret && !isAdmin) console.log('[scan] 비밀 키로 읽었으나 관리자 아님 — userId:', userId);
   }
 
   /* ── 일일 한도 체크 (관리자는 건너뜀) ── */
