@@ -5808,8 +5808,16 @@ function TeamPickModal(p){
   );
 }
 
+/* KBO 구단주(kbo-sim) — 덱관리 구글 계정 그대로 들어가도록 구글 계정 ID를 # 뒤에 실어 보낸다.
+   게임은 그 ID를 login_hint 로 구글 로그인을 곧장 시작하고, 같은 구글 앱이라 다시 묻지 않는다.
+   (# 뒤는 서버로 가지 않고, 게임이 읽자마자 주소창에서 지운다) */
+var KBO_GAME_URL="https://kbo-sim.vercel.app";
+function kboGameUrl(googleId){return KBO_GAME_URL+"/#sso=deck"+(googleId?"&hint="+encodeURIComponent(googleId):"");}
+
 function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
+  /* 게임 공개 전까지 관리자만 — 공개할 때 isAdmin 조건만 빼면 된다 */
+  var showGame=p.isAdmin&&p.gameUrl;
   /* short 는 모바일 아래 탭 전용 줄임말 — 일곱 칸이라 원말이 들어가면 줄이 접힌다.
      원말은 title 로 붙는다 */
   var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"lab",label:"연구소",icon:"🔬",beta:true},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",soon:true}];
@@ -5822,7 +5830,8 @@ function Nav(p){
       <div style={{position:"fixed",top:0,left:0,right:0,height:44,zIndex:110,background:"var(--side)",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",padding:"0 10px",gap:8}}>
         <span style={{fontSize:12,fontWeight:900,fontFamily:"var(--h)",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",whiteSpace:"nowrap"}}>{"DECK"}</span>
         <DeckDropdown {...deckProps}/>
-        <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
+        {showGame&&(<a href={p.gameUrl} target="_blank" rel="noopener" title="KBO 구단주 (새 탭)" style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",textDecoration:"none",flexShrink:0,lineHeight:1}}>{"⚾"}</a>)}
+        <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:showGame?0:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px"}}>
         {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);}} title={t.label+(t.soon?" (준비중)":"")} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44}}><span style={{fontSize:18,lineHeight:1}}>{t.icon}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}{t.beta&&(<span style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></button>);})}
@@ -5839,6 +5848,7 @@ function Nav(p){
         {tabs.map(function(t){return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44}}><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}</button>);})}
         <div style={{marginTop:"auto",padding:"12px 16px",borderTop:"1px solid var(--bd)"}}>
           {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
+          {showGame&&(<a href={p.gameUrl} target="_blank" rel="noopener" title="KBO 구단주 (새 탭)" style={{display:"block",textAlign:"center",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",textDecoration:"none",marginBottom:6}}>{"⚾ KBO 구단주"}</a>)}
           <button onClick={p.toggleTheme} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:6}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
           <button onClick={p.logout} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
         </div>
@@ -5867,6 +5877,7 @@ function Nav(p){
           )}
           <div><div style={{fontSize:12,fontWeight:700,color:"var(--t1)"}}>{p.user}</div><div style={{fontSize:9,color:"var(--td)"}}>{p.authType==="google"?"Google 계정":"게스트"}</div></div>
         </div>
+        {showGame&&(<a href={p.gameUrl} target="_blank" rel="noopener" title="KBO 구단주 (새 탭)" style={{display:"block",textAlign:"center",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",textDecoration:"none",marginBottom:4}}>{"⚾ KBO 구단주"}</a>)}
         <button onClick={p.toggleTheme} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:4}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
         <button onClick={p.logout} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
       </div>
@@ -10081,6 +10092,7 @@ export default function App(){
      매니페스트가 도착하면 이 값을 올려 한 번 다시 그리게 한다. */
   var _pr=useState(0);var setPhotoReady=_pr[1];
   var _at=useState("");var authType=_at[0];var setAuthType=_at[1];
+  var _gid=useState("");var googleId=_gid[0];var setGoogleId=_gid[1]; /* KBO 구단주 링크에 싣는 구글 계정 ID */
   var _sd=useState({liveSetPo:0});var sdState=_sd[0];var setSdState=_sd[1];
   var _uid=useState(null);var userId=_uid[0];var setUserId=_uid[1];
   var _authChecked=useState(false);var authChecked=_authChecked[0];var setAuthChecked=_authChecked[1];
@@ -10265,6 +10277,7 @@ export default function App(){
         setAuthType("google");
         setAdmin(profile ? profile.is_admin : false);
         setUserId(session.user.id);
+        var meta=session.user.user_metadata||{};setGoogleId(meta.provider_id||meta.sub||"");
         setLi(true);
       }
       setAuthChecked(true);
@@ -10272,7 +10285,7 @@ export default function App(){
     getSession().then(function(session){handleAuth(session);});
     var sub = supabase.auth.onAuthStateChange(function(event, session){
       if(event==="SIGNED_IN" && session){handleAuth(session);}
-      if(event==="SIGNED_OUT"){setLi(false);setUser("");setAdmin(false);}
+      if(event==="SIGNED_OUT"){setLi(false);setUser("");setAdmin(false);setGoogleId("");}
     });
     return function(){if(sub && sub.data && sub.data.subscription){sub.data.subscription.unsubscribe();}};
   },[]);
@@ -10323,7 +10336,7 @@ export default function App(){
   /* ── 로그아웃 ── */
   var lo=function(){
     if(supabase){signOut();}
-    setLi(false);setUser("");setAuthType("");setTab("lineup");setAdmin(false);setUserId(null);
+    setLi(false);setUser("");setAuthType("");setTab("lineup");setAdmin(false);setUserId(null);setGoogleId("");
     setDecks([]);setCurDeckId(null);setShowTeamSelect(false);setTeamPick(false);setSdState({liveSetPo:0});
   };
 
@@ -10417,7 +10430,7 @@ export default function App(){
 
   return(
     <div className={theme==="light"?"light":""} style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
-      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin}
+      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin} gameUrl={kboGameUrl(googleId)}
         decks={decks} curDeckId={curDeckId}
         onSwitchDeck={handleSwitchDeck}
         onAddDeck={function(){setShowTeamSelect("add");}}
