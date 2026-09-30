@@ -31,16 +31,12 @@ export default async function handler(req, res) {
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   /* 이 함수는 서버(Vercel)에서만 돈다. 브라우저로 내려가지 않으므로 비밀 키를 써도 된다.
-     비밀 키를 쓰는 이유: profiles 를 공개 키로 읽으면 그 표를 비로그인에게 열어 두어야 하고,
-     그러면 전체 유저의 이메일이 공개된다. 비밀 키는 RLS 를 지나가므로 표를 닫아 둘 수 있다.
-     아직 환경변수가 없으면 예전처럼 공개 키로 떨어진다 — 배포 순서 때문에 둔 안전장치다.
-     (SUPABASE_SERVICE_ROLE_KEY 를 Vercel 에 넣은 뒤 profiles 정책을 조일 것) */
-  /* 이름이 둘인 이유: kbo-sim 은 SUPABASE_SECRET_KEY 로 쓰고 있어 헷갈리기 쉽다.
-     어느 이름으로 넣어도 되게 둘 다 받는다 */
+     비밀 키로 scan_usage·scan_usage_user 를 다루면 그 표들을 공개 키에 열어 두지 않아도 된다
+     (열어 두면 아무나 스캔 한도를 조작할 수 있다).
+     이름이 둘인 이유: kbo-sim 은 SUPABASE_SECRET_KEY 로 쓰고 있어 헷갈리기 쉽다.
+     환경변수가 없으면 예전처럼 공개 키로 떨어진다 — 그 경우 위 표들을 닫으면 안 된다. */
   const secretKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   const supabaseKey = secretKey || process.env.VITE_SUPABASE_ANON_KEY;
-  const usingSecret = !!secretKey;
-
   if (!GEMINI_API_KEY) {
     return res.status(500).json({ error: 'GEMINI_API_KEY 환경변수가 설정되지 않았습니다.' });
   }
@@ -50,32 +46,19 @@ export default async function handler(req, res) {
 
   /* 타입별 설정 */
   const DAILY_LIMIT      = isSkill ? 2000 : 400;   /* 전체 일일 한도: 사진일괄 400회, 스킬 2000회 */
-  const USER_DAILY_LIMIT = isSkill ? 20    : 4;    /* 사용자 한도: 사진일괄 4회, 스킬 20회 (관리자 예외) */
+  const USER_DAILY_LIMIT = isSkill ? 20    : 4;    /* 사용자 한도: 사진일괄 4회, 스킬 20회 — 관리자도 같다 */
   const MODELS_TO_USE    = isSkill
     ? ['gemini-2.5-flash-lite']                                                    /* 스킬판독: 텍스트 OCR이므로 lite로 충분 */
     : ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];    /* 사진일괄: 3 Flash 우선 → 503 등 실패 시 2.5 Flash → 최후 lite 폴백 */
   const today = new Date().toISOString().slice(0, 10);
+  /* 관리자 한도 면제는 없앴다 (2026-09-30).
+     그것 하나 때문에 profiles 를 읽어야 했고, profiles 를 비로그인에게 열어 두느라
+     전체 유저의 이메일이 공개돼 있었다. 실제로는 한 번도 쓰인 적이 없다 —
+     기록상 하루 최다 사용이 전체 유저·관리자 통틀어 1회다 (한도는 스킬 20 · 일괄 4).
+     관리자도 이제 같은 한도를 받는다. */
 
-  /* ── 관리자 여부 확인 (profiles.is_admin = true 이면 한도 면제) ── */
-  let isAdmin = false;
-  if (supabaseUrl && supabaseKey && userId) {
-    try {
-      const profRes = await fetch(
-        `${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=is_admin`,
-        { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
-      );
-      const profData = await profRes.json();
-      isAdmin = Array.isArray(profData) && profData[0] && profData[0].is_admin === true;
-    } catch (e) {
-      console.error('관리자 여부 확인 오류:', e);
-    }
-    /* 비밀 키로 읽는데도 관리자 판정이 안 되면 정책이나 키가 어긋난 것이다.
-       기능은 계속 돌지만(한도 면제만 빠짐) 로그로 남겨 둔다 */
-    if (usingSecret && !isAdmin) console.log('[scan] 비밀 키로 읽었으나 관리자 아님 — userId:', userId);
-  }
-
-  /* ── 일일 한도 체크 (관리자는 건너뜀) ── */
-  if (!isAdmin && supabaseUrl && supabaseKey) {
+  /* ── 일일 한도 체크 ── */
+  if (supabaseUrl && supabaseKey) {
     try {
       const globalRes = await fetch(
         `${supabaseUrl}/rest/v1/scan_usage?date=eq.${today}`,
