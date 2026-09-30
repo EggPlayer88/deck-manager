@@ -201,7 +201,7 @@ const legacyStored = {
 };
 const resolved = resolveSkills(legacyStored);
 eq('스킬표가 새 값으로', resolved['타자']['정밀타격'][0], 20.7);
-eq('타자 스킬 수', Object.keys(resolved['타자']).length, 91);
+eq('타자 스킬 수', Object.keys(resolved['타자']).length, 92);
 eq('신규 스킬 반영', resolved['타자']['빈틈없는타선(타순O)'][1], 23.83);
 eq('국대 테이블세터', resolved['타자']['국대 테이블세터'][0], 14.97);
 eq('대타스페셜 점수 생김', resolved['타자']['대타스페셜'][5], 11.54);
@@ -231,7 +231,7 @@ eq('소방수는 메이저', DEFAULT_MAJOR['마무리']['소방수'] ? 1 : 0, 1)
 eq('타자엔 없음', DEFAULT_SKILLS['타자']['소방수'] === undefined ? 1 : 0, 1);
 eq('선발엔 없음', DEFAULT_SKILLS['선발']['소방수'] === undefined ? 1 : 0, 1);
 eq('중계엔 없음', DEFAULT_SKILLS['중계']['소방수'] === undefined ? 1 : 0, 1);
-eq('마무리 스킬 수', Object.keys(DEFAULT_SKILLS['마무리']).length, 70);
+eq('마무리 스킬 수', Object.keys(DEFAULT_SKILLS['마무리']).length, 71);
 /* 총점은 파1.0 정0.85 변1.05 구1.35 로 맞아떨어진다 (Lv10: 파7.7 정7.7 변16 구16) */
 eq('소방수 Lv10 검산',
    Math.round((7.7 * 1.0 + 7.7 * 0.85 + 16 * 1.05 + 16 * 1.35) * 100) / 100, 52.65, 0.01);
@@ -514,8 +514,8 @@ eq('카드종류 접두는 떼고 본다', skillRoleOf('패기(임팩불펜)').j
 eq('타자 괄호는 역할 취급 안 함', skillAllowedAt('컨택트히터(타순배치)', '타자', false) ? 1 : 0, 1);
 
 console.log('\n[메이저 분류] 확정본');
-eq('타자 메이저 75개', Object.keys(DEFAULT_MAJOR['타자']).length, 75);
-eq('선발 메이저 59개', Object.keys(DEFAULT_MAJOR['선발']).length, 59);
+eq('타자 메이저 76개', Object.keys(DEFAULT_MAJOR['타자']).length, 76);
+eq('선발 메이저 60개', Object.keys(DEFAULT_MAJOR['선발']).length, 60);
 /* 검토에서 잡힌 두 건 — 킬러 계열은 전부 일반, 흐름끊기는 역할 전부 메이저 */
 eq('우완킬러 일반', DEFAULT_MAJOR['타자']['우완킬러'] ? 1 : 0, 0);
 eq('좌완킬러도 일반', DEFAULT_MAJOR['타자']['좌완킬러'] ? 1 : 0, 0);
@@ -2210,6 +2210,45 @@ console.log('\n[스쿼드 공유] 그림에 쓰는 이름 — 도감 구분용 �
   eq('빈 값도 터지지 않는다', sqName(null) === '' ? 1 : 0, 1);
 }
 
+
+console.log('\n[슬로우 스타트] 새 스킬 — 타자 · 선발 · 불펜 (2026-09-30 사용자 제공)');
+{
+  const BAT = [10.9, 11.6, 14.85, 16.25, 19.5, 20.9];
+  const SP = [9.9, 11.61, 13.32, 15.03, 16.74, 18.45];
+  const RP = [9.33, 10.92, 12.52, 14.12, 15.71, 17.31];
+  eq('타자 표', JSON.stringify(DEFAULT_SKILLS['타자']['슬로우 스타트']) === JSON.stringify(BAT) ? 1 : 0, 1);
+  eq('선발 표', JSON.stringify(DEFAULT_SKILLS['선발']['슬로우스타트(선발)']) === JSON.stringify(SP) ? 1 : 0, 1);
+  eq('중계 표', JSON.stringify(DEFAULT_SKILLS['중계']['슬로우스타트(불펜)']) === JSON.stringify(RP) ? 1 : 0, 1);
+  eq('마무리도 같은 불펜 값', JSON.stringify(DEFAULT_SKILLS['마무리']['슬로우스타트(불펜)']) === JSON.stringify(RP) ? 1 : 0, 1);
+  /* 5~10 레벨이 표 그대로 나오는지 */
+  for (let lv = 5; lv <= 10; lv++) {
+    eq('타자 ' + lv + '렙', getSkillScore('슬로우 스타트', lv, '타자'), BAT[lv - 5]);
+    eq('선발 ' + lv + '렙', getSkillScore('슬로우스타트(선발)', lv, '선발'), SP[lv - 5]);
+    eq('중계 ' + lv + '렙', getSkillScore('슬로우스타트(불펜)', lv, '중계'), RP[lv - 5]);
+    eq('마무리 ' + lv + '렙', getSkillScore('슬로우스타트(불펜)', lv, '마무리'), RP[lv - 5]);
+  }
+  eq('4렙 아래는 0', getSkillScore('슬로우 스타트', 4, '타자'), 0);
+  /* 이름의 띄어쓰기는 상관없다 (canonSkillName 이 공백을 떼고 찾는다) */
+  eq('띄어쓰기 없이 적어도 찾는다', getSkillScore('슬로우스타트', 6, '타자'), 11.6);
+  eq('타자 쪽에 (선발)·(불펜) 은 없다',
+    DEFAULT_SKILLS['타자']['슬로우스타트(선발)'] === undefined
+    && DEFAULT_SKILLS['타자']['슬로우스타트(불펜)'] === undefined ? 1 : 0, 1);
+  /* 자리 판정 — (선발) 은 선발에만, (불펜) 은 중계·마무리에만 */
+  eq('(선발) 은 선발에만', skillAllowedAt('슬로우스타트(선발)', '선발')
+    && !skillAllowedAt('슬로우스타트(선발)', '중계')
+    && !skillAllowedAt('슬로우스타트(선발)', '마무리') ? 1 : 0, 1);
+  eq('(불펜) 은 중계·마무리에만', skillAllowedAt('슬로우스타트(불펜)', '중계')
+    && skillAllowedAt('슬로우스타트(불펜)', '마무리')
+    && !skillAllowedAt('슬로우스타트(불펜)', '선발') ? 1 : 0, 1);
+  /* 메이저 — 비메이저 최고점이 타자 12.02 · 투수 13.50 인데 이 스킬은 17~21 점대다 */
+  eq('네 갈래 모두 메이저',
+    DEFAULT_SKILLS._major['타자']['슬로우 스타트']
+    && DEFAULT_SKILLS._major['선발']['슬로우스타트(선발)']
+    && DEFAULT_SKILLS._major['중계']['슬로우스타트(불펜)']
+    && DEFAULT_SKILLS._major['마무리']['슬로우스타트(불펜)'] ? 1 : 0, 1);
+  /* 표를 늘렸으면 판도 올려야 한다 — 안 올리면 관리자가 고친 값이 불러올 때마다 덮인다 */
+  eq('스킬표 판은 14', DEFAULT_SKILLS._sv, 14);
+}
 
 console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 — 스킬 변형과 발사각 (2026-09-28 사용자 지정)');
 {
