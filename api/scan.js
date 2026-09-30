@@ -35,8 +35,11 @@ export default async function handler(req, res) {
      그러면 전체 유저의 이메일이 공개된다. 비밀 키는 RLS 를 지나가므로 표를 닫아 둘 수 있다.
      아직 환경변수가 없으면 예전처럼 공개 키로 떨어진다 — 배포 순서 때문에 둔 안전장치다.
      (SUPABASE_SERVICE_ROLE_KEY 를 Vercel 에 넣은 뒤 profiles 정책을 조일 것) */
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-  const usingSecret = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  /* 이름이 둘인 이유: kbo-sim 은 SUPABASE_SECRET_KEY 로 쓰고 있어 헷갈리기 쉽다.
+     어느 이름으로 넣어도 되게 둘 다 받는다 */
+  const secretKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+  const supabaseKey = secretKey || process.env.VITE_SUPABASE_ANON_KEY;
+  const usingSecret = !!secretKey;
 
   if (!GEMINI_API_KEY) {
     return res.status(500).json({ error: 'GEMINI_API_KEY 환경변수가 설정되지 않았습니다.' });
