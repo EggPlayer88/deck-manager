@@ -111,9 +111,10 @@ export function walkImages(fs, path, dir, base = '') {
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
   for (const e of entries) {
     if (e.name.startsWith('.')) continue;   /* .sync-cache.json 같은 숨김 파일 */
-    /* '_' 로 시작하는 폴더는 참고·보관용으로 보고 건너뛴다.
-       예: _현재 웹앱 적용중/ — 눈으로 보려고 받아둔 것이지 다시 올릴 대상이 아니다. */
-    if (e.isDirectory() && e.name.startsWith('_')) continue;
+    /* '_' 로 시작하면 폴더든 파일이든 참고·보관용으로 보고 건너뛴다.
+       폴더 예: _현재 웹앱 적용중/ — 눈으로 보려고 받아둔 것이지 다시 올릴 대상이 아니다.
+       파일 예: _사진규격_가이드.png — 작업용 안내 그림이지 선수 사진이 아니다. */
+    if (e.name.startsWith('_')) continue;
     const rel = base ? path.join(base, e.name) : e.name;
     if (e.isDirectory()) out = out.concat(walkImages(fs, path, path.join(dir, e.name), rel));
     else if (IMG_RE.test(e.name)) out.push(rel);
