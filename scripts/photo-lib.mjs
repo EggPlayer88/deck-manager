@@ -34,11 +34,34 @@ export function decodeName(encoded) {
   return out;
 }
 
-/* 파일명에서 선수 이름을 뽑는다. "이승엽2.png" → "이승엽"
-   끝의 숫자는 같은 선수의 몇 번째 사진인지를 뜻하는 구분자다. */
+/* 도감에 있는 팀 이름. 파일명의 팀 부분이 이 중 하나여야 카드에 붙는다. */
+export const TEAMS = ['키움', '삼성', 'LG', '두산', 'KT', 'SSG', '롯데', '한화', 'NC', '기아'];
+
+/* 파일명 → { 이름, 팀, 번호 }
+
+     이승엽2.png        → { name:'이승엽',  team:'',     idx:2 }   팀 무관 (모든 팀에 씀)
+     최형우_삼성.png     → { name:'최형우',  team:'삼성', idx:0 }   삼성 최형우 카드에만
+     최형우_기아1.png    → { name:'최형우',  team:'기아', idx:1 }
+
+   같은 선수가 팀을 옮긴 경우(도감 1,085명 중 190명) 유니폼이 다른 사진을 붙이기 위한 것이다.
+   카드를 고를 때는 팀이 맞는 사진이 먼저, 없으면 팀 무관 사진이 쓰인다.
+   선수 이름에 '_' 가 들어간 경우는 도감에 없어서 구분자로 안전하다. */
+export function parsePhotoName(storageName) {
+  const decoded = decodeName(storageName.replace(/\.[^.]+$/, ''));
+  const cut = decoded.lastIndexOf('_');
+  let name = decoded, team = '';
+  if (cut > 0) {
+    const tail = decoded.slice(cut + 1).replace(/\d+$/, '');
+    /* 도감에 있는 팀 이름일 때만 팀으로 본다. 아니면 이름의 일부로 둔다 */
+    if (TEAMS.indexOf(tail) >= 0) { name = decoded.slice(0, cut); team = tail; }
+  }
+  const m = /(\d+)$/.exec(name.length === decoded.length ? decoded : decoded.slice(cut + 1));
+  return { name: name.replace(/\d+$/, ''), team, idx: m ? Number(m[1]) : 0 };
+}
+
+/* 이름만 필요할 때 (옛 이름 유지 — 부르는 곳이 있다) */
 export function playerNameFromStorageName(storageName) {
-  const base = storageName.replace(/\.[^.]+$/, '');
-  return decodeName(base).replace(/\d+$/, '');
+  return parsePhotoName(storageName).name;
 }
 
 /* 버킷 전체 목록. storage.list 의 기본 limit 은 100 이라 반드시 페이지를 넘겨야 한다. */
@@ -65,13 +88,16 @@ export async function listAllFiles(supabase, bucket = PHOTO_BUCKET) {
 export function buildManifest(files) {
   const photos = {};
   for (const f of files) {
-    const name = playerNameFromStorageName(f.name);
+    const { name, team } = parsePhotoName(f.name);
     if (!name) continue;
-    (photos[name] = photos[name] || []).push({ f: f.name });
+    const byTeam = photos[name] = photos[name] || {};
+    (byTeam[team] = byTeam[team] || []).push({ f: f.name });
   }
-  /* 같은 선수의 사진은 파일명 순 — 이승엽1, 이승엽2 순서가 유지된다 */
-  for (const list of Object.values(photos)) list.sort((a, b) => a.f.localeCompare(b.f));
-  return { v: 1, updatedAt: new Date().toISOString(), photos };
+  /* 같은 선수·같은 팀의 사진은 파일명 순 — 이승엽1, 이승엽2 순서가 유지된다 */
+  for (const byTeam of Object.values(photos))
+    for (const list of Object.values(byTeam)) list.sort((a, b) => a.f.localeCompare(b.f));
+  /* v2 = 팀별로 나뉜 모양. 팀 무관 사진은 "" 키에 들어간다 */
+  return { v: 2, updatedAt: new Date().toISOString(), photos };
 }
 
 /* 폴더를 하위까지 전부 훑어 사진 파일의 상대경로를 모은다.

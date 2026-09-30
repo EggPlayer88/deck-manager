@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 /* 선수 사진의 이름↔파일명 인코딩 규칙은 scripts/photo-lib.mjs 한 곳에만 둔다.
    올리는 쪽(npm run photos)과 읽는 쪽(이 파일)이 같은 규칙을 써야 하므로,
    복사해 두면 한쪽만 바뀌었을 때 이미 올라간 사진을 통째로 못 찾게 된다. */
-import { PHOTO_BUCKET, MANIFEST_FILE, encodeName, decodeName } from '../scripts/photo-lib.mjs';
+import { PHOTO_BUCKET, MANIFEST_FILE, encodeName, decodeName, buildManifest, parsePhotoName } from '../scripts/photo-lib.mjs';
 
 var SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 var SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -278,11 +278,9 @@ export async function listPlayerPhotos(playerName) {
   if (!supabase || !playerName) return [];
   var data = await listAllPhotoFiles();
   var filtered = data.filter(function(f) {
-    /* 확장자 제거 후 디코딩 → 끝 숫자 제거 → 선수이름 비교 */
-    var base = f.name.replace(/\.[^.]+$/, '');
-    var decoded = decodeName(base);
-    var baseName = decoded.replace(/\d+$/, '');
-    return baseName === playerName;
+    /* 폴백 경로라 팀은 가리지 않는다 — 이름만 맞으면 전부 돌려준다.
+       (매니페스트가 있을 때는 이 함수를 쓰지 않는다) */
+    return parsePhotoName(f.name).name === playerName;
   });
   filtered.sort(function(a, b) { return a.name.localeCompare(b.name); });
   return filtered.map(function(f) { return photoPublicUrl(f.name); });
@@ -298,14 +296,15 @@ export async function listAllPhotos() {
   if (!supabase) return [];
   var data = await listAllPhotoFiles();
   return data.map(function(f) {
-    var base = f.name.replace(/\.[^.]+$/, '');
-    /* 디코딩 먼저, 그 다음 끝 숫자 제거 */
-    var decoded = decodeName(base);
-    var baseName = decoded.replace(/\d+$/, '');
+    var decoded = decodeName(f.name.replace(/\.[^.]+$/, ''));
+    var p = parsePhotoName(f.name);
     return {
       storageName: f.name,          /* Supabase Storage 실제 파일명 (삭제 시 사용) */
       name: decoded + f.name.match(/\.[^.]+$/)[0], /* 표시용 원본 한글 파일명 */
-      baseName: baseName,
+      /* 관리 화면의 묶음 이름. 팀이 붙은 사진은 따로 묶어 보여 준다 */
+      baseName: p.team ? (p.name + ' (' + p.team + ')') : p.name,
+      player: p.name,
+      team: p.team,
       url: photoPublicUrl(f.name)
     };
   });
@@ -319,16 +318,29 @@ export async function listAllPhotos() {
    pos 는 동기화 때 자동 크롭이 찾아낸 세로 위치(%)로, 슬라이더 값이 없을 때의 기본값이 된다. */
 /* MANIFEST_FILE 은 scripts/photo-lib.mjs 에서 가져온다 */
 
-/* 저장 모양(파일명) → 앱이 쓰는 모양(이름별 URL 목록) */
+/* 저장 모양(파일명) → 앱이 쓰는 모양
+     { 선수이름: { '': [url…], '기아': [url…], '삼성': [url…] } }
+   '' 는 팀 무관 사진이다. 카드는 팀이 맞는 것을 먼저 쓰고, 없으면 '' 를 쓴다.
+
+   v1(팀 개념이 없던 모양: 이름 → 배열)도 읽는다 — 배포와 매니페스트 갱신 사이에
+   옛 파일이 남아 있어도 화면이 깨지지 않게 하기 위해서다. */
 function normalizeManifest(m) {
   if (!m || !m.photos) return null;
   var photos = {};
   Object.keys(m.photos).forEach(function (name) {
-    var urls = [];
-    (m.photos[name] || []).forEach(function (e) {
-      if (e && e.f) urls.push(photoPublicUrl(e.f));
-    });
-    if (urls.length) photos[name] = urls;
+    var src = m.photos[name];
+    var byTeam = {};
+    if (Array.isArray(src)) {
+      /* v1 — 전부 팀 무관으로 본다 */
+      byTeam[''] = src.filter(function (e) { return e && e.f; }).map(function (e) { return photoPublicUrl(e.f); });
+    } else if (src && typeof src === 'object') {
+      Object.keys(src).forEach(function (team) {
+        var urls = (src[team] || []).filter(function (e) { return e && e.f; })
+          .map(function (e) { return photoPublicUrl(e.f); });
+        if (urls.length) byTeam[team] = urls;
+      });
+    }
+    if (Object.keys(byTeam).length) photos[name] = byTeam;
   });
   return { photos: photos, updatedAt: m.updatedAt || '' };
 }
@@ -353,17 +365,7 @@ export async function loadPhotoManifest() {
 export async function rebuildPhotoManifest() {
   if (!supabase) return null;
   var files = await listAllPhotoFiles();
-  var photos = {};
-  files.forEach(function (f) {
-    var name = decodeName(f.name.replace(/\.[^.]+$/, '')).replace(/\d+$/, '');
-    if (!name) return;
-    (photos[name] = photos[name] || []).push({ f: f.name });
-  });
-  Object.keys(photos).forEach(function (n) {
-    photos[n].sort(function (a, b) { return a.f.localeCompare(b.f); });
-  });
-
-  var manifest = { v: 1, updatedAt: new Date().toISOString(), photos: photos };
+  var manifest = buildManifest(files);
   var body = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
   var r = await supabase.storage.from(PHOTO_BUCKET)
     .upload(MANIFEST_FILE, body, { upsert: true, contentType: 'application/json', cacheControl: '60' });

@@ -30,7 +30,7 @@ import sharp from 'sharp';
 import { createClient } from '@supabase/supabase-js';
 import {
   PHOTO_BUCKET, MANIFEST_FILE, encodeName,
-  listAllFiles, buildManifest, walkImages,
+  listAllFiles, buildManifest, walkImages, TEAMS,
 } from './photo-lib.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -120,6 +120,23 @@ async function main() {
     if (dups.length) {
       console.log('\n⚠ 파일명이 겹칩니다 — 마지막 것만 남습니다:');
       dups.forEach((b) => console.log(`   ${b}: ${byBase[b].join(' , ')}`));
+    }
+
+    /* 팀 이름 오타 — '_' 뒤가 도감의 팀이 아니면 통째로 이름의 일부가 되어
+       어떤 카드에도 안 붙는다. 막지는 않고 알려만 준다 (작업 중에 멈추면 답답하다) */
+    const badTeam = [];
+    for (const rel of files) {
+      const base = path.basename(rel).replace(/\.[^.]+$/, '');
+      const cut = base.lastIndexOf('_');
+      if (cut <= 0) continue;
+      const tail = base.slice(cut + 1).replace(/\d+$/, '');
+      if (TEAMS.indexOf(tail) < 0) badTeam.push({ rel, tail });
+    }
+    if (badTeam.length) {
+      console.log('\n⚠ 팀 이름을 못 알아봤습니다 — 이 사진들은 어떤 카드에도 안 붙습니다:');
+      badTeam.forEach((b) => console.log(`   ${b.rel}   ('${b.tail}' 은 팀이 아님)`));
+      console.log(`   쓸 수 있는 팀: ${TEAMS.join(' · ')}`);
+      console.log('   (그래도 계속 올립니다)');
     }
 
     console.log(`\n선수사진/ 에서 ${files.length}장 발견\n`);

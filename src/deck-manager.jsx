@@ -81,14 +81,25 @@ function getLogoForCard(team, year) {
   /* TODO: 연도별 조건 추가 예정 */
   return getTeamLogoUrl(team, 1);
 }
- /* 전역 사진 캐시: {선수이름: [url, ...]} */
-function getPhotoUrl(name) {
-  /* 해당 이름의 첫 번째 사진 URL 반환 (없으면 "") */
-  var urls = PHOTO_CACHE[name];
+
+/* 사진 고르기 — 팀이 맞는 것이 먼저, 없으면 팀 무관 사진.
+
+   같은 선수라도 팀을 옮기면 유니폼이 다르다 (도감 1,085명 중 190명).
+   파일명에 팀을 붙이면(최형우_삼성.png) 그 팀 카드에만 붙고,
+   팀 없이 올린 사진(최형우.png)은 나머지 팀 전부의 기본이 된다.
+   PHOTO_CACHE 모양: { 선수이름: { '': [url…], '기아': [url…] } } */
+function getPhotoList(name, team) {
+  var byTeam = PHOTO_CACHE[name];
+  if (!byTeam) return null;
+  if (team && byTeam[team] && byTeam[team].length) return byTeam[team];
+  if (byTeam[''] && byTeam[''].length) return byTeam[''];
+  return null;
+}
+function getPhotoUrl(name, team) {
+  var urls = getPhotoList(name, team);
   return (urls && urls.length > 0) ? urls[0] : "";
 }
-function getPhotoUrls(name) { return PHOTO_CACHE[name] || null; }
-
+function getPhotoUrls(name, team) { return getPhotoList(name, team); }
 
 /* 사진 매니페스트(_index.json) 한 장으로 전역 캐시를 통째로 채운다.
    이게 성공하면 라인업을 열 때 선수마다 버킷을 훑던 호출이 전부 사라진다.
@@ -2782,7 +2793,7 @@ function DiamondView(p) {
         var b = slotMap[pos] || null;
         return (
           <div key={pos} onClick={onClick ? function() { onClick(pos); } : undefined} style={{ position: "absolute", left: co.x + "%", top: co.y + "%", transform: "translate(-50%,-50%)", textAlign: "center", cursor: onClick ? "pointer" : "default" }}>
-            {b ? (<PlayerCard player={Object.assign({},b,{photoUrl:b.photoUrl||getPhotoUrl(b.name)})} size={mob?"sm":"sm"} showPhoto={true} />) : (
+            {b ? (<PlayerCard player={Object.assign({},b,{photoUrl:b.photoUrl||getPhotoUrl(b.name,b.team)})} size={mob?"sm":"sm"} showPhoto={true} />) : (
               <div style={{ width: mob?46:52, height: mob?64:72, borderRadius: 5, background: "var(--inner)", border: "1px dashed var(--bd)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                 <span style={{ fontSize: mob?12:14, opacity: 0.2 }}>{"+"}</span>
                 <span style={{ fontSize: mob?7:8, color: "var(--td)", fontWeight: 700 }}>{pos}</span>
@@ -2802,7 +2813,7 @@ function PCard(p) {
   var d = p.p;
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <PlayerCard player={Object.assign({},d,{photoUrl:d.photoUrl||getPhotoUrl(d.name)})} size={p.size || "md"} showPhoto={true} />
+      <PlayerCard player={Object.assign({},d,{photoUrl:d.photoUrl||getPhotoUrl(d.name,d.team)})} size={p.size || "md"} showPhoto={true} />
     </div>
   );
 }
@@ -4176,19 +4187,27 @@ function LineupPage(p) {
     if (!name || photoCacheRef.current[name] !== undefined) return;
     photoCacheRef.current[name] = null;
     /* 매니페스트를 이미 받아 뒀으면 네트워크를 다시 타지 않는다.
-       매니페스트에 이름이 없다 = 사진이 없는 선수 이므로 빈 배열로 확정한다.
+       매니페스트에 이름이 없다 = 사진이 없는 선수 이므로 빈 것으로 확정한다.
        이 함수는 렌더 도중에도 불리므로, 곧바로 값을 알더라도 await 로 한 틱 물러나
-       렌더가 끝난 뒤에 상태를 바꾼다. */
-    var urls = PHOTO_MANIFEST_LOADED
-      ? await Promise.resolve(PHOTO_CACHE[name] || [])
-      : await listPlayerPhotos(name);
-    photoCacheRef.current[name] = urls || [];
-    PHOTO_CACHE[name] = urls || []; /* 전역 캐시 업데이트 */
+       렌더가 끝난 뒤에 상태를 바꾼다.
+       담는 모양은 전역 캐시와 같다 — { 팀: [url…] }, 팀 무관은 '' 키.
+       폴백 경로(listPlayerPhotos)는 팀 구분이 없으므로 전부 '' 로 넣는다. */
+    var byTeam = PHOTO_MANIFEST_LOADED
+      ? await Promise.resolve(PHOTO_CACHE[name] || {})
+      : { '': (await listPlayerPhotos(name)) || [] };
+    photoCacheRef.current[name] = byTeam;
+    PHOTO_CACHE[name] = byTeam; /* 전역 캐시 업데이트 */
     setPhotoCache(function(prev){
-      var next = Object.assign({}, prev); next[name] = urls || []; return next;
+      var next = Object.assign({}, prev); next[name] = byTeam; return next;
     });
   }, []);
-  var getPhotos = function(name) { return photoCache[name]; };
+  /* 팀이 맞는 사진이 먼저, 없으면 팀 무관 사진. 아직 안 읽었으면 undefined */
+  var getPhotos = function(name, team) {
+    var byTeam = photoCache[name];
+    if (byTeam === undefined) return undefined;
+    if (team && byTeam[team] && byTeam[team].length) return byTeam[team];
+    return byTeam[''] || [];
+  };
 
   /* 라인업 내 모든 선수 사진 자동 로드 */
   var lm = p.lineupMap || {};
@@ -4486,7 +4505,7 @@ function LineupPage(p) {
             <span>{idx + 1}</span>
             {idx < 8 && (<span className="lu-arrow" title={"타순 바꾸기"} onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx+1); }} style={{ fontSize: 12, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▼"}</span>)}
           </div>
-          <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
+          <PlayerCard player={(function(){ var ph=getPhotos(pl.name,pl.team); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
@@ -4540,7 +4559,7 @@ function LineupPage(p) {
           {oAdj && (<div style={{ marginBottom: 8 }}><OrderNote adj={oAdj} /></div>)}
           {/* 사진 선택 UI */}
           {(function(){
-            var photos = getPhotos(pl.name);
+            var photos = getPhotos(pl.name,pl.team);
             if (photos === undefined) { loadPhotosForPlayer(pl.name); return null; }
             if (!photos || photos.length === 0) return null;
             return (
@@ -4589,7 +4608,7 @@ function LineupPage(p) {
       <React.Fragment key={pl.id}>
         <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : LINEUP_COLS, alignItems: "center", gap: mob ? 6 : LINEUP_GAP, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
-          <PlayerCard player={(function(){ var ph=getPhotos(pl.name); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
+          <PlayerCard player={(function(){ var ph=getPhotos(pl.name,pl.team); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
@@ -4645,7 +4664,7 @@ function LineupPage(p) {
         {isSel && (<div style={{ padding: "8px 14px", background: "rgba(206,147,216,0.03)", borderBottom: "1px solid var(--bd)" }}>
           {/* 사진 선택 UI */}
           {(function(){
-            var photos = getPhotos(pl.name);
+            var photos = getPhotos(pl.name,pl.team);
             if (photos === undefined) { loadPhotosForPlayer(pl.name); return null; }
             if (!photos || photos.length === 0) return null;
             return (

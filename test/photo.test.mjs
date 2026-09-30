@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {
-  encodeName, decodeName, playerNameFromStorageName, buildManifest, walkImages,
+  encodeName, decodeName, playerNameFromStorageName, buildManifest, walkImages, parsePhotoName,
 } from '../scripts/photo-lib.mjs';
 
 let pass = 0, fail = 0;
@@ -27,16 +27,48 @@ eq('파일명 → 선수 이름', playerNameFromStorageName(encodeName('이승�
 eq('숫자 없는 파일명', playerNameFromStorageName(encodeName('김도영') + '.jpg'), '김도영');
 eq('영문 혼용 이름', playerNameFromStorageName(encodeName('로하스') + '.jpg'), '로하스');
 
-console.log('\n[매니페스트] 이름별 사진 목록만 담는다 — 위치값은 담지 않는다');
+console.log('\n[파일명 → 이름·팀·번호] 팀을 붙이면 그 팀 카드에만 붙는다');
+const pp = (n) => parsePhotoName(encodeName(n) + '.webp');
+eq('팀 없음', pp('이승엽2'), { name: '이승엽', team: '', idx: 2 });
+eq('팀 있음', pp('최형우_삼성'), { name: '최형우', team: '삼성', idx: 0 });
+eq('팀 + 번호', pp('최형우_기아1'), { name: '최형우', team: '기아', idx: 1 });
+eq('영문 팀', pp('김현수B_LG2'), { name: '김현수B', team: 'LG', idx: 2 });
+eq('동명이인 접미사는 이름의 일부', pp('로하스B'), { name: '로하스B', team: '', idx: 0 });
+/* 도감에 없는 팀명은 팀으로 보지 않는다 — 그래야 sync 가 경고를 띄울 수 있다 */
+eq('팀명 오타는 이름에 붙는다', pp('최형우_KIA'), { name: '최형우_KIA', team: '', idx: 0 });
+
+console.log('\n[매니페스트] 이름 → 팀 → 사진들');
 const f = (n) => ({ name: encodeName(n) + '.webp' });
-const files = [f('이승엽2'), f('이승엽1'), f('김도영')];
+const files = [f('이승엽2'), f('이승엽1'), f('김도영'), f('최형우_기아'), f('최형우_삼성2'), f('최형우_삼성1'), f('최형우')];
 const m1 = buildManifest(files);
-eq('선수별로 묶인다', Object.keys(m1.photos).sort(), ['김도영', '이승엽']);
+eq('버전은 2', m1.v, 2);
+eq('선수별로 묶인다', Object.keys(m1.photos).sort(), ['김도영', '이승엽', '최형우']);
+eq('팀 없는 사진은 빈 키에', Object.keys(m1.photos['이승엽']), ['']);
 eq('한 선수의 여러 장이 파일명 순',
-  m1.photos['이승엽'].map((e) => e.f),
+  m1.photos['이승엽'][''].map((e) => e.f),
   [encodeName('이승엽1') + '.webp', encodeName('이승엽2') + '.webp']);
-eq('항목은 파일명만 갖는다', Object.keys(m1.photos['이승엽'][0]), ['f']);
+eq('팀별로 나뉜다', Object.keys(m1.photos['최형우']).sort(), ['', '기아', '삼성']);
+eq('팀 안에서도 파일명 순',
+  m1.photos['최형우']['삼성'].map((e) => e.f),
+  [encodeName('최형우_삼성1') + '.webp', encodeName('최형우_삼성2') + '.webp']);
+eq('항목은 파일명만 갖는다', Object.keys(m1.photos['김도영']['']?.[0] || {}), ['f']);
 eq('위치값 필드가 없다', m1.posByName, undefined);
+
+console.log('\n[고르기] 팀이 맞는 것 먼저, 없으면 팀 무관');
+/* deck-manager.jsx 의 getPhotoList 와 같은 규칙 */
+function pick(byTeam, team) {
+  if (!byTeam) return null;
+  if (team && byTeam[team] && byTeam[team].length) return byTeam[team];
+  if (byTeam[''] && byTeam[''].length) return byTeam[''];
+  return null;
+}
+const 최 = m1.photos['최형우'];
+eq('삼성 카드 → 삼성 사진', pick(최, '삼성')[0].f, encodeName('최형우_삼성1') + '.webp');
+eq('기아 카드 → 기아 사진', pick(최, '기아')[0].f, encodeName('최형우_기아') + '.webp');
+eq('그 외 팀 → 팀 무관 사진', pick(최, 'LG')[0].f, encodeName('최형우') + '.webp');
+eq('팀 정보가 없어도 팀 무관 사진', pick(최, '')[0].f, encodeName('최형우') + '.webp');
+eq('팀 사진만 있고 무관 사진이 없으면 그 팀만',
+  pick(buildManifest([f('나성범_기아')]).photos['나성범'], 'LG'), null);
 
 console.log('\n[사진 변환] 투명 배경을 지키고, 자르지 않는다');
 /* 위쪽에만 불투명한 사각형을 둔 2:3 이미지 — 배경을 딴 누끼 사진을 흉내낸다 */
