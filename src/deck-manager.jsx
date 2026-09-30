@@ -5816,8 +5816,10 @@ function kboGameUrl(googleId){return KBO_GAME_URL+"/#sso=deck"+(googleId?"&hint=
 
 function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
-  /* 게임 공개 전까지 관리자만 — 공개할 때 isAdmin 조건만 빼면 된다 */
-  var showGame=p.isAdmin&&p.gameUrl;
+  /* 모든 로그인 유저에게 연다 (2026-09-30). 게스트는 구글 계정이 없어 게임에 못 들어가므로 뺀다.
+     게임 쪽 KBO_TESTERS 화이트리스트가 풀려 있어야 실제로 플레이할 수 있다 —
+     막혀 있으면 로그인까지 하고 "테스트 기간이에요" 화면을 보게 된다. */
+  var showGame=p.authType==="google"&&p.gameUrl;
   /* short 는 모바일 아래 탭 전용 줄임말 — 칸이 좁아 원말이 들어가면 줄이 접힌다.
      원말은 title 로 붙는다. href 가 있는 항목은 탭이 아니라 바깥으로 나가는 링크다. */
   var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"lab",label:"덱 연구소",short:"연구소",icon:"🔬"},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",soon:true}];
