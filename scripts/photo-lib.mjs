@@ -121,3 +121,26 @@ export function walkImages(fs, path, dir, base = '') {
   }
   return out;
 }
+
+/* ── 확장자만 다른 중복 찾기 ──
+   같은 사진을 새로 올려도 확장자가 다르면 옛 파일이 버킷에 그대로 남는다.
+   buildManifest 는 파일명 순으로 첫 장을 고르는데 '.png' 가 '.webp' 보다 앞서서,
+   옛 그림이 카드에 뜨고 새 그림은 묻힌다 — 업로드는 성공했는데 웹에는 안 보인다.
+   같은 선수의 여러 장(이승엽1 · 이승엽2)은 base 가 다르므로 여기 안 걸린다.
+   keep 은 .webp 를 우선한다 (업로드 파이프라인이 내보내는 형식). */
+export function findShadowed(files) {
+  const byBase = {};
+  for (const f of files) {
+    const name = typeof f === 'string' ? f : f.name;
+    const base = name.replace(/.[^.]+$/, '');
+    (byBase[base] = byBase[base] || []).push(name);
+  }
+  return Object.keys(byBase)
+    .filter((b) => byBase[b].length > 1)
+    .sort()
+    .map((b) => {
+      const names = byBase[b].slice().sort();
+      const keep = names.filter((n) => /.webp$/i.test(n))[0] || names[0];
+      return { base: b, names, keep, drop: names.filter((n) => n !== keep) };
+    });
+}

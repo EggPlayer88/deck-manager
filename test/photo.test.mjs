@@ -9,6 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {
   encodeName, decodeName, playerNameFromStorageName, buildManifest, walkImages, parsePhotoName,
+  findShadowed,
 } from '../scripts/photo-lib.mjs';
 
 let pass = 0, fail = 0;
@@ -131,6 +132,27 @@ eq('폴더 이름은 매칭에 안 쓴다',
   playerNameFromStorageName(encodeName(path.basename('20260914 작업분/이승엽1.JPG', '.JPG')) + '.jpg'),
   '이승엽');
 fs.rmSync(tmp, { recursive: true, force: true });
+
+console.log('\n[확장자만 다른 중복] 옛 .png 가 새 .webp 를 묻어 버리는 것을 잡아야 한다');
+{
+  const files = [
+    { name: 'AC15C815D6381.png' },   /* 강정호 — 옛것 */
+    { name: 'AC15C815D6381.webp' },  /* 강정호 — 새것 */
+    { name: 'AE40B3C4C6011.webp' },  /* 김도영 — 하나뿐 */
+    { name: 'C774C2B9C5FD1.webp' },  /* 이승엽1 */
+    { name: 'C774C2B9C5FD2.webp' },  /* 이승엽2 — base 가 달라 중복 아님 */
+  ];
+  const dup = findShadowed(files);
+  eq('중복 1건만 잡는다', dup.length, 1);
+  eq('묻히는 쪽은 옛 .png', dup[0].drop, ['AC15C815D6381.png']);
+  eq('남기는 쪽은 .webp', dup[0].keep, 'AC15C815D6381.webp');
+  eq('같은 선수의 여러 장은 안 걸린다',
+    findShadowed([{ name: 'a1.webp' }, { name: 'a2.webp' }]).length, 0);
+  eq('문자열 배열도 받는다', findShadowed(['x.png', 'x.webp'])[0].keep, 'x.webp');
+  /* 경고가 왜 필요한지 — 매니페스트는 실제로 옛 .png 를 먼저 고른다 */
+  const m = buildManifest([{ name: 'AC15C815D6381.png' }, { name: 'AC15C815D6381.webp' }]);
+  eq('매니페스트는 .png 를 앞에 둔다', m.photos['강정호'][''][0].f, 'AC15C815D6381.png');
+}
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);

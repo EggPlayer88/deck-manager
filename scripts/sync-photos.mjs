@@ -5,6 +5,7 @@
      npm run photos              선수사진/ 전체 동기화 (바뀐 것만 올림)
      npm run photos -- --dry     올리지 않고 무엇을 할지만 출력
      npm run photos -- --force   캐시 무시하고 전부 다시 올림
+     npm run photos -- --prune-old       확장자만 다른 옛 사진을 지움 (아래 ⚠ 가 떴을 때)
      npm run photos -- --manifest-only   업로드 없이 매니페스트만 다시 만듦
                                          (웹 UI 로 올린 뒤 목록을 맞출 때)
 
@@ -29,8 +30,8 @@ import 'dotenv/config';
 import sharp from 'sharp';
 import { createClient } from '@supabase/supabase-js';
 import {
-  PHOTO_BUCKET, MANIFEST_FILE, encodeName,
-  listAllFiles, buildManifest, walkImages, TEAMS,
+  PHOTO_BUCKET, MANIFEST_FILE, encodeName, decodeName,
+  listAllFiles, buildManifest, walkImages, findShadowed, TEAMS,
 } from './photo-lib.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,6 +56,7 @@ const args = process.argv.slice(2);
 const FORCE = args.includes('--force');
 const DRY = args.includes('--dry');
 const MANIFEST_ONLY = args.includes('--manifest-only');
+const PRUNE_OLD = args.includes('--prune-old');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -174,7 +176,28 @@ async function main() {
 
   /* ── 매니페스트 재생성 ──
      폴더에 없고 웹 UI 로만 올린 사진도 버킷 목록에서 함께 잡힌다. */
-  const bucketFiles = await listAllFiles(supabase);
+  let bucketFiles = await listAllFiles(supabase);
+
+  /* 확장자만 다른 중복은 새 사진을 묻어 버린다. 반드시 알려 주고, 원하면 지운다. */
+  const shadowed = findShadowed(bucketFiles);
+  if (shadowed.length) {
+    console.log(`
+⚠ 확장자만 다른 중복 ${shadowed.length}건 — 새로 올린 사진이 묻힙니다:`);
+    shadowed.forEach((s) => {
+      console.log(`   ${decodeName(s.base)}  →  카드에는 '${s.names[0]}' 이 뜹니다`);
+      s.drop.forEach((n) => console.log(`      묻힘: ${n}`));
+    });
+    if (PRUNE_OLD && !DRY) {
+      const kill = shadowed.reduce((a, s) => a.concat(s.drop), []);
+      const { error } = await supabase.storage.from(PHOTO_BUCKET).remove(kill);
+      if (error) die(`옛 사진 삭제 실패: ${error.message}`);
+      console.log(`   → 옛 사진 ${kill.length}장을 지웠습니다.`);
+      bucketFiles = await listAllFiles(supabase);
+    } else {
+      console.log(`   → 옛 사진을 지우려면: npm run photos -- --prune-old`);
+    }
+  }
+
   const manifest = buildManifest(bucketFiles);
   const playerCount = Object.keys(manifest.photos).length;
 
