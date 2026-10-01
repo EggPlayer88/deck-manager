@@ -5370,7 +5370,7 @@ function LoginPage(p) {
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 8 }}>{"게스트 모드"}</div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input type="text" value={nick} onChange={function(e) { setNick(e.target.value); }} placeholder="닉네임 입력" onKeyDown={function(e) { if (e.key === "Enter") guestLogin(); }}
-                    style={{ flex: 1, padding: "10px 14px", fontSize: 15, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff", outline: "none", boxSizing: "border-box" }} />
+                    style={{ flex: 1, width: 0 /* 입력칸 기본 폭(약 220px)이 줄을 밀면 좁은 폰에서 카드가 화면 밖으로 나간다 */, padding: "10px 14px", fontSize: 15, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff", outline: "none", boxSizing: "border-box" }} />
                   <button onClick={guestLogin} disabled={ld} style={{ padding: "10px 20px", fontSize: 15, fontWeight: 800, background: ld ? "rgba(255,213,79,0.2)" : "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 8, cursor: ld ? "wait" : "pointer", color: "#1a1100", fontFamily: "var(--h)", whiteSpace: "nowrap" }}>
                     {ld ? "..." : "시작"}
                   </button>
