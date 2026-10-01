@@ -1661,6 +1661,24 @@ function sqCard(x, cx, cy, w, h, p) {
   g.addColorStop(.75, c[1]); g.addColorStop(1, c[0]);
   x.fillStyle = g; sqRound(x, a, b, w, h, rad); x.fill();
   x.restore();
+  /* 선수 사진 — 카드 종류 무늬를 테두리로 남기고 안쪽을 채운다.
+     사진이 없으면(p.img 없음) 지금까지처럼 무늬만 보인다 */
+  if (p.img) {
+    var pi = 5, pw = w - pi * 2, ph = h - pi * 2;
+    x.save();
+    sqRound(x, a + pi, b + pi, pw, ph, rad - 3); x.clip();
+    var iw = p.img.naturalWidth || p.img.width || 1, ih = p.img.naturalHeight || p.img.height || 1;
+    /* cover 맞춤 — 칸을 가득 채우고 넘치는 쪽을 자른다.
+       세로로 자를 때 어디를 보일지는 앱 카드와 같은 PHOTO_POS 를 쓴다 */
+    var sc = Math.max(pw / iw, ph / ih);
+    var dw = iw * sc, dh = ih * sc;
+    x.drawImage(p.img, a + pi + (pw - dw) / 2, b + pi + (ph - dh) * (PHOTO_POS / 100), dw, dh);
+    /* 아래쪽을 어둡게 깔아 이름이 사진에 묻히지 않게 */
+    var sg = x.createLinearGradient(0, b + h * 0.45, 0, b + h);
+    sg.addColorStop(0, "rgba(0,0,0,0)"); sg.addColorStop(1, "rgba(0,0,0,.72)");
+    x.fillStyle = sg; x.fillRect(a + pi, b + pi, pw, ph);
+    x.restore();
+  }
   x.strokeStyle = "rgba(255,255,255,.45)"; x.lineWidth = 2;
   sqRound(x, a + 1, b + 1, w - 2, h - 2, rad - 1); x.stroke();
   var bh = Math.round(h * 0.28);
@@ -1755,6 +1773,23 @@ function drawSquadCanvas(d) {
   x.fillText("컴투스 프로야구 v26 덱 매니저 · 덱 연구소", SQ_W - 44, y + 38);
   return cv;
 }
+/* 그림에 넣을 사진을 미리 받아 둔다. 캔버스는 기다려 주지 않으므로 먼저 다 받아야 한다.
+   스토리지가 Access-Control-Allow-Origin: * 를 주므로 crossOrigin 을 걸면 캔버스가 더럽혀지지 않아
+   toBlob 으로 내려받을 수 있다. 한 장이라도 실패하면 그 카드만 사진 없이 그린다 */
+function sqLoadPhotos(list) {
+  return Promise.all((list || []).map(function (p) {
+    var url = p && p.name ? getPhotoUrl(p.name, p.team) : "";
+    if (!url) return Promise.resolve(null);
+    return new Promise(function (done) {
+      var im = new Image();
+      im.crossOrigin = "anonymous";
+      im.onload = function () { p.img = im; done(im); };
+      im.onerror = function () { done(null); };
+      im.src = url;
+    });
+  }));
+}
+
 function downloadSquadImage(d) {
   var go = function () {
     var cv = drawSquadCanvas(d);
@@ -1771,8 +1806,9 @@ function downloadSquadImage(d) {
       var a2 = document.createElement("a"); a2.href = cv.toDataURL("image/png"); a2.download = name; a2.click();
     }
   };
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(go).catch(go);
-  else go();
+  var fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+  var pics = sqLoadPhotos((d.bats || []).concat(d.pits || []));
+  Promise.all([fonts, pics]).then(go).catch(go);
 }
 
 /* ================================================================
@@ -6814,7 +6850,8 @@ function LabPage(p) {
     };
     var one = function (sl) {
       var c = cards[sl]; if (!c) return null;
-      return { slot: sl, name: c.name, ct: c.cardType };
+      /* 팀을 같이 넘긴다 — 사진이 팀별로 갈려 있어 유니폼이 맞는 쪽을 고르게 */
+      return { slot: sl, name: c.name, ct: c.cardType, team: c.team };
     };
     downloadSquadImage({
       team: team,
