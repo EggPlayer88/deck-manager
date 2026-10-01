@@ -10,3 +10,6 @@ dist
 선수사진/*
 !선수사진/README.md
 !선수사진/_사진규격_가이드.png
+
+# 스쿼드 공유 시안 묶음(PNG·미리보기 HTML, 수십 MB) — scripts/build-squad-preview.mjs 로 다시 만든다.
+artifacts/
