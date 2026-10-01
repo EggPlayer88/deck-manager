@@ -5265,6 +5265,7 @@ function PolicyModal(p) {
 
 function LoginPage(p) {
   var mob = useMedia("(max-width:600px)");
+  var stack = useMedia("(max-width:800px)"); /* 601~800px(폴드·태블릿 세로): 위쪽 로그인 부분만 한 줄로 */
   var _ld = useState(false); var ld = _ld[0]; var setLd = _ld[1];
   var _guestOpen = useState(false); var guestOpen = _guestOpen[0]; var setGuestOpen = _guestOpen[1];
   var _nick = useState(""); var nick = _nick[0]; var setNick = _nick[1];
@@ -5308,7 +5309,7 @@ function LoginPage(p) {
 
       {/* =================== HERO / LOGIN SECTION =================== */}
       <section style={{ minHeight: mob ? "auto" : "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: mob ? "40px 16px" : "60px 20px" }}>
-        <div style={{ width: "100%", maxWidth: 1100, display: "grid", gridTemplateColumns: mob ? "1fr" : "1.2fr 1fr", gap: mob ? 32 : 48, alignItems: "center" }}>
+        <div style={{ width: "100%", maxWidth: stack && !mob ? 460 : 1100, display: "grid", gridTemplateColumns: stack ? "1fr" : "1.2fr 1fr", gap: stack ? 32 : 48, alignItems: "center" }}>
 
           {/* Left: Hero text */}
           <div>
@@ -5329,7 +5330,7 @@ function LoginPage(p) {
           </div>
 
           {/* Right: Login card (기존 UI 유지) */}
-          <div style={{ width: "100%", maxWidth: 460, padding: mob ? "32px 24px" : "40px 32px", background: "rgba(15,20,30,0.92)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 64px rgba(0,0,0,0.6)", margin: mob ? "0 auto" : 0 }}>
+          <div style={{ width: "100%", maxWidth: 460, padding: mob ? "32px 24px" : "40px 32px", background: "rgba(15,20,30,0.92)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 64px rgba(0,0,0,0.6)", margin: stack ? "0 auto" : 0 }}>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
               <div style={{ fontSize: 44, marginBottom: 8 }}>{"⚾"}</div>
               <h2 style={{ fontSize: 20, fontWeight: 900, margin: 0, fontFamily: "var(--h)", letterSpacing: 3, color: "#FFD54F" }}>{"시작하기"}</h2>
