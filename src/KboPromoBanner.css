@@ -1,0 +1,47 @@
+/* Reusable KBO promotion. Scoped classes; no app-wide styles.
+   덱 매니저에 붙이며 바꾼 것 (여러 기기 호환):
+   - inset 대신 top/right/bottom/left — iOS 14.0 사파리는 inset 을 모른다
+   - 컨테이너 쿼리를 모르는 브라우저(iOS 15 이하·옛 안드로이드 웹뷰)는 화면 폭으로 그림을 숨긴다
+   - 모바일 배치는 앱의 모바일 기준(640px 이하)과 맞췄다
+   - hover 효과는 마우스가 있는 기기에서만 — 휴대폰에서 누른 뒤 들뜬 채 남지 않게
+   - 터치 기기에서는 닫기 버튼을 손가락 크기로 */
+.kbo-promo{--promo-gold:#f7d77c;position:relative;isolation:isolate;box-sizing:border-box;display:flex;align-items:center;gap:28px;min-height:132px;width:100%;padding:23px 34px 23px 26px;overflow:hidden;border:1px solid #536048;border-radius:12px;background:radial-gradient(ellipse at 72% 105%,#37523b 0,transparent 49%),linear-gradient(112deg,#172a29,#152122 70%,#1a2624);color:#f8f5e9;font-family:'Noto Sans KR','Malgun Gothic',sans-serif;text-align:left;container-type:inline-size}
+.kbo-promo:before{content:'';position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:-1;background:repeating-linear-gradient(125deg,transparent 0 60px,#b6cda706 61px 62px);border-left:3px solid var(--promo-gold)}
+.kbo-promo__copy{position:relative;z-index:1;flex:1;min-width:0}
+.kbo-promo__brand{display:flex;align-items:center;gap:9px;color:#e7cc8d;font-size:11px;font-weight:700;letter-spacing:.06em;margin-bottom:8px}
+.kbo-promo__badge{padding:2px 5px;border:1px solid #a89d6866;border-radius:3px;color:#d1c9a8;font-size:8px;letter-spacing:.13em}
+.kbo-promo__title{font-size:26px;line-height:1.32;letter-spacing:-1.1px;font-weight:800;margin:0;word-break:keep-all}
+.kbo-promo__desc{font-size:12px;color:#b9c8bc;line-height:1.6;margin:8px 0 0;word-break:keep-all}
+.kbo-promo__art{width:152px;height:104px;flex:none;position:relative;opacity:.93}
+.kbo-promo__art svg{width:100%;height:100%;overflow:visible}
+.kbo-promo__action{position:relative;flex:none;text-align:center;margin-right:4px}
+.kbo-promo__cta{display:inline-flex;align-items:center;justify-content:center;gap:15px;min-height:44px;box-sizing:border-box;padding:0 18px;border-radius:7px;border:1px solid #ffe3a0;background:#f5d47c;color:#20251f;font-size:13px;font-weight:800;line-height:1;text-decoration:none;white-space:nowrap;transition:background .16s,transform .16s}
+@media(hover:hover){.kbo-promo__cta:hover{background:#ffe9ad;transform:translateY(-1px)}}
+.kbo-promo__cta:focus-visible,.kbo-promo__close:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.kbo-promo__hint{display:block;margin-top:7px;font-size:9px;color:#a9b6aa}
+.kbo-promo__close{position:absolute;right:3px;top:3px;width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:4px;background:transparent;color:#b3c0b5;font:18px Arial;cursor:pointer;z-index:3}
+@media(hover:hover){.kbo-promo__close:hover{background:#ffffff12;color:#fff}}
+.kbo-promo--b{border-color:#5a5140;background:radial-gradient(ellipse at 70% 110%,#61422c 0,transparent 52%),linear-gradient(110deg,#272823,#222422 65%,#2a2821)}
+.kbo-promo--b .kbo-promo__desc{color:#c8c1ad}
+.kbo-promo--side{display:block;width:172px;min-height:0;padding:18px 16px 16px;border-radius:10px}
+.kbo-promo--side .kbo-promo__brand{font-size:10px;margin-bottom:13px}
+.kbo-promo--side .kbo-promo__title{font-size:20px;line-height:1.5;letter-spacing:-.7px}
+.kbo-promo--side .kbo-promo__desc{font-size:10px;margin-top:8px}
+.kbo-promo--side .kbo-promo__action{text-align:left;margin:16px 0 0}
+.kbo-promo--side .kbo-promo__cta{min-height:36px;width:100%;font-size:11px;padding:0 9px;justify-content:space-between}
+.kbo-promo--side .kbo-promo__hint{display:none}
+@container (max-width:800px){.kbo-promo__art{display:none}.kbo-promo__title{font-size:23px}}
+@supports not (container-type:inline-size){@media(max-width:1100px){.kbo-promo__art{display:none}.kbo-promo__title{font-size:23px}}}
+@media(pointer:coarse) and (min-width:641px){.kbo-promo__close{width:36px;height:36px;top:0;right:0}}
+@media(max-width:640px){
+ .kbo-promo:not(.kbo-promo--side){display:block;min-height:158px;padding:16px 17px 15px;border-radius:10px}
+ .kbo-promo:not(.kbo-promo--side) .kbo-promo__brand{font-size:10px;margin-bottom:7px}
+ .kbo-promo:not(.kbo-promo--side) .kbo-promo__title{font-size:22px;line-height:1.4;letter-spacing:-1px;padding-right:0}
+ .kbo-promo:not(.kbo-promo--side) .kbo-promo__desc{font-size:10px;margin-top:5px;letter-spacing:-.3px}
+ .kbo-promo:not(.kbo-promo--side) .kbo-promo__action{display:flex;align-items:center;gap:10px;margin-top:13px;text-align:left}
+ .kbo-promo:not(.kbo-promo--side) .kbo-promo__cta{min-height:44px;font-size:11px;padding:0 13px;gap:18px}
+ .kbo-promo:not(.kbo-promo--side) .kbo-promo__hint{font-size:9px;margin:0}
+ .kbo-promo:not(.kbo-promo--side) .kbo-promo__art{display:none}
+ .kbo-promo__close{width:44px;height:44px;top:0;right:0}
+}
+@media(prefers-reduced-motion:reduce){.kbo-promo__cta{transition:none}}

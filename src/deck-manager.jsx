@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { downloadSquadImage as downloadSquadTemplate } from "./squad-share.js";
+import KboPromoBanner from "./KboPromoBanner.jsx";
 
 /* Supabase: injected via window._SUPABASE from main.jsx (Vercel deployment).
    In artifact preview / standalone, these remain as stubs → localStorage-only mode. */
@@ -4032,6 +4033,9 @@ function LineupPage(p) {
   var _picker = useState(null); var pickerSlot = _picker[0]; var setPickerSlot = _picker[1];
   /* 고점판독기 — 켜면 라인업 선수 전원을 고점 값으로 바꿔 보여 준다. 저장된 값은 그대로다 */
   var _peak = useState(false); var peakOn = _peak[0]; var setPeakOn = _peak[1];
+  /* KBO 구단주 홍보 배너 — 메뉴 링크와 같은 조건(구글 로그인)·같은 주소. 게스트는 게임에 못 들어가 뺀다.
+     숨김 여부는 첫 그림부터 정해 두어 화면이 뒤늦게 밀리지 않게 한다 */
+  var _promo = useState(function () { return !kboPromoHidden(); }); var promoOpen = _promo[0]; var setPromoOpen = _promo[1];
   var _dragSlot = useState(null); var dragSlot = _dragSlot[0]; var setDragSlot = _dragSlot[1];
   /* 사진 캐시: {선수이름: [url, ...]} - useState로 re-render 보장 */
   var _photoCache = useState({});var photoCache=_photoCache[0];var setPhotoCache=_photoCache[1];
@@ -4615,6 +4619,12 @@ function LineupPage(p) {
   );
   /* 가중치 줄은 줄임말, 원래 이름은 마우스를 올리면 */
   var wNow = getW();
+  /* 자리 — 모바일은 TOTAL SCORE 바로 아래(구장보다 위), PC 는 구장·투수 개요 아래 타선표 위. 라인업에 한 번만 */
+  var promo = (p.authType === "google" && p.gameUrl && promoOpen) ? (
+    <div style={{ marginBottom: mob ? 14 : 16 }}>
+      <KboPromoBanner href={p.gameUrl} onDismiss={function () { kboPromoHide(7); setPromoOpen(false); }} />
+    </div>
+  ) : null;
 
   return (
     <div style={{ padding: mob ? 12 : 18, maxWidth: 1200, paddingBottom: mob ? PAGE_BOTTOM : 18 }}>
@@ -4644,6 +4654,7 @@ function LineupPage(p) {
           {" — 라인업 선수 전원의 스킬·훈련·특훈·잠재력이 상위 0.1% 안팎으로 뽑혔다고 가정한 모습입니다. 이미 그보다 좋은 항목과 강화·세트덱·포틈은 내 덱 그대로이고, 저장된 값은 바뀌지 않아요."}
         </div>
       )}
+      {mob && promo}
 
       {/* Diamond + Pitching */}
       <div style={{ display: "grid", gridTemplateColumns: (mob) ? "1fr" : "380px 1fr", gap: 14, marginBottom: 16 }}>
@@ -4673,6 +4684,8 @@ function LineupPage(p) {
           </div>
         </div>
       </div>
+
+      {!mob && promo}
 
       {/* Tables */}
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
@@ -5685,6 +5698,11 @@ function TeamPickModal(p){
    (# 뒤는 서버로 가지 않고, 게임이 읽자마자 주소창에서 지운다) */
 var KBO_GAME_URL="https://kbo-sim.vercel.app";
 function kboGameUrl(googleId){return KBO_GAME_URL+"/#sso=deck"+(googleId?"&hint="+encodeURIComponent(googleId):"");}
+/* 라인업 화면의 KBO 구단주 홍보 배너 — × 를 누르면 7일 동안 숨긴다.
+   테마처럼 이 브라우저에만 적는다. 저장소가 막힌 브라우저는 이번에만 닫히고 다음에 다시 뜬다 */
+var KBO_PROMO_KEY="kbo-promo-hide-until";
+function kboPromoHidden(){try{return Number(localStorage.getItem(KBO_PROMO_KEY)||0)>Date.now();}catch(e){return false;}}
+function kboPromoHide(days){try{localStorage.setItem(KBO_PROMO_KEY,String(Date.now()+days*864e5));}catch(e){}}
 
 function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
@@ -10312,7 +10330,7 @@ export default function App(){
   if(store.loading||!curDeckId)return(<div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
 
   var pg=null;
-  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId}/>);
+  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId} authType={authType} gameUrl={kboGameUrl(googleId)}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} customDex={store.customDex} saveCustomDex={store.saveCustomDex} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
   else if(tab==="lab")pg=(<LabPage mobile={mob} teamName={curDeckObj&&curDeckObj.teamName} skills={store.skills} labSaves={store.labSaves} saveLab={store.saveLab}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills}/>);
