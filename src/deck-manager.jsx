@@ -6747,6 +6747,8 @@ function LabPage(p) {
           {r ? (<React.Fragment>
             <Badge type={r.cardType} />
             <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
+            {/* 임팩트는 연도가 없어 종류(빅게임헌터·여름사나이…)로 가른다 — 다른 화면과 같은 보라색 */}
+            {r.cardType === "임팩트" && r.impactType && (<span style={{ fontSize: 10, color: "#a78bfa", whiteSpace: "nowrap" }}>{"(" + r.impactType + ")"}</span>)}
             <span style={{ fontSize: 10, color: "var(--td)", whiteSpace: "nowrap" }}>{[r.team, r.year].filter(Boolean).join(" ")}</span>
             {flag && (<span style={{ fontSize: 9, fontWeight: 800, color: "#FF8A80", border: "1px solid rgba(255,138,128,0.4)", borderRadius: 3, padding: "0 3px" }}>{flag}</span>)}
           </React.Fragment>) : (<span style={{ fontSize: 12, color: "var(--td)" }}>{"+ 카드"}</span>)}
@@ -6937,7 +6939,9 @@ function LabPage(p) {
                     <button key={e.sp.id} onClick={function () { putCard(pickSlot, e.sp); }}
                       style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "7px 14px", background: "transparent", border: "none", borderBottom: "1px solid var(--bd)", cursor: "pointer", textAlign: "left" }}>
                       <Badge type={e.sp.cardType} />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)" }}>{e.sp.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)" }}>{e.sp.name}
+                        {e.sp.cardType === "임팩트" && e.sp.impactType && (<span style={{ fontSize: 11, fontWeight: 500, color: "#a78bfa", marginLeft: 3 }}>{"(" + e.sp.impactType + ")"}</span>)}
+                      </span>
                       <span style={{ fontSize: 11, color: "var(--td)" }}>{[e.sp.team, e.sp.year, e.sp.role === "타자" ? e.sp.subPosition : e.sp.position].filter(Boolean).join(" · ")}</span>
                       <span title="9각성까지 올렸을 때의 능력치 점수입니다" style={{ marginLeft: "auto", fontSize: 12, color: "var(--acc)", fontFamily: "var(--m)" }}>{e.score}</span>
                     </button>
