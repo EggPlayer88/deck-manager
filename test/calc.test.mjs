@@ -18,6 +18,7 @@ import {
   SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, skillBaseName, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
+import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet } from './calc-extract.mjs';
 
 let pass = 0, fail = 0;
 const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
@@ -2458,6 +2459,67 @@ console.log('\n[전력공유] 스킬·훈재 음영 — 상위 1% / 5% / 15% 를
   eq('골글 타자 고점 배분은 맨 위 등급', shareTrainPct(b) <= 1 ? 1 : 0, 1);
   eq('훈련 0 이면 꼴찌 쪽', shareTrainPct({ role: '타자', cardType: '골든글러브' }) > 90 ? 1 : 0, 1);
   eq('모르는 카드 종류는 null', shareTrainPct({ role: '타자', cardType: '없는카드' }) === null ? 1 : 0, 1);
+}
+
+console.log('\n[연구소 표준 점수] 카드 고르기 — 라인업과 상관없는 같은 잣대 (2026-10-02 사용자 지정)');
+{
+  const bat = (o) => Object.assign({ id: 'x', name: '시험타자', role: '타자', position: '타자', subPosition: 'LF', hand: '우', stars: 5,
+    cardType: '골든글러브', team: '기아', year: '2016', power: 100, accuracy: 95, eye: 80, patience: 60 }, o);
+  const pit = (o) => Object.assign({ id: 'y', name: '시험투수', role: '투수', position: '선발', hand: '우', stars: 5,
+    cardType: '골든글러브', team: '기아', year: '2016', change: 100, stuff: 100 }, o);
+  const r1 = (v) => Math.round(v * 10) / 10;
+  /* 골든글러브는 늘 선택 팀이고 110(드림/나눔)도 양쪽 다 받는다 — 어느 덱에서든 같은 점수 */
+  const gg = bat({ team: '삼성' });
+  eq('골글은 덱 구단이 달라도 같다', labStdScore(gg, 'LF', '기아') === labStdScore(gg, 'LF', '삼성') ? 1 : 0, 1);
+  /* 같은 임팩트 카드 — 타팀이면 선택 팀 효과(30·90·150·170·200 좌 = 모든 능력치 +8)를 못 받는다 */
+  const imp = (team, o) => bat(Object.assign({ cardType: '임팩트', stars: 4, year: '', team: team, impactType: '빅게임헌터' }, o || {}));
+  const own = labStdScore(imp('기아'), 'LF', '기아');
+  eq('타팀(같은 군) 임팩트 타자는 8 × 2.4 만큼 낮다', r1(own - labStdScore(imp('한화'), 'LF', '기아')), 19.2);
+  eq('타팀(다른 군)은 110 의 +1 까지 더 낮다', r1(own - labStdScore(imp('삼성'), 'LF', '기아')), 21.6);
+  const impP = (team) => pit({ cardType: '임팩트', stars: 4, year: '', team: team, impactType: '여름사나이' });
+  eq('타팀(같은 군) 임팩트 투수는 6 × 2.4 만큼 낮다 (200 은 타자 쪽)', r1(labStdScore(impP('기아'), 'SP1', '기아') - labStdScore(impP('LG'), 'SP1', '기아')), 14.4);
+  /* 타팀 카드를 FA 로 보지 않는다 — 능력치 -3 · 특훈 2회 추가가 붙지 않는다 */
+  eq('표준 카드는 FA 가 아니다', labStdPl(imp('LG'), '기아').isFa ? 1 : 0, 0);
+  eq('국가대표도 와일드카드가 아니다', labStdPl(bat({ cardType: '국가대표', team: 'LG' }), '기아').isWildcard ? 1 : 0, 0);
+  /* 발사각 보너스는 뺀다 */
+  eq('발사각이 있어도 점수는 같다', labStdScore(bat({ power: 200, launchAngle: 16 }), 'LF', '기아') === labStdScore(bat({ power: 200 }), 'LF', '기아') ? 1 : 0, 1);
+  /* 연도 구간은 임팩트만 받는다 — 시그니처는 연도가 달라도 같고, 임팩트는 180·185 우에서 +1 씩 받는다 */
+  const sig = (year) => bat({ cardType: '시그니처', year: year });
+  eq('시그니처는 연도 보너스가 없다', labStdScore(sig('2015'), 'LF', '기아') === labStdScore(sig('2001'), 'LF', '기아') ? 1 : 0, 1);
+  const noYear = labSdState('기아', Object.assign({}, LAB_STD_SD, { s180: '', s185: '' }));
+  const pk = labStdPl(imp('기아'), '기아');
+  eq('임팩트 타자는 연도 구간 180·185 에서 파워 +2', calcSDBonus(pk, 'LF', labSdState('기아', LAB_STD_SD), LAB_SET_POINT, -1).p - calcSDBonus(pk, 'LF', noYear, LAB_SET_POINT, -1).p, 2);
+  const pkSig = labStdPl(sig('2015'), '기아');
+  eq('시그니처 타자는 그 두 구간에서 받는 것이 없다', calcSDBonus(pkSig, 'LF', labSdState('기아', LAB_STD_SD), LAB_SET_POINT, -1).p - calcSDBonus(pkSig, 'LF', noYear, LAB_SET_POINT, -1).p, 0);
+  /* 표준 세트덱 — 연도 구간은 연도를 비운 우(75 는 투수 쪽), 110 은 덱 구단이 정한다 */
+  eq('연도 구간은 연도를 비운다', ['s55', 's75', 's180', 's185', 's190'].every((k) => LAB_STD_SD[k] === 'R:') ? 1 : 0, 1);
+  eq('110 은 고정하지 않는다', LAB_STD_SD.s110 === undefined ? 1 : 0, 1);
+  eq('선택 팀 구간 30·90·150·170 은 좌', ['s30', 's90', 's150', 's170'].every((k) => LAB_STD_SD[k] === 'L') ? 1 : 0, 1);
+  eq('110 을 뺀 32구간을 모두 정했다', Object.keys(LAB_STD_SD).length, 32);
+  /* 캐시를 거친 빠른 길(labStdGet) — 묶음 덧칠 + 기준 자리 점수 + 자리 차이. 바로 센 값과 같아야 한다
+     (2026-10-02 도감 전체 76,468건 대조에서 어긋남 0 — 합을 0.01 에서 맞추기 전에는 .x5 경계에서 0.1 씩 갈렸다) */
+  const ctx = labStdCtx('기아');
+  const cards = [imp('기아'), imp('LG', { id: 'z1', power: 120 }), bat({ id: 'z2', subPosition: 'C' }), bat({ id: 'z3', cardType: '라이브', team: '두산', hand: '좌' }),
+    pit({ id: 'z4' }), pit({ id: 'z5', position: '중계', cardType: '국가대표', team: '한화' }), pit({ id: 'z6', position: '마무리', cardType: '올스타', team: 'NC', year: '2025' })];
+  let same = 0, total = 0;
+  for (const c of cards) {
+    const slots = c.role === '타자' ? ['DH', 'LF', 'C', '1B'] : c.position === '선발' ? ['SP1', 'SP3', 'SP5'] : c.position === '마무리' ? ['CP'] : ['RP1', 'RP4', 'RP6'];
+    for (const sl of slots) { total++; if (labStdGet(ctx, c, sl) === labStdScore(c, sl, '기아')) same++; }
+  }
+  eq('캐시 길 = 바로 센 값 (' + total + '건)', same, total);
+  eq('기준 자리 점수는 카드마다 한 번', Object.keys(ctx.base).length, cards.length);
+  eq('고점 덧칠은 (역할·카드 종류·손) 묶음마다', Object.keys(ctx.ov).length <= cards.length ? 1 : 0, 1);
+  eq('역할마다 기준 자리', LAB_STD_HOME['타자'] + LAB_STD_HOME['선발'] + LAB_STD_HOME['중계'] + LAB_STD_HOME['마무리'] === 'DHSP1RP1CP' ? 1 : 0, 1);
+  const D2 = [bat({ id: 'g1', name: '가', team: '삼성' }), imp('기아', { id: 'i1', name: '나' }), imp('LG', { id: 'i2', name: '다', power: 110 })];
+  const IX2 = buildDexIndex(D2, getW());
+  const vals = {}; D2.forEach((sp) => { vals[sp.id] = labStdScore(sp, 'LF', '기아'); });
+  const want = D2.slice().sort((a, b) => vals[b.id] - vals[a.id]).map((sp) => sp.id).join('');
+  const got = dexSearch(IX2, '타자', '', '', '', { scoreOf: (e) => vals[e.sp.id] }).map((e) => e.sp.id).join('');
+  eq('표준 점수 순서로 줄 세운다', got === want ? 1 : 0, 1);
+  eq('파워가 10 높아도 타팀 임팩트가 자팀 임팩트보다 아래', vals.i2 < vals.i1 ? 1 : 0, 1);
+  eq('keep 으로 더 거른다', dexSearch(IX2, '타자', '', '', '', { keep: (e) => e.sp.team === '기아' }).map((e) => e.sp.id).join('') === 'i1' ? 1 : 0, 1);
+  eq('옵션이 없으면 예전처럼 9각성 점수순', dexSearch(IX2, '타자', '', '', '').map((e) => e.sp.id).join('') ===
+    D2.slice().sort((a, b) => dexScore(b, getW()) - dexScore(a, getW())).map((sp) => sp.id).join('') ? 1 : 0, 1);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);

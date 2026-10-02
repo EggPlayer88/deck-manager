@@ -6560,22 +6560,25 @@ function dexRank(e, q, cho) {
   if (j > 0) return 1;
   return e.hay.indexOf(q) >= 0 ? 2 : 3;
 }
-/* 걸러서 정렬한 결과. 질의가 없으면 그냥 센 카드부터 보여준다. */
-function dexSearch(index, slot, q, cardType, team) {
+/* 걸러서 정렬한 결과. 질의가 없으면 그냥 센 카드부터 보여준다.
+   opt.keep(e) — 더 거를 조건 · opt.scoreOf(e) — 정렬 점수 (연구소는 표준 점수를 넘긴다). 안 주면 9각성 점수 */
+function dexSearch(index, slot, q, cardType, team, opt) {
   var qq = String(q || "").trim().toLowerCase();
   var cho = isChoQuery(qq);
+  var keep = opt && opt.keep, scoreOf = opt && opt.scoreOf;
   var hit = [];
   for (var i = 0; i < index.length; i++) {
     var e = index[i];
     if (!dexFitsSlot(e, slot)) continue;
     if (cardType && e.sp.cardType !== cardType) continue;
     if (team && (e.sp.team || "") !== team) continue;
+    if (keep && !keep(e)) continue;
     var r = dexRank(e, qq, cho);
     if (r === 3) continue;
-    hit.push({ e: e, r: r });
+    hit.push({ e: e, r: r, v: scoreOf ? scoreOf(e) : e.score });
   }
   hit.sort(function (a, b) {
-    return (a.r - b.r) || (b.e.score - a.e.score) || (a.e.name < b.e.name ? -1 : a.e.name > b.e.name ? 1 : 0);
+    return (a.r - b.r) || (b.v - a.v) || (a.e.name < b.e.name ? -1 : a.e.name > b.e.name ? 1 : 0);
   });
   return hit.map(function (x) { return x.e; });
 }
@@ -6634,6 +6637,29 @@ function LabPage(p) {
     var m = {}; dexAll().forEach(function (sp) { m[sp.id] = sp; }); return m;
   }, [p.skills, SEED_PLAYERS.length]);
   var rowOf = function (sl) { return slots[sl] ? byId[slots[sl]] : null; };
+  /* 카드 고르기 목록의 표준 점수 — 팀·도감·스킬표·POTM 이 바뀌면 새로 센다 (labStdGet) */
+  var stdCtx = React.useMemo(function () { return labStdCtx(team); }, [team, p.skills, SEED_PLAYERS.length, GLOBAL_POTM_LIST]);
+  var stdOf = function (sp, sl) { return labStdGet(stdCtx, sp, sl); };
+  /* 연구소에 들어오면 뒤에서 조금씩 미리 세 둔다 — 휴대폰에서 DH(타자 3천 장) 목록을
+     처음 열 때 멈칫하지 않게. 12ms 일하고 바로 양보해서 그 사이 누른 것은 곧장 받는다.
+     (requestIdleCallback 은 화면이 늘 바쁘면 거의 불리지 않아 쓰지 않는다).
+     가장 긴 목록인 타자(DH)부터 센다 */
+  React.useEffect(function () {
+    var all = dexAll(), rows = all.filter(function (sp) { return sp.role === "타자"; })
+      .concat(all.filter(function (sp) { return sp.role !== "타자"; }));
+    var i = 0, stop = false, timer = null;
+    var step = function () {
+      if (stop) return;
+      var t0 = Date.now();
+      while (i < rows.length && Date.now() - t0 < 12) {
+        var sp = rows[i++];
+        if (sp && sp.id && stdCtx.base[sp.id] === undefined) labStdGet(stdCtx, sp, LAB_STD_HOME[labCat(sp)]);
+      }
+      if (i < rows.length) timer = setTimeout(step, 0);
+    };
+    timer = setTimeout(step, 200);
+    return function () { stop = true; clearTimeout(timer); };
+  }, [stdCtx]);
   var cards = React.useMemo(function () {
     var c = {};
     LAB_SLOTS.forEach(function (sl) { var r = rowOf(sl); if (r) c[sl] = labCard(r, team); });
@@ -6905,9 +6931,9 @@ function LabPage(p) {
       {/* 카드 고르기 */}
       {pickSlot && (function () {
         var isBat = BAT_SLOTS.indexOf(pickSlot) >= 0;
-        var list = isBat
-          ? dexSearch(dexIdx, "타자", q, ctF, teamF).filter(function (e) { return labFitsBatSlot(e.sp, pickSlot); })
-          : dexSearch(dexIdx, labPitKind(pickSlot), q, ctF, teamF);
+        var stdOpt = { scoreOf: function (e) { return stdOf(e.sp, pickSlot); },
+          keep: isBat ? function (e) { return labFitsBatSlot(e.sp, pickSlot); } : null };
+        var list = dexSearch(dexIdx, isBat ? "타자" : labPitKind(pickSlot), q, ctF, teamF, stdOpt);
         var shown = list.slice(0, 120);
         return (
           <div onClick={function () { setPickSlot(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
@@ -6916,6 +6942,8 @@ function LabPage(p) {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 15, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{pickSlot + " 자리"}</span>
                   <span style={{ fontSize: 11, color: "var(--td)" }}>{isBat ? (pickSlot === "DH" ? "타자 아무나" : "도감 포지션이 " + pickSlot + " 인 카드만") : labPitKind(pickSlot)}</span>
+                  <span title={"표준 점수순 — 라인업과 상관없는 같은 잣대입니다.\n훈재분·특훈·스킬·잠재력 상위 0.1%, 미리 정한 세트덱 200(연도 효과는 임팩트만), 발사각·타순 효과는 뺐습니다.\n타팀 카드는 선택 팀 세트덱 효과를 못 받아 낮게 나옵니다."}
+                    style={{ fontSize: 10, color: "var(--acc)", border: "1px solid rgba(255,213,79,0.35)", borderRadius: 3, padding: "0 4px", whiteSpace: "nowrap", cursor: "help" }}>{"표준 점수순"}</span>
                   <button onClick={function () { setPickSlot(null); }} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 17 }}>{"\u2715"}</button>
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
@@ -6943,7 +6971,7 @@ function LabPage(p) {
                         {e.sp.cardType === "임팩트" && e.sp.impactType && (<span style={{ fontSize: 11, fontWeight: 500, color: "#a78bfa", marginLeft: 3 }}>{"(" + e.sp.impactType + ")"}</span>)}
                       </span>
                       <span style={{ fontSize: 11, color: "var(--td)" }}>{[e.sp.team, e.sp.year, e.sp.role === "타자" ? e.sp.subPosition : e.sp.position].filter(Boolean).join(" · ")}</span>
-                      <span title="9각성까지 올렸을 때의 능력치 점수입니다" style={{ marginLeft: "auto", fontSize: 12, color: "var(--acc)", fontFamily: "var(--m)" }}>{e.score}</span>
+                      <span title="표준 점수 — 상위 0.1% · 고정 세트덱 기준 (라인업과 무관)" style={{ marginLeft: "auto", fontSize: 12, color: "var(--acc)", fontFamily: "var(--m)" }}>{stdOf(e.sp, pickSlot).toFixed(1)}</span>
                     </button>
                   );
                 })}
@@ -9449,6 +9477,85 @@ function labSdState(teamName, extra) {
     /* 연도 구간(55·75…)은 연도덱을 켜지 않으면 통째로 빈다. 어느 연도를 고를지는
        라인업에 들어간 연도 중에서 optimizeSetDeck 이 점수로 정한다 */
     yearBat: true, yearPit: true }, extra || {});
+}
+/* ── 카드 고르기의 표준 점수 ─────────────────────────────────
+   라인업과 상관없이 늘 같은 잣대로 카드 한 장의 값을 잰다 (2026-10-02 사용자 지정).
+   ⚡점수 내기는 넣은 카드에 맞춰 세트덱을 다시 고르지만, 고르기 목록은 이 고정 기준으로 줄 세운다.
+     · 세트덱 200 — 구간 선택은 LAB_STD_SD 로 고정한다
+     · 연도 구간(55·75·180·185·190)은 연도 쪽을 고르되 연도를 비워 둔다 → 임팩트만 받는다
+       (시그·골글·올스타 같은 카드는 연도 보너스를 못 받는 것으로 본다)
+     · 110(드림/나눔)은 덱 구단의 군 — 다른 군 카드는 그 +1 을 못 받는다
+     · 훈재분·특훈·스킬·잠재력은 상위 0.1% (peakPl — 카드 종류마다 고점이 다르다)
+     · 발사각 보너스와 타순 효과는 뺀다
+     · 타팀 카드는 FA 로 보지 않는다. 선택 팀 효과(30·90·150·170·200 좌, 195 우)를 못 받아
+       따로 깎지 않아도 점수가 낮아진다. 골든글러브는 늘 선택 팀이다
+   구간 선택은 in100 상위 100덱(맞춰 본 97덱)을 연구소 0.1% 로 최적화했을 때 더 많이 고른 쪽이다.
+   대부분 97:0 이고 갈린 곳도 한쪽이 80덱 이상이다 (65·75·85·95·135·140·155·195) */
+var LAB_STD_SD = {
+  s30: "L", s40: "L", s50: "R", s55: "R:", s60: "L", s65: "R", s70: "L", s75: "R:",
+  s80: "L", s85: "L", s90: "L", s95: "R", s100: "L", s105: "R", s115: "R", s120: "L",
+  s125: "L", s130: "R", s135: "R", s140: "L", s145: "R", s150: "L", s155: "L", s160: "L",
+  s165: "R", s170: "L", s175: "L", s180: "R:", s185: "R:", s190: "R:", s195: "R", s200: "L"
+};
+/* 고점(peakPl)이 채우는 칸 — 스킬·훈련·특훈·잠재력 */
+var LAB_STD_FIELDS = ["sLvManual", "skill1", "s1Lv", "skill2", "s2Lv", "skill3", "s3Lv",
+  "trainP", "trainA", "trainE", "trainN", "trainC", "trainS",
+  "specPower", "specAccuracy", "specEye", "specPatience", "specChange", "specStuff",
+  "potType1", "pot1", "potType2", "pot2", "potType3", "pot3"];
+/* 표준 점수 계산 묶음 — 팀마다 하나. ov 는 고점 덧칠, base 는 카드별 기준 자리 점수, off 는 자리 차이 */
+function labStdCtx(teamName) {
+  return { team: teamName, sd: labSdState(teamName, LAB_STD_SD), ov: {}, base: {}, off: {} };
+}
+/* 표준 점수에 쓰는 카드 — 0.1% 고점으로 채우고 발사각을 비운 사본.
+   도감 카드는 스킬·훈련·잠재력이 비어 있어 고점이 늘 이긴다. 그래서 (역할 · 카드 종류 · 손) 이 같으면
+   덧칠이 똑같다 — ctx 를 주면 묶음마다 한 번만 센다 (계산의 대부분이 여기다).
+   POTM 으로 잠재력이 고정된 카드와 직접 등록한 카드는 하나씩 센다 */
+function labStdPl(row, teamName, ctx) {
+  if (!row) return null;
+  var sd = ctx ? ctx.sd : labSdState(teamName, LAB_STD_SD);
+  var c = labCard(row, teamName);
+  c.isFa = false; c.isWildcard = false;
+  var d = deckPl(c, sd);
+  var hs = d.role === "타자" ? "-" : "";
+  if (ctx && !d.potmPot && !d.custom) {
+    var k = labCat(d) + "|" + d.cardType + "|" + (d.hand || "");
+    var ov = ctx.ov[k];
+    if (!ov) {
+      var pk = peakPl(d, hs); ov = ctx.ov[k] = {};
+      LAB_STD_FIELDS.forEach(function (f) { ov[f] = pk[f]; });
+    }
+    return Object.assign({}, d, ov, { launchAngle: 0 });
+  }
+  return Object.assign({}, peakPl(d, hs), { launchAngle: 0 });
+}
+/* 반올림 전 점수. 타순 -1 = 타순을 보는 세트덱 구간을 받지 않는다 */
+function labStdRaw(pl, slot, sd) {
+  var sdB = calcSDBonus(pl, slot, sd, LAB_SET_POINT, -1);
+  return (pl.role === "타자" ? calcBat(pl, lineupLu(pl), sdB) : calcPit(pl, lineupLu(pl), sdB)).total;
+}
+/* 도감 카드 한 장의 표준 점수 (캐시 없이 바로). slot 은 연구소 자리(C·LF·SP1·CP …) */
+function labStdScore(row, slot, teamName) {
+  if (!row) return 0;
+  return Math.round(labStdRaw(labStdPl(row, teamName), slot, labSdState(teamName, LAB_STD_SD)) * 10) / 10;
+}
+/* 역할마다 기준 자리. 자리에 따라 점수가 갈리는 것은 포지션 특훈과 내·외야 구간뿐이고,
+   둘 다 카드와 상관없이 같은 만큼 더해진다 — 기준 자리 점수에 자리 차이만 더하면 된다 */
+var LAB_STD_HOME = { "타자": "DH", "선발": "SP1", "중계": "RP1", "마무리": "CP" };
+/* 캐시를 거친 표준 점수 — labStdScore 와 같은 값이다 (테스트로 도감 전체를 맞춰 봤다) */
+function labStdGet(ctx, row, slot) {
+  var home = LAB_STD_HOME[labCat(row)];
+  var b = ctx.base[row.id], pl = null;
+  if (b === undefined) { pl = labStdPl(row, ctx.team, ctx); b = ctx.base[row.id] = labStdRaw(pl, home, ctx.sd); }
+  if (slot === home) return Math.round(b * 10) / 10;
+  var key = home + ">" + slot;
+  var off = ctx.off[key];
+  if (off === undefined) {
+    pl = pl || labStdPl(row, ctx.team, ctx);
+    off = ctx.off[key] = labStdRaw(pl, slot, ctx.sd) - b;
+  }
+  /* calcBat·calcPit 가 0.01 에서 반올림해 돌려주므로 합도 0.01 에서 한 번 맞춘 뒤 0.1 로 —
+     안 그러면 .x5 경계에서 바로 센 값과 0.1 씩 갈린다 */
+  return Math.round(Math.round((b + off) * 100) / 100 * 10) / 10;
 }
 /* 자리 배율이 높은 순서 — 1위 타자를 3번에, 2위를 4번에, 3위를 1번에…
    calcBat 은 타순을 보지 않으므로 큰 점수를 큰 배율에 붙이면 그게 최대다 */
