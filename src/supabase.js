@@ -46,11 +46,39 @@ export async function getProfile(userId) {
    저장해 둔 덱이 사라졌다. 복구할 방법은 프로젝트 전체 백업 복원뿐이었다.
 
    - 행이 없음(신규 유저)  → null. 정상이다
-   - 읽기가 실패           → throw. 부르는 쪽이 저장을 포기해야 한다 */
+   - 읽기가 실패           → throw. 부르는 쪽이 저장을 포기해야 한다
+   - 로그인 세션이 없음    → throw. 아래 sessionTokenFor 설명 참고 */
+
+/* 계정 id(uuid)인가. 게스트 id("guest_1759…")는 uuid 가 아니라 서버에 줄이 있을 수 없다 */
+function isAccountId(id) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
+}
+
+/* 이 계정으로 로그인된 세션의 토큰. 세션이 없거나 다른 계정의 것이면 null.
+
+   로그인해 둔 탭에서도 세션이 잠깐 없는 순간이 있다. 토큰이 만료됐는데 갱신 요청이 실패하면
+   (절전에서 막 깨어났을 때, 통신이 불안정할 때) supabase-js 는 최대 1분 동안 "세션 없음"을 돌려주고,
+   그동안의 요청을 anon 키로 보낸다. anon 으로 읽으면 RLS 가 내 줄을 가려서 오류가 아니라
+   "행이 없음"(PGRST116)이 온다. 이것을 신규 유저로 받아들이면 화면에 빈 덱이 뜨고,
+   세션이 돌아온 뒤 그 빈 덱이 서버의 덱을 덮어쓴다.
+   그래서 계정의 줄은 그 계정의 토큰을 직접 붙여서만 읽는다 — 그래야 "행이 없음"을 믿을 수 있다. */
+async function sessionTokenFor(userId) {
+  var r = await supabase.auth.getSession();
+  var s = r && r.data && r.data.session;
+  if (!s || !s.access_token || !s.user || s.user.id !== userId) return null;
+  return s.access_token;
+}
+
 export async function loadUserData(userId) {
   if (!supabase || !userId) return null;
-  var r = await supabase.from('user_settings').select('sd_state')
-    .eq('user_id', userId).eq('key', 'settings').single();
+  var q = supabase.from('user_settings').select('sd_state')
+    .eq('user_id', userId).eq('key', 'settings');
+  if (isAccountId(userId)) {
+    var token = await sessionTokenFor(userId);
+    if (!token) throw new Error('로그인 상태를 확인하지 못했습니다 (세션 만료 또는 통신 불안정)');
+    q = q.setHeader('Authorization', 'Bearer ' + token);
+  }
+  var r = await q.single();
   if (r.error) {
     /* 아래 둘은 "이 사람에게는 저장된 것이 없다" 는 뜻이지 실패가 아니다.
        - PGRST116 : 조건에 맞는 행이 없음 (신규 유저)

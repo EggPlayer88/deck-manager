@@ -1119,6 +1119,11 @@ function makeDeckWriter(waitMs) {
         if (seen[k] !== state[k]) { seen[k] = state[k]; latest[k] = state[k]; }
       });
     },
+    /* 덱을 새로 읽어 왔을 때 부른다. 다시 그리기를 기다리지 않고 그 자리에서 읽어 온 내용으로 갈아 둔다 —
+       그 사이에 저장이 끼어들어도 앞 덱의 내용이 섞여 나가지 않는다 */
+    reset: function (state) {
+      Object.keys(state).forEach(function (k) { latest[k] = state[k]; });
+    },
     /* 바뀐 칸을 적고, 지금의 한 덩어리를 돌려준다 */
     take: function (part) {
       Object.keys(part).forEach(function (k) { latest[k] = part[k]; });
@@ -1154,6 +1159,16 @@ function toDeckFormat(all, list, fallbackId) {
   return out;
 }
 
+/* 저장된 덱(base)의 선수가 새 내용(next)에 한 명도 남지 않는가.
+   라인업·세트덱 설정만 바꾸는 저장에서 이렇게 되면, 보내려는 것이 그 덱의 내용이 아니다 (saveAllData 의 안전망) */
+function deckLosesAllPlayers(base, next) {
+  var ids = ((base && base.players) || []).map(function(x) { return x && x.id; }).filter(Boolean);
+  if (ids.length === 0) return false;
+  var keep = {};
+  ((next && next.players) || []).forEach(function(x) { if (x && x.id) keep[x.id] = 1; });
+  return !ids.some(function(id) { return keep[id] === 1; });
+}
+
 function useData(userId, sdState, setSdState, curDeckId){
   var _p=useState([]);var players=_p[0];var setPlayers=_p[1];
   var _lm=useState({});var lineupMap=_lm[0];var setLineupMap=_lm[1];
@@ -1170,6 +1185,16 @@ function useData(userId, sdState, setSdState, curDeckId){
   var _le=useState(null);var loadError=_le[0];var setLoadError=_le[1];
   var uidRef=React.useRef(userId);uidRef.current=userId;
   var deckIdRef=React.useRef(curDeckId);deckIdRef.current=curDeckId;
+  /* 지금 메모리에 든 선수·라인업·세트덱 설정이 "누구의 어느 덱"을 읽어 온 것인지. 읽어 온 것이 없으면 null.
+     저장은 이 값이 지금 계정·지금 덱과 같을 때만 나간다 (deckReady).
+     이 확인이 없던 때에는 덱 읽기가 실패해도 0.8초 뒤 자동 저장이 메모리의 빈 초기값을
+     (덱을 바꾸던 중이면 앞 덱의 내용을) 그 덱 자리에 써넣어, 저장해 둔 덱이 통째로 지워졌다
+     — 2026-10 "라인업이 날아갔다" 사고 */
+  var loadedRef=React.useRef(null);
+  var deckReady=function(){
+    var k=loadedRef.current;
+    return !!k && !!k.deckId && k.uid===uidRef.current && k.deckId===deckIdRef.current;
+  };
   /* 덱 저장기 (makeDeckWriter) — 저장할 최신 값과 요청 순서를 붙잡는다 */
   var writerRef=React.useRef(null);
   if(!writerRef.current)writerRef.current=makeDeckWriter(10000);
@@ -1178,6 +1203,9 @@ function useData(userId, sdState, setSdState, curDeckId){
 
   /* ── 전체 sd_state 메모리 캐시 (읽기 중복 제거) ── */
   var allDataRef=React.useRef(null);
+  /* 계정이 바뀌면 앞 계정의 줄을 버린다 — 들고 있으면 새 계정의 저장이 그 줄을 바탕으로 나간다 */
+  var cacheUidRef=React.useRef(userId);
+  if(cacheUidRef.current!==userId){cacheUidRef.current=userId;allDataRef.current=null;}
   var globalLoadedRef=React.useRef(false); /* 선수도감/스킬 1회만 로드 */
 
   /* 저장 전에 기준이 될 전체 줄(sd_state)을 확보한다.
@@ -1204,6 +1232,17 @@ function useData(userId, sdState, setSdState, curDeckId){
     alert('서버와 연결이 불안정해 방금 변경을 저장하지 못했습니다.\n\n'
       + '기존에 저장된 덱은 그대로 있습니다.\n'
       + '잠시 후 다시 시도하거나 새로고침해 주세요.');
+  };
+  /* 메모리에 든 것이 지금 덱을 읽어 온 내용이 아니라서 저장을 버렸다.
+     덱을 읽는 동안에는 화면이 가려져 있어 정상이라면 올 일이 없다 — 왔다면 알려서 새로고침하게 한다 */
+  var warnNotReady = function(why) {
+    console.error('[저장 취소] ' + why + ' — 덱 ' + deckIdRef.current);
+    var now = Date.now();
+    if (now - saveWarnAtRef.current < 30000) return;
+    saveWarnAtRef.current = now;
+    alert('덱을 제대로 불러오지 못한 상태라 방금 변경을 저장하지 않았습니다.\n\n'
+      + '기존에 저장된 덱은 그대로 있습니다.\n'
+      + '새로고침한 뒤 다시 시도해 주세요.');
   };
 
   var loadDeckData = async function(uid, deckId) {
@@ -1247,14 +1286,22 @@ function useData(userId, sdState, setSdState, curDeckId){
     return true;
   };
 
-  /* 저장: 캐시 사용 → 쓰기 1번만 */
-  var saveAllData = async function(uid, deckId, deckData) {
+  /* 저장: 캐시 사용 → 쓰기 1번만
+     kind — 무엇을 바꾸는 저장인지 ("players" · "lineup" · "sd") */
+  var saveAllData = async function(uid, deckId, deckData, kind) {
     if (!supabase || !uid || !deckId) return;
     var all;
     try { all = await ensureAllData(uid); } catch (e) { warnSaveBlocked(e); return false; }
     if (!all.decks) {
       all = toDeckFormat(all, await sGet("deck-list"), deckId);
       allDataRef.current = all;
+    }
+    /* 마지막 안전망 — 라인업·세트덱 설정만 바꾸는 저장(자동 저장 포함)은 선수 명단을 갈아치울 수 없다.
+       서버의 그 덱에는 선수가 있는데 보내려는 내용에는 그 선수가 한 명도 없다면,
+       메모리에 든 것은 그 덱이 아니다(빈 초기값이거나 다른 덱). 보내면 저장해 둔 덱이 지워진다 */
+    if (kind !== "players" && deckLosesAllPlayers(all.decks[deckId], deckData)) {
+      warnNotReady('저장된 덱의 선수가 보내려는 내용에 하나도 없습니다(' + kind + ')');
+      return false;
     }
     /* deckList/deckCurrent는 localStorage(saveDecks가 항상 최신으로 유지)에서 읽어 보존
        이렇게 해야 saveDecks와의 race condition 방지 */
@@ -1268,7 +1315,11 @@ function useData(userId, sdState, setSdState, curDeckId){
   };
 
   useEffect(function(){
+    /* 덱(또는 계정)이 바뀌었다. 새 덱을 읽어 올 때까지 메모리에 든 것은 그 덱의 내용이 아니다 — 저장을 막아 둔다 */
+    loadedRef.current=null;
     if(!userId || !curDeckId) return;
+    /* 이 읽기가 끝나기 전에 덱이 또 바뀌면 결과를 버린다 (늦게 온 앞 덱 내용이 새 덱 화면에 깔리지 않게) */
+    var stale=false;
     setLoading(true);
     (async function(){
       if(supabase){
@@ -1277,26 +1328,32 @@ function useData(userId, sdState, setSdState, curDeckId){
         try {
           dd = await writer.queue(function(){ return loadDeckData(userId, curDeckId); });
         } catch (e) {
+          if(stale) return;
           /* 읽기 실패. 여기서 빈 덱을 그리면 유저가 그 위에 저장해 서버의 덱을 지운다.
-             화면 상태를 건드리지 말고 오류로 멈춘다. */
+             화면 상태를 건드리지 말고 오류로 멈춘다. loadedRef 가 비어 있어 저장도 나가지 않는다. */
           console.error('[덱 읽기 실패]', e);
           setLoadError((e && e.message) || '알 수 없는 오류');
           setLoading(false);
           return;
         }
+        if(stale) return;
         setLoadError(null);
-        if(dd && dd.players && dd.players.length > 0){
-          setPlayers(dd.players); setLineupMap(dd.lineupMap||{}); setSdState(dd.sdConfig||{liveSetPo:0});
-        } else {
-          setPlayers([]); setLineupMap({}); setSdState({liveSetPo:0});
-        }
+        /* 선수가 없는 덱도 저장해 둔 라인업·세트덱 설정은 그대로 살린다
+           (전에는 선수가 0명이면 설정까지 기본값으로 읽어, 뒤따르는 자동 저장이 설정을 지웠다) */
+        var got = dd
+          ? { players: Array.isArray(dd.players) ? dd.players : [], lineupMap: dd.lineupMap || {}, sdConfig: dd.sdConfig || {liveSetPo:0} }
+          : { players: [], lineupMap: {}, sdConfig: {liveSetPo:0} };
+        setPlayers(got.players); setLineupMap(got.lineupMap); setSdState(got.sdConfig);
+        /* 여기서부터 메모리의 내용은 이 덱의 것이다 — 저장을 연다 */
+        writer.reset(got);
+        loadedRef.current={uid:userId,deckId:curDeckId};
         /* 직접 등록 카드 — 계정 것이라 덱을 바꿔도 다시 읽지 않아도 되지만,
            allDataRef 가 새로 채워질 때마다 맞춰 둔다 */
         var cdx = (allDataRef.current && allDataRef.current.customDex) || [];
         setCustomPlayers(cdx); setCustomDexState(cdx.slice(0, CUSTOM_MAX));
         var lab = (allDataRef.current && allDataRef.current.lab && allDataRef.current.lab[curDeckId]) || null;
         if (!lab) lab = ((await sGet("deck-lab")) || {})[curDeckId] || [];
-        setLabSaves(Array.isArray(lab) ? lab.slice(0, LAB_MAX_SAVES) : []);
+        if(!stale) setLabSaves(Array.isArray(lab) ? lab.slice(0, LAB_MAX_SAVES) : []);
         /* 선수도감/스킬: 로그인 후 딱 1번만 로드 */
         if(!globalLoadedRef.current){
           globalLoadedRef.current = true;
@@ -1335,29 +1392,34 @@ function useData(userId, sdState, setSdState, curDeckId){
         }
         var sdc=await sGet("deck-sdconfig-"+curDeckId);
         if(!needReset&&sdc){setSdState(sdc);}else{setSdState({liveSetPo:0});}
+        if(!stale) loadedRef.current={uid:userId,deckId:curDeckId};
       }
-      setLoading(false);
+      if(!stale) setLoading(false);
     })();
+    return function(){ stale=true; };
   },[userId, curDeckId]);
 
   SKILL_DATA=skills;if(skills.weights)LIVE_WEIGHTS=skills.weights;
 
-  /* 선수·라인업·세트덱 저장은 나머지 칸도 저장기의 최신 값으로 채워 한 덩어리로 보낸다 */
+  /* 선수·라인업·세트덱 저장은 나머지 칸도 저장기의 최신 값으로 채워 한 덩어리로 보낸다.
+     셋 다 지금 덱을 읽어 온 뒤에만 받는다 (deckReady) — 부른 그 순간의 덱·내용을 붙잡아 그 덱 자리에 쓴다 */
   var saveP=useCallback(async function(d){
+    if(!deckReady()){warnNotReady('덱을 읽어 오기 전의 선수 저장');return;}
     /* 자동 레벨은 계산값으로, 스킬 이름은 표 이름으로 정리해서 저장한다 (normPlayerSkills) */
     d=normPlayerList(d);
     setPlayers(d);
     var deck=writer.take({players:d});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck); });}
+    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck,"players"); });}
     else if(did){await sSet("deck-players-"+did,d);}
   },[]);
 
   var saveLM=useCallback(async function(d){
+    if(!deckReady()){warnNotReady('덱을 읽어 오기 전의 라인업 저장');return;}
     setLineupMap(d);
     var deck=writer.take({lineupMap:d});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck); });}
+    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck,"lineup"); });}
     else if(did){await sSet("deck-lineup-"+did,d);}
   },[]);
 
@@ -1368,9 +1430,10 @@ function useData(userId, sdState, setSdState, curDeckId){
   },[]);
 
   var saveSdState=useCallback(async function(nsd){
+    if(!deckReady()){warnNotReady('덱을 읽어 오기 전의 세트덱 설정 저장');return;}
     var deck=writer.take({sdConfig:nsd});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck); });}
+    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck,"sd"); });}
     else if(did){await sSet("deck-sdconfig-"+did,nsd);}
   },[]);
 
@@ -1397,7 +1460,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     }
   },[]);
 
-  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,loadError:loadError,setLoadError:setLoadError,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
+  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,loadError:loadError,setLoadError:setLoadError,deckReady:deckReady,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
 }
 
 /* ── 전력공유 ─────────────────────────────────────────────────
@@ -10273,14 +10336,16 @@ export default function App(){
     })();
   },[userId]);
 
-  /* ── sdState 자동 저장 ── */
+  /* ── sdState 자동 저장 ──
+     지금 덱을 읽어 온 뒤에만 건다. 읽기가 실패했거나 아직 읽는 중이면 메모리의 sdState 는 그 덱의 것이 아니다 —
+     그걸 저장하면 서버에 있는 덱이 빈 내용(또는 앞 덱 내용)으로 덮인다 (useData 의 deckReady) */
   var sdTimerRef=React.useRef(null);
   useEffect(function(){
-    if(!userId||store.loading)return;
+    if(!userId||store.loading||store.loadError||!store.deckReady())return;
     if(sdTimerRef.current)clearTimeout(sdTimerRef.current);
-    sdTimerRef.current=setTimeout(function(){store.saveSdState(sdState);},800);
+    sdTimerRef.current=setTimeout(function(){if(store.deckReady())store.saveSdState(sdState);},800);
     return function(){if(sdTimerRef.current)clearTimeout(sdTimerRef.current);};
-  },[sdState,userId,store.loading]);
+  },[sdState,userId,store.loading,store.loadError]);
 
   /* ── 선수 사진: 매니페스트를 시작할 때 한 번만 받는다 ──
      사진 목록·자동 크롭 위치·관리자 슬라이더 값이 전부 이 파일 하나에 들어 있다.

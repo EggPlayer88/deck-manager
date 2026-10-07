@@ -10,7 +10,7 @@ import {
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills,
   ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME,
   dexAll, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
-  isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat,
+  isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat, deckLosesAllPlayers,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
@@ -1840,6 +1840,35 @@ console.log('\n[덱 저장기] 선수·라인업·세트덱을 늘 최신 한 �
   await w.queue(async () => {});
   const waited = Date.now() - t0;
   eq('멈춘 요청은 30ms 만 기다린다', waited >= 25 && waited < 1000 ? 1 : 0, 1);
+}
+
+console.log('');
+console.log('[덱 저장 안전장치] 읽어 오지 못한 덱 위에 저장하지 않는다 — 2026-10 "라인업이 날아갔다" 사고');
+{
+  const P = (ids) => ids.map((id) => ({ id }));
+  const base = { players: P(['a', 'b', 'c']), lineupMap: { C: 'a' }, sdConfig: { liveSetPo: 0 } };
+  /* 라인업·세트덱 설정만 바꾸는 저장이 선수 명단을 통째로 갈아치우려 하면 보내지 않는다 (saveAllData) */
+  eq('빈 초기값을 보내면 저장된 선수를 전부 잃는다', deckLosesAllPlayers(base, { players: [], lineupMap: {}, sdConfig: { liveSetPo: 0 } }) ? 1 : 0, 1);
+  eq('다른 덱 내용을 보내도 전부 잃는다', deckLosesAllPlayers(base, { players: P(['x', 'y']) }) ? 1 : 0, 1);
+  eq('저장된 선수가 한 명이라도 남으면 아니다', deckLosesAllPlayers(base, { players: P(['c', 'z']) }) ? 1 : 0, 0);
+  eq('그대로 다시 쓰는 저장은 아니다', deckLosesAllPlayers(base, base) ? 1 : 0, 0);
+  eq('저장된 덱에 선수가 없으면 잃을 것이 없다', deckLosesAllPlayers({ players: [] }, { players: [] }) ? 1 : 0, 0);
+  eq('저장된 덱 칸이 없으면(새 덱) 잃을 것이 없다', deckLosesAllPlayers(undefined, { players: P(['a']) }) ? 1 : 0, 0);
+  eq('보낼 내용이 없어도 오류 없이 판정한다', deckLosesAllPlayers(base, null) ? 1 : 0, 1);
+  eq('id 없는 옛 선수뿐이면 견줄 수 없어 막지 않는다', deckLosesAllPlayers({ players: [{ name: '옛' }] }, { players: [] }) ? 1 : 0, 0);
+
+  /* 덱을 새로 읽어 오면, 다시 그리기 전이라도 저장기의 최신 값은 그 덱 내용이다 */
+  const w = makeDeckWriter(1000);
+  const A0 = { players: P(['a']), lineupMap: { C: 'a' }, sdConfig: { s: 'A' } };
+  const B0 = { players: P(['b']), lineupMap: { C: 'b' }, sdConfig: { s: 'B' } };
+  w.sync(A0);
+  w.reset(B0);
+  const t = w.take({ sdConfig: B0.sdConfig });
+  eq('reset 뒤의 저장에는 앞 덱 내용이 섞이지 않는다', t.players === B0.players && t.lineupMap === B0.lineupMap ? 1 : 0, 1);
+  w.sync(A0);   /* 아직 다시 그리기 전 — 화면 state 는 앞 덱 그대로다 */
+  eq('다시 그리기 전의 옛 state 가 들어와도 읽어 온 내용 유지', w.take({}).players === B0.players ? 1 : 0, 1);
+  w.sync(B0);
+  eq('다시 그린 뒤에도 그대로', w.take({}).players === B0.players && w.take({}).sdConfig === B0.sdConfig ? 1 : 0, 1);
 }
 
 console.log('');
