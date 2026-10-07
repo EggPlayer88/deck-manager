@@ -10,7 +10,7 @@ import {
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills,
   ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME,
   dexAll, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
-  isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat, deckLosesAllPlayers,
+  isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat, deckLosesAllPlayers, canonJson, normDeck, deckSnap, classifyDeckSave, classifyKeySave,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
@@ -1869,6 +1869,59 @@ console.log('[덱 저장 안전장치] 읽어 오지 못한 덱 위에 저장하
   eq('다시 그리기 전의 옛 state 가 들어와도 읽어 온 내용 유지', w.take({}).players === B0.players ? 1 : 0, 1);
   w.sync(B0);
   eq('다시 그린 뒤에도 그대로', w.take({}).players === B0.players && w.take({}).sdConfig === B0.sdConfig ? 1 : 0, 1);
+}
+
+console.log('');
+console.log('[저장 합치기] 서버의 최신 줄에 이 탭이 바꾼 것만 얹는다 — 2026-10-07 옛 사본이 다른 기기의 저장을 되돌리던 문제');
+{
+  /* DB(jsonb)는 키 순서를 지키지 않는다 — 순서가 달라도 같은 내용이어야 한다 */
+  eq('키 순서가 달라도 같은 내용', canonJson({ a: 1, b: { c: 2, d: [1, 2] } }) === canonJson({ b: { d: [1, 2], c: 2 }, a: 1 }) ? 1 : 0, 1);
+  eq('배열 순서는 내용이다', canonJson([1, 2]) === canonJson([2, 1]) ? 1 : 0, 0);
+  eq('undefined 칸은 JSON 처럼 없는 것으로', canonJson({ a: 1, b: undefined }) === canonJson({ a: 1 }) ? 1 : 0, 1);
+  eq('null 칸은 있는 것이다', canonJson({ a: 1, b: null }) === canonJson({ a: 1 }) ? 1 : 0, 0);
+  eq('배열 안의 undefined · NaN 은 JSON 처럼 null', canonJson([undefined, NaN, 1]) === canonJson([null, null, 1]) ? 1 : 0, 1);
+  eq('1.0 과 1 은 같은 수', canonJson({ n: 1.0 }) === canonJson(JSON.parse('{"n":1}')) ? 1 : 0, 1);
+  eq('수와 글자는 다르다', canonJson({ n: 1 }) === canonJson({ n: '1' }) ? 1 : 0, 0);
+  eq('따옴표 · 줄바꿈이 든 글자', canonJson({ s: 'a"b\n' }) === canonJson(JSON.parse(JSON.stringify({ s: 'a"b\n' }))) ? 1 : 0, 1);
+  const big = { players: [{ id: 'p1', name: '가', skills: ['x', 'y'], pot1: undefined, n: 0.1 + 0.2 }], lineupMap: { C: 'p1' }, sdConfig: { liveSetPo: 0, batOrder: ['C', 'DH'] } };
+  eq('JSON 으로 저장했다 읽어도 같다', canonJson(big) === canonJson(JSON.parse(JSON.stringify(big))) ? 1 : 0, 1);
+
+  const P = (ids) => ids.map((id) => ({ id }));
+  const deck = (ids, lm, sd) => ({ players: P(ids), lineupMap: lm || {}, sdConfig: sd || { liveSetPo: 0 } });
+  eq('덱 칸이 없는 것과 빈 덱은 같다', deckSnap(undefined).str === deckSnap({ players: [], lineupMap: {}, sdConfig: { liveSetPo: 0 } }).str ? 1 : 0, 1);
+  eq('설정이 빠진 덱은 기본 설정으로 본다', deckSnap({ players: P(['a']) }).str === deckSnap(deck(['a'])).str ? 1 : 0, 1);
+  eq('선수 수 · 라인업 칸 수', deckSnap(deck(['a', 'b'], { C: 'a', DH: '' })).n * 10 + deckSnap(deck(['a', 'b'], { C: 'a', DH: '' })).lu, 21);
+  eq('선수가 없어도 설정은 내용이다', deckSnap(deck([], {}, { liveSetPo: 0, s30: 'L' })).str === deckSnap(null).str ? 1 : 0, 0);
+  eq('normDeck — 선수 칸이 배열이 아니면 빈 명단', normDeck({ players: 'x' }).players.length, 0);
+
+  const base = deck(['a', 'b', 'c'], { C: 'a' });
+  const bs = deckSnap(base);
+  const mine = deck(['a', 'b', 'c'], { C: 'a' }, { liveSetPo: 0, s30: 'L' });           /* 설정만 바꿨다 */
+  const SD = { sd: true }, PL = { players: true };
+  eq('서버가 내가 알던 그대로 → 얹는다', classifyDeckSave(base, bs, mine, SD) === 'apply' ? 1 : 0, 1);
+  eq('서버가 이미 같은 내용 → 쓸 것이 없다', classifyDeckSave(mine, bs, mine, SD) === 'same' ? 1 : 0, 1);
+  const theirs = deck(['a', 'b', 'c', 'd'], { C: 'a', DH: 'd' });                      /* 다른 기기가 선수를 넣었다 */
+  eq('다른 기기가 같은 덱을 바꿨다 → 묻는다', classifyDeckSave(theirs, bs, mine, SD) === 'conflict' ? 1 : 0, 1);
+  eq('서버의 덱 칸이 사라졌다 → 내 내용으로 되살린다', classifyDeckSave(undefined, bs, mine, SD) === 'heal' ? 1 : 0, 1);
+  eq('서버의 덱이 빈 덱으로 덮였다 → 되살린다', classifyDeckSave(deck([]), bs, mine, SD) === 'heal' ? 1 : 0, 1);
+  eq('원래 빈 덱이던 것을 다른 기기가 설정만 바꿨다 → 묻는다 (되살릴 것이 아니다)',
+    classifyDeckSave(deck([], {}, { liveSetPo: 0, s30: 'R' }), deckSnap(null), deck(['a']), PL) === 'conflict' ? 1 : 0, 1);
+  eq('서버도 나도 선수가 없다 → 묻는다', classifyDeckSave(deck([], {}, { liveSetPo: 0, s30: 'R' }), bs, deck([], {}, { liveSetPo: 0, s30: 'L' }), SD) === 'conflict' ? 1 : 0, 1);
+  /* 응답을 못 받았을 뿐 서버에는 반영된 내 저장 */
+  const sent1 = deck(['a', 'b', 'c'], { C: 'a', DH: 'b' });
+  eq('서버 내용이 내가 전에 보낸 것 → 남이 바꾼 것이 아니다', classifyDeckSave(sent1, bs, mine, SD, [deckSnap(sent1).str]) === 'apply' ? 1 : 0, 1);
+  eq('보낸 적 없는 내용이면 여전히 묻는다', classifyDeckSave(theirs, bs, mine, SD, [deckSnap(sent1).str]) === 'conflict' ? 1 : 0, 1);
+  /* 메모리에 든 것이 그 덱이 아닐 때의 안전망 */
+  eq('설정만 바꿨는데 서버의 선수가 하나도 없다 → 올리지 않는다', classifyDeckSave(base, bs, deck(['x', 'y']), SD) === 'refuse' ? 1 : 0, 1);
+  eq('선수를 통째로 갈아 넣은 저장은 올린다 (가져오기 · 복원)', classifyDeckSave(base, bs, deck(['x', 'y']), PL) === 'apply' ? 1 : 0, 1);
+  eq('새 덱(서버에 칸 없음 · 아는 것도 없음)의 첫 저장 → 얹는다', classifyDeckSave(undefined, undefined, deck(['a']), PL) === 'apply' ? 1 : 0, 1);
+  eq('새 덱인데 바꾼 것이 없다 → 쓸 것이 없다', classifyDeckSave(undefined, undefined, deck([]), SD) === 'same' ? 1 : 0, 1);
+
+  const k = (v) => canonJson(v);
+  eq('직접 등록 카드 — 서버가 알던 그대로 → 얹는다', classifyKeySave(k([]), k([]), k([{ id: 'c1' }])) === 'apply' ? 1 : 0, 1);
+  eq('직접 등록 카드 — 서버가 이미 같다', classifyKeySave(k([{ id: 'c1' }]), k([]), k([{ id: 'c1' }])) === 'same' ? 1 : 0, 1);
+  eq('직접 등록 카드 — 다른 기기가 바꿨다', classifyKeySave(k([{ id: 'c9' }]), k([]), k([{ id: 'c1' }])) === 'conflict' ? 1 : 0, 1);
+  eq('직접 등록 카드 — 서버 내용이 내가 전에 보낸 것', classifyKeySave(k([{ id: 'c9' }]), k([]), k([{ id: 'c1' }]), [k([{ id: 'c9' }])]) === 'apply' ? 1 : 0, 1);
 }
 
 console.log('');

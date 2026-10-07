@@ -69,9 +69,12 @@ async function sessionTokenFor(userId) {
   return s.access_token;
 }
 
-export async function loadUserData(userId) {
-  if (!supabase || !userId) return null;
-  var q = supabase.from('user_settings').select('sd_state')
+/* 줄을 읽는다. 저장 시각(updated_at)도 함께 받는다 —
+   쓸 때 "내가 읽은 뒤로 줄이 바뀌지 않았을 때만" 쓰기 위해서다 (saveUserRow).
+   돌려주는 것: { state: sd_state 또는 null, stamp: updated_at 또는 null, exists: 줄이 있는가 } */
+export async function loadUserRow(userId) {
+  if (!supabase || !userId) return { state: null, stamp: null, exists: false };
+  var q = supabase.from('user_settings').select('sd_state,updated_at')
     .eq('user_id', userId).eq('key', 'settings');
   if (isAccountId(userId)) {
     var token = await sessionTokenFor(userId);
@@ -85,23 +88,68 @@ export async function loadUserData(userId) {
        - 22P02    : user_id 가 uuid 형식이 아님. 게스트("guest_1759…")가 여기 걸린다.
                     형식이 어긋난 id 로는 애초에 행이 있을 수 없으므로 "없음"이 맞다.
                     이걸 실패로 보면 게스트가 오류 화면에 막혀 앱을 아예 못 쓴다. */
-    if (r.error.code === 'PGRST116' || r.error.code === '22P02') return null;
+    if (r.error.code === 'PGRST116' || r.error.code === '22P02') return { state: null, stamp: null, exists: false };
     throw new Error('사용자 데이터를 읽지 못했습니다: '
       + (r.error.message || r.error.code || '알 수 없는 오류'));
   }
-  return (r.data && r.data.sd_state) || null;
+  return { state: (r.data && r.data.sd_state) || null, stamp: (r.data && r.data.updated_at) || null, exists: true };
 }
 
-export async function saveUserData(userId, data) {
-  if (!supabase || !userId) return false;
-  var r = await supabase.from('user_settings').upsert({
-    user_id: userId,
-    key: 'settings',
-    sd_state: data,
-    updated_at: new Date().toISOString()
-  }, { onConflict: 'user_id,key' });
-  if (r.error) { console.error('saveUserData error:', r.error); return false; }
-  return true;
+export async function loadUserData(userId) {
+  return (await loadUserRow(userId)).state;
+}
+
+/* 줄을 쓴다 — got(loadUserRow 가 돌려준 것)을 읽은 뒤로 줄이 바뀌지 않았을 때만.
+
+   예전의 saveUserData 는 조건 없이 줄을 통째로 덮어썼다(upsert). 탭이 들고 있던 옛 사본을 그렇게 쓰면
+   그 사이 다른 기기·다른 탭이 저장한 것이 전부 되돌아간다. 그래서 부르는 쪽은 쓰기 직전에 줄을 다시 읽어
+   바꿀 것만 얹고(덱 매니저의 commit), 여기서는 읽고 쓰는 그 짧은 사이에 끼어든 저장까지 걸러 낸다.
+
+   돌려주는 것: { ok: true, stamp } · { ok: false, conflict: true }(그 사이 줄이 바뀜 — 다시 읽고 다시 얹을 것)
+               · { ok: false, error }(통신·권한 실패) */
+export async function saveUserRow(userId, data, got) {
+  if (!supabase || !userId) return { ok: false, error: new Error('저장할 수 없는 상태입니다') };
+  var token = null;
+  if (isAccountId(userId)) {
+    /* 토큰 없이(anon) 나간 쓰기는 RLS 에 걸려 "0줄 바뀜"이 되는데, 그러면 "줄이 바뀌었다"와 구분이 안 된다 */
+    token = await sessionTokenFor(userId);
+    if (!token) return { ok: false, error: new Error('로그인 상태를 확인하지 못했습니다 (세션 만료 또는 통신 불안정)') };
+  }
+  var now = new Date().toISOString();
+  var q;
+  if (got && got.exists) {
+    q = supabase.from('user_settings').update({ sd_state: data, updated_at: now })
+      .eq('user_id', userId).eq('key', 'settings');
+    /* got.force — 줄이 바뀌지 않았는데도(읽은 시각이 그대로인데도) 조건이 걸리지 않았을 때만 부르는 쪽이 켠다.
+       시각 조건 자체가 어긋난 것이라 조건 없이 쓴다 (그렇게라도 저장은 돼야 한다) */
+    if (!got.force) q = got.stamp ? q.eq('updated_at', got.stamp) : q.is('updated_at', null);
+  } else {
+    q = supabase.from('user_settings').insert({ user_id: userId, key: 'settings', sd_state: data, updated_at: now });
+  }
+  q = q.select('updated_at');
+  if (token) q = q.setHeader('Authorization', 'Bearer ' + token);
+  var r = await q;
+  if (r.error) {
+    /* 23505 : 줄이 없는 줄 알고 만들려 했는데 그 사이 다른 곳에서 먼저 만들었다 */
+    if (r.error.code === '23505') return { ok: false, conflict: true };
+    console.error('saveUserRow error:', r.error);
+    /* 통신 실패가 아니라 서버가 이 쓰기 문장을 거절한 경우 — 예전 방식(조건 없는 upsert)으로 한 번 더 써 본다.
+       새 방식이 운영 서버의 어떤 설정과 맞지 않더라도 저장 자체는 돼야 한다. 보내는 줄은 이미 최신본에 얹은 것이라
+       옛 사본을 덮어쓰던 때와는 다르다. 이렇게 쓴 줄은 savedBy 끝에 "/upsert" 가 붙어 나중에 가려낼 수 있다 */
+    if (r.status >= 400 && r.status < 500) {
+      var q2 = supabase.from('user_settings').upsert({
+        user_id: userId, key: 'settings', updated_at: now,
+        sd_state: Object.assign({}, data, { savedBy: String((data && data.savedBy) || '') + '/upsert' })
+      }, { onConflict: 'user_id,key' });
+      if (token) q2 = q2.setHeader('Authorization', 'Bearer ' + token);
+      var r2 = await q2;
+      if (!r2.error) return { ok: true, stamp: now, fallback: true };
+      console.error('saveUserRow fallback error:', r2.error);
+    }
+    return { ok: false, error: new Error(r.error.message || r.error.code || '저장하지 못했습니다') };
+  }
+  if (!r.data || r.data.length === 0) return { ok: false, conflict: true };
+  return { ok: true, stamp: r.data[0].updated_at };
 }
 
 /* ============ Global Skills (admin) ============ */

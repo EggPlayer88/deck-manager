@@ -11,7 +11,9 @@ var signOut = _SB.signOut || function(){ return Promise.resolve(); };
 var getSession = _SB.getSession || function(){ return Promise.resolve(null); };
 var getProfile = _SB.getProfile || function(){ return Promise.resolve(null); };
 var loadUserData = _SB.loadUserData || function(){ return Promise.resolve(null); };
-var saveUserData = _SB.saveUserData || function(){ return Promise.resolve(); };
+/* 줄 읽기·쓰기 — 저장 시각을 함께 주고받아 "읽은 뒤로 바뀌지 않았을 때만" 쓴다 (supabase.js) */
+var loadUserRow = _SB.loadUserRow || function(){ return Promise.resolve({ state: null, stamp: null, exists: false }); };
+var saveUserRow = _SB.saveUserRow || function(){ return Promise.resolve({ ok: false, error: new Error("no supabase") }); };
 var loadGlobalSkills = _SB.loadGlobalSkills || function(){ return Promise.resolve(null); };
 var saveGlobalSkills = _SB.saveGlobalSkills || function(){ return Promise.resolve(); };
 var loadGlobalPlayers = _SB.loadGlobalPlayers || function(){ return Promise.resolve([]); };
@@ -1160,13 +1162,80 @@ function toDeckFormat(all, list, fallbackId) {
 }
 
 /* 저장된 덱(base)의 선수가 새 내용(next)에 한 명도 남지 않는가.
-   라인업·세트덱 설정만 바꾸는 저장에서 이렇게 되면, 보내려는 것이 그 덱의 내용이 아니다 (saveAllData 의 안전망) */
+   라인업·세트덱 설정만 바꾸는 저장에서 이렇게 되면, 올리려는 것이 그 덱의 내용이 아니다 (classifyDeckSave 의 안전망) */
 function deckLosesAllPlayers(base, next) {
   var ids = ((base && base.players) || []).map(function(x) { return x && x.id; }).filter(Boolean);
   if (ids.length === 0) return false;
   var keep = {};
   ((next && next.players) || []).forEach(function(x) { if (x && x.id) keep[x.id] = 1; });
   return !ids.some(function(id) { return keep[id] === 1; });
+}
+
+/* ── 저장 합치기 ─────────────────────────────────────────────────
+   계정의 저장 데이터는 DB 한 줄(sd_state)에 다 들어 있다. 전에는 탭이 열릴 때 읽어 둔 사본에 바꾼 것을 얹어
+   줄을 통째로 다시 썼다. 그러면 그 사이 다른 기기·다른 탭이 저장한 것이 전부 옛 사본으로 되돌아간다
+   (2026-10-07 — 켜 둔 탭이 그 뒤에 만든 덱 칸을 지웠다. 폰에서 고친 뒤 PC 에 켜 둔 탭에서 하나만 바꿔도 폰 작업이 사라진다).
+   이제는 쓰기 직전에 서버의 최신 줄을 읽고, 이 탭이 바꾼 것만 그 위에 얹는다 (useData 의 commit).
+   같은 덱을 다른 곳에서도 바꿨는지는 "이 탭이 마지막으로 본 서버 내용"(base)과 견줘서 안다. */
+
+/* 줄을 마지막으로 쓴 앱의 저장 방식 — 줄 맨 위 savedBy 에 적는다. 사고가 났을 때 어느 방식의 앱이 썼는지 가릴 수 있다
+   (이 표식이 없거나 옛 값이면, 새로고침하지 않은 옛 탭이 통째로 덮어쓴 것이다) */
+var SAVE_TAG = "merge-1";
+
+/* JSON 으로 저장했다 읽은 값과 메모리의 값을 견줄 수 있게 한 줄로 편다.
+   DB(jsonb)는 키 순서를 지키지 않으므로 키를 정렬하고, JSON 에 실리지 않는 값(undefined · NaN)은 JSON 이 하는 대로 다룬다 */
+function canonJson(v) {
+  if (v === undefined || v === null) return "null";
+  if (typeof v === "number") return isFinite(v) ? String(v) : "null";
+  if (typeof v === "string") return JSON.stringify(v);
+  if (typeof v === "boolean") return v ? "true" : "false";
+  if (Array.isArray(v)) return "[" + v.map(canonJson).join(",") + "]";
+  if (typeof v === "object") {
+    if (typeof v.toJSON === "function") return canonJson(v.toJSON());
+    return "{" + Object.keys(v).filter(function(k) { return v[k] !== undefined && typeof v[k] !== "function"; }).sort()
+      .map(function(k) { return JSON.stringify(k) + ":" + canonJson(v[k]); }).join(",") + "}";
+  }
+  return "null";
+}
+
+/* 덱 한 벌의 모양을 고르게 한다 — 서버에 칸이 없거나 일부가 비어 있어도 화면이 쓰는 모양으로.
+   선수가 없는 덱도 저장해 둔 라인업·세트덱 설정은 그대로 살린다 */
+function normDeck(d) {
+  if (!d) return { players: [], lineupMap: {}, sdConfig: { liveSetPo: 0 } };
+  return { players: Array.isArray(d.players) ? d.players : [], lineupMap: d.lineupMap || {}, sdConfig: d.sdConfig || { liveSetPo: 0 } };
+}
+
+/* 덱의 지문 — str 이 같으면 같은 내용이다. n · lu 는 유저에게 보여 줄 선수 수 · 라인업 칸 수 */
+function deckSnap(d) {
+  var x = normDeck(d);
+  var lu = 0;
+  Object.keys(x.lineupMap).forEach(function(k) { if (x.lineupMap[k]) lu++; });
+  return { str: canonJson(x), n: x.players.length, lu: lu };
+}
+
+/* 덱 한 벌을 서버의 최신 줄에 얹어도 되는지 가른다.
+   server — 방금 읽은 서버의 그 덱 / base — 이 탭이 마지막으로 본 서버 내용(deckSnap) / mine — 올리려는 내용
+   kinds — 이 탭이 무엇을 바꿨는지 { players, lineup, sd } / sent — 이 탭이 전에 보냈던 내용의 지문들
+   "same"     서버가 이미 같은 내용이다 — 쓸 것이 없다
+   "apply"    서버가 내가 알던 그대로다 — 얹는다
+   "heal"     서버의 그 덱이 비워졌다(옛 코드의 덮어쓰기 등). 잃을 것이 없으니 내 내용으로 되살린다
+   "conflict" 다른 기기·탭이 이 덱을 바꿨다 — 유저에게 묻는다
+   "refuse"   라인업·설정만 바꿨는데 서버의 선수가 내 내용에 한 명도 없다 — 메모리에 든 것이 이 덱이 아니다 */
+function classifyDeckSave(server, base, mine, kinds, sent) {
+  var sv = deckSnap(server), me = deckSnap(mine), bs = base || deckSnap(null);
+  if (me.str === sv.str) return "same";
+  /* 응답을 못 받았을 뿐 서버에는 반영된 내 저장이 있을 수 있다 — 내가 보냈던 내용이면 아는 내용이다 */
+  var known = sv.str === bs.str || (sent || []).indexOf(sv.str) >= 0;
+  if (!known) return (bs.n > 0 && sv.n === 0 && me.n > 0) ? "heal" : "conflict";
+  if (!(kinds && kinds.players) && deckLosesAllPlayers(server, mine)) return "refuse";
+  return "apply";
+}
+
+/* 덱이 아닌 칸(직접 등록 카드 · 연구소 실험본)도 같은 식으로 가른다. 값은 canonJson 으로 편 글자열로 받는다 */
+function classifyKeySave(server, base, mine, sent) {
+  if (mine === server) return "same";
+  if (server === base || (sent || []).indexOf(server) >= 0) return "apply";
+  return "conflict";
 }
 
 function useData(userId, sdState, setSdState, curDeckId){
@@ -1201,37 +1270,46 @@ function useData(userId, sdState, setSdState, curDeckId){
   var writer=writerRef.current;
   writer.sync({players:players,lineupMap:lineupMap,sdConfig:sdState});
 
-  /* ── 전체 sd_state 메모리 캐시 (읽기 중복 제거) ── */
+  /* ── 서버 줄의 사본과 저장 대기열 ──
+     allDataRef : 마지막으로 읽거나 쓴 서버 줄. 화면에 뿌릴 값(직접 등록 카드 · 연구소)을 여기서 꺼낸다.
+                  저장의 바탕으로는 쓰지 않는다 — 저장은 매번 서버를 다시 읽는다 (commit).
+     baseRef    : 이 탭이 마지막으로 본 서버 내용의 지문. 덱을 불러올 때와 내 저장이 성공했을 때만 바뀐다.
+                  저장할 때 서버의 지금 내용이 이것과 다르면, 그 사이 다른 기기·탭이 바꾼 것이다.
+     pendingRef : 아직 서버에 못 올린 변경. 저장이 실패하면 남아 있다가 다음 저장 때 함께 올라간다.
+     sentRef    : 이 탭이 보냈던 내용의 지문 — 응답을 못 받았을 뿐 서버에는 반영된 내 저장을 남의 것으로 착각하지 않게 */
   var allDataRef=React.useRef(null);
-  /* 계정이 바뀌면 앞 계정의 줄을 버린다 — 들고 있으면 새 계정의 저장이 그 줄을 바탕으로 나간다 */
+  var newPending=function(){ return { decks:{}, listOps:[], customDex:null, lab:{} }; };
+  var newBase=function(){ return { decks:{}, customDex:canonJson([]), lab:{} }; };
+  var pendingRef=React.useRef(null); if(!pendingRef.current) pendingRef.current=newPending();
+  var baseRef=React.useRef(null); if(!baseRef.current) baseRef.current=newBase();
+  var sentRef=React.useRef(null); if(!sentRef.current) sentRef.current={};
+  /* 계정이 바뀌면 앞 계정의 것을 전부 버린다 — 들고 있으면 새 계정의 줄에 앞 계정의 내용이 얹힌다 */
   var cacheUidRef=React.useRef(userId);
-  if(cacheUidRef.current!==userId){cacheUidRef.current=userId;allDataRef.current=null;}
+  if(cacheUidRef.current!==userId){
+    cacheUidRef.current=userId; allDataRef.current=null;
+    pendingRef.current=newPending(); baseRef.current=newBase(); sentRef.current={};
+  }
   var globalLoadedRef=React.useRef(false); /* 선수도감/스킬 1회만 로드 */
-
-  /* 저장 전에 기준이 될 전체 줄(sd_state)을 확보한다.
-     읽기가 실패하면 예외를 그대로 올려 저장을 취소시킨다 — 이것이 핵심이다.
-     예전처럼 `await loadUserData(uid) || {}` 로 빈 객체를 만들어 버리면
-     그 빈 것이 유저의 덱을 통째로 덮어쓴다.
-     행이 없는 신규 유저는 {} 로 시작해도 잃을 것이 없다. */
-  var ensureAllData = async function(uid) {
-    var all = allDataRef.current;
-    if (all) return all;
-    all = (await loadUserData(uid)) || {};   /* 읽기 실패 시 여기서 throw */
-    allDataRef.current = all;
-    return all;
+  var hasPending=function(){
+    var p=pendingRef.current;
+    return Object.keys(p.decks).length>0 || p.listOps.length>0 || !!p.customDex || Object.keys(p.lab).length>0;
+  };
+  var noteSent=function(key,str){
+    var a=sentRef.current[key]||(sentRef.current[key]=[]);
+    if(a.indexOf(str)<0){ a.push(str); if(a.length>6) a.shift(); }
   };
 
   /* 저장이 막혔다는 사실은 반드시 알려야 한다 — 조용히 실패하면
      유저는 저장된 줄 알고 창을 닫는다. 다만 연달아 뜨지 않게 30초에 한 번만. */
   var saveWarnAtRef = React.useRef(0);
   var warnSaveBlocked = function(e) {
-    console.error('[저장 취소] 서버에서 기존 데이터를 읽지 못했습니다:', e);
+    console.error('[저장 실패] 서버에 올리지 못했습니다:', e);
     var now = Date.now();
     if (now - saveWarnAtRef.current < 30000) return;
     saveWarnAtRef.current = now;
     alert('서버와 연결이 불안정해 방금 변경을 저장하지 못했습니다.\n\n'
       + '기존에 저장된 덱은 그대로 있습니다.\n'
-      + '잠시 후 다시 시도하거나 새로고침해 주세요.');
+      + '이 창을 켜 두면 잠시 뒤 다시 저장을 시도합니다. 새로고침하면 방금 변경은 사라집니다.');
   };
   /* 메모리에 든 것이 지금 덱을 읽어 온 내용이 아니라서 저장을 버렸다.
      덱을 읽는 동안에는 화면이 가려져 있어 정상이라면 올 일이 없다 — 왔다면 알려서 새로고침하게 한다 */
@@ -1245,10 +1323,184 @@ function useData(userId, sdState, setSdState, curDeckId){
       + '새로고침한 뒤 다시 시도해 주세요.');
   };
 
+  /* 같은 덱을 다른 기기·탭에서도 바꿨다. 한쪽을 조용히 버리지 않고 유저에게 묻는다.
+     shown — 그 덱이 지금 화면의 덱인가 / sv · me — 서버 내용과 올리려던 내용의 지문(deckSnap)
+     돌려주는 값: "server"(서버 내용을 따른다) · "apply"(이 탭의 내용으로 저장한다) · "none"(아무것도 하지 않는다) */
+  var askDeckConflict = function(shown, sv, me) {
+    var mine = shown ? '지금 화면의 내용' : '여기서 고치던 내용';
+    if (window.confirm((shown ? '이 덱이' : '앞서 고치던 덱이') + ' 다른 기기나 다른 탭에서 바뀌어서, 방금 변경을 저장하지 않았습니다.\n\n'
+      + '· 서버에 저장된 내용: 선수 ' + sv.n + '명 · 라인업 ' + sv.lu + '칸\n'
+      + '· ' + mine + ': 선수 ' + me.n + '명 · 라인업 ' + me.lu + '칸\n\n'
+      + '[확인] 서버에 저장된 내용을 ' + (shown ? '불러옵니다' : '그대로 둡니다') + ' (방금 한 변경은 다시 해 주세요)\n'
+      + '[취소] 다른 방법을 고릅니다')) return "server";
+    if (window.confirm(mine + '으로 저장할까요?\n다른 기기나 탭에서 바꾼 내용은 사라집니다.\n\n'
+      + '[확인] ' + mine + '으로 저장합니다\n'
+      + '[취소] 저장하지 않고 그대로 둡니다')) return "apply";
+    return "none";
+  };
+  /* 서버의 내용을 화면에 깐다 (덱을 다시 불러온 것과 같다) — 그 덱이 지금 화면의 덱일 때만 */
+  var showServerDeck = function(uid, deckId, serverDeck) {
+    var k = loadedRef.current;
+    if (!k || k.uid !== uid || k.deckId !== deckId) return;
+    var got = normDeck(serverDeck);
+    setPlayers(got.players); setLineupMap(got.lineupMap); setSdState(got.sdConfig);
+    writer.reset(got);
+  };
+
+  /* 저장이 실패하면 뒤에서 몇 번 더 올려 본다 — 유저가 더 손대지 않아도 통신이 돌아오면 올라가게 */
+  var retryRef = React.useRef({ timer: null, n: 0 });
+  var retryLater = function(uid) {
+    var r = retryRef.current;
+    if (r.timer || r.n >= 5) return;
+    var wait = [5000, 15000, 30000, 60000, 60000][r.n]; r.n++;
+    r.timer = setTimeout(function() {
+      r.timer = null;
+      if (uidRef.current !== uid || !hasPending()) return;
+      writer.queue(function() { return commit(uid, true); });
+    }, wait);
+  };
+
+  /* ── 저장 ──
+     서버의 최신 줄을 읽고 → 이 탭이 바꾼 것(pendingRef)만 얹고 → 읽은 뒤로 줄이 바뀌지 않았을 때만 쓴다.
+     읽고 쓰는 사이에 다른 곳에서 저장했으면(saveUserRow 의 conflict) 다시 읽어서 다시 얹는다.
+     quiet — 실패해도 알림창을 띄우지 않는다 (뒤에서 다시 시도할 때) */
+  var commit = async function(uid, quiet) {
+    if (!supabase || !uid || isGuestUid(uid)) return true;
+    if (uidRef.current !== uid) return false;
+    var pend = pendingRef.current, base = baseRef.current;
+    /* 바뀐 것이 없는 덱 저장은 서버까지 가지 않는다 — 전에는 앱을 열기만 해도 줄을 한 번씩 다시 썼다 */
+    Object.keys(pend.decks).forEach(function(id) {
+      if (deckSnap(pend.decks[id].data).str === (base.decks[id] || deckSnap(null)).str) delete pend.decks[id];
+    });
+    var fail = function(e) {
+      if (quiet) console.error('[저장 실패] 뒤에서 다시 시도합니다:', e); else warnSaveBlocked(e);
+      retryLater(uid);
+      return false;
+    };
+    var refused = null;   /* 바로 앞 시도에서 서버가 받지 않은 쓰기가 기준으로 삼았던 저장 시각 */
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (!hasPending()) return true;
+      var got;
+      try { got = await loadUserRow(uid); } catch (e) { return fail(e); }
+      if (pendingRef.current !== pend) return false;   /* 읽는 사이 계정이 바뀌었다 */
+      if (refused !== null && got.exists && String(got.stamp || "") === refused) {
+        /* 줄은 그대로인데 "읽은 뒤로 바뀌지 않았을 때만" 조건이 걸리지 않았다 — 조건이 어긋난 것이다. 조건 없이 쓴다 */
+        console.error('[저장] 저장 시각 조건이 걸리지 않아 조건 없이 씁니다:', refused);
+        got.force = true;
+      }
+      var row = got.state || {};
+      var ops = pend.listOps.slice();
+      if (!row.decks) {
+        /* 옛 형식 줄 — 맨 위 데이터를 주인 덱으로 옮긴다. 주인을 찾는 목록은 이번에 얹을 목록 변경까지 반영한 것 */
+        var pv = { deckList: Array.isArray(row.deckList) ? row.deckList.slice() : [], deckCurrent: row.deckCurrent || "" };
+        ops.forEach(function(op) { try { op.fn(pv); } catch (e) {} });
+        row = toDeckFormat(row, pv.deckList, Object.keys(pend.decks)[0] || deckIdRef.current);
+      }
+      var touched = false;
+      var done = [];   /* 쓰기가 성공했을 때 마무리할 일들 */
+      if (ops.length > 0) {
+        if (!Array.isArray(row.deckList)) row.deckList = [];
+        var listWas = canonJson([row.deckList, row.deckCurrent || ""]);
+        ops.forEach(function(op) {
+          /* 목록 변경 하나가 오류를 내도 저장 전체가 막히면 안 된다 — 그 변경만 버린다 */
+          var keepList = row.deckList.slice(), keepCur = row.deckCurrent;
+          try { op.fn(row); if (!Array.isArray(row.deckList)) throw new Error('덱 목록이 배열이 아닙니다'); }
+          catch (e) {
+            console.error('[덱 목록 변경 실패]', e);
+            row.deckList = keepList; row.deckCurrent = keepCur;
+            var bad = pend.listOps.indexOf(op); if (bad >= 0) pend.listOps.splice(bad, 1);
+          }
+        });
+        if (canonJson([row.deckList, row.deckCurrent || ""]) !== listWas) touched = true;
+      }
+      Object.keys(pend.decks).forEach(function(id) {
+        var p = pend.decks[id], sv = deckSnap(row.decks[id]), me = deckSnap(p.data);
+        var k = loadedRef.current, shown = !!k && k.uid === uid && k.deckId === id;
+        var v = classifyDeckSave(row.decks[id], base.decks[id], p.data, p.kinds, sentRef.current["deck:" + id]);
+        if (v === "conflict") {
+          v = askDeckConflict(shown, sv, me);
+          if (v === "apply") base.decks[id] = sv;   /* 서버의 지금 내용을 보고 덮어쓰기로 했다 — 다시 묻지 않는다 */
+        }
+        if (v === "apply" || v === "heal") {
+          if (v === "heal") console.warn('[저장] 서버에서 비워진 덱을 이 탭의 내용으로 되살립니다 — 덱 ' + id);
+          row.decks[id] = p.data; touched = true;
+          noteSent("deck:" + id, me.str);
+          done.push(function() { base.decks[id] = me; if (pend.decks[id] === p) delete pend.decks[id]; });
+          return;
+        }
+        if (v === "same") base.decks[id] = me;
+        else if (v === "server") { base.decks[id] = sv; showServerDeck(uid, id, row.decks[id]); }
+        else if (v === "refuse") warnNotReady('저장된 덱의 선수가 올리려는 내용에 하나도 없습니다');
+        if (pend.decks[id] === p) delete pend.decks[id];
+      });
+      if (pend.customDex) {
+        var pc = pend.customDex, sc = Array.isArray(row.customDex) ? row.customDex : [];
+        var svc = canonJson(sc), mec = canonJson(pc.value);
+        var vc = classifyKeySave(svc, base.customDex, mec, sentRef.current.customDex);
+        if (vc === "apply") {
+          row.customDex = pc.value; touched = true;
+          noteSent("customDex", mec);
+          done.push(function() { base.customDex = mec; pc.ok = true; if (pend.customDex === pc) pend.customDex = null; });
+        } else {
+          if (vc === "same") { base.customDex = mec; pc.ok = true; }
+          else {
+            /* 다른 기기·탭에서 카드 목록이 바뀌었다 — 서버 것을 따른다 */
+            base.customDex = svc; pc.ok = false;
+            setCustomPlayers(sc); setCustomDexState(sc.slice(0, CUSTOM_MAX));
+            alert('직접 등록 카드가 다른 기기나 다른 탭에서 바뀌어서, 방금 변경을 저장하지 않았습니다.\n\n'
+              + '서버에 저장된 목록을 불러왔습니다. 방금 한 변경은 다시 해 주세요.');
+          }
+          if (pend.customDex === pc) pend.customDex = null;
+        }
+      }
+      Object.keys(pend.lab).forEach(function(id) {
+        var pl = pend.lab[id], sl = (row.lab && Array.isArray(row.lab[id])) ? row.lab[id] : [];
+        var svl = canonJson(sl), mel = canonJson(pl.value);
+        var vl = classifyKeySave(svl, base.lab[id] === undefined ? canonJson([]) : base.lab[id], mel, sentRef.current["lab:" + id]);
+        if (vl === "apply") {
+          row.lab = row.lab || {}; row.lab[id] = pl.value; touched = true;
+          noteSent("lab:" + id, mel);
+          done.push(function() { base.lab[id] = mel; pl.ok = true; if (pend.lab[id] === pl) delete pend.lab[id]; });
+        } else {
+          if (vl === "same") { base.lab[id] = mel; pl.ok = true; }
+          else {
+            base.lab[id] = svl; pl.ok = false;
+            if (deckIdRef.current === id) setLabSaves(sl.slice(0, LAB_MAX_SAVES));
+            alert('연구소 저장본이 다른 기기나 다른 탭에서 바뀌어서, 방금 변경을 저장하지 않았습니다.\n\n'
+              + '서버에 저장된 내용을 불러왔습니다. 방금 한 변경은 다시 해 주세요.');
+          }
+          if (pend.lab[id] === pl) delete pend.lab[id];
+        }
+      });
+      var settleOps = function() {
+        ops.forEach(function(op) {
+          op.result = { list: (row.deckList || []).slice(), cur: row.deckCurrent || null };
+          var k = pend.listOps.indexOf(op);
+          if (k >= 0) pend.listOps.splice(k, 1);
+        });
+      };
+      if (!touched) { settleOps(); allDataRef.current = row; return true; }
+      row.savedBy = SAVE_TAG;
+      var res;
+      try { res = await saveUserRow(uid, row, got); } catch (e) { return fail(e); }
+      if (pendingRef.current !== pend) return false;
+      if (res && res.conflict) { refused = got.exists ? String(got.stamp || "") : null; continue; }   /* 읽고 쓰는 사이 다른 곳에서 저장했다 — 다시 읽고 다시 얹는다 */
+      if (!res || !res.ok) return fail((res && res.error) || new Error('저장하지 못했습니다'));
+      done.forEach(function(f) { f(); });
+      settleOps();
+      allDataRef.current = row;
+      retryRef.current.n = 0;
+      return true;
+    }
+    return fail(new Error('다른 곳의 저장과 계속 겹쳐서 저장하지 못했습니다'));
+  };
+
   var loadDeckData = async function(uid, deckId) {
+    /* 못 올린 변경이 남아 있으면 먼저 올린다 — 올리기 전에 읽으면 그 변경이 빠진 내용이 온다 */
+    if (hasPending()) await commit(uid, true);
     var all = await loadUserData(uid);
+    allDataRef.current = all || null;
     if (!all) return null;
-    allDataRef.current = all;
     if (!all.decks) {
       return { players: all.players||[], lineupMap: all.lineupMap||{}, sdConfig: all.sdConfig||{liveSetPo:0} };
     }
@@ -1262,12 +1514,11 @@ function useData(userId, sdState, setSdState, curDeckId){
     setCustomDexState(arr);
     var uid = uidRef.current;
     if (!supabase || !uid) { await sSet("deck-custom-dex", arr); return true; }
-    var all;
-    try { all = await ensureAllData(uid); } catch (e) { warnSaveBlocked(e); return false; }
-    all.customDex = arr;
-    allDataRef.current = all;
-    await saveUserData(uid, all);
-    return true;
+    if (isGuestUid(uid)) return true;   /* 게스트 id 로는 서버에 줄을 만들 수 없다 */
+    var rec = { value: arr, ok: null };
+    pendingRef.current.customDex = rec;
+    await writer.queue(function() { return commit(uid); });
+    return rec.ok === true;
   };
 
   /* 연구소 실험본 저장 — sd_state 뿌리의 lab[덱id] */
@@ -1277,42 +1528,31 @@ function useData(userId, sdState, setSdState, curDeckId){
     var uid = uidRef.current, did = deckIdRef.current;
     if (!did) return false;
     if (!supabase || isGuestUid(uid)) { var loc = (await sGet("deck-lab")) || {}; loc[did] = arr; await sSet("deck-lab", loc); return true; }
-    var all;
-    try { all = await ensureAllData(uid); } catch (e) { warnSaveBlocked(e); return false; }
-    all.lab = all.lab || {};
-    all.lab[did] = arr;
-    allDataRef.current = all;
-    await saveUserData(uid, all);
-    return true;
+    var rec = { value: arr, ok: null };
+    pendingRef.current.lab[did] = rec;
+    await writer.queue(function() { return commit(uid); });
+    return rec.ok === true;
   };
 
-  /* 저장: 캐시 사용 → 쓰기 1번만
-     kind — 무엇을 바꾸는 저장인지 ("players" · "lineup" · "sd") */
-  var saveAllData = async function(uid, deckId, deckData, kind) {
-    if (!supabase || !uid || !deckId) return;
-    var all;
-    try { all = await ensureAllData(uid); } catch (e) { warnSaveBlocked(e); return false; }
-    if (!all.decks) {
-      all = toDeckFormat(all, await sGet("deck-list"), deckId);
-      allDataRef.current = all;
-    }
-    /* 마지막 안전망 — 라인업·세트덱 설정만 바꾸는 저장(자동 저장 포함)은 선수 명단을 갈아치울 수 없다.
-       서버의 그 덱에는 선수가 있는데 보내려는 내용에는 그 선수가 한 명도 없다면,
-       메모리에 든 것은 그 덱이 아니다(빈 초기값이거나 다른 덱). 보내면 저장해 둔 덱이 지워진다 */
-    if (kind !== "players" && deckLosesAllPlayers(all.decks[deckId], deckData)) {
-      warnNotReady('저장된 덱의 선수가 보내려는 내용에 하나도 없습니다(' + kind + ')');
-      return false;
-    }
-    /* deckList/deckCurrent는 localStorage(saveDecks가 항상 최신으로 유지)에서 읽어 보존
-       이렇게 해야 saveDecks와의 race condition 방지 */
-    var latestList = await sGet("deck-list");
-    var latestCur  = await sGet("deck-current");
-    if (latestList && latestList.length > 0) all.deckList = latestList;
-    if (latestCur) all.deckCurrent = latestCur;
-    all.decks[deckId] = deckData;
-    allDataRef.current = all;
-    await saveUserData(uid, all);
+  /* 덱 목록 바꾸기 — fn(row) 이 서버의 최신 줄에서 row.deckList · row.deckCurrent 를 고친다.
+     목록을 통째로 보내지 않고 "무엇을 바꾸는지"만 얹으므로, 다른 기기에서 만든 덱이나 이 브라우저에 남은 옛 목록 때문에
+     서버 목록이 뒤바뀌지 않는다. 저장이 끝나면 서버 기준 { list, cur } 을 돌려준다.
+     못 올렸으면 null — 그 변경은 남아 있다가 다음 저장 때 함께 올라간다 */
+  var listOp = async function(fn) {
+    var uid = uidRef.current;
+    if (!supabase || !uid || isGuestUid(uid)) return null;
+    var op = { fn: fn, result: null };
+    pendingRef.current.listOps.push(op);
+    try { await writer.queue(function() { return commit(uid); }); } catch (e) { console.warn('덱 목록 저장 오류:', e); }
+    return op.result;
   };
+
+  /* 아직 못 올린 변경이 있는데 창을 닫으려 하면 브라우저가 한 번 묻게 한다 */
+  useEffect(function(){
+    var h = function(e) { if (hasPending()) { e.preventDefault(); e.returnValue = ''; return ''; } };
+    window.addEventListener('beforeunload', h);
+    return function(){ window.removeEventListener('beforeunload', h); };
+  },[]);
 
   useEffect(function(){
     /* 덱(또는 계정)이 바뀌었다. 새 덱을 읽어 올 때까지 메모리에 든 것은 그 덱의 내용이 아니다 — 저장을 막아 둔다 */
@@ -1338,22 +1578,27 @@ function useData(userId, sdState, setSdState, curDeckId){
         }
         if(stale) return;
         setLoadError(null);
-        /* 선수가 없는 덱도 저장해 둔 라인업·세트덱 설정은 그대로 살린다
-           (전에는 선수가 0명이면 설정까지 기본값으로 읽어, 뒤따르는 자동 저장이 설정을 지웠다) */
-        var got = dd
-          ? { players: Array.isArray(dd.players) ? dd.players : [], lineupMap: dd.lineupMap || {}, sdConfig: dd.sdConfig || {liveSetPo:0} }
-          : { players: [], lineupMap: {}, sdConfig: {liveSetPo:0} };
+        /* 못 올린 변경이 남아 있는 덱이면 그것이 이 덱의 최신 내용이다 — 서버 것으로 덮으면 그 변경이 화면에서 사라진다.
+           그때는 base 도 그대로 둔다 (그 변경을 올릴 때 서버가 그 사이 바뀌었는지 견줘야 한다) */
+        var pd = pendingRef.current.decks[curDeckId];
+        var got = normDeck(pd ? pd.data : dd);
+        if (!pd) baseRef.current.decks[curDeckId] = deckSnap(dd);
         setPlayers(got.players); setLineupMap(got.lineupMap); setSdState(got.sdConfig);
         /* 여기서부터 메모리의 내용은 이 덱의 것이다 — 저장을 연다 */
         writer.reset(got);
         loadedRef.current={uid:userId,deckId:curDeckId};
         /* 직접 등록 카드 — 계정 것이라 덱을 바꿔도 다시 읽지 않아도 되지만,
-           allDataRef 가 새로 채워질 때마다 맞춰 둔다 */
-        var cdx = (allDataRef.current && allDataRef.current.customDex) || [];
-        setCustomPlayers(cdx); setCustomDexState(cdx.slice(0, CUSTOM_MAX));
-        var lab = (allDataRef.current && allDataRef.current.lab && allDataRef.current.lab[curDeckId]) || null;
+           서버 줄을 새로 읽을 때마다 맞춰 둔다 */
+        var srv = allDataRef.current || {};
+        if (!pendingRef.current.customDex) {
+          var cdx = Array.isArray(srv.customDex) ? srv.customDex : [];
+          baseRef.current.customDex = canonJson(cdx);
+          setCustomPlayers(cdx); setCustomDexState(cdx.slice(0, CUSTOM_MAX));
+        }
+        var lab = (srv.lab && srv.lab[curDeckId]) || null;
+        if (!pendingRef.current.lab[curDeckId]) baseRef.current.lab[curDeckId] = canonJson(Array.isArray(lab) ? lab : []);
         if (!lab) lab = ((await sGet("deck-lab")) || {})[curDeckId] || [];
-        if(!stale) setLabSaves(Array.isArray(lab) ? lab.slice(0, LAB_MAX_SAVES) : []);
+        if(!stale && !pendingRef.current.lab[curDeckId]) setLabSaves(Array.isArray(lab) ? lab.slice(0, LAB_MAX_SAVES) : []);
         /* 선수도감/스킬: 로그인 후 딱 1번만 로드 */
         if(!globalLoadedRef.current){
           globalLoadedRef.current = true;
@@ -1401,8 +1646,15 @@ function useData(userId, sdState, setSdState, curDeckId){
 
   SKILL_DATA=skills;if(skills.weights)LIVE_WEIGHTS=skills.weights;
 
-  /* 선수·라인업·세트덱 저장은 나머지 칸도 저장기의 최신 값으로 채워 한 덩어리로 보낸다.
-     셋 다 지금 덱을 읽어 온 뒤에만 받는다 (deckReady) — 부른 그 순간의 덱·내용을 붙잡아 그 덱 자리에 쓴다 */
+  /* 선수·라인업·세트덱 저장은 나머지 칸도 저장기의 최신 값으로 채운 한 덩어리를 대기열에 올린다.
+     셋 다 지금 덱을 읽어 온 뒤에만 받는다 (deckReady) — 부른 그 순간의 덱·내용을 붙잡아 그 덱 자리에 얹는다.
+     한 동작에서 셋을 연달아 불러도 서버에는 마지막 한 덩어리가 한 번만 올라간다 (commit) */
+  var putDeck=function(uid,did,deck,kind){
+    var decks=pendingRef.current.decks, prev=decks[did];
+    var kinds=Object.assign({},prev?prev.kinds:null); kinds[kind]=true;
+    decks[did]={data:deck,kinds:kinds};
+    return writer.queue(function(){ return commit(uid); });
+  };
   var saveP=useCallback(async function(d){
     if(!deckReady()){warnNotReady('덱을 읽어 오기 전의 선수 저장');return;}
     /* 자동 레벨은 계산값으로, 스킬 이름은 표 이름으로 정리해서 저장한다 (normPlayerSkills) */
@@ -1410,7 +1662,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     setPlayers(d);
     var deck=writer.take({players:d});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck,"players"); });}
+    if(supabase&&uid&&did){ if(!isGuestUid(uid)) await putDeck(uid,did,deck,"players"); }
     else if(did){await sSet("deck-players-"+did,d);}
   },[]);
 
@@ -1419,7 +1671,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     setLineupMap(d);
     var deck=writer.take({lineupMap:d});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck,"lineup"); });}
+    if(supabase&&uid&&did){ if(!isGuestUid(uid)) await putDeck(uid,did,deck,"lineup"); }
     else if(did){await sSet("deck-lineup-"+did,d);}
   },[]);
 
@@ -1433,7 +1685,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     if(!deckReady()){warnNotReady('덱을 읽어 오기 전의 세트덱 설정 저장');return;}
     var deck=writer.take({sdConfig:nsd});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){await writer.queue(function(){ return saveAllData(uid,did,deck,"sd"); });}
+    if(supabase&&uid&&did){ if(!isGuestUid(uid)) await putDeck(uid,did,deck,"sd"); }
     else if(did){await sSet("deck-sdconfig-"+did,nsd);}
   },[]);
 
@@ -1460,7 +1712,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     }
   },[]);
 
-  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,loadError:loadError,setLoadError:setLoadError,deckReady:deckReady,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,allDataRef:allDataRef,queueWrite:writer.queue};
+  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,loadError:loadError,setLoadError:setLoadError,deckReady:deckReady,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,listOp:listOp};
 }
 
 /* ── 전력공유 ─────────────────────────────────────────────────
@@ -10221,112 +10473,91 @@ export default function App(){
     return Object.assign({}, sdState||{}, { teamName: tn || (sdState && sdState.teamName) || "" });
   }, [sdState, curDeckObj]);
 
-  /* ── localStorage 덱 목록 로드/저장 헬퍼 ── */
-  var loadDecks=React.useCallback(async function(uid){
-    /* Supabase 우선, fallback localStorage */
-    var targetUid = uid || userId;
-    if(supabase && targetUid){
-      var all=await loadUserData(targetUid);
-      if(all&&all.deckList&&all.deckList.length>0)
-        return{list:all.deckList, curId:all.deckCurrent||null, fromSupabase:true};
-    }
-    var list=await sGet("deck-list");var curId=await sGet("deck-current");
-    return{list:list||[], curId:curId||null, fromSupabase:false};
-  },[userId]);
-  var saveDecks=React.useCallback(async function(list,curId){
-    /* localStorage 항상 저장 */
+  /* ── 덱 목록 ──
+     계정의 덱 목록은 서버의 것만 믿는다. 전에는 서버에 목록이 없으면 이 브라우저에 남은 목록(계정 구분이 없는
+     localStorage)을 가져다 서버에 올렸고, 덱을 저장할 때마다 그 목록으로 서버 목록을 덮었다. 그래서 다른 계정 ·
+     게스트 · 옛 탭의 목록이 섞여 들어가 "덱은 서버에 있는데 목록에 없어서 빈 화면"이 됐다 (2026-10 사고).
+     목록을 바꿀 때도 통째로 보내지 않고 "무엇을 바꾸는지"만 서버의 최신 목록에 얹는다 (store.listOp).
+     게스트와 Supabase 없는 모드는 전처럼 이 브라우저의 목록을 쓴다. */
+  var isAccount=!!(supabase&&userId&&!isGuestUid(userId));
+  var curIdRef=React.useRef(curDeckId);curIdRef.current=curDeckId;
+  var listSeqRef=React.useRef(0);
+  /* 화면은 먼저 바꿔 두고(list · curId) 서버에는 op 만 얹는다. 저장이 끝나면 서버 기준 목록으로 맞춘다 —
+     다른 기기에서 만든 덱이 여기서 들어온다 */
+  var changeDecks=async function(list,curId,op){
     await sSet("deck-list",list);await sSet("deck-current",curId);
-    /* Supabase: 전체 구조 유지하면서 deckList/deckCurrent만 업데이트 */
-    if(supabase&&userId){
-      var job=async function(){
-        try{
-          var all=store.allDataRef ? store.allDataRef.current : null;
-          if(!all) all=await loadUserData(userId)||{};
-          /* 옛 형식 줄이면 맨 위 데이터를 주인 덱('내 덱')으로 옮긴 뒤에 목록을 쓴다 */
-          all=toDeckFormat(all,list,curId);
-          all.deckList=list;
-          all.deckCurrent=curId;
-          /* allDataRef 캐시도 동기화 */
-          if(store.allDataRef) store.allDataRef.current=all;
-          await saveUserData(userId,all);
-        }catch(e){console.warn('saveDecks 오류:',e);}
-      };
-      /* 덱 데이터와 같은 줄을 통째로 쓰므로 덱 저장과 같은 순서 줄에 세운다 (makeDeckWriter) */
-      await (store.queueWrite ? store.queueWrite(job) : job());
-    }
-  },[userId,store]);
+    if(!isAccount)return;
+    var seq=++listSeqRef.current;
+    var res=await store.listOp(op);
+    /* 그 사이 목록을 또 바꿨으면 그쪽 결과를 기다린다. 보고 있는 덱이 서버 목록에 없으면(다른 기기에서 지움) 화면은 그대로 둔다 */
+    if(!res||seq!==listSeqRef.current)return;
+    var cur=curIdRef.current;
+    if(cur&&!res.list.some(function(d){return d&&d.deckId===cur;}))return;
+    setDecks(res.list.filter(function(d){return d&&d.deckId;}));
+  };
 
   /* ── 로그인 성공 후 덱 목록 로드 ── */
   useEffect(function(){
     if(!userId)return;
     (async function(){
-      var result;
-      try {
-        result = await loadDecks(userId);
-      } catch (e) {
-        /* 서버를 못 읽었다. localStorage 목록으로 내려가면 안 된다 —
-           그걸로 동기화하면 서버에 있는 덱 목록을 덮어쓴다. 오류로 멈춘다. */
-        console.error('[덱 목록 읽기 실패]', e);
-        store.setLoadError((e && e.message) || '알 수 없는 오류');
-        return;
-      }
-      var list=result.list; var savedCurId=result.curId;
-      var fromSupabase=result.fromSupabase;
-
-      /* localStorage에서 가져왔으면 Supabase에 즉시 동기화 */
-      if(!fromSupabase && list && list.length>0 && supabase){
-        try{
-          var all=toDeckFormat(await loadUserData(userId)||{},list,savedCurId);
-          all.deckList=list;
-          all.deckCurrent=savedCurId;
-          await saveUserData(userId,all);
-        }catch(e){console.warn('덱 목록 동기화 오류:',e);}
-      }
-
-      /* 기존 유저: deckList 없어도 Supabase에 players 데이터가 있으면 임시 덱 생성 */
-      if((!list||list.length===0) && supabase){
-        var ud=await loadUserData(userId);
-        if(ud && ud.players && ud.players.length>0){
-          /* 기존 데이터가 있는 유저 → 기본 덱 1개 자동 생성 */
-          var fallbackId="dk_legacy_"+userId.slice(0,8);
-          var fallbackDeck={deckId:fallbackId,teamName:"내 덱"};
-          list=[fallbackDeck]; savedCurId=fallbackId;
-          /* Supabase에 덱 목록 저장 */
-          ud.deckList=list; ud.deckCurrent=fallbackId;
-          await saveUserData(userId,ud);
-          await sSet("deck-list",list); await sSet("deck-current",fallbackId);
+      var list=[]; var savedCurId=null;
+      var account=!!(supabase&&!isGuestUid(userId));
+      var kiaToGia=function(d){return (d&&d.teamName==="KIA")?Object.assign({},d,{teamName:"기아"}):d;};
+      if(account){
+        var row;
+        try {
+          row = await loadUserData(userId);
+        } catch (e) {
+          /* 서버를 못 읽었다. 여기서 빈 목록으로 내려가면 새 덱을 만들게 되어 있던 덱이 가려진다. 오류로 멈춘다. */
+          console.error('[덱 목록 읽기 실패]', e);
+          store.setLoadError((e && e.message) || '알 수 없는 오류');
+          return;
+        }
+        row=row||{};
+        list=Array.isArray(row.deckList)?row.deckList.filter(function(d){return d&&d.deckId;}):[];
+        savedCurId=row.deckCurrent||null;
+        var seed=null;   /* 서버에 목록이 없어서 여기서 지어 주는 목록 */
+        if(list.length===0&&row.decks&&Object.keys(row.decks).length>0&&!row.savedBy){
+          /* 목록 없이 덱만 있는 줄 (2026-04 초기 형식 — 그때는 목록이 브라우저에만 있었다) → 덱 칸으로 목록을 되살린다.
+             구단은 이 브라우저에 같은 덱 id 로 남아 있으면 그것을 쓰고, 없으면 '내 덱'으로 둬서 다시 고르게 한다.
+             savedBy 가 있는 줄은 지금 방식의 앱이 쓴 것이라 목록이 비었으면 유저가 덱을 다 지운 것이다 — 되살리지 않는다 */
+          var known=(await sGet("deck-list"))||[];
+          var nOf=function(id){var d=row.decks[id];return (d&&Array.isArray(d.players))?d.players.length:0;};
+          seed=Object.keys(row.decks).sort(function(a,b){return nOf(b)-nOf(a);}).slice(0,5).map(function(id){
+            var k=known.filter(function(d){return d&&d.deckId===id;})[0];
+            return {deckId:id,teamName:(k&&k.teamName)||"내 덱"};
+          });
+        }else if(list.length===0&&!row.decks&&row.players&&row.players.length>0){
+          /* 옛 형식(선수가 줄 맨 위에 있고 덱 구분이 없다) → 기본 덱 1개를 지어 준다 */
+          seed=[{deckId:"dk_legacy_"+userId.slice(0,8),teamName:"내 덱"}];
+        }
+        if(seed){
+          list=seed; savedCurId=seed[0].deckId;
+          var seedCur=savedCurId;
+          await store.listOp(function(r){
+            if(!Array.isArray(r.deckList)||r.deckList.length===0){r.deckList=seed.slice();r.deckCurrent=seedCur;}
+          });
+        }
+        /* 팀명 마이그레이션: 과거에 "KIA"로 저장된 덱들을 "기아"로 자동 변환
+           선수도감 팀명이 "기아"로 통일되어 있어 매칭 일관성 확보 */
+        if(list.some(function(d){return d.teamName==="KIA";})){
+          list=list.map(kiaToGia);
+          await store.listOp(function(r){r.deckList=r.deckList.map(kiaToGia);});
+          console.log("[팀명 마이그레이션] KIA → 기아 변환 완료");
+        }
+        /* 이 브라우저의 목록도 맞춰 둔다 — 아직 새로고침하지 않은 옛 탭이 이것을 읽는다 */
+        await sSet("deck-list",list);
+        if(savedCurId)await sSet("deck-current",savedCurId);
+      }else{
+        list=((await sGet("deck-list"))||[]).filter(function(d){return d&&d.deckId;});
+        savedCurId=(await sGet("deck-current"))||null;
+        if(list.some(function(d){return d.teamName==="KIA";})){
+          list=list.map(kiaToGia);
+          await sSet("deck-list",list);
         }
       }
 
-      /* 팀명 마이그레이션: 과거에 "KIA"로 저장된 덱들을 "기아"로 자동 변환
-         선수도감 팀명이 "기아"로 통일되어 있어 매칭 일관성 확보 */
-      var needTeamMigration = false;
-      if (list && list.length > 0) {
-        list = list.map(function(d) {
-          if (d && d.teamName === "KIA") {
-            needTeamMigration = true;
-            return Object.assign({}, d, { teamName: "기아" });
-          }
-          return d;
-        });
-        if (needTeamMigration) {
-          /* 변환된 목록을 즉시 영속화 */
-          await sSet("deck-list", list);
-          if (supabase && userId) {
-            try {
-              var allM = toDeckFormat(store.allDataRef && store.allDataRef.current
-                ? store.allDataRef.current : (await loadUserData(userId) || {}), list, savedCurId);
-              allM.deckList = list;
-              if (savedCurId) allM.deckCurrent = savedCurId;
-              if (store.allDataRef) store.allDataRef.current = allM;
-              await saveUserData(userId, allM);
-              console.log("[팀명 마이그레이션] KIA → 기아 변환 완료");
-            } catch(e) { console.warn("팀명 마이그레이션 저장 오류:", e); }
-          }
-        }
-      }
-
-      if(list&&list.length>0){
+      if(list.length>0){
         setDecks(list);
         var found=list.find(function(d){return d.deckId===savedCurId;});
         setCurDeckId(found?savedCurId:list[0].deckId);
@@ -10394,29 +10625,37 @@ export default function App(){
     setCurDeckId(newId);
     setTab("lineup");
     setShowTeamSelect(false);
-    /* 이후 비동기 저장 */
-    await saveDecks(newList,newId);
+    /* 이후 비동기 저장 — 서버 목록에 이 덱을 더한다 */
+    await changeDecks(newList,newId,function(row){
+      if(!row.deckList.some(function(d){return d&&d.deckId===newId;}))row.deckList.push(newDeck);
+      row.deckCurrent=newId;
+    });
   };
 
-  /* ── 덱 삭제 ── */
+  /* ── 덱 삭제 ── 목록에서만 뺀다. 덱 내용(decks 칸)은 서버에 남겨 둔다 — 잘못 지웠을 때 되살릴 수 있다 */
   var handleDeleteDeck=async function(deckId){
     var newList=decks.filter(function(d){return d.deckId!==deckId;});
+    var nextId=newList.length===0?null:((curDeckId===deckId)?newList[0].deckId:curDeckId);
+    var op=function(row){
+      row.deckList=row.deckList.filter(function(d){return d&&d.deckId!==deckId;});
+      var has=function(id){return !!id&&row.deckList.some(function(d){return d.deckId===id;});};
+      row.deckCurrent=has(nextId)?nextId:(row.deckList[0]?row.deckList[0].deckId:"");
+    };
     if(newList.length===0){
       /* 마지막 덱 삭제 → 팀 선택 화면으로 */
       setDecks([]);setCurDeckId(null);
-      await sSet("deck-list",[]);await sSet("deck-current",null);
       setShowTeamSelect("first");
+      await changeDecks([],null,op);
       return;
     }
-    var nextId=(curDeckId===deckId)?newList[0].deckId:curDeckId;
     setDecks(newList);
     setCurDeckId(nextId);
-    await saveDecks(newList,nextId);
+    await changeDecks(newList,nextId,op);
   };
   var handleSwitchDeck=async function(deckId){
     if(deckId===curDeckId)return;
     setCurDeckId(deckId);
-    await saveDecks(decks,deckId);
+    await changeDecks(decks,deckId,function(row){row.deckCurrent=deckId;});
   };
   /* ── 지금 덱의 구단 정하기/바꾸기 — 덱 데이터는 그대로, 목록의 teamName 만 바뀐다 ── */
   var handleSetDeckTeam=async function(teamName){
@@ -10424,7 +10663,9 @@ export default function App(){
     var newList=decks.map(function(d){return d.deckId===id?Object.assign({},d,{teamName:teamName}):d;});
     setDecks(newList);
     setTeamPick(false);
-    await saveDecks(newList,id);
+    await changeDecks(newList,id,function(row){
+      row.deckList=row.deckList.map(function(d){return (d&&d.deckId===id)?Object.assign({},d,{teamName:teamName}):d;});
+    });
   };
 
   /* ── 로그아웃 ── */
