@@ -22,7 +22,8 @@ export async function signInWithGoogle() {
 
 export async function signOut() {
   if (!supabase) return {};
-  return await supabase.auth.signOut();
+  /* 이 브라우저의 세션만 끊는다. 기본값(global)은 다른 기기의 세션까지 끊어서, 거기서 작업 중이던 변경을 올릴 길이 없어진다 */
+  return await supabase.auth.signOut({ scope: 'local' });
 }
 
 export async function getSession() {
@@ -136,7 +137,9 @@ export async function saveUserRow(userId, data, got) {
     /* 통신 실패가 아니라 서버가 이 쓰기 문장을 거절한 경우 — 예전 방식(조건 없는 upsert)으로 한 번 더 써 본다.
        새 방식이 운영 서버의 어떤 설정과 맞지 않더라도 저장 자체는 돼야 한다. 보내는 줄은 이미 최신본에 얹은 것이라
        옛 사본을 덮어쓰던 때와는 다르다. 이렇게 쓴 줄은 savedBy 끝에 "/upsert" 가 붙어 나중에 가려낼 수 있다 */
-    if (r.status >= 400 && r.status < 500) {
+    /* 문장 자체가 거절된 경우(형식·주소 오류)에만. 시간 초과(408) · 요청 과다(429) · 권한(401·403)은 그냥 실패로 돌려 다시 시도에 맡긴다 —
+       오래 걸리다 실패한 요청 뒤에 조건 없이 쓰면 그 사이 다른 곳의 저장을 덮을 수 있다 */
+    if ([400, 404, 405, 406, 422].indexOf(r.status) >= 0) {
       var q2 = supabase.from('user_settings').upsert({
         user_id: userId, key: 'settings', updated_at: now,
         sd_state: Object.assign({}, data, { savedBy: String((data && data.savedBy) || '') + '/upsert' })

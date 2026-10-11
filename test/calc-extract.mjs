@@ -2120,10 +2120,17 @@ function makeDeckWriter(waitMs) {
     },
     /* job 을 앞 요청이 끝난 뒤에 실행하고, job 의 결과(실패 포함)를 그대로 돌려준다 */
     queue: function (job) {
-      var run = tail.then(function () { return job(); });
-      var timer = null;
-      var guard = new Promise(function (resolve) { timer = setTimeout(resolve, waitMs); });
-      tail = Promise.race([run.then(function () {}, function () {}), guard]).then(function () { clearTimeout(timer); });
+      var prev = tail;
+      var run = prev.then(function () { return job(); });
+      /* 기다림은 이 작업이 실제로 시작한 때부터 센다. 줄에 선 때부터 세면, 앞 작업들이 느릴 때 아직 시작도 안 한 작업의 시한이
+         먼저 지나서 뒤 작업이 겹쳐 돈다 (느린 통신에서 연달아 고치면 저장 여러 개가 동시에 돌았다) */
+      tail = prev.then(function () {
+        return new Promise(function (resolve) {
+          var timer = setTimeout(resolve, waitMs);
+          var end = function () { clearTimeout(timer); resolve(); };
+          run.then(end, end);
+        });
+      });
       return run;
     }
   };
@@ -2140,6 +2147,12 @@ function toDeckFormat(all, list, fallbackId) {
     var legacy = (list || out.deckList).filter(function(d) { return d && String(d.deckId || "").indexOf("dk_legacy_") === 0; })[0];
     var owner = legacy ? legacy.deckId : (src.deckCurrent || fallbackId || "");
     if (owner) out.decks[owner] = { players: src.players || [], lineupMap: src.lineupMap || {}, sdConfig: src.sdConfig || { liveSetPo: 0 } };
+    else {
+      /* 주인 덱을 정할 수 없으면 맨 위 데이터를 그대로 둔다 — 여기서 빼 버리면 서버에서 사라진다 */
+      if (src.players) out.players = src.players;
+      if (src.lineupMap) out.lineupMap = src.lineupMap;
+      if (src.sdConfig) out.sdConfig = src.sdConfig;
+    }
   }
   return out;
 }
@@ -2155,7 +2168,12 @@ function canonJson(v) {
   if (typeof v === "number") return isFinite(v) ? String(v) : "null";
   if (typeof v === "string") return JSON.stringify(v);
   if (typeof v === "boolean") return v ? "true" : "false";
-  if (Array.isArray(v)) return "[" + v.map(canonJson).join(",") + "]";
+  if (Array.isArray(v)) {
+    /* map 은 빈 칸을 건너뛴다 — 칸마다 돌아야 JSON 과 같아진다 (빈 칸은 null) */
+    var parts = [];
+    for (var i = 0; i < v.length; i++) parts.push(canonJson(v[i]));
+    return "[" + parts.join(",") + "]";
+  }
   if (typeof v === "object") {
     if (typeof v.toJSON === "function") return canonJson(v.toJSON());
     return "{" + Object.keys(v).filter(function(k) { return v[k] !== undefined && typeof v[k] !== "function"; }).sort()

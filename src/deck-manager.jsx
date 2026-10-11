@@ -386,11 +386,17 @@ function isGuestUid(uid){ return !uid || String(uid).indexOf("guest_") === 0; }
 /* 되돌리기용 스냅샷 — 시트 가져오기처럼 한 번에 많이 갈아엎는 작업 직전에 남긴다.
    덱마다 마지막 하나만 들고 있으면 충분하다. 브라우저에만 저장한다. */
 function snapKey(deckId){ return "deck-snapshot-" + deckId; }
-async function saveDeckSnapshot(deckId, label, data){
+/* owner — 그 스냅샷을 남긴 계정. 이 브라우저의 저장소는 계정 구분이 없어서, 같은 덱 id 를 물려받은 다른 계정·게스트가
+   남긴 스냅샷으로 "되돌리기"를 하면 남의 내용이 내 덱에 저장된다. 주인이 다르거나 적혀 있지 않은 스냅샷은 없는 것으로 친다 */
+async function saveDeckSnapshot(deckId, label, data, owner){
   if(!deckId) return false;
-  return await sSet(snapKey(deckId), { ts: Date.now(), label: label || "", data: data });
+  return await sSet(snapKey(deckId), { ts: Date.now(), label: label || "", data: data, owner: owner || "" });
 }
-async function loadDeckSnapshot(deckId){ return deckId ? await sGet(snapKey(deckId)) : null; }
+async function loadDeckSnapshot(deckId, owner){
+  if(!deckId) return null;
+  var v = await sGet(snapKey(deckId));
+  return (v && v.owner && v.owner === (owner || "")) ? v : null;
+}
 async function clearDeckSnapshot(deckId){ if(deckId) await sSet(snapKey(deckId), null); }
 function snapAgo(ts){
   var m = Math.floor((Date.now() - ts) / 60000);
@@ -1109,7 +1115,7 @@ function useMedia(q){var _s=useState(false);var m=_s[0];var setM=_s[1];useEffect
    나머지 절반이 옛 state 였고, 요청도 한꺼번에 나가서 옛 내용이 마지막에 DB 에 남을 수 있었다.
    그래서 (1) 저장할 때마다 최신 값을 여기에 바로 적고 그 순간의 한 덩어리를 통째로 보내며
    (2) 이 줄을 읽고 쓰는 요청은 부른 순서대로 하나씩 보낸다.
-   앞 요청이 waitMs 안에 끝나지 않으면(네트워크 멈춤) 더 기다리지 않고 다음 요청을 보낸다 */
+   앞 요청이 시작한 뒤 waitMs 안에 끝나지 않으면(네트워크 멈춤) 더 기다리지 않고 다음 요청을 보낸다 */
 function makeDeckWriter(waitMs) {
   var latest = {};
   var seen = {};
@@ -1133,10 +1139,17 @@ function makeDeckWriter(waitMs) {
     },
     /* job 을 앞 요청이 끝난 뒤에 실행하고, job 의 결과(실패 포함)를 그대로 돌려준다 */
     queue: function (job) {
-      var run = tail.then(function () { return job(); });
-      var timer = null;
-      var guard = new Promise(function (resolve) { timer = setTimeout(resolve, waitMs); });
-      tail = Promise.race([run.then(function () {}, function () {}), guard]).then(function () { clearTimeout(timer); });
+      var prev = tail;
+      var run = prev.then(function () { return job(); });
+      /* 기다림은 이 작업이 실제로 시작한 때부터 센다. 줄에 선 때부터 세면, 앞 작업들이 느릴 때 아직 시작도 안 한 작업의 시한이
+         먼저 지나서 뒤 작업이 겹쳐 돈다 (느린 통신에서 연달아 고치면 저장 여러 개가 동시에 돌았다) */
+      tail = prev.then(function () {
+        return new Promise(function (resolve) {
+          var timer = setTimeout(resolve, waitMs);
+          var end = function () { clearTimeout(timer); resolve(); };
+          run.then(end, end);
+        });
+      });
       return run;
     }
   };
@@ -1157,6 +1170,12 @@ function toDeckFormat(all, list, fallbackId) {
     var legacy = (list || out.deckList).filter(function(d) { return d && String(d.deckId || "").indexOf("dk_legacy_") === 0; })[0];
     var owner = legacy ? legacy.deckId : (src.deckCurrent || fallbackId || "");
     if (owner) out.decks[owner] = { players: src.players || [], lineupMap: src.lineupMap || {}, sdConfig: src.sdConfig || { liveSetPo: 0 } };
+    else {
+      /* 주인 덱을 정할 수 없으면 맨 위 데이터를 그대로 둔다 — 여기서 빼 버리면 서버에서 사라진다 */
+      if (src.players) out.players = src.players;
+      if (src.lineupMap) out.lineupMap = src.lineupMap;
+      if (src.sdConfig) out.sdConfig = src.sdConfig;
+    }
   }
   return out;
 }
@@ -1180,7 +1199,7 @@ function deckLosesAllPlayers(base, next) {
 
 /* 줄을 마지막으로 쓴 앱의 저장 방식 — 줄 맨 위 savedBy 에 적는다. 사고가 났을 때 어느 방식의 앱이 썼는지 가릴 수 있다
    (이 표식이 없거나 옛 값이면, 새로고침하지 않은 옛 탭이 통째로 덮어쓴 것이다) */
-var SAVE_TAG = "merge-1";
+var SAVE_TAG = "merge-2";   /* merge-1: 2026-10-07 · merge-2: 2026-10-10 보강 */
 
 /* JSON 으로 저장했다 읽은 값과 메모리의 값을 견줄 수 있게 한 줄로 편다.
    DB(jsonb)는 키 순서를 지키지 않으므로 키를 정렬하고, JSON 에 실리지 않는 값(undefined · NaN)은 JSON 이 하는 대로 다룬다 */
@@ -1189,7 +1208,12 @@ function canonJson(v) {
   if (typeof v === "number") return isFinite(v) ? String(v) : "null";
   if (typeof v === "string") return JSON.stringify(v);
   if (typeof v === "boolean") return v ? "true" : "false";
-  if (Array.isArray(v)) return "[" + v.map(canonJson).join(",") + "]";
+  if (Array.isArray(v)) {
+    /* map 은 빈 칸을 건너뛴다 — 칸마다 돌아야 JSON 과 같아진다 (빈 칸은 null) */
+    var parts = [];
+    for (var i = 0; i < v.length; i++) parts.push(canonJson(v[i]));
+    return "[" + parts.join(",") + "]";
+  }
   if (typeof v === "object") {
     if (typeof v.toJSON === "function") return canonJson(v.toJSON());
     return "{" + Object.keys(v).filter(function(k) { return v[k] !== undefined && typeof v[k] !== "function"; }).sort()
@@ -1238,7 +1262,7 @@ function classifyKeySave(server, base, mine, sent) {
   return "conflict";
 }
 
-function useData(userId, sdState, setSdState, curDeckId){
+function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
   var _p=useState([]);var players=_p[0];var setPlayers=_p[1];
   var _lm=useState({});var lineupMap=_lm[0];var setLineupMap=_lm[1];
   var _sk=useState(DEFAULT_SKILLS);var skills=_sk[0];var setSkills=_sk[1];
@@ -1254,6 +1278,12 @@ function useData(userId, sdState, setSdState, curDeckId){
   var _le=useState(null);var loadError=_le[0];var setLoadError=_le[1];
   var uidRef=React.useRef(userId);uidRef.current=userId;
   var deckIdRef=React.useRef(curDeckId);deckIdRef.current=curDeckId;
+  /* 지금 덱의 목록 항목({deckId, teamName}) — 덱을 저장할 때 서버 목록에 이 덱이 빠져 있으면 다시 넣는 데 쓴다 */
+  var entryRef=React.useRef(null);entryRef.current=curDeckEntry||null;
+  /* 0.8초를 기다리는 세트덱 설정 변경을 지금 저장으로 넘기는 함수 — App 이 넣어 둔다 (창을 닫기 직전에 부른다) */
+  var flushRef=React.useRef(null);
+  /* 0.8초를 기다리는 설정 변경을 저장하지 않고 버리는 함수 — App 이 넣어 둔다 (화면을 서버 내용으로 갈아 끼울 때 부른다) */
+  var cancelSdRef=React.useRef(null);
   /* 지금 메모리에 든 선수·라인업·세트덱 설정이 "누구의 어느 덱"을 읽어 온 것인지. 읽어 온 것이 없으면 null.
      저장은 이 값이 지금 계정·지금 덱과 같을 때만 나간다 (deckReady).
      이 확인이 없던 때에는 덱 읽기가 실패해도 0.8초 뒤 자동 저장이 메모리의 빈 초기값을
@@ -1283,16 +1313,36 @@ function useData(userId, sdState, setSdState, curDeckId){
   var pendingRef=React.useRef(null); if(!pendingRef.current) pendingRef.current=newPending();
   var baseRef=React.useRef(null); if(!baseRef.current) baseRef.current=newBase();
   var sentRef=React.useRef(null); if(!sentRef.current) sentRef.current={};
+  /* unsureRef : 덱마다 "보냈는데 서버에 반영됐는지 확인하지 못한 쓰기"가 있는가 (decks — 그 쓰기의 번호 · flying — 아직 응답이 오지 않은 쓰기의 수).
+                 번호는 보낼 때 적고, 그 쓰기가 성공했거나 서버 내용을 읽어서 확인했을 때 지운다. 남아 있는 동안에는 내용이 base 와
+                 같아 보여도 서버가 어느 쪽인지 모른다 — 저장을 건너뛰지 않고 읽어서 견준다 (deckUnchanged).
+                 "마지막으로 보낸 내용이 base 와 다른가"로는 부족하다 — 결과를 모르는 쓰기가 둘이고 뒤의 것이 base 와 같으면 가려진다.
+                 ok — 덱마다 성공이 확인된 쓰기 중 가장 큰 번호. 겹쳐 돈 저장에서 옛 쓰기의 응답이 더 새 쓰기보다 늦게 오면 base 를 옛 내용으로 되돌리지 않는다
+     genRef    : 이 탭이 아는 서버 내용(base)이 바뀔 때마다 올라가는 번호. 읽기를 시작할 때와 끝났을 때 번호가 다르면
+                 그 응답은 바뀌기 전의 줄일 수 있어서 버리고 다시 읽는다 (저장이 겹쳐 돌 때의 헛 충돌을 막는다) */
+  var unsureRef=React.useRef(null); if(!unsureRef.current) unsureRef.current={seq:0,decks:{},flying:{},ok:{}};
+  /* declinedRef : 방금 "저장하지 않고 그대로 둔다"로 끝낸 물음들 (1초 동안만 들고 있는다). 그 직후 탭이 뒤로 가거나 포커스를 잃으면
+                   그 답은 유저가 누른 것이 아니라 브라우저가 창을 닫으며 돌려준 것이다 — 못 올린 변경으로 되돌려 두고 돌아오면 다시 묻는다 */
+  var declinedRef=React.useRef(null); if(!declinedRef.current) declinedRef.current=[];
+  var genRef=React.useRef(0);
   /* 계정이 바뀌면 앞 계정의 것을 전부 버린다 — 들고 있으면 새 계정의 줄에 앞 계정의 내용이 얹힌다 */
   var cacheUidRef=React.useRef(userId);
   if(cacheUidRef.current!==userId){
     cacheUidRef.current=userId; allDataRef.current=null;
-    pendingRef.current=newPending(); baseRef.current=newBase(); sentRef.current={};
+    pendingRef.current=newPending(); baseRef.current=newBase(); sentRef.current={}; unsureRef.current={seq:0,decks:{},flying:{},ok:{}}; declinedRef.current=[]; genRef.current++;
   }
+  /* 화면에 깔린 직접 등록 카드 · 연구소 저장본도 앞 계정의 것이다 — 비워 둔다 (새 계정의 덱을 읽을 때 다시 채운다) */
+  useEffect(function(){ setCustomPlayers([]); setCustomDexState([]); setLabSaves([]); },[userId]);
   var globalLoadedRef=React.useRef(false); /* 선수도감/스킬 1회만 로드 */
   var hasPending=function(){
     var p=pendingRef.current;
     return Object.keys(p.decks).length>0 || p.listOps.length>0 || !!p.customDex || Object.keys(p.lab).length>0;
+  };
+  /* 창을 닫거나 로그아웃할 때 물을 만한 변경이 남았는가 —
+     "마지막으로 본 덱" 표시만 바꾸는 가벼운 목록 변경(soft)은 치지 않는다 (덱만 바꿔도 닫을 때마다 묻게 된다) */
+  var hasUnsaved=function(){
+    var p=pendingRef.current;
+    return Object.keys(p.decks).length>0 || !!p.customDex || Object.keys(p.lab).length>0 || p.listOps.some(function(op){ return !op.soft; });
   };
   var noteSent=function(key,str){
     var a=sentRef.current[key]||(sentRef.current[key]=[]);
@@ -1307,82 +1357,194 @@ function useData(userId, sdState, setSdState, curDeckId){
     var now = Date.now();
     if (now - saveWarnAtRef.current < 30000) return;
     saveWarnAtRef.current = now;
+    if (String((e && e.message) || '').indexOf('로그인 상태') >= 0) {
+      /* 통신이 아니라 로그인이 끊긴 경우 (다른 기기·탭에서 로그아웃했거나 로그인이 만료됐다) */
+      alert('로그인이 끊겨서 방금 변경을 저장하지 못했습니다.\n\n'
+        + '기존에 저장된 덱은 그대로 있습니다.\n'
+        + '이 창을 켜 둔 채 다른 탭에서 다시 로그인하면 이 창의 변경이 이어서 저장됩니다. 이 창을 새로고침하면 방금 변경은 사라집니다.');
+      return;
+    }
     alert('서버와 연결이 불안정해 방금 변경을 저장하지 못했습니다.\n\n'
       + '기존에 저장된 덱은 그대로 있습니다.\n'
-      + '이 창을 켜 두면 잠시 뒤 다시 저장을 시도합니다. 새로고침하면 방금 변경은 사라집니다.');
+      + '이 창을 켜 두면 통신이 돌아오는 대로 다시 저장합니다. 새로고침하면 방금 변경은 사라집니다.');
   };
   /* 메모리에 든 것이 지금 덱을 읽어 온 내용이 아니라서 저장을 버렸다.
      덱을 읽는 동안에는 화면이 가려져 있어 정상이라면 올 일이 없다 — 왔다면 알려서 새로고침하게 한다 */
+  var notReadyWarnAtRef = React.useRef(0);
   var warnNotReady = function(why) {
     console.error('[저장 취소] ' + why + ' — 덱 ' + deckIdRef.current);
     var now = Date.now();
-    if (now - saveWarnAtRef.current < 30000) return;
-    saveWarnAtRef.current = now;
+    if (now - notReadyWarnAtRef.current < 30000) return;
+    notReadyWarnAtRef.current = now;
     alert('덱을 제대로 불러오지 못한 상태라 방금 변경을 저장하지 않았습니다.\n\n'
       + '기존에 저장된 덱은 그대로 있습니다.\n'
       + '새로고침한 뒤 다시 시도해 주세요.');
   };
 
-  /* 같은 덱을 다른 기기·탭에서도 바꿨다. 한쪽을 조용히 버리지 않고 유저에게 묻는다.
-     shown — 그 덱이 지금 화면의 덱인가 / sv · me — 서버 내용과 올리려던 내용의 지문(deckSnap)
-     돌려주는 값: "server"(서버 내용을 따른다) · "apply"(이 탭의 내용으로 저장한다) · "none"(아무것도 하지 않는다) */
-  var askDeckConflict = function(shown, sv, me) {
-    var mine = shown ? '지금 화면의 내용' : '여기서 고치던 내용';
-    if (window.confirm((shown ? '이 덱이' : '앞서 고치던 덱이') + ' 다른 기기나 다른 탭에서 바뀌어서, 방금 변경을 저장하지 않았습니다.\n\n'
-      + '· 서버에 저장된 내용: 선수 ' + sv.n + '명 · 라인업 ' + sv.lu + '칸\n'
-      + '· ' + mine + ': 선수 ' + me.n + '명 · 라인업 ' + me.lu + '칸\n\n'
-      + '[확인] 서버에 저장된 내용을 ' + (shown ? '불러옵니다' : '그대로 둡니다') + ' (방금 한 변경은 다시 해 주세요)\n'
+  /* 지금 확인 창을 띄워 답을 받을 수 있는가 — 탭이 보이고 이 문서에 포커스가 있을 때만.
+     Chrome 은 "맨 앞 창의 지금 탭"이 아니면 confirm 을 띄우지 않고 곧바로 false 를 돌려준다 (다른 Chrome 창을 쓰는 중이면 탭은 보여도 그렇다).
+     그것을 답이나 "창이 막혀 있다"로 읽으면 유저는 보지도 못한 물음으로 변경이 버려진다 — 포커스가 없으면 묻지 않고 남겨 두었다가 돌아오면 묻는다.
+     다만 포커스가 있다고 한 번도 알려 준 적이 없는 환경(일부 앱 안 브라우저가 그럴 수 있다)에서는 포커스로 가릴 수 없다.
+     거기서 포커스를 기다리면 물음이 영영 뜨지 않는다 — 그때는 보이기만 하면 묻는다 (seenFocusRef — 유저가 고치는 순간에도 본다, putDeck) */
+  var seenFocusRef = React.useRef(false);
+  var canAsk = function() {
+    if (document.visibilityState !== "visible") return false;
+    if (typeof document.hasFocus !== "function") return true;
+    if (document.hasFocus()) { seenFocusRef.current = true; return true; }
+    return !seenFocusRef.current;
+  };
+  /* 같은 것을 다른 기기·탭에서도 바꿨다. 한쪽을 조용히 버리지 않고 유저에게 묻는다.
+     subject — 무엇이 ("이 덱이" · "직접 등록 카드가" …) / mine — 이 탭의 것을 부르는 말 / svText · meText — 양쪽을 한 줄로 /
+     keep — 서버 내용을 따르면 화면이 어떻게 되는지 ("불러옵니다" · "그대로 둡니다")
+     돌려주는 값: "server"(서버 내용을 따른다) · "apply"(이 탭의 내용으로 저장한다) · "none"(아무것도 하지 않는다) ·
+                  "wait"(답을 받지 못했다 — 변경을 남겨 두고 다시 묻는다) · "blocked"(두 창 모두 뜨지 않았다 — settleAsk 가 가린다) */
+  var askConflict = function(subject, mine, svText, meText, keep) {
+    /* 답하지 않고 다른 탭으로 가면 브라우저(Chrome)가 떠 있던 창을 "취소"로 닫고, 뒤에 있는 탭에서는 창이 뜨지도 않는다.
+       어느 쪽이든 유저의 답이 아니다. 답으로 치면 유저는 고르지 않았는데 "저장 안 함"으로 굳는다 — 남겨 두었다가 탭으로 돌아오면 다시 묻는다 */
+    var away = function() { return !canAsk(); };
+    var t0 = Date.now();
+    if (window.confirm(subject + ' 다른 기기나 다른 탭에서 바뀌어서, 방금 변경을 저장하지 않았습니다.\n\n'
+      + '· 서버에 저장된 내용: ' + svText + '\n'
+      + '· ' + mine + ': ' + meText + '\n\n'
+      + '[확인] 서버에 저장된 내용을 ' + keep + ' (방금 한 변경은 다시 해 주세요)\n'
       + '[취소] 다른 방법을 고릅니다')) return "server";
+    if (away()) return "wait";
+    var t1 = Date.now();
     if (window.confirm(mine + '으로 저장할까요?\n다른 기기나 탭에서 바꾼 내용은 사라집니다.\n\n'
       + '[확인] ' + mine + '으로 저장합니다\n'
       + '[취소] 저장하지 않고 그대로 둡니다')) return "apply";
+    if (away()) return "wait";
+    if (Date.now() - t1 <= 60) {
+      /* 둘째 창이 뜨지 않고 곧바로 false 가 왔다.
+         첫 창은 떴으면 답을 받지 못한 것이다 (그 창이 뜬 채로 탭·창을 떠났거나, 거기서 "창을 더 띄우지 않기"를 체크했다).
+         첫 창도 뜨지 않았으면 "blocked" — 창이 막혀 있을 수도, 방금 탭·창을 떠났을 수도 있다. 어느 쪽인지는 settleAsk 가 가린다 */
+      return (t1 - t0 <= 60) ? "blocked" : "wait";
+    }
     return "none";
+  };
+  /* 물음의 결과를 그 변경(대기분 entry)에 맞춰 다듬는다.
+     "blocked"(두 창 모두 뜨지 않음)는 한 번으로는 믿지 않는다 — 유저가 "이 페이지가 창을 더 띄우지 못하게"를 체크해 둔 경우에도,
+     탭·창을 막 떠난 직후에도 그렇게 보인다 (가시성·포커스 변경은 confirm 이 끝난 뒤에야 페이지에 도착한다).
+     물을 수 있는 상태(canAsk)에서 두 번 연속이면 창이 막혀 있는 것이다. 그대로 "아무것도 하지 않기"로 두면 화면에는 변경이 남아 있는데
+     저장은 안 되는 상태가 조용히 이어지므로 서버 내용을 따른다 — 화면이 서버 내용으로 바뀌어, 보이는 것이 곧 저장된 것이 된다 */
+  var settleAsk = function(entry, v) {
+    if (v !== "blocked") { entry.blocked = 0; return v; }
+    entry.blocked = (entry.blocked || 0) + 1;
+    if (entry.blocked < 2) return "wait";
+    console.warn('[저장] 확인 창을 띄울 수 없어 서버에 저장된 내용을 따릅니다');
+    return "server";
+  };
+  /* "저장하지 않고 그대로 둔다"로 끝낸 것을 1초 동안 적어 둔다 (declinedRef) */
+  var noteDeclined = function(kind, id, entry) {
+    var now = Date.now();
+    declinedRef.current = declinedRef.current.filter(function(d) { return now - d.at <= 1000; });
+    declinedRef.current.push({ kind: kind, id: id, entry: entry, pend: pendingRef.current, at: now });
+  };
+  /* shown — 그 덱이 지금 화면의 덱인가 / sv · me — 서버 내용과 올리려던 내용의 지문(deckSnap) */
+  var askDeckConflict = function(shown, sv, me) {
+    return askConflict(shown ? '이 덱이' : '앞서 고치던 덱이', shown ? '지금 화면의 내용' : '여기서 고치던 내용',
+      '선수 ' + sv.n + '명 · 라인업 ' + sv.lu + '칸', '선수 ' + me.n + '명 · 라인업 ' + me.lu + '칸', shown ? '불러옵니다' : '그대로 둡니다');
   };
   /* 서버의 내용을 화면에 깐다 (덱을 다시 불러온 것과 같다) — 그 덱이 지금 화면의 덱일 때만 */
   var showServerDeck = function(uid, deckId, serverDeck) {
     var k = loadedRef.current;
     if (!k || k.uid !== uid || k.deckId !== deckId) return;
     var got = normDeck(serverDeck);
+    /* 0.8초를 기다리던 설정 변경은 방금 버리기로 한 내용이다. 그 타이머가 화면이 다시 그려지기 전에 터지면
+       버린 설정이 서버 내용 위에 묻지 않고 올라간다 (base 가 방금 서버 내용으로 바뀌었다) — 여기서 지운다 */
+    if (cancelSdRef.current) { try { cancelSdRef.current(); } catch (x) {} }
     setPlayers(got.players); setLineupMap(got.lineupMap); setSdState(got.sdConfig);
     writer.reset(got);
+    genRef.current++;
+  };
+  /* 올릴 것이 없는 덱 저장인가 — 내용이 내가 아는 서버 내용(base)과 같고, 서버가 정말 그 내용인지 의심할 이유가 없다.
+     결과를 확인하지 못한 쓰기가 있거나 아직 가는 중인 쓰기가 있으면(unsureRef) 건너뛰지 않고 읽어서 견준다 */
+  var deckUnchanged = function(id, data) {
+    var u = unsureRef.current;
+    if (u.decks[id] || u.flying[id] > 0) return false;
+    return deckSnap(data).str === (baseRef.current.decks[id] || deckSnap(null)).str;
   };
 
-  /* 저장이 실패하면 뒤에서 몇 번 더 올려 본다 — 유저가 더 손대지 않아도 통신이 돌아오면 올라가게 */
+  /* 저장이 실패하면 뒤에서 계속 다시 올려 본다 (5초 → 15초 → 30초 → 그 뒤로 1분마다) —
+     유저가 더 손대지 않아도 통신이 돌아오면 올라가게. 통신이 돌아왔거나 탭으로 돌아온 순간에는 기다리지 않고 바로 올린다 (아래 effect) */
   var retryRef = React.useRef({ timer: null, n: 0 });
   var retryLater = function(uid) {
     var r = retryRef.current;
-    if (r.timer || r.n >= 5) return;
-    var wait = [5000, 15000, 30000, 60000, 60000][r.n]; r.n++;
+    if (r.timer) return;
+    var wait = [5000, 15000, 30000, 60000][Math.min(r.n, 3)]; r.n++;
     r.timer = setTimeout(function() {
       r.timer = null;
-      if (uidRef.current !== uid || !hasPending()) return;
+      var now = uidRef.current;
+      /* 그 사이 계정이 바뀌었다. 새 계정의 못 올린 변경이 있으면 그쪽으로 다시 건다 (이 타이머가 걸려 있어서 그쪽 예약이 막혔을 수 있다) */
+      if (now !== uid) { if (now && hasPending()) retryLater(now); return; }
+      if (!hasPending()) return;
       writer.queue(function() { return commit(uid, true); });
     }, wait);
   };
+  useEffect(function(){
+    var lastKick = 0;
+    var kick = function() {
+      if (document.visibilityState === 'hidden') return;
+      var uid = uidRef.current;
+      if (!uid || !hasPending()) return;
+      /* 탭으로 돌아오면 가시성 · 포커스 신호가 잇달아 온다 — 한 번만 올린다 */
+      var now = Date.now(); if (now - lastKick < 300) return; lastKick = now;
+      var r = retryRef.current;
+      if (r.timer) { clearTimeout(r.timer); r.timer = null; }
+      r.n = 0;
+      writer.queue(function() { return commit(uid, true); });
+    };
+    /* 방금(1초 안) "그대로 둔다"로 끝낸 물음 직후에 탭이 뒤로 가거나 포커스를 잃었다 — 유저가 누른 답이 아니라 브라우저가 창을 닫으며
+       돌려준 답이다 (그 자리에서는 아직 "보인다"로 읽혀서 알 수 없다). 버렸던 변경을 못 올린 변경으로 되돌려 둔다 — 돌아오면 kick 이 다시 묻는다 */
+    var undecline = function() {
+      if (canAsk()) return;
+      var now = Date.now(), pend = pendingRef.current;
+      declinedRef.current.forEach(function(d) {
+        if (now - d.at > 1000 || d.pend !== pend) return;
+        if (d.kind === 'deck') { if (!pend.decks[d.id]) pend.decks[d.id] = d.entry; }
+        else if (d.kind === 'customDex') { if (!pend.customDex) { d.entry.ok = null; pend.customDex = d.entry; } }
+        else if (d.kind === 'lab') { if (!pend.lab[d.id]) { d.entry.ok = null; pend.lab[d.id] = d.entry; } }
+      });
+      declinedRef.current = [];
+    };
+    window.addEventListener('online', kick); document.addEventListener('visibilitychange', kick); window.addEventListener('focus', kick);
+    document.addEventListener('visibilitychange', undecline); window.addEventListener('blur', undecline);
+    return function(){
+      window.removeEventListener('online', kick); document.removeEventListener('visibilitychange', kick); window.removeEventListener('focus', kick);
+      document.removeEventListener('visibilitychange', undecline); window.removeEventListener('blur', undecline);
+    };
+  },[]);
 
   /* ── 저장 ──
      서버의 최신 줄을 읽고 → 이 탭이 바꾼 것(pendingRef)만 얹고 → 읽은 뒤로 줄이 바뀌지 않았을 때만 쓴다.
      읽고 쓰는 사이에 다른 곳에서 저장했으면(saveUserRow 의 conflict) 다시 읽어서 다시 얹는다.
      quiet — 실패해도 알림창을 띄우지 않는다 (뒤에서 다시 시도할 때) */
-  var commit = async function(uid, quiet) {
+  var commitOnce = async function(uid, quiet) {
     if (!supabase || !uid || isGuestUid(uid)) return true;
     if (uidRef.current !== uid) return false;
-    var pend = pendingRef.current, base = baseRef.current;
+    var pend = pendingRef.current, base = baseRef.current, uns = unsureRef.current;
     /* 바뀐 것이 없는 덱 저장은 서버까지 가지 않는다 — 전에는 앱을 열기만 해도 줄을 한 번씩 다시 썼다 */
-    Object.keys(pend.decks).forEach(function(id) {
-      if (deckSnap(pend.decks[id].data).str === (base.decks[id] || deckSnap(null)).str) delete pend.decks[id];
-    });
+    Object.keys(pend.decks).forEach(function(id) { if (deckUnchanged(id, pend.decks[id].data)) delete pend.decks[id]; });
     var fail = function(e) {
+      /* 그 사이 로그아웃했거나 계정이 바뀌었다 — 이 계정의 못 올린 변경은 이미 버려졌다. 알리지도 다시 올리지도 않는다
+         (로그아웃을 확인한 직후에 "로그인이 끊겨서 … 이어서 저장됩니다"가 뜨면 틀린 말이다) */
+      if (uidRef.current !== uid) return false;
       if (quiet) console.error('[저장 실패] 뒤에서 다시 시도합니다:', e); else warnSaveBlocked(e);
       retryLater(uid);
       return false;
     };
     var refused = null;   /* 바로 앞 시도에서 서버가 받지 않은 쓰기가 기준으로 삼았던 저장 시각 */
+    var staleReads = 0;
     for (var attempt = 0; attempt < 4; attempt++) {
       if (!hasPending()) return true;
-      var got;
+      var got, gen = genRef.current;
       try { got = await loadUserRow(uid); } catch (e) { return fail(e); }
       if (pendingRef.current !== pend) return false;   /* 읽는 사이 계정이 바뀌었다 */
+      if (genRef.current !== gen && staleReads < 5) {
+        /* 읽는 사이에 다른 저장이 끝났거나 덱을 새로 읽었다 — 이 응답은 그 전의 줄일 수 있다. 그것으로 "다른 곳에서 바뀌었다"고
+           판단하면 헛 충돌이 난다 (통신이 느려 저장이 겹쳐 돌 때). 버리고 다시 읽는다 */
+        staleReads++; attempt--; continue;
+      }
       if (refused !== null && got.exists && String(got.stamp || "") === refused) {
         /* 줄은 그대로인데 "읽은 뒤로 바뀌지 않았을 때만" 조건이 걸리지 않았다 — 조건이 어긋난 것이다. 조건 없이 쓴다 */
         console.error('[저장] 저장 시각 조건이 걸리지 않아 조건 없이 씁니다:', refused);
@@ -1390,65 +1552,118 @@ function useData(userId, sdState, setSdState, curDeckId){
       }
       var row = got.state || {};
       var ops = pend.listOps.slice();
+      /* 탭이 뒤에 있거나 포커스가 없으면 확인 창을 띄울 수 없다 (브라우저가 곧바로 "취소"를 돌려준다 — canAsk).
+         물어야 하는 것은 남겨 두었다가 돌아오면 다시 올린다 */
+      var visible = canAsk();
       if (!row.decks) {
-        /* 옛 형식 줄 — 맨 위 데이터를 주인 덱으로 옮긴다. 주인을 찾는 목록은 이번에 얹을 목록 변경까지 반영한 것 */
+        /* 옛 형식 줄 — 맨 위 데이터를 주인 덱으로 옮긴다. 주인을 찾는 목록 · 지금 덱은 이번에 얹을 목록 변경까지 반영한 것 */
         var pv = { deckList: Array.isArray(row.deckList) ? row.deckList.slice() : [], deckCurrent: row.deckCurrent || "" };
         ops.forEach(function(op) { try { op.fn(pv); } catch (e) {} });
-        row = toDeckFormat(row, pv.deckList, Object.keys(pend.decks)[0] || deckIdRef.current);
+        /* 아무것도 없으면 목록의 첫 덱 — 로그인할 때 "지금 덱"이 없으면 띄우는 덱이다. 이것까지 없을 때만(목록이 비었다) 맨 위에 그대로 둔다 */
+        row = toDeckFormat(row, pv.deckList, pv.deckCurrent || Object.keys(pend.decks)[0] || deckIdRef.current
+          || ((pv.deckList[0] && pv.deckList[0].deckId) || ""));
       }
       var touched = false;
       var done = [];   /* 쓰기가 성공했을 때 마무리할 일들 */
+      var sentIds = [];         /* 이번 쓰기에 실리는 덱들 */
+      var again = false;        /* 가는 중인 다른 쓰기 때문에 판정을 미룬 덱이 있다 — 그 쓰기가 끝난 뒤에 다시 본다 */
+      var unanswered = false;   /* 물었는데 답을 받지 못한 것이 있다 (askConflict 의 "wait") */
+      /* 이번 회차에 [확인]을 받지 못한 물음이 있었으면 더 묻지 않는다 — 유저가 자리를 떠났을 수 있고, 떠난 직후에는 아직 "보인다"로 읽혀서
+         이어서 물으면 뜨지도 않은 창의 false 를 답으로 받게 된다. 남은 것은 다음 회차에 묻는다 */
+      var stopAsk = false;
+      var listKey = function() { return canonJson([row.deckList, row.deckCurrent || "", row.deletedDecks || null]); };
       if (ops.length > 0) {
         if (!Array.isArray(row.deckList)) row.deckList = [];
-        var listWas = canonJson([row.deckList, row.deckCurrent || ""]);
+        var listWas = listKey();
         ops.forEach(function(op) {
           /* 목록 변경 하나가 오류를 내도 저장 전체가 막히면 안 된다 — 그 변경만 버린다 */
-          var keepList = row.deckList.slice(), keepCur = row.deckCurrent;
+          var keepList = row.deckList.slice(), keepCur = row.deckCurrent, keepDel = row.deletedDecks;
           try { op.fn(row); if (!Array.isArray(row.deckList)) throw new Error('덱 목록이 배열이 아닙니다'); }
           catch (e) {
             console.error('[덱 목록 변경 실패]', e);
-            row.deckList = keepList; row.deckCurrent = keepCur;
+            row.deckList = keepList; row.deckCurrent = keepCur; row.deletedDecks = keepDel;
             var bad = pend.listOps.indexOf(op); if (bad >= 0) pend.listOps.splice(bad, 1);
           }
         });
-        if (canonJson([row.deckList, row.deckCurrent || ""]) !== listWas) touched = true;
+        if (listKey() !== listWas) touched = true;
       }
       Object.keys(pend.decks).forEach(function(id) {
         var p = pend.decks[id], sv = deckSnap(row.decks[id]), me = deckSnap(p.data);
         var k = loadedRef.current, shown = !!k && k.uid === uid && k.deckId === id;
         var v = classifyDeckSave(row.decks[id], base.decks[id], p.data, p.kinds, sentRef.current["deck:" + id]);
+        /* 쓰지 않고 끝내는 판정(이미 같다 · 묻는다 · 받지 않는다)은 방금 읽은 내용이 그대로일 때만 맞다. 이 덱이 실린 다른 쓰기가 아직
+           가는 중이면(저장이 겹쳐 돌 때) 곧 바뀔 수 있다 — 끝내지 않고 남겨 두었다가 그 쓰기가 끝난 뒤에 다시 본다.
+           쓰는 판정은 그대로 간다 — "읽은 뒤로 줄이 바뀌지 않았을 때만" 조건이 둘 중 하나만 받게 한다 */
+        if (v !== "apply" && v !== "heal" && uns.flying[id] > 0) { again = true; return; }
         if (v === "conflict") {
-          v = askDeckConflict(shown, sv, me);
-          if (v === "apply") base.decks[id] = sv;   /* 서버의 지금 내용을 보고 덮어쓰기로 했다 — 다시 묻지 않는다 */
+          if (!visible) return;
+          if (stopAsk) { unanswered = true; return; }
+          v = settleAsk(p, askDeckConflict(shown, sv, me));
+          if (v !== "server" && v !== "apply") stopAsk = true;
+          if (v === "wait") { unanswered = true; return; }
+          if (v === "apply") { base.decks[id] = sv; genRef.current++; }   /* 서버의 지금 내용을 보고 덮어쓰기로 했다 — 다시 묻지 않는다 */
         }
         if (v === "apply" || v === "heal") {
           if (v === "heal") console.warn('[저장] 서버에서 비워진 덱을 이 탭의 내용으로 되살립니다 — 덱 ' + id);
-          row.decks[id] = p.data; touched = true;
+          /* 보내는 것과 글자 하나 다르지 않은 사본을 기준(base)으로 삼는다 — 보내는 사이 화면 쪽 객체가 바뀌어도 어긋나지 않게 */
+          var data = JSON.parse(JSON.stringify(p.data));
+          me = deckSnap(data);
+          row.decks[id] = data; touched = true;
+          /* 이 덱이 서버 목록에서 빠져 있으면 같은 쓰기에서 다시 넣는다. 옛 탭은 줄을 통째로 덮으면서 목록도 자기 것으로 바꾼다 —
+             내용만 되살리고 목록을 그대로 두면 덱이 다시 "서버에는 있는데 목록에 없는" 상태가 된다.
+             다른 곳에서 일부러 지운 덱(deletedDecks 에 표식이 있다)은 넣지 않는다 */
+          if (p.entry && !(row.deletedDecks && row.deletedDecks[id])) {
+            if (!Array.isArray(row.deckList)) row.deckList = [];
+            if (!row.deckList.some(function(d) { return d && d.deckId === id; })) {
+              console.warn('[저장] 서버 목록에서 빠진 덱을 다시 넣습니다 — 덱 ' + id);
+              row.deckList.push({ deckId: id, teamName: p.entry.teamName });
+            }
+          }
           noteSent("deck:" + id, me.str);
-          done.push(function() { base.decks[id] = me; if (pend.decks[id] === p) delete pend.decks[id]; });
+          /* 이 쓰기의 결과를 확인할 때까지 번호를 적어 둔다 — 성공하면 아래 done 이 지운다 (그 사이 더 새 쓰기가 나갔으면 그쪽 번호라 그대로 둔다) */
+          var tok = ++uns.seq; uns.decks[id] = tok; sentIds.push(id);
+          done.push(function() {
+            /* 더 새 쓰기가 이미 확인됐으면(겹쳐 돈 저장에서 옛 쓰기의 응답이 늦게 온 것이다) base 를 옛 내용으로 되돌리지 않는다 —
+               되돌리면 유저가 그 옛 내용으로 돌아갔을 때 "바뀐 것 없음"으로 보고 저장하지 않는다 */
+            if (!(uns.ok[id] > tok)) { uns.ok[id] = tok; base.decks[id] = me; }
+            if (uns.decks[id] === tok) delete uns.decks[id];
+            if (pend.decks[id] === p) delete pend.decks[id];
+          });
           return;
         }
+        /* 서버의 내용을 읽어서 확인했다 — 결과를 모르는 쓰기는 이제 없다 */
+        delete uns.decks[id];
         if (v === "same") base.decks[id] = me;
         else if (v === "server") { base.decks[id] = sv; showServerDeck(uid, id, row.decks[id]); }
         else if (v === "refuse") warnNotReady('저장된 덱의 선수가 올리려는 내용에 하나도 없습니다');
+        else if (v === "none") noteDeclined("deck", id, p);
         if (pend.decks[id] === p) delete pend.decks[id];
       });
       if (pend.customDex) {
         var pc = pend.customDex, sc = Array.isArray(row.customDex) ? row.customDex : [];
         var svc = canonJson(sc), mec = canonJson(pc.value);
         var vc = classifyKeySave(svc, base.customDex, mec, sentRef.current.customDex);
+        if (vc === "conflict") {
+          /* 덱과 같은 식으로 묻는다. 묻지 않고 서버 것을 따르면, 옛 탭이 목록을 옛 사본으로 되돌렸을 때 이 탭에 남은 마지막 사본까지 버리게 된다 */
+          if (!visible) vc = "wait";
+          else if (stopAsk) { vc = "wait"; unanswered = true; }
+          else {
+            vc = settleAsk(pc, askConflict('직접 등록 카드가', '지금 화면의 카드 목록', '카드 ' + sc.length + '장', '카드 ' + pc.value.length + '장', '불러옵니다'));
+            if (vc !== "server" && vc !== "apply") stopAsk = true;
+            if (vc === "wait") unanswered = true;
+            if (vc === "apply") { base.customDex = svc; genRef.current++; }
+          }
+        }
         if (vc === "apply") {
           row.customDex = pc.value; touched = true;
           noteSent("customDex", mec);
           done.push(function() { base.customDex = mec; pc.ok = true; if (pend.customDex === pc) pend.customDex = null; });
-        } else {
+        } else if (vc !== "wait") {
           if (vc === "same") { base.customDex = mec; pc.ok = true; }
           else {
-            /* 다른 기기·탭에서 카드 목록이 바뀌었다 — 서버 것을 따른다 */
-            base.customDex = svc; pc.ok = false;
-            setCustomPlayers(sc); setCustomDexState(sc.slice(0, CUSTOM_MAX));
-            alert('직접 등록 카드가 다른 기기나 다른 탭에서 바뀌어서, 방금 변경을 저장하지 않았습니다.\n\n'
-              + '서버에 저장된 목록을 불러왔습니다. 방금 한 변경은 다시 해 주세요.');
+            pc.ok = false;
+            if (vc === "server") { base.customDex = svc; setCustomPlayers(sc); setCustomDexState(sc.slice(0, CUSTOM_MAX)); }
+            else if (vc === "none") noteDeclined("customDex", null, pc);
           }
           if (pend.customDex === pc) pend.customDex = null;
         }
@@ -1457,48 +1672,81 @@ function useData(userId, sdState, setSdState, curDeckId){
         var pl = pend.lab[id], sl = (row.lab && Array.isArray(row.lab[id])) ? row.lab[id] : [];
         var svl = canonJson(sl), mel = canonJson(pl.value);
         var vl = classifyKeySave(svl, base.lab[id] === undefined ? canonJson([]) : base.lab[id], mel, sentRef.current["lab:" + id]);
+        if (vl === "conflict") {
+          if (!visible) return;
+          if (stopAsk) { unanswered = true; return; }
+          vl = settleAsk(pl, askConflict('연구소 저장본이', '지금 화면의 저장본', sl.length + '개', pl.value.length + '개', '불러옵니다'));
+          if (vl !== "server" && vl !== "apply") stopAsk = true;
+          if (vl === "wait") { unanswered = true; return; }
+          if (vl === "apply") { base.lab[id] = svl; genRef.current++; }
+        }
         if (vl === "apply") {
           row.lab = row.lab || {}; row.lab[id] = pl.value; touched = true;
           noteSent("lab:" + id, mel);
           done.push(function() { base.lab[id] = mel; pl.ok = true; if (pend.lab[id] === pl) delete pend.lab[id]; });
-        } else {
-          if (vl === "same") { base.lab[id] = mel; pl.ok = true; }
-          else {
-            base.lab[id] = svl; pl.ok = false;
-            if (deckIdRef.current === id) setLabSaves(sl.slice(0, LAB_MAX_SAVES));
-            alert('연구소 저장본이 다른 기기나 다른 탭에서 바뀌어서, 방금 변경을 저장하지 않았습니다.\n\n'
-              + '서버에 저장된 내용을 불러왔습니다. 방금 한 변경은 다시 해 주세요.');
-          }
-          if (pend.lab[id] === pl) delete pend.lab[id];
+          return;
         }
+        if (vl === "same") { base.lab[id] = mel; pl.ok = true; }
+        else {
+          pl.ok = false;
+          if (vl === "server") { base.lab[id] = svl; if (deckIdRef.current === id) setLabSaves(sl.slice(0, LAB_MAX_SAVES)); }
+          else if (vl === "none") noteDeclined("lab", id, pl);
+        }
+        if (pend.lab[id] === pl) delete pend.lab[id];
       });
       var settleOps = function() {
         ops.forEach(function(op) {
-          op.result = { list: (row.deckList || []).slice(), cur: row.deckCurrent || null };
+          op.result = { list: (row.deckList || []).slice(), cur: row.deckCurrent || null, deleted: row.deletedDecks || {} };
           var k = pend.listOps.indexOf(op);
           if (k >= 0) pend.listOps.splice(k, 1);
         });
       };
-      if (!touched) { settleOps(); allDataRef.current = row; return true; }
+      /* 판정을 미뤘거나 답을 받지 못한 것이 남았으면 뒤에서 다시 본다 (가는 중이던 쓰기가 끝난 뒤 · 창을 다시 띄울 수 있을 때).
+         탭이 뒤에 있거나 포커스가 없어서 못 물은 것은 여기서 예약하지 않는다 — 돌아오는 순간 다시 올린다 (위의 kick) */
+      var later = function() { if (again || (unanswered && canAsk())) retryLater(uid); };
+      /* 미룬 판정이 남았으면 다시 올리기 간격을 처음으로 되돌리지 않는다 — 그 쓰기가 오래 멎어 있을 때 5초마다 읽기만 되풀이하지 않게 */
+      if (!touched) { settleOps(); allDataRef.current = row; if (!again) retryRef.current.n = 0; later(); return true; }
       row.savedBy = SAVE_TAG;
       var res;
-      try { res = await saveUserRow(uid, row, got); } catch (e) { return fail(e); }
+      /* 응답이 올 때까지 "이 덱이 실린 쓰기가 가는 중"으로 적어 둔다 (unsureRef 의 flying) */
+      sentIds.forEach(function(id) { uns.flying[id] = (uns.flying[id] || 0) + 1; });
+      var arrived = function() { sentIds.forEach(function(id) { if (uns.flying[id] > 1) uns.flying[id]--; else delete uns.flying[id]; }); };
+      try { res = await saveUserRow(uid, row, got); } catch (e) { arrived(); return fail(e); }
+      arrived();
       if (pendingRef.current !== pend) return false;
       if (res && res.conflict) { refused = got.exists ? String(got.stamp || "") : null; continue; }   /* 읽고 쓰는 사이 다른 곳에서 저장했다 — 다시 읽고 다시 얹는다 */
       if (!res || !res.ok) return fail((res && res.error) || new Error('저장하지 못했습니다'));
       done.forEach(function(f) { f(); });
       settleOps();
       allDataRef.current = row;
-      retryRef.current.n = 0;
+      genRef.current++;
+      if (!again) retryRef.current.n = 0;
+      later();
       return true;
     }
     return fail(new Error('다른 곳의 저장과 계속 겹쳐서 저장하지 못했습니다'));
+  };
+  var commit = async function(uid, quiet) {
+    try { return await commitOnce(uid, quiet); }
+    catch (e) {
+      /* 여기까지 오는 예외는 프로그램 오류다. 조용히 넘기지 않는다 — 알리고, 못 올린 변경은 남겨 둔 채 다시 시도한다 */
+      console.error('[저장 실패] 예기치 못한 오류:', e);
+      if (uidRef.current !== uid) return false;
+      if (!quiet) warnSaveBlocked(e);
+      retryLater(uid);
+      return false;
+    }
   };
 
   var loadDeckData = async function(uid, deckId) {
     /* 못 올린 변경이 남아 있으면 먼저 올린다 — 올리기 전에 읽으면 그 변경이 빠진 내용이 온다 */
     if (hasPending()) await commit(uid, true);
-    var all = await loadUserData(uid);
+    var all = null;
+    for (var tries = 0; tries < 3; tries++) {
+      var gen = genRef.current;
+      all = await loadUserData(uid);
+      if (genRef.current === gen) break;   /* 읽는 사이에 다른 저장이 끝났으면 그 전의 줄일 수 있다 — 다시 읽는다 */
+    }
     allDataRef.current = all || null;
     if (!all) return null;
     if (!all.decks) {
@@ -1538,18 +1786,32 @@ function useData(userId, sdState, setSdState, curDeckId){
      목록을 통째로 보내지 않고 "무엇을 바꾸는지"만 얹으므로, 다른 기기에서 만든 덱이나 이 브라우저에 남은 옛 목록 때문에
      서버 목록이 뒤바뀌지 않는다. 저장이 끝나면 서버 기준 { list, cur } 을 돌려준다.
      못 올렸으면 null — 그 변경은 남아 있다가 다음 저장 때 함께 올라간다 */
-  var listOp = async function(fn) {
+  var listOp = async function(fn, soft) {
     var uid = uidRef.current;
     if (!supabase || !uid || isGuestUid(uid)) return null;
-    var op = { fn: fn, result: null };
+    var op = { fn: fn, result: null, soft: !!soft };
     pendingRef.current.listOps.push(op);
-    try { await writer.queue(function() { return commit(uid); }); } catch (e) { console.warn('덱 목록 저장 오류:', e); }
+    /* soft — "마지막으로 본 덱" 표시처럼 잃어도 되는 변경. 이것만 올리는 저장은 실패해도 알림을 띄우지 않는다 (다음 저장 때 함께 올라간다) */
+    var quiet = !!soft && !hasUnsaved();
+    try { await writer.queue(function() { return commit(uid, quiet); }); } catch (e) { console.warn('덱 목록 저장 오류:', e); }
     return op.result;
+  };
+
+  /* 못 올린 변경을 지금 올려 본다 (가는 중인 저장도 끝나기를 기다린다). ms 안에 다 올라가면 true — 로그아웃 직전에 쓴다 */
+  var flushNow = function(ms) {
+    var uid = uidRef.current;
+    if (!supabase || !uid || isGuestUid(uid)) return Promise.resolve(true);
+    var run = writer.queue(function() { return hasPending() ? commit(uid, true) : true; })
+      .then(function() { return !hasUnsaved(); }, function() { return false; });
+    return Promise.race([run, new Promise(function(res) { setTimeout(function() { res(false); }, ms); })]);
   };
 
   /* 아직 못 올린 변경이 있는데 창을 닫으려 하면 브라우저가 한 번 묻게 한다 */
   useEffect(function(){
-    var h = function(e) { if (hasPending()) { e.preventDefault(); e.returnValue = ''; return ''; } };
+    var h = function(e) {
+      if (flushRef.current) { try { flushRef.current(); } catch (x) {} }   /* 0.8초를 기다리던 설정 변경도 못 올린 변경으로 친다 */
+      if (hasUnsaved()) { e.preventDefault(); e.returnValue = ''; return ''; }
+    };
     window.addEventListener('beforeunload', h);
     return function(){ window.removeEventListener('beforeunload', h); };
   },[]);
@@ -1586,6 +1848,7 @@ function useData(userId, sdState, setSdState, curDeckId){
         setPlayers(got.players); setLineupMap(got.lineupMap); setSdState(got.sdConfig);
         /* 여기서부터 메모리의 내용은 이 덱의 것이다 — 저장을 연다 */
         writer.reset(got);
+        genRef.current++;
         loadedRef.current={uid:userId,deckId:curDeckId};
         /* 직접 등록 카드 — 계정 것이라 덱을 바꿔도 다시 읽지 않아도 되지만,
            서버 줄을 새로 읽을 때마다 맞춰 둔다 */
@@ -1598,7 +1861,10 @@ function useData(userId, sdState, setSdState, curDeckId){
         var lab = (srv.lab && srv.lab[curDeckId]) || null;
         if (!pendingRef.current.lab[curDeckId]) baseRef.current.lab[curDeckId] = canonJson(Array.isArray(lab) ? lab : []);
         if (!lab) lab = ((await sGet("deck-lab")) || {})[curDeckId] || [];
-        if(!stale && !pendingRef.current.lab[curDeckId]) setLabSaves(Array.isArray(lab) ? lab.slice(0, LAB_MAX_SAVES) : []);
+        /* 못 올린 저장이 남아 있는 덱이면 그것이 이 덱의 최신 내용이다. 화면을 그대로 두면 안 된다 — 다른 덱에 다녀온 뒤라면
+           화면에 든 것은 그 덱의 저장본이고, 거기서 한 칸을 저장하면 그 덱의 저장본이 이 덱에 올라간다 */
+        var plab = pendingRef.current.lab[curDeckId];
+        if(!stale) setLabSaves(plab ? (Array.isArray(plab.value) ? plab.value.slice(0, LAB_MAX_SAVES) : []) : (Array.isArray(lab) ? lab.slice(0, LAB_MAX_SAVES) : []));
         /* 선수도감/스킬: 로그인 후 딱 1번만 로드 */
         if(!globalLoadedRef.current){
           globalLoadedRef.current = true;
@@ -1651,8 +1917,13 @@ function useData(userId, sdState, setSdState, curDeckId){
      한 동작에서 셋을 연달아 불러도 서버에는 마지막 한 덩어리가 한 번만 올라간다 (commit) */
   var putDeck=function(uid,did,deck,kind){
     var decks=pendingRef.current.decks, prev=decks[did];
+    /* 유저가 고치는 순간에는 보통 이 문서에 포커스가 있다 — 이 환경이 포커스를 알려 주는지 여기서 본다 (canAsk) */
+    if (typeof document.hasFocus === "function" && document.hasFocus()) seenFocusRef.current = true;
+    /* 바뀐 것이 없으면 올릴 것도 없다 (덱을 불러온 직후의 자동 저장이 늘 이 경우다) */
+    if(!prev&&deckUnchanged(did,deck))return Promise.resolve(true);
     var kinds=Object.assign({},prev?prev.kinds:null); kinds[kind]=true;
-    decks[did]={data:deck,kinds:kinds};
+    var e=entryRef.current;
+    decks[did]={data:deck,kinds:kinds,entry:(e&&e.deckId===did)?{deckId:did,teamName:e.teamName}:(prev?prev.entry:null)};
     return writer.queue(function(){ return commit(uid); });
   };
   var saveP=useCallback(async function(d){
@@ -1712,7 +1983,7 @@ function useData(userId, sdState, setSdState, curDeckId){
     }
   },[]);
 
-  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,loadError:loadError,setLoadError:setLoadError,deckReady:deckReady,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,listOp:listOp};
+  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,loadError:loadError,setLoadError:setLoadError,deckReady:deckReady,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,listOp:listOp,hasUnsaved:hasUnsaved,flushNow:flushNow,flushRef:flushRef,cancelSdRef:cancelSdRef};
 }
 
 /* ── 전력공유 ─────────────────────────────────────────────────
@@ -7413,7 +7684,7 @@ function MyPlayersPage(p) {
   /* 직전 상태로 되돌리기 */
   var _snap = useState(null); var snap = _snap[0]; var setSnap = _snap[1];
   useEffect(function(){ var alive = true;
-    (async function(){ var v = await loadDeckSnapshot(curDeckId); if(alive) setSnap(v && v.data ? v : null); })();
+    (async function(){ var v = await loadDeckSnapshot(curDeckId, p.userId); if(alive) setSnap(v && v.data ? v : null); })();
     return function(){ alive = false; };
   }, [curDeckId]);
   
@@ -7467,7 +7738,7 @@ function MyPlayersPage(p) {
     var R = impPrev; if (!R) return;
     /* 되돌릴 수 있게 지금 상태를 먼저 남긴다 */
     var snapData = { players: players, lineupMap: lm, sdState: sdState };
-    await saveDeckSnapshot(curDeckId, "시트 가져오기 전", snapData);
+    await saveDeckSnapshot(curDeckId, "시트 가져오기 전", snapData, p.userId);
     setSnap({ ts: Date.now(), label: "시트 가져오기 전", data: snapData });
     var byId = {}; dexAll().forEach(function(sp) { byId[sp.id] = sp; });
     var made = [], nameToId = {}, stamp = Date.now();
@@ -10459,7 +10730,10 @@ export default function App(){
   /* teamPick: 덱 목록의 "구단 변경"으로 연 구단 선택 창 (구단 없는 덱이면 이 값과 관계없이 뜬다) */
   var _tpk=useState(false);var teamPick=_tpk[0];var setTeamPick=_tpk[1];
 
-  var store=useData(userId,sdState,setSdState,curDeckId);
+  /* 지금 덱의 목록 항목 — 덱을 저장할 때 서버 목록에 이 덱이 빠져 있으면 다시 넣는 데 쓴다 (useData 의 commit) */
+  var curEntry=null;
+  for(var _di=0;_di<decks.length;_di++){if(decks[_di]&&decks[_di].deckId===curDeckId){curEntry=decks[_di];break;}}
+  var store=useData(userId,sdState,setSdState,curDeckId,curEntry);
 
   /* 현재 덱의 teamName을 sdState에 자동 주입한 버전을 자식에 전달
      - sdState는 sdConfig 데이터(세트덱 설정)이고 teamName 없음
@@ -10481,24 +10755,52 @@ export default function App(){
      게스트와 Supabase 없는 모드는 전처럼 이 브라우저의 목록을 쓴다. */
   var isAccount=!!(supabase&&userId&&!isGuestUid(userId));
   var curIdRef=React.useRef(curDeckId);curIdRef.current=curDeckId;
+  var decksRef=React.useRef(decks);decksRef.current=decks;
   var listSeqRef=React.useRef(0);
   /* 화면은 먼저 바꿔 두고(list · curId) 서버에는 op 만 얹는다. 저장이 끝나면 서버 기준 목록으로 맞춘다 —
-     다른 기기에서 만든 덱이 여기서 들어온다 */
-  var changeDecks=async function(list,curId,op){
+     다른 기기에서 만든 덱이 여기서 들어온다.
+     soft — "마지막으로 본 덱" 표시만 바꾸는 가벼운 변경 (실패해도 알리지 않고, 창을 닫을 때 묻지도 않는다) */
+  var changeDecks=async function(list,curId,op,soft){
     await sSet("deck-list",list);await sSet("deck-current",curId);
     if(!isAccount)return;
     var seq=++listSeqRef.current;
-    var res=await store.listOp(op);
-    /* 그 사이 목록을 또 바꿨으면 그쪽 결과를 기다린다. 보고 있는 덱이 서버 목록에 없으면(다른 기기에서 지움) 화면은 그대로 둔다 */
+    var res=await store.listOp(op,soft);
+    /* 그 사이 목록을 또 바꿨으면 그쪽 결과를 기다린다 */
     if(!res||seq!==listSeqRef.current)return;
     var cur=curIdRef.current;
-    if(cur&&!res.list.some(function(d){return d&&d.deckId===cur;}))return;
-    setDecks(res.list.filter(function(d){return d&&d.deckId;}));
+    var srvList=res.list.filter(function(d){return d&&d.deckId;});
+    if(cur&&!srvList.some(function(d){return d.deckId===cur;})){
+      /* 보고 있는 덱이 서버 목록에 없다.
+         다른 곳에서 일부러 지운 덱(지운 표식이 있다)이면 화면은 그대로 둔다 — 새로고침하면 목록에서 빠진다.
+         표식이 없으면 옛 탭이 목록을 통째로 덮어 빠진 것이다 — 이 덱을 서버 목록에 다시 넣는다.
+         이 변경은 가벼운 변경(soft)으로 올리지 않는다: 못 올린 채 탭을 닫으면 덱이 목록에 없는 채로 남으므로, 실패하면 알리고 닫을 때도 묻는다 */
+      if(res.deleted&&res.deleted[cur])return;
+      var mine=decksRef.current.filter(function(d){return d&&d.deckId===cur;})[0];
+      if(mine){
+        var back={deckId:mine.deckId,teamName:mine.teamName};
+        store.listOp(function(row){
+          if(row.deletedDecks&&row.deletedDecks[back.deckId])return;
+          if(!row.deckList.some(function(d){return d&&d.deckId===back.deckId;}))row.deckList.push(back);
+        });
+      }
+      return;
+    }
+    setDecks(srvList);
+    /* 이 브라우저의 목록도 서버 것으로 맞춘다 — 아직 새로고침하지 않은 옛 탭이 이것을 서버에 올린다 */
+    sSet("deck-list",srvList);
   };
 
   /* ── 로그인 성공 후 덱 목록 로드 ── */
+  var listOwnerRef=React.useRef(null);
   useEffect(function(){
     if(!userId)return;
+    /* 새로고침 없이 계정이 바뀌었으면(다른 탭에서 다른 계정으로 로그인, 로그인 화면에서 게스트로 들어옴) 앞 계정의 덱 목록 ·
+       지금 덱 · 팀 선택 화면을 비우고 시작한다. 그대로 두면 앞 계정의 덱이 새 계정 화면에 남는다 */
+    if(listOwnerRef.current!==userId){
+      listOwnerRef.current=userId;
+      setDecks([]);setCurDeckId(null);setShowTeamSelect(false);setTeamPick(false);
+    }
+    var cancelled=false;   /* 이 읽기가 끝나기 전에 계정이 또 바뀌면 결과를 버린다 */
     (async function(){
       var list=[]; var savedCurId=null;
       var account=!!(supabase&&!isGuestUid(userId));
@@ -10509,10 +10811,12 @@ export default function App(){
           row = await loadUserData(userId);
         } catch (e) {
           /* 서버를 못 읽었다. 여기서 빈 목록으로 내려가면 새 덱을 만들게 되어 있던 덱이 가려진다. 오류로 멈춘다. */
+          if(cancelled)return;
           console.error('[덱 목록 읽기 실패]', e);
           store.setLoadError((e && e.message) || '알 수 없는 오류');
           return;
         }
+        if(cancelled)return;
         row=row||{};
         list=Array.isArray(row.deckList)?row.deckList.filter(function(d){return d&&d.deckId;}):[];
         savedCurId=row.deckCurrent||null;
@@ -10536,13 +10840,13 @@ export default function App(){
           var seedCur=savedCurId;
           await store.listOp(function(r){
             if(!Array.isArray(r.deckList)||r.deckList.length===0){r.deckList=seed.slice();r.deckCurrent=seedCur;}
-          });
+          },true);
         }
         /* 팀명 마이그레이션: 과거에 "KIA"로 저장된 덱들을 "기아"로 자동 변환
            선수도감 팀명이 "기아"로 통일되어 있어 매칭 일관성 확보 */
         if(list.some(function(d){return d.teamName==="KIA";})){
           list=list.map(kiaToGia);
-          await store.listOp(function(r){r.deckList=r.deckList.map(kiaToGia);});
+          await store.listOp(function(r){r.deckList=r.deckList.map(kiaToGia);},true);
           console.log("[팀명 마이그레이션] KIA → 기아 변환 완료");
         }
         /* 이 브라우저의 목록도 맞춰 둔다 — 아직 새로고침하지 않은 옛 탭이 이것을 읽는다 */
@@ -10557,26 +10861,47 @@ export default function App(){
         }
       }
 
+      if(cancelled)return;
       if(list.length>0){
         setDecks(list);
         var found=list.find(function(d){return d.deckId===savedCurId;});
         setCurDeckId(found?savedCurId:list[0].deckId);
+        setShowTeamSelect(false);
       }else{
         setShowTeamSelect("first");
       }
     })();
+    return function(){cancelled=true;};
   },[userId]);
 
   /* ── sdState 자동 저장 ──
      지금 덱을 읽어 온 뒤에만 건다. 읽기가 실패했거나 아직 읽는 중이면 메모리의 sdState 는 그 덱의 것이 아니다 —
      그걸 저장하면 서버에 있는 덱이 빈 내용(또는 앞 덱 내용)으로 덮인다 (useData 의 deckReady) */
   var sdTimerRef=React.useRef(null);
+  var sdStateRef=React.useRef(sdState);sdStateRef.current=sdState;
   useEffect(function(){
     if(!userId||store.loading||store.loadError||!store.deckReady())return;
     if(sdTimerRef.current)clearTimeout(sdTimerRef.current);
-    sdTimerRef.current=setTimeout(function(){if(store.deckReady())store.saveSdState(sdState);},800);
-    return function(){if(sdTimerRef.current)clearTimeout(sdTimerRef.current);};
+    sdTimerRef.current=setTimeout(function(){sdTimerRef.current=null;if(store.deckReady())store.saveSdState(sdState);},800);
+    return function(){if(sdTimerRef.current){clearTimeout(sdTimerRef.current);sdTimerRef.current=null;}};
   },[sdState,userId,store.loading,store.loadError]);
+  /* 0.8초를 기다리는 설정 변경이 있으면 지금 저장으로 넘긴다. 덱을 바꾸거나 · 로그아웃하거나 · 탭을 떠나기 직전에 부른다 —
+     그러지 않으면 방금 바꾼 설정이 타이머와 함께 사라진다 (덱이 바뀌면 타이머는 지워지고, 화면은 새 덱 내용으로 덮인다) */
+  var flushSd=function(){
+    if(!sdTimerRef.current)return;
+    clearTimeout(sdTimerRef.current);sdTimerRef.current=null;
+    if(store.deckReady())store.saveSdState(sdStateRef.current);
+  };
+  var flushSdRef=React.useRef(null);flushSdRef.current=flushSd;
+  store.flushRef.current=flushSd;
+  /* 기다리던 설정 변경을 저장하지 않고 버린다 — 화면을 서버 내용으로 갈아 끼울 때 (useData 의 showServerDeck) */
+  store.cancelSdRef.current=function(){if(sdTimerRef.current){clearTimeout(sdTimerRef.current);sdTimerRef.current=null;}};
+  useEffect(function(){
+    var h=function(){if(document.visibilityState==="hidden"&&flushSdRef.current)flushSdRef.current();};
+    var h2=function(){if(flushSdRef.current)flushSdRef.current();};
+    document.addEventListener("visibilitychange",h);window.addEventListener("pagehide",h2);
+    return function(){document.removeEventListener("visibilitychange",h);window.removeEventListener("pagehide",h2);};
+  },[]);
 
   /* ── 선수 사진: 매니페스트를 시작할 때 한 번만 받는다 ──
      사진 목록·자동 크롭 위치·관리자 슬라이더 값이 전부 이 파일 하나에 들어 있다.
@@ -10617,6 +10942,7 @@ export default function App(){
 
   /* ── 팀 선택 → 덱 생성 → 메인페이지 이동 ── */
   var handleSelectTeam=async function(teamName){
+    flushSd();
     var newId="dk_"+Date.now();
     var newDeck={deckId:newId,teamName:teamName};
     var newList=decks.concat([newDeck]);
@@ -10634,10 +10960,15 @@ export default function App(){
 
   /* ── 덱 삭제 ── 목록에서만 뺀다. 덱 내용(decks 칸)은 서버에 남겨 둔다 — 잘못 지웠을 때 되살릴 수 있다 */
   var handleDeleteDeck=async function(deckId){
+    flushSd();
     var newList=decks.filter(function(d){return d.deckId!==deckId;});
     var nextId=newList.length===0?null:((curDeckId===deckId)?newList[0].deckId:curDeckId);
     var op=function(row){
       row.deckList=row.deckList.filter(function(d){return d&&d.deckId!==deckId;});
+      /* 일부러 지웠다는 표식 — 이 덱을 띄워 둔 다른 탭이 저장하면서 목록에 다시 넣지 않게 한다 (commit · changeDecks) */
+      var del=Object.assign({},row.deletedDecks);del[deckId]=Date.now();
+      var ids=Object.keys(del).sort(function(a,b){return del[b]-del[a];}).slice(0,30);
+      row.deletedDecks={};ids.forEach(function(k){row.deletedDecks[k]=del[k];});
       var has=function(id){return !!id&&row.deckList.some(function(d){return d.deckId===id;});};
       row.deckCurrent=has(nextId)?nextId:(row.deckList[0]?row.deckList[0].deckId:"");
     };
@@ -10654,8 +10985,9 @@ export default function App(){
   };
   var handleSwitchDeck=async function(deckId){
     if(deckId===curDeckId)return;
+    flushSd();
     setCurDeckId(deckId);
-    await changeDecks(decks,deckId,function(row){row.deckCurrent=deckId;});
+    await changeDecks(decks,deckId,function(row){row.deckCurrent=deckId;},true);
   };
   /* ── 지금 덱의 구단 정하기/바꾸기 — 덱 데이터는 그대로, 목록의 teamName 만 바뀐다 ── */
   var handleSetDeckTeam=async function(teamName){
@@ -10669,7 +11001,15 @@ export default function App(){
   };
 
   /* ── 로그아웃 ── */
-  var lo=function(){
+  var lo=async function(){
+    /* 못 올린 변경이 있으면 올리고 나간다 — 로그아웃하면 세션이 없어져 더는 올릴 수 없다 */
+    flushSd();
+    if(store.hasUnsaved()){
+      var saved=await store.flushNow(6000);
+      /* 기다리는 동안에도 화면은 움직인다 — 그 사이 바꾼 설정(0.8초 타이머)을 넘기고, 남은 것이 있는지 다시 본다 */
+      flushSd();
+      if((!saved||store.hasUnsaved())&&!window.confirm("아직 서버에 저장하지 못한 변경이 있습니다.\n지금 로그아웃하면 그 변경은 사라집니다.\n\n그래도 로그아웃할까요?"))return;
+    }
     if(supabase){signOut();}
     setLi(false);setUser("");setAuthType("");setTab("lineup");setAdmin(false);setUserId(null);setGoogleId("");
     setDecks([]);setCurDeckId(null);setShowTeamSelect(false);setTeamPick(false);setSdState({liveSetPo:0});
@@ -10692,7 +11032,7 @@ export default function App(){
   "}</style>);
 
   if(!authChecked)return(<div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 인증 확인중..."}</div>{CSS}</div>);
-  if(!li)return(<div className={theme==="light"?"light":""}><LoginPage onLogin={function(u,type,adm){setUser(u);setAuthType(type||"dev");setAdmin(adm||false);if(!userId)setUserId("guest_"+Date.now());setLi(true);}}/>{CSS}</div>);
+  if(!li)return(<div className={theme==="light"?"light":""}><LoginPage onLogin={function(u,type,adm){setUser(u);setAuthType(type||"dev");setAdmin(adm||false);setUserId("guest_"+Date.now());setLi(true);}}/>{CSS}</div>);
 
   /* ── 팀 선택 화면 ── */
   if(showTeamSelect){

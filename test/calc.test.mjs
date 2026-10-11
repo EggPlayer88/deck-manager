@@ -1925,6 +1925,37 @@ console.log('[저장 합치기] 서버의 최신 줄에 이 탭이 바꾼 것만
 }
 
 console.log('');
+console.log('[저장 보강 — 2026-10-10 독립 검토에서 나온 것]');
+{
+  const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+  /* 저장기 줄의 기다림은 작업이 실제로 시작한 때부터 센다 — 줄에 선 때부터 세면 느린 작업들이 겹쳐 돈다 */
+  const w = makeDeckWriter(60);
+  let active = 0, maxActive = 0; const order = [];
+  const slow = (n) => w.queue(async () => { active++; maxActive = Math.max(maxActive, active); await nap(40); order.push(n); active--; });
+  await Promise.all([slow(1), slow(2), slow(3), slow(4)]);
+  eq('느린 작업 넷을 한꺼번에 줄 세워도 하나씩 돈다', maxActive, 1);
+  eq('줄 선 순서대로 끝난다', order.join(''), 1234);
+  /* 그래도 멈춘 작업은 시한 뒤에 넘어간다 */
+  const w2 = makeDeckWriter(30);
+  w2.queue(() => new Promise(() => {}));
+  const t0 = Date.now(); await w2.queue(async () => {});
+  eq('멈춘 작업은 시작한 뒤 30ms 만 기다린다', Date.now() - t0 >= 25 && Date.now() - t0 < 1000 ? 1 : 0, 1);
+
+  /* 구멍 난 배열 — JSON 은 빈 칸을 null 로 적는다. 지문도 같아야 저장 뒤에 헛 충돌이 안 난다 */
+  const holes = []; holes[2] = 'x';
+  eq('구멍 난 배열의 지문이 JSON 왕복 뒤와 같다', canonJson({ a: holes }) === canonJson(JSON.parse(JSON.stringify({ a: holes }))) ? 1 : 0, 1);
+  eq('빈 칸 수가 다르면 다른 내용', canonJson([undefined, 'x']) === canonJson(holes) ? 1 : 0, 0);
+
+  /* 옛 형식 줄을 바꿀 때 주인 덱을 정할 수 없으면 맨 위 데이터를 버리지 않는다 */
+  const root = { players: [{ id: 'p1' }], lineupMap: { C: 'p1' }, sdConfig: { liveSetPo: 2 }, customDex: [{ id: 'c1' }] };
+  const kept = toDeckFormat(root, [], '');
+  eq('주인을 못 찾으면 맨 위 선수 · 라인업 · 설정이 그대로 남는다', kept.players === root.players && kept.lineupMap === root.lineupMap && kept.sdConfig === root.sdConfig ? 1 : 0, 1);
+  eq('그때 덱 칸은 비어 있고 다른 칸은 그대로', Object.keys(kept.decks).length === 0 && kept.customDex === root.customDex ? 1 : 0, 1);
+  const moved = toDeckFormat(root, [], 'dk_1');
+  eq('주인이 있으면 전처럼 그 덱으로 옮긴다', moved.decks.dk_1.players === root.players && moved.players === undefined ? 1 : 0, 1);
+}
+
+console.log('');
 console.log('[시트 가져오기 — 라이브 V1/V2 구분] 2026-09-21');
 {
   /* 라이브는 같은 선수·팀·연도에 V1 과 V2 두 장이 있다. 관리기 시트에는 V1/V2 칸이 없어서
