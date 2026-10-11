@@ -95,20 +95,20 @@ eq('없으면 0', zonePenalty({}), 0);
 console.log('\n[calcBat] 손계산 대조');
 /* 파워200 정확100 선구50, 좌타, 발사각20, 흰존2 콜존1, 강화없음, 스킬없음
    200*1.0 + 100*0.85 + 50*0.4 = 305
-   좌타 -2.5 → 302.5 / 존 -6 → 296.5 / 발사각 +5 → 301.5 */
+   좌타 -4 → 301 / 존 -6 → 295 / 발사각 +5 → 300   (좌타 감점은 2026-10-12 에 2.5 → 4) */
 const batL = calcBat(
   { hand: '좌', power: 200, accuracy: 100, eye: 50, launchAngle: 20, whiteZone: 2, coldZone: 1, cardType: '시즌' },
   {}, null);
-eq('좌타 종합', batL.total, 301.5);
+eq('좌타 종합', batL.total, 300);
 eq('발사각 필요파워', batL.laReq, 172);
 eq('발사각 획득', batL.laGain, 5);
 
-/* 같은 조건에 우타면 좌타 감점 2.5가 없다 */
+/* 같은 조건에 우타면 좌타 감점 4가 없다 */
 const batR = calcBat(
   { hand: '우', power: 200, accuracy: 100, eye: 50, launchAngle: 20, whiteZone: 2, coldZone: 1, cardType: '시즌' },
   {}, null);
 eq('우타 종합', batR.total, 304);
-eq('좌타 감점 폭', batR.total - batL.total, 2.5);
+eq('좌타 감점 폭', batR.total - batL.total, 4);
 
 /* 양타는 감점 대상이 아니다 (시트는 "좌"만 검사) */
 const batS = calcBat({ hand: '양', power: 200, accuracy: 100, eye: 50, cardType: '시즌' }, {}, null);
@@ -769,34 +769,53 @@ eq('없는 이름은 그대로 0', getSkillScore('없는스킬입니다', 6, '�
 eq('정확히 있는 이름은 그대로', canonSkillName('정밀타격', '타자') === '정밀타격' ? 1 : 0, 1);
 
 
-console.log('\n[중계 전술] 적극 = 승리조·추격조 +1 / 분업 = 승리조만 +2');
+console.log('\n[중계 전술] 적극 = 승리조·추격조 +1 / 분업 = 승리조만 +2 — 화면 능력치가 아니라 점수에만');
 var rp = { role:"투수", position:"중계", cardType:"시즌", stars:5 };
+/* 전술 보너스는 calcSDBonus 가 tac 으로 따로 돌려준다. 화면에 보이는 능력치(c · s)는 전술을 켜도 그대로다
+   (라인업의 능력치는 인게임 덱 화면 수치와 같아야 한다 — 2026-10-12 사용자 지정) */
 /* 2/2/2 편성(bpcIdx 4) → RP1,RP2 가 승리조 */
 var off = { bpcIdx:4, s95:"", s125:"" };
 var on  = { bpcIdx:4, s95:"", s125:"", rpActive:true };
-eq('승리조 RP1 변화 +1', calcSDBonus(rp,"RP1",on,0).c - calcSDBonus(rp,"RP1",off,0).c, 1);
-eq('승리조 RP1 구위 +1', calcSDBonus(rp,"RP1",on,0).s - calcSDBonus(rp,"RP1",off,0).s, 1);
-eq('승리조 RP2 도 오름', calcSDBonus(rp,"RP2",on,0).s - calcSDBonus(rp,"RP2",off,0).s, 1);
-eq('추격조 RP3 도 +1', calcSDBonus(rp,"RP3",on,0).s - calcSDBonus(rp,"RP3",off,0).s, 1);
-eq('롱릴리프 RP5 는 안 받음', calcSDBonus(rp,"RP5",on,0).s - calcSDBonus(rp,"RP5",off,0).s, 0);
+eq('승리조 RP1 전술 보너스 1', calcSDBonus(rp,"RP1",on,0).tac, 1);
+eq('승리조 RP1 화면 변화는 그대로', calcSDBonus(rp,"RP1",on,0).c - calcSDBonus(rp,"RP1",off,0).c, 0);
+eq('승리조 RP1 화면 구위는 그대로', calcSDBonus(rp,"RP1",on,0).s - calcSDBonus(rp,"RP1",off,0).s, 0);
+eq('전술을 끄면 보너스 0', calcSDBonus(rp,"RP1",off,0).tac, 0);
+eq('승리조 RP2 도 오름', calcSDBonus(rp,"RP2",on,0).tac, 1);
+eq('추격조 RP3 도 +1', calcSDBonus(rp,"RP3",on,0).tac, 1);
+eq('롱릴리프 RP5 는 안 받음', calcSDBonus(rp,"RP5",on,0).tac, 0);
 var cp = { role:"투수", position:"마무리", cardType:"시즌", stars:5 };
-eq('마무리는 안 받음', calcSDBonus(cp,"CP",on,0).s - calcSDBonus(cp,"CP",off,0).s, 0);
+eq('마무리는 안 받음', calcSDBonus(cp,"CP",on,0).tac, 0);
 var sp = { role:"투수", position:"선발", cardType:"시즌", stars:5 };
-eq('선발도 안 받음', calcSDBonus(sp,"SP1",on,0).s - calcSDBonus(sp,"SP1",off,0).s, 0);
+eq('선발도 안 받음', calcSDBonus(sp,"SP1",on,0).tac, 0);
 var bat = { role:"타자", cardType:"시즌", stars:5 };
 eq('타자는 무관', calcSDBonus(bat,"C",on,0,0).p - calcSDBonus(bat,"C",off,0,0).p, 0);
+eq('타자 쪽에는 전술 칸이 없다', calcSDBonus(bat,"C",on,0,0).tac === undefined ? 1 : 0, 1);
 /* 편성이 바뀌면 승리조 자리도 바뀐다 — 3/1/2(bpcIdx 6) 이면 RP3 까지 승리조 */
 var on3 = { bpcIdx:6, s95:"", s125:"", rpActive:true };
 var off3 = { bpcIdx:6, s95:"", s125:"" };
-eq('3/1/2 면 RP3 도 승리조', calcSDBonus(rp,"RP3",on3,0).s - calcSDBonus(rp,"RP3",off3,0).s, 1);
-eq('3/1/2 의 RP4 는 추격조라 +1', calcSDBonus(rp,"RP4",on3,0).s - calcSDBonus(rp,"RP4",off3,0).s, 1);
-eq('3/1/2 의 RP5 는 롱릴이라 0', calcSDBonus(rp,"RP5",on3,0).s - calcSDBonus(rp,"RP5",off3,0).s, 0);
+eq('3/1/2 면 RP3 도 승리조', calcSDBonus(rp,"RP3",on3,0).tac, 1);
+eq('3/1/2 의 RP4 는 추격조라 +1', calcSDBonus(rp,"RP4",on3,0).tac, 1);
+eq('3/1/2 의 RP5 는 롱릴이라 0', calcSDBonus(rp,"RP5",on3,0).tac, 0);
 /* 분업 — 승리조만 +2. 추격조·롱릴·마무리는 받지 않는다 */
 var onSplit = { bpcIdx:6, s95:"", s125:"", isWinSplit:true };
-eq('분업이면 승리조 +2', calcSDBonus(rp,"RP1",onSplit,0).s - calcSDBonus(rp,"RP1",off3,0).s, 2);
-eq('분업이면 3번째 승리조도 +2', calcSDBonus(rp,"RP3",onSplit,0).s - calcSDBonus(rp,"RP3",off3,0).s, 2);
-eq('분업은 추격조를 안 올린다', calcSDBonus(rp,"RP4",onSplit,0).s - calcSDBonus(rp,"RP4",off3,0).s, 0);
-eq('분업은 마무리도 안 올린다', calcSDBonus(cp,"CP",onSplit,0).s - calcSDBonus(cp,"CP",off3,0).s, 0);
+eq('분업이면 승리조 +2', calcSDBonus(rp,"RP1",onSplit,0).tac, 2);
+eq('분업이면 3번째 승리조도 +2', calcSDBonus(rp,"RP3",onSplit,0).tac, 2);
+eq('분업이어도 화면 구위는 그대로', calcSDBonus(rp,"RP1",onSplit,0).s - calcSDBonus(rp,"RP1",off3,0).s, 0);
+eq('분업은 추격조를 안 올린다', calcSDBonus(rp,"RP4",onSplit,0).tac, 0);
+eq('분업은 마무리도 안 올린다', calcSDBonus(cp,"CP",onSplit,0).tac, 0);
+/* 라인업에 보이는 수치와 점수 — 같은 중계 투수를 승리조 자리에 놓고 전술만 바꾼다 */
+{
+  const rel = { id:'tac1', role:"투수", position:"중계", cardType:"골든글러브", hand:"우", change:80, stuff:80, enhance:"9각성", sLvManual:true };
+  const at = (sd, slot) => lineupPit(rel, slot, sd, lineupOpts(sd, 0));
+  const w0 = getW();
+  const b0 = at(off3, 'RP1'), a1 = at(on3, 'RP1'), s2 = at(onSplit, 'RP1');
+  eq('적극을 켜도 화면의 변화 · 구위는 그대로', (a1.change === b0.change && a1.stuff === b0.stuff) ? 1 : 0, 1);
+  eq('분업을 켜도 화면의 변화 · 구위는 그대로', (s2.change === b0.change && s2.stuff === b0.stuff) ? 1 : 0, 1);
+  eq('적극이면 점수는 능력치 1 만큼 오른다', Math.round((a1.total - b0.total) * 100) / 100, Math.round((w0.c + w0.s) * 100) / 100);
+  eq('분업이면 점수는 능력치 2 만큼 오른다', Math.round((s2.total - b0.total) * 100) / 100, Math.round(2 * (w0.c + w0.s) * 100) / 100);
+  eq('롱릴리프는 점수도 그대로', at(on3, 'RP5').total, at(off3, 'RP5').total);
+  eq('마무리는 점수도 그대로', lineupPit({ ...rel, position:'마무리' }, 'CP', on3, lineupOpts(on3, 0)).total, lineupPit({ ...rel, position:'마무리' }, 'CP', off3, lineupOpts(off3, 0)).total);
+}
 eq('승리조 판정 자체', isWinGroupSlot("RP1", 4) ? 1 : 0, 1);
 eq('RP3 은 2/2/2 에서 승리조 아님', isWinGroupSlot("RP3", 4) ? 1 : 0, 0);
 eq('CP 는 승리조 아님', isWinGroupSlot("CP", 4) ? 1 : 0, 0);

@@ -667,8 +667,9 @@ function calcBat(pl,lu,sdB){
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mn,pl.cardType,2,"타자",pts),"타자")
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mn,pl.cardType,3,"타자",pts),"타자");
   var t=fP*w.p+fA*w.a+fE*w.e+fN*(w.n||0)+ss;
-  /* 260814 시트: 좌타 감점 / 흰존·콜존 감점 / 발사각 보너스 */
-  if(pl.hand==="좌") t-=2.5;
+  /* 260814 시트: 좌타 감점 / 흰존·콜존 감점 / 발사각 보너스.
+     좌타 감점은 2.5 → 4 (2026-10-12 사용자 지정 — 좌승사자 투수가 늘어 좌타자가 그만큼 더 불리해졌다) */
+  if(pl.hand==="좌") t-=4;
   t+=zonePenalty(pl);
   t+=launchAngleGain(pl.launchAngle,fP);
   /* 국대에이스(타자): 종합점수에만 반영 */
@@ -696,6 +697,9 @@ function calcPit(pl,lu,sdB){
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mnP,pl.cardType,2,pt,ptsP),pt)
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mnP,pl.cardType,3,pt,ptsP),pt);
   var t=fC*w.c+fS*w.s+ss;
+  /* 중계 전술(적극 +1 · 분업 +2): 인게임 덱 화면 수치에는 안 보이는 상승이라 화면 능력치(fC · fS)에는 넣지 않고
+     종합점수에만 반영한다 — 변화 · 구위가 그만큼 오른 것과 같은 점수 (calcSDBonus 의 tac) */
+  if(sb.tac) t+=sb.tac*(w.c+w.s);
   /* 260814 시트: 좌완 가산 */
   if(pl.hand==="좌") t+=1;
   /* 국대에이스(투수)+포수리드: 종합점수에만 반영 */
@@ -1077,18 +1081,20 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   /* 투수조장은 투수만 */
   if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
 
-  /* 중계 전술 능력치 보너스 — 인게임 화면 수치로는 안 보이지만 실제로는 오른다.
+  /* 중계 전술 능력치 보너스 — 인게임 덱 화면의 수치로는 안 보이지만 경기에서는 실제로 오른다.
        적극 : 승리조와 추격조 모두 +1 (편성과 상관없이 켤 수 있다)
        분업 : 승리조만 +2 (승리조가 3명일 때만 켤 수 있다)
-     롱릴리프와 마무리는 어느 쪽에서도 받지 않는다. */
+     롱릴리프와 마무리는 어느 쪽에서도 받지 않는다.
+     라인업에 보이는 능력치는 인게임 덱 화면의 수치와 같아야 하므로(스킬 · 전술로 오르는 것은 거기에 안 보인다)
+     화면 능력치(c · s)에는 더하지 않고 따로 돌려준다(tac) — calcPit 이 종합점수에만 얹는다 (국대에이스 · 포수리드와 같은 식.
+     2026-10-12 사용자 지정: 전에는 c · s 에 더해서 적극 · 분업을 켜면 라인업의 변화 · 구위 수치가 1 · 2씩 올라 보였다) */
+  var tacB = 0;
   if (!isBat) {
     var rpTac = rpTactic(sdState);
     if (rpTac !== "기본") {
       var rpGrp = rpGroupOf(slot, sdState.bpcIdx);
-      var rpB = 0;
-      if (rpTac === "적극" && (rpGrp === "승리조" || rpGrp === "패전조")) rpB = 1;
-      else if (rpTac === "분업" && rpGrp === "승리조") rpB = 2;
-      if (rpB) { pc += rpB; ps += rpB; }
+      if (rpTac === "적극" && (rpGrp === "승리조" || rpGrp === "패전조")) tacB = 1;
+      else if (rpTac === "분업" && rpGrp === "승리조") tacB = 2;
     }
   }
 
@@ -1102,7 +1108,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   var ptSkillList = (sdState["pts_" + slot] || []).filter(function(x){ return !!x; });
   /* run·def·vel·ctl·sta 는 점수에 안 쓰고 세트덱 효과만 담는다 */
   return isBat ? {p:bp,a:ba,e:be,n:bn,run:S.run,def:S.def,ptSkills:ptSkillList,_sdState:sdState}
-               : {c:pc,s:ps,vel:S.vel,ctl:S.ctl,sta:S.sta,def:S.def,ptSkills:ptSkillList,_sdState:sdState};
+               : {c:pc,s:ps,tac:tacB,vel:S.vel,ctl:S.ctl,sta:S.sta,def:S.def,ptSkills:ptSkillList,_sdState:sdState};
 }
 
 /* ================================================================
@@ -3586,9 +3592,9 @@ function BullpenLayout(p) {
           )}
         </div>
         {cfg.w === 3 && (
-          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명을 셋업으로 나눠 쓰고 능력치가 2씩 오릅니다. 대신 선발 배율이 7.00 에서 6.33 으로 깎이고 그만큼 중계 몫이 커집니다. 적극과는 함께 켤 수 없습니다." style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
+          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명을 셋업으로 나눠 쓰고 능력치가 2씩 오릅니다. 이 상승은 인게임 덱 화면 수치에는 보이지 않아서, 라인업의 변화·구위 숫자는 그대로이고 점수에만 반영됩니다. 대신 선발 배율이 7.00 에서 6.33 으로 깎이고 그만큼 중계 몫이 커집니다. 적극과는 함께 켤 수 없습니다." style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
         )}
-        <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명과 추격조 " + cfg.l + "명의 능력치가 1씩 오릅니다. 대신 선발 배율이 7.00 에서 6.66 으로 깎이고 그만큼 중계 몫이 커집니다. 분업과는 함께 켤 수 없습니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
+        <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명과 추격조 " + cfg.l + "명의 능력치가 1씩 오릅니다. 이 상승은 인게임 덱 화면 수치에는 보이지 않아서, 라인업의 변화·구위 숫자는 그대로이고 점수에만 반영됩니다. 대신 선발 배율이 7.00 에서 6.66 으로 깎이고 그만큼 중계 몫이 커집니다. 분업과는 함께 켤 수 없습니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {[
