@@ -10,7 +10,7 @@ import {
   launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills,
   ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME,
   dexAll, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
-  isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat, deckLosesAllPlayers, canonJson, normDeck, deckSnap, classifyDeckSave, classifyKeySave,
+  isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat, deckLosesAllPlayers, canonJson, normDeck, deckSnap, classifyDeckSave, classifyKeySave, deckShrinkNote, pushAudit,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
   LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS,
@@ -2652,6 +2652,46 @@ console.log('\n[연구소 표준 점수] 카드 고르기 — 라인업과 상�
   eq('keep 으로 더 거른다', dexSearch(IX2, '타자', '', '', '', { keep: (e) => e.sp.team === '기아' }).map((e) => e.sp.id).join('') === 'i1' ? 1 : 0, 1);
   eq('옵션이 없으면 예전처럼 9각성 점수순', dexSearch(IX2, '타자', '', '', '').map((e) => e.sp.id).join('') ===
     D2.slice().sort((a, b) => dexScore(b, getW()) - dexScore(a, getW())).map((sp) => sp.id).join('') ? 1 : 0, 1);
+}
+
+console.log('');
+console.log('[저장 기록 — 선수가 빠지는 저장만 적는다 (2026-10-12)]');
+{
+  const P = (ids) => ids.map((id) => ({ id, name: 'n' + id }));
+  const deck = (ids, extra) => Object.assign({ players: P(ids), lineupMap: {}, sdConfig: { liveSetPo: 0 } }, extra || {});
+  /* 빠진 선수가 없으면 적지 않는다 — 평범한 수정 · 추가 */
+  eq('선수 수정(같은 명단)은 적지 않는다', deckShrinkNote(deck(['a', 'b']), deck(['a', 'b']), 'dk_1', { players: true }, '', false, 1000) === null ? 1 : 0, 1);
+  eq('선수 추가는 적지 않는다', deckShrinkNote(deck(['a', 'b']), deck(['a', 'b', 'c']), 'dk_1', { players: true }, '', false, 1000) === null ? 1 : 0, 1);
+  eq('설정만 바꾼 저장은 적지 않는다', deckShrinkNote(deck(['a', 'b']), deck(['a', 'b'], { sdConfig: { liveSetPo: 3 } }), 'dk_1', { sd: true }, '', false, 1000) === null ? 1 : 0, 1);
+  eq('서버에 덱 칸이 없던 경우(새 덱 · 되살리기)는 적지 않는다', deckShrinkNote(undefined, deck(['a']), 'dk_1', { players: true }, '', false, 1000) === null ? 1 : 0, 1);
+  /* 한 명 삭제 */
+  const one = deckShrinkNote(deck(['a', 'b', 'c']), deck(['a', 'c']), 'dk_1', { players: true }, 'delete', false, 1234);
+  eq('한 명 삭제 — 3명 → 2명 · 빠진 1 · 들어온 0', [one.n0, one.n1, one.rm, one.ad].join(',') === '3,2,1,0' ? 1 : 0, 1);
+  eq('한 명 삭제 — 시각 · 덱 · 바꾼 것 · 동작', [one.t, one.d, one.k, one.w].join('|') === '1234|dk_1|p|delete' ? 1 : 0, 1);
+  eq('묻고 덮은 것이 아니면 c 가 없다', one.c === undefined ? 1 : 0, 1);
+  /* 통째로 바뀜 — 수는 늘어도 원래 선수가 빠졌으면 적는다 */
+  const swap = deckShrinkNote(deck(['a', 'b']), deck(['x', 'y', 'z']), 'dk_2', { players: true, lineup: true, sd: true }, 'import', false, 5);
+  eq('가져오기로 명단이 통째로 바뀜 — 2명 → 3명 · 빠진 2 · 들어온 3', [swap.n0, swap.n1, swap.rm, swap.ad, swap.k, swap.w].join(',') === '2,3,2,3,pls,import' ? 1 : 0, 1);
+  /* 전부 비움 */
+  const wipe = deckShrinkNote(deck(['a', 'b', 'c']), deck([]), 'dk_3', { players: true }, 'restore', false, 5);
+  eq('전부 비움 — 3명 → 0명 · 빠진 3', [wipe.n0, wipe.n1, wipe.rm, wipe.ad, wipe.w].join(',') === '3,0,3,0,restore' ? 1 : 0, 1);
+  /* 다른 곳에서 바뀐 덱을 묻고 이 탭의 내용으로 덮음 */
+  const over = deckShrinkNote(deck(['a', 'b', 'phone']), deck(['a', 'b']), 'dk_1', { sd: true }, '', true, 5);
+  eq('묻고 덮어쓴 경우 c=1 · 동작 이름 없음', [over.rm, over.c, over.w === undefined ? 'x' : over.w, over.k].join(',') === '1,1,x,s' ? 1 : 0, 1);
+  eq('시각을 안 주면 지금 시각', Math.abs(deckShrinkNote(deck(['a']), deck([]), 'd', null, '', false).t - Date.now()) < 5000 ? 1 : 0, 1);
+  /* 줄에 넣기 — 최근 20건 */
+  const row = {};
+  pushAudit(row, null);
+  eq('적을 것이 없으면 칸을 만들지 않는다', row.audit === undefined ? 1 : 0, 1);
+  pushAudit(row, one);
+  eq('첫 기록', row.audit.length === 1 && row.audit[0] === one ? 1 : 0, 1);
+  for (let i = 0; i < 30; i++) pushAudit(row, { t: i, d: 'dk_1', n0: 9, n1: 8, rm: 1, ad: 0, k: 'p' });
+  eq('최근 20건만 남는다', row.audit.length, 20);
+  eq('가장 옛 것부터 밀려난다', (row.audit[0].t === 10 && row.audit[19].t === 29) ? 1 : 0, 1);
+  const before = [{ t: 1 }]; const row2 = { audit: before };
+  pushAudit(row2, { t: 2 });
+  eq('읽어 온 배열을 직접 고치지 않는다', before.length === 1 && row2.audit.length === 2 ? 1 : 0, 1);
+  eq('다 차도 2KB 를 넘지 않는다', JSON.stringify(Array.from({ length: 20 }, () => deckShrinkNote(deck(['a', 'b', 'c']), deck([]), 'dk_1700000000001', { players: true, lineup: true, sd: true }, 'restore', true, Date.now()))).length < 2048 ? 1 : 0, 1);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);

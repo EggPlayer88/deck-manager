@@ -1205,7 +1205,7 @@ function deckLosesAllPlayers(base, next) {
 
 /* 줄을 마지막으로 쓴 앱의 저장 방식 — 줄 맨 위 savedBy 에 적는다. 사고가 났을 때 어느 방식의 앱이 썼는지 가릴 수 있다
    (이 표식이 없거나 옛 값이면, 새로고침하지 않은 옛 탭이 통째로 덮어쓴 것이다) */
-var SAVE_TAG = "merge-2";   /* merge-1: 2026-10-07 · merge-2: 2026-10-10 보강 */
+var SAVE_TAG = "merge-3";   /* merge-1: 2026-10-07 · merge-2: 2026-10-11 보강 · merge-3: 2026-10-12 선수가 빠지는 저장을 audit 에 적음 */
 
 /* JSON 으로 저장했다 읽은 값과 메모리의 값을 견줄 수 있게 한 줄로 편다.
    DB(jsonb)는 키 순서를 지키지 않으므로 키를 정렬하고, JSON 에 실리지 않는 값(undefined · NaN)은 JSON 이 하는 대로 다룬다 */
@@ -1266,6 +1266,35 @@ function classifyKeySave(server, base, mine, sent) {
   if (mine === server) return "same";
   if (server === base || (sent || []).indexOf(server) >= 0) return "apply";
   return "conflict";
+}
+
+/* 저장 기록 — 덱에서 선수가 빠지는 저장을 줄 맨 위 audit 에 최근 20건만 적어 둔다. 운영 확인용이고 화면에는 쓰지 않는다.
+   서버에는 마지막 결과만 남아서, 덱의 선수가 0명이 됐을 때 유저가 하나씩 지운 것인지 한 번에 지워진 것인지를 나중에 가릴 수 없었다
+   (2026-10-12 — 석 달 만에 돌아온 계정 둘의 덱이 0명이 됐는데 "본인이 지운 듯"까지만 말할 수 있었다).
+   server — 쓰기 직전 서버의 그 덱 / mine — 올리는 내용. 서버에 있던 선수가 하나도 빠지지 않으면 적지 않는다(null).
+   t 시각 · d 덱 · n0 → n1 선수 수 · rm 빠진 선수 수 · ad 새로 들어온 선수 수 · k 이 탭이 바꾼 것(p 선수 · l 라인업 · s 설정) ·
+   w 어떤 동작이었나(delete 한 명 삭제 · import 시트 가져오기 · restore 되돌리기 · json 백업 복원 — 그 밖의 수정은 없음) ·
+   c 다른 곳에서 바뀐 것을 묻고 "이 탭의 내용으로 저장"을 고른 경우 1 */
+function deckShrinkNote(server, mine, deckId, kinds, why, asked, now) {
+  var a = normDeck(server).players, b = normDeck(mine).players;
+  var has = {}, was = {}, rm = 0, ad = 0;
+  b.forEach(function(x) { if (x && x.id) has[x.id] = 1; });
+  a.forEach(function(x) { if (x && x.id) { was[x.id] = 1; if (!has[x.id]) rm++; } });
+  if (rm === 0) return null;
+  b.forEach(function(x) { if (x && x.id && !was[x.id]) ad++; });
+  var k = "";
+  if (kinds) { if (kinds.players) k += "p"; if (kinds.lineup) k += "l"; if (kinds.sd) k += "s"; }
+  var out = { t: now || Date.now(), d: String(deckId || ""), n0: a.length, n1: b.length, rm: rm, ad: ad, k: k };
+  if (why) out.w = String(why);
+  if (asked) out.c = 1;
+  return out;
+}
+/* 기록 한 줄을 줄(row)에 넣는다 — 최근 20건만 남긴다 (한 건에 90자쯤이라 다 차도 2KB 가 안 된다) */
+function pushAudit(row, note) {
+  if (!row || !note) return;
+  var list = Array.isArray(row.audit) ? row.audit.slice() : [];
+  list.push(note);
+  row.audit = list.slice(-20);
 }
 
 function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
@@ -1601,6 +1630,7 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
            가는 중이면(저장이 겹쳐 돌 때) 곧 바뀔 수 있다 — 끝내지 않고 남겨 두었다가 그 쓰기가 끝난 뒤에 다시 본다.
            쓰는 판정은 그대로 간다 — "읽은 뒤로 줄이 바뀌지 않았을 때만" 조건이 둘 중 하나만 받게 한다 */
         if (v !== "apply" && v !== "heal" && uns.flying[id] > 0) { again = true; return; }
+        var asked = v === "conflict";   /* 다른 곳에서 바뀐 덱이다 — 아래에서 쓰게 되면 유저가 물음에 "이 탭의 내용으로"를 고른 것 */
         if (v === "conflict") {
           if (!visible) return;
           if (stopAsk) { unanswered = true; return; }
@@ -1614,6 +1644,8 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
           /* 보내는 것과 글자 하나 다르지 않은 사본을 기준(base)으로 삼는다 — 보내는 사이 화면 쪽 객체가 바뀌어도 어긋나지 않게 */
           var data = JSON.parse(JSON.stringify(p.data));
           me = deckSnap(data);
+          /* 서버에 있던 선수가 빠지는 저장이면 같은 쓰기에 기록을 남긴다 (deckShrinkNote · pushAudit — 운영 확인용) */
+          pushAudit(row, deckShrinkNote(row.decks[id], data, id, p.kinds, p.why, asked));
           row.decks[id] = data; touched = true;
           /* 이 덱이 서버 목록에서 빠져 있으면 같은 쓰기에서 다시 넣는다. 옛 탭은 줄을 통째로 덮으면서 목록도 자기 것으로 바꾼다 —
              내용만 되살리고 목록을 그대로 두면 덱이 다시 "서버에는 있는데 목록에 없는" 상태가 된다.
@@ -1921,7 +1953,7 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
   /* 선수·라인업·세트덱 저장은 나머지 칸도 저장기의 최신 값으로 채운 한 덩어리를 대기열에 올린다.
      셋 다 지금 덱을 읽어 온 뒤에만 받는다 (deckReady) — 부른 그 순간의 덱·내용을 붙잡아 그 덱 자리에 얹는다.
      한 동작에서 셋을 연달아 불러도 서버에는 마지막 한 덩어리가 한 번만 올라간다 (commit) */
-  var putDeck=function(uid,did,deck,kind){
+  var putDeck=function(uid,did,deck,kind,why){
     var decks=pendingRef.current.decks, prev=decks[did];
     /* 유저가 고치는 순간에는 보통 이 문서에 포커스가 있다 — 이 환경이 포커스를 알려 주는지 여기서 본다 (canAsk) */
     if (typeof document.hasFocus === "function" && document.hasFocus()) seenFocusRef.current = true;
@@ -1929,17 +1961,18 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
     if(!prev&&deckUnchanged(did,deck))return Promise.resolve(true);
     var kinds=Object.assign({},prev?prev.kinds:null); kinds[kind]=true;
     var e=entryRef.current;
-    decks[did]={data:deck,kinds:kinds,entry:(e&&e.deckId===did)?{deckId:did,teamName:e.teamName}:(prev?prev.entry:null)};
+    /* why — 선수를 한꺼번에 바꾸는 동작의 이름(delete · import · restore · json). 저장 기록(audit)에만 쓴다 */
+    decks[did]={data:deck,kinds:kinds,entry:(e&&e.deckId===did)?{deckId:did,teamName:e.teamName}:(prev?prev.entry:null),why:why||(prev?prev.why:"")||""};
     return writer.queue(function(){ return commit(uid); });
   };
-  var saveP=useCallback(async function(d){
+  var saveP=useCallback(async function(d,why){
     if(!deckReady()){warnNotReady('덱을 읽어 오기 전의 선수 저장');return;}
     /* 자동 레벨은 계산값으로, 스킬 이름은 표 이름으로 정리해서 저장한다 (normPlayerSkills) */
     d=normPlayerList(d);
     setPlayers(d);
     var deck=writer.take({players:d});
     var did=deckIdRef.current; var uid=uidRef.current;
-    if(supabase&&uid&&did){ if(!isGuestUid(uid)) await putDeck(uid,did,deck,"players"); }
+    if(supabase&&uid&&did){ if(!isGuestUid(uid)) await putDeck(uid,did,deck,"players",why); }
     else if(did){await sSet("deck-players-"+did,d);}
   },[]);
 
@@ -6837,7 +6870,7 @@ function LockerRoomPage(p) {
               var r = new FileReader(); r.onload = function() {
                 try {
                   var d = JSON.parse(r.result);
-                  if (d.players) save(d.players);
+                  if (d.players) save(d.players, "json");
                   if (d.lineupMap) p.saveLineupMap(d.lineupMap);
                   if (d.sdState) { Object.keys(d.sdState).forEach(function(k) { upd(k, d.sdState[k]); }); }
                   if (d.skills) p.saveSkills(d.skills);
@@ -7724,7 +7757,7 @@ function MyPlayersPage(p) {
     if (!snap || !snap.data) return;
     if (!window.confirm("지금 덱을 " + snapAgo(snap.ts) + " 상태(" + (snap.label || "직전") + ")로 되돌립니다.\n지금 내용은 사라집니다. 계속할까요?")) return;
     var d = snap.data;
-    save(d.players || []);
+    save(d.players || [], "restore");
     saveLM(d.lineupMap || {});
     if (d.sdState) { setSdState(d.sdState); if (saveSdState) saveSdState(d.sdState); }
     await clearDeckSnapshot(curDeckId);
@@ -7817,7 +7850,7 @@ function MyPlayersPage(p) {
       var sheetNames = {}; R.entries.forEach(function(en) { sheetNames[en.name] = 1; });
       next = players.filter(function(pl) { return !sheetNames[pl.name]; }).concat(made);
     }
-    save(next);
+    save(next, "import");
 
     /* 라인업 */
     var newLM = {};
@@ -8117,7 +8150,7 @@ function MyPlayersPage(p) {
                   </div>
                 );
               })()}
-              <button onClick={function() { if (confirm("'" + pl.name + "' 삭제?")) { save(players.filter(function(x) { return x.id !== pl.id; })); setSelId(null); } }} style={{ padding: "3px 8px", fontSize: 11, background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)", borderRadius: 3, color: "#EF5350", cursor: "pointer", marginLeft: "auto" }}>{"삭제"}</button>
+              <button onClick={function() { if (confirm("'" + pl.name + "' 삭제?")) { save(players.filter(function(x) { return x.id !== pl.id; }), "delete"); setSelId(null); } }} style={{ padding: "3px 8px", fontSize: 11, background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)", borderRadius: 3, color: "#EF5350", cursor: "pointer", marginLeft: "auto" }}>{"삭제"}</button>
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 6, padding: "4px 8px", background: "var(--inner)", borderRadius: 4, fontSize: 13 }}>
               <span style={{ color: "var(--td)" }}>{"세트덱 스코어:"}</span>
