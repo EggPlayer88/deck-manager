@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { downloadSquadImage as downloadSquadTemplate } from "./squad-share.js";
 import KboPromoBanner from "./KboPromoBanner.jsx";
+/* 클럽 라운지 — 화면은 club-lounge.jsx, 서버 일은 club-api.js. 이 파일은 덱 계산(카드 표기·점수)만 넘겨 준다 */
+import ClubLoungePage from "./club-lounge.jsx";
+import { autoPublish as clubAutoPublish, addComment as clubAddComment } from "./club-api.js";
 
 /* Supabase: injected via window._SUPABASE from main.jsx (Vercel deployment).
    In artifact preview / standalone, these remain as stubs → localStorage-only mode. */
@@ -6445,7 +6448,7 @@ function Nav(p){
   var showGame=p.authType==="google"&&p.gameUrl;
   /* short 는 모바일 아래 탭 전용 줄임말 — 칸이 좁아 원말이 들어가면 줄이 접힌다.
      원말은 title 로 붙는다. href 가 있는 항목은 탭이 아니라 바깥으로 나가는 링크다. */
-  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"lab",label:"덱 연구소",short:"연구소",icon:"🔬"},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",soon:true}];
+  var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"lab",label:"덱 연구소",short:"연구소",icon:"🔬"},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",beta:true}];
   /* KBO 구단주 — 클럽라운지 바로 아래. 다른 사이트로 나가므로 탭이 아니라 링크다 */
   if(showGame)tabs.push({id:"kbogame",label:"KBO 구단주",short:"구단주",icon:"⚾",beta:true,href:p.gameUrl});
   /* 관리자 칸은 라커룸 앞에 — 메뉴 순서가 바뀌어도 자리를 찾아 넣는다 */
@@ -7478,6 +7481,55 @@ function LabPage(p) {
     touch(function () { setTeam(teamKey(v.team) || team); setSlots(Object.assign({}, v.slots || {})); });
     setMsg("실험 " + (i + 1) + " 을 불러왔습니다.");
   };
+  /* 클럽 라운지에서 넘어온 덱 — "연구소에서 열기"면 그대로 올리고, "수정 제안"이면 고친 뒤 댓글로 돌려보낸다.
+     지금 짜 둔 것을 덮어쓰므로 카드가 있으면 먼저 묻는다. 실험본(저장 칸)은 건드리지 않는다 */
+  var _sug = useState(null); var suggest = _sug[0]; var setSuggest = _sug[1];
+  var _sugTxt = useState(""); var sugTxt = _sugTxt[0]; var setSugTxt = _sugTxt[1];
+  var _clubBusy = useState(false); var clubBusy = _clubBusy[0]; var setClubBusy = _clubBusy[1];
+  var inc = p.incoming;
+  React.useEffect(function () {
+    if (!inc || !inc.deck) return;
+    var d = inc.deck, next = {}, miss = 0;
+    LAB_SLOTS.forEach(function (sl) {
+      var id = d.slots && d.slots[sl];
+      if (id && byId[id]) next[sl] = id; else if (d.view && d.view[sl]) miss++;
+    });
+    if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 클럽에서 가져온 덱을 올릴까요?\n(저장해 둔 실험 1~3 은 그대로입니다)")) {
+      (p.onIncomingDone || function () {})(); return;
+    }
+    touch(function () { setTeam(teamKey(d.team) || team); setSlots(next); });
+    setSuggest(inc.mode === "suggest" ? { post: inc.post, base: d } : null); setSugTxt("");
+    setMsg("클럽에서 가져온 덱을 올렸습니다 (" + Object.keys(next).length + "자리)"
+      + (miss ? " — 도감에 없는 카드 " + miss + "장은 빠졌습니다" : ""));
+    if (inc.mode !== "suggest") (p.onIncomingDone || function () {})();
+  }, [inc && inc.key]);
+  var clubDeckNow = function (cb) {
+    if (filled < 1) { setMsg("카드를 먼저 넣어 주세요."); return; }
+    setClubBusy(true); setMsg("");
+    setTimeout(function () {
+      Promise.resolve().then(function () { return cb(clubLabDeck(team, slots, "")); })
+        .catch(function (e) { setMsg((e && e.message) || "클럽에 보내지 못했습니다."); })
+        .then(function () { setClubBusy(false); });
+    }, 20);
+  };
+  var shareClub = function () { clubDeckNow(function (deck) { p.onShareToClub(deck); }); };
+  var sendSuggest = function () {
+    var base = suggest && suggest.base; if (!base) return;
+    clubDeckNow(function (deck) {
+      var changes = [];
+      LAB_SLOTS.forEach(function (sl) {
+        var a = base.view && base.view[sl], b = deck.view[sl];
+        var same = (base.slots && base.slots[sl]) ? base.slots[sl] === deck.slots[sl]
+          : (!a && !b) || (a && b && a.n === b.n && a.ct === b.ct && a.l === b.l);
+        if (!same) changes.push({ slot: sl, from: a || null, to: b || null });
+      });
+      if (!changes.length) throw new Error("바꾼 자리가 없습니다. 카드를 바꾼 뒤 보내 주세요.");
+      /* 바꾸기 전 점수도 연구소 잣대(세 티어)로 다시 센다 — 내 덱 요약본의 TOTAL 과는 잣대가 달라 견줄 수 없다 */
+      var before = base.src === "lab" && base.scores ? base.scores : clubLabDeck(base.team, base.slots, "").scores;
+      return p.onSuggest(suggest.post, sugTxt.trim(), { changes: changes, before: before, after: deck.scores, deck: deck })
+        .then(function () { setSuggest(null); });
+    });
+  };
   var dropSave = function (i) {
     var list = saves.slice(); list[i] = null;
     (p.saveLab || function () {})(list);
@@ -7584,8 +7636,26 @@ function LabPage(p) {
             fontFamily: "var(--h)", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
           <span aria-hidden="true">{"\uD83D\uDCF8"}</span>{sharing ? "만드는 중…" : "스쿼드 공유"}
         </button>
+        {p.onShareToClub && !suggest && (<button onClick={shareClub} disabled={clubBusy || filled < 1}
+          title={filled ? "지금 짠 라인업을 클럽 라운지에 글로 올립니다 (세 티어 점수를 같이 실어요)" : "카드를 먼저 넣어 주세요"}
+          style={{ padding: "6px 12px", fontSize: 13, fontWeight: 800, borderRadius: 6, whiteSpace: "nowrap",
+            background: filled ? "rgba(206,147,216,0.12)" : "var(--inner)", border: "1px solid " + (filled ? "rgba(206,147,216,0.45)" : "var(--bd)"),
+            color: filled ? "var(--acp)" : "var(--td)", cursor: filled && !clubBusy ? "pointer" : "default" }}>
+          {clubBusy ? "준비 중…" : "🎙️ 클럽에 공유"}
+        </button>)}
       </div>
 
+      {suggest && (
+        <div style={{ border: "1px solid rgba(206,147,216,0.4)", background: "rgba(206,147,216,0.06)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--acp)" }}>{"✏️ 수정 제안 중 — " + ((suggest.post && (suggest.post.title || suggest.post.author_name)) || "클럽 글")}</div>
+          <div style={{ fontSize: 11.5, color: "var(--td)", margin: "3px 0 8px" }}>{"아래 라인업에서 카드를 바꾼 뒤 보내면, 바뀐 자리와 점수 변화가 그 글의 댓글로 붙습니다"}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <input value={sugTxt} onChange={function (e) { setSugTxt(e.target.value); }} maxLength={1000} placeholder="한마디 (선택) — 예: 2루를 조성환으로 바꿔 보세요"
+              style={{ flex: "1 1 220px", width: 0, padding: "7px 10px", fontSize: 13, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)" }} />
+            <button onClick={sendSuggest} disabled={clubBusy} style={{ padding: "6px 14px", fontSize: 13, fontWeight: 800, background: "var(--acp)", border: "none", borderRadius: 6, color: "#1a1020", cursor: clubBusy ? "default" : "pointer" }}>{clubBusy ? "보내는 중…" : "제안 보내기"}</button>
+            <button onClick={function () { setSuggest(null); (p.onIncomingDone || function () {})(); }} style={{ padding: "6px 12px", fontSize: 13, background: "none", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t2)", cursor: "pointer" }}>{"그만두기"}</button>
+          </div>
+        </div>)}
       {limits.bad.length > 0 && (
         <div style={{ fontSize: 11, color: "#FF8A80", marginBottom: 8 }}>
           {"자팀도 골글도 아니고 FA·와일드카드·올스타로도 쓸 수 없는 카드: "
@@ -9032,22 +9102,6 @@ function SkillManagePage(p) {
 
 
 /* ================================================================
-   CLUB LOUNGE PAGE
-   ================================================================ */
-function ClubLoungePage(p) {
-  return (
-    <div style={{padding:p.mobile?12:18,maxWidth:760,paddingBottom:p.mobile?PAGE_BOTTOM:18}}>
-      <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"🎙️ 클럽 라운지"}</h2>
-      <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}>
-        <div style={{fontSize:48,marginBottom:12}}>{"🎙️"}</div>
-        <h3 style={{fontSize:16,fontWeight:800,color:"var(--t1)",margin:"0 0 8px",fontFamily:"var(--h)"}}>{"업데이트 예정"}</h3>
-        <p style={{fontSize:14,color:"var(--td)",margin:0}}>{"커뮤니티 기능이 준비되면 이 페이지에서 만나보실 수 있습니다."}</p>
-      </div>
-    </div>
-  );
-}
-
-/* ================================================================
    DATA CENTER PAGE
    ================================================================ */
 function DataCenterPage(p) {
@@ -10403,6 +10457,56 @@ function labRun(cards, teamName, extra) {
   return { sp: totalSP, tiers: tiers, limits: lim };
 }
 
+/* ── 클럽 라운지에 넘기는 덱 ──────────────────────────────────
+   덱은 { v, src: "lab"|"deck", team, name, slots: {자리: 도감 id}, view: {자리: {n, ct, l}},
+   scores(연구소 세 티어) 또는 total·setPoint(내 덱) } 로 주고받는다.
+   표기(view)를 같이 실어 두어 도감이 바뀌거나 직접 등록한 카드여도 글은 그대로 읽힌다.
+   연구소로 열 때는 slots 의 도감 id 만 쓴다 — 도감에 없는 카드는 빠진다 */
+var CLUB_IMPACT_SHORT = { "얼리스타터": "얼리", "여름사나이": "여사", "좌완에이스": "좌에", "우완에이스": "우에", "가을사나이": "가사",
+  "키플레이어": "키플", "빅게임헌터": "빅게임", "돌격대장": "돌대", "분위기메이커": "분메", "대표타자": "대표", "안방마님": "안방",
+  "비FA계약": "비FA", "파이어볼러": "파이어", "구종마스터": "구마", "좌타해결사": "좌타" };
+function clubCardLabel(c) {
+  if (!c) return "";
+  if (c.cardType === "임팩트" && c.impactType) return CLUB_IMPACT_SHORT[c.impactType] || String(c.impactType);
+  if (c.cardType === "올스타") return "올스타";
+  var y = String(c.year || "");
+  return y ? y.slice(-2) : "";
+}
+function clubView(c) { return c ? { n: c.name, ct: c.cardType, l: clubCardLabel(c) } : null; }
+/* 연구소 실험본 → 클럽 덱. 세 티어 점수를 같이 낸다 (0.2초쯤 걸린다) */
+function clubLabDeck(team, slots, name) {
+  var cards = {}, view = {}, ids = {};
+  LAB_SLOTS.forEach(function (sl) {
+    var id = slots && slots[sl]; var r = id ? findCard(id) : null;
+    if (r) { cards[sl] = labCard(r, team); view[sl] = clubView(r); ids[sl] = id; }
+  });
+  var res = Object.keys(cards).length ? labRun(cards, team) : null;
+  return { v: 1, src: "lab", team: team, name: name || "", slots: ids, view: view,
+    scores: res ? res.tiers.map(function (t) { return Math.round(t.total * 10) / 10; }) : null };
+}
+/* 지금 내 덱(라인업) → 클럽 요약본. 점수는 라인업 화면과 같은 길로 센다 (LineupPage 의 realPick·totalScore).
+   sdState 는 사본에서만 센다 — computeLineupSetDeck 이 자동값을 써 넣기 때문이다 */
+function clubDeckSummary(players, lm, sdState, name) {
+  var sd = Object.assign({}, sdState || {});
+  var byId = {}; (players || []).forEach(function (x) { byId[x.id] = x; });
+  var memo = {};
+  var realPick = function (slot) {
+    if (!(slot in memo)) { var pl = byId[(lm || {})[slot]]; memo[slot] = pl ? deckPl(mergePl(pl), sd) : null; }
+    return memo[slot];
+  };
+  var slots = {}, view = {}, filled = 0;
+  LAB_SLOTS.forEach(function (sl) {
+    var pl = realPick(sl);
+    if (pl) { filled++; slots[sl] = pl.dbId || null; view[sl] = clubView(pl); }
+  });
+  var totalSP = computeLineupSetDeck(realPick, sd);
+  memo = {};   /* 세트덱 자동값이 들어간 뒤의 sd 로 다시 뽑는다 — 라인업 화면과 같은 순서 */
+  var total = filled ? calcLineupTotal(realPick, sd, lineupOpts(sd, totalSP)) : 0;
+  var setPoint = totalSP - (sd.liveSetPo || 0);
+  return { deck: { v: 1, src: "deck", team: teamKey(sd.teamName), name: name || "", slots: slots, view: view, total: total, setPoint: setPoint },
+    total: total, setPoint: setPoint, filled: filled };
+}
+
 function SkillCalculator(p) {
   var skills = p.skills || {};
   var mob = p.mobile;
@@ -10893,6 +10997,38 @@ export default function App(){
     return Object.assign({}, sdState||{}, { teamName: tn || (sdState && sdState.teamName) || "" });
   }, [sdState, curDeckObj]);
 
+  /* ── 클럽 라운지 연결 ──
+     labIncoming: 클럽 글·덱 현황에서 "연구소에서 열기"/"수정 제안"으로 넘어온 덱
+     clubDraft:   연구소에서 "클럽에 공유"로 넘긴 덱 — 라운지 글쓰기 창에 붙는다
+     clubFocus:   수정 제안을 보낸 뒤 그 글을 바로 연다 */
+  var _lin=useState(null);var labIncoming=_lin[0];var setLabIncoming=_lin[1];
+  var _cdr=useState(null);var clubDraft=_cdr[0];var setClubDraft=_cdr[1];
+  var _cfo=useState(null);var clubFocus=_cfo[0];var setClubFocus=_cfo[1];
+  var isGoogle=authType==="google"&&!!userId&&!isGuestUid(userId);
+  var clubSummaryNow=function(){ return clubDeckSummary(store.players,store.lineupMap,sdStateWithTeam,""); };
+  /* 공개해 둔 덱이 지금 열린 덱이면, 바뀔 때마다 요약본을 올린다 (4초 모아서 · 같은 내용이면 안 보냄).
+     원본 저장(user_settings)과는 완전히 따로 돈다 — 실패해도 덱 저장에는 아무 영향이 없다 */
+  useEffect(function(){
+    if(!isGoogle||!curDeckId||store.loading||!store.deckReady())return;
+    var t=setTimeout(function(){
+      /* 4초 사이 덱을 바꿨으면 이 내용은 그 덱의 것이 아니다 */
+      if(!store.deckReady())return;
+      clubAutoPublish(userId,curDeckId,clubSummaryNow).catch(function(e){ console.warn("[club] 덱 요약본을 올리지 못했습니다:",e&&e.message); });
+    },4000);
+    return function(){clearTimeout(t);};
+  },[isGoogle,userId,curDeckId,store.players,store.lineupMap,sdStateWithTeam,store.loading]);
+  var clubTools={
+    summaryNow:clubSummaryNow,
+    labDeck:function(team,slots,name){ return new Promise(function(res,rej){ setTimeout(function(){ try{res(clubLabDeck(team,slots,name));}catch(e){rej(e);} },20); }); },
+    publishNow:function(){ return clubAutoPublish(userId,curDeckId,clubSummaryNow,true); }
+  };
+  var openInLab=function(deck,opts){ setLabIncoming({deck:deck,mode:(opts&&opts.mode)||"open",post:opts&&opts.post,key:Date.now()}); setTab("lab"); };
+  var shareToClub=function(deck){ setClubDraft({deck:deck,key:Date.now()}); setTab("clublounge"); };
+  var sendSuggestion=async function(post,body,suggestion){
+    await clubAddComment(post,body,suggestion);
+    setLabIncoming(null); setClubFocus(post.id); setTab("clublounge");
+  };
+
   /* ── 덱 목록 ──
      계정의 덱 목록은 서버의 것만 믿는다. 전에는 서버에 목록이 없으면 이 브라우저에 남은 목록(계정 구분이 없는
      localStorage)을 가져다 서버에 올렸고, 덱을 저장할 때마다 그 목록으로 서버 목록을 덮었다. 그래서 다른 계정 ·
@@ -11236,14 +11372,17 @@ export default function App(){
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId} authType={authType} gameUrl={kboGameUrl(googleId)}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} customDex={store.customDex} saveCustomDex={store.saveCustomDex} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
-  else if(tab==="lab")pg=(<LabPage mobile={mob} teamName={curDeckObj&&curDeckObj.teamName} skills={store.skills} labSaves={store.labSaves} saveLab={store.saveLab}/>);
+  else if(tab==="lab")pg=(<LabPage mobile={mob} teamName={curDeckObj&&curDeckObj.teamName} skills={store.skills} labSaves={store.labSaves} saveLab={store.saveLab}
+    incoming={labIncoming} onIncomingDone={function(){setLabIncoming(null);}} onShareToClub={isGoogle?shareToClub:null} onSuggest={sendSuggestion}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} potmList={store.potmList} setPotmList={store.savePotmList} isAdmin={isAdmin}/>);
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
   else if(tab==="skills"&&isAdmin)pg=(<SkillManagePage mobile={mob} skills={store.skills} saveSkills={store.saveSkills}/>);
   else if(tab==="enhance"&&isAdmin)pg=(<EnhancePage mobile={mob}/>);
   else if(tab==="datacenter")pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin}/>);
-  else if(tab==="clublounge")pg=(<ClubLoungePage mobile={mob}/>);
+  else if(tab==="clublounge")pg=(<ClubLoungePage mobile={mob} userId={userId} authType={isGoogle?"google":authType} isAdmin={isAdmin}
+    decks={decks} curDeckId={curDeckId} labSaves={store.labSaves} tools={clubTools} onOpenLab={openInLab}
+    draft={clubDraft} onDraftUsed={function(){setClubDraft(null);}} focusPostId={clubFocus} onFocusUsed={function(){setClubFocus(null);}}/>);
   else pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin}/>);
 
   /* 구단 없는 덱(예전 '내 덱')은 구단을 고를 때까지 선택 창을 띄운다 — 세트덱 선택 팀·드림/나눔이 덱 구단을 따른다 */
