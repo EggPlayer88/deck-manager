@@ -3,6 +3,7 @@
    시안: data/mockups/club/club_v2_*.png (2026-10-15 사용자 확인) */
 import React, { useState, useEffect, useCallback } from "react";
 import * as realApi from "./club-api.js";
+import { checkShot } from "./shot-check.js";
 
 /* ── 작은 부품 ──────────────────────────────────────────── */
 
@@ -293,7 +294,7 @@ function StartView(p) {
     <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 12 }}>
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Icon n="crown" size={18} style={{ color: "var(--acc)" }} /><b style={{ fontSize: 15 }}>{"클럽장 등록"}</b></div>
-        <div style={{ fontSize: 12.5, color: "var(--td)", lineHeight: 1.7, margin: "8px 0 14px" }}>{"인게임 클럽장 화면 캡처로 인증해요."}<br />{"관리자가 확인하면 클럽이 열려요."}</div>
+        <div style={{ fontSize: 12.5, color: "var(--td)", lineHeight: 1.7, margin: "8px 0 14px" }}>{"클럽장임이 보이는 인게임 캡처 1장으로 인증해요."}<br />{"관리자가 확인하면 클럽이 열려요."}</div>
         <Btn pri style={{ width: "100%" }} onClick={p.onApply}>{"인증 신청"}</Btn>
       </Card>
       <Card>
@@ -363,7 +364,7 @@ function ApplyFlow(p) {
       style={{ background: "none", border: "none", color: "var(--td)", fontSize: 12, cursor: "pointer", padding: 0, marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
       <Icon n="back" size={13} />{edit && !app ? "클럽 라운지" : "신청 그만두기"}</button>
     <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: -.5, marginBottom: 4 }}>{"클럽장 등록"}</div>
-    <div style={{ color: "var(--t2)", marginBottom: 20, fontSize: 13 }}>{"인게임 클럽장만 클럽을 열 수 있어요. 한 번만 확인하면 됩니다."}</div>
+    <div style={{ color: "var(--t2)", marginBottom: 20, fontSize: 13 }}>{"인게임 클럽장만 클럽을 열 수 있어요. 클럽장 화면 캡처 1장이면 돼요."}</div>
     <Card pad={mob ? "18px 16px" : 22}>
       {Steps}
       {showForm ? (<div>
@@ -373,12 +374,12 @@ function ApplyFlow(p) {
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
           {app && <Btn onClick={function () { setEdit(false); }}>{"취소"}</Btn>}
-          <Btn pri onClick={start} disabled={b.busy}>{"인증 코드 받기"}</Btn>
+          <Btn pri onClick={start} disabled={b.busy}>{"다음"}</Btn>
         </div>
       </div>) : (<div>
         {app.kind === "claim" && (<div style={{ display: "flex", gap: 10, padding: "12px 14px", borderRadius: 10, background: "rgba(255,167,38,.08)", border: "1px solid rgba(255,167,38,.3)", marginBottom: 14 }}>
           <Icon n="alert" style={{ color: "#FFA726", marginTop: 2 }} />
-          <div style={{ fontSize: 12.5, color: "var(--t2)", lineHeight: 1.6 }}>{"‘" + app.club_name + "’ 은 이미 등록된 클럽이에요. 진짜 클럽장이면 아래 코드로 인증해 주세요. 관리자가 확인해 기존 등록이 잘못됐으면 그 클럽을 정리하고 새로 열어 드려요."}</div>
+          <div style={{ fontSize: 12.5, color: "var(--t2)", lineHeight: 1.6 }}>{"‘" + app.club_name + "’ 은 이미 등록된 클럽이에요. 진짜 클럽장이면 아래처럼 캡처를 올려 주세요. 관리자가 확인해 기존 등록이 잘못됐으면 그 클럽을 정리하고 새로 열어 드려요."}</div>
         </div>)}
         <ShotSubmit api={api} app={app} onDone={p.reload} left={<Btn onClick={function () { setEdit(true); }}>{"정보 고치기"}</Btn>} />
       </div>)}
@@ -387,52 +388,58 @@ function ApplyFlow(p) {
   </div>);
 }
 
-/* 인증 코드 + 캡처 올리기 + 제출. 처음 인증(ApplyFlow)과 재인증(ReverifyBanner)이 같이 쓴다 */
+/* 캡처 올리기 + 제출. 처음 인증·되찾기(ApplyFlow)는 캡처 1장만, 재인증(ReverifyBanner)은 코드를 소개글에 적은 캡처.
+   올리기 전에 원본으로 간단 점검(shot-check.js)을 돌려 결과를 같이 낸다 — 관리자 심사 카드에만 보인다 */
 function ShotSubmit(p) {
   var api = p.api, app = p.app;
   var _files = useState([]); var files = _files[0]; var setFiles = _files[1];
   var b = useBusy();
   var addFiles = function (list) {
-    var arr = files.slice();
-    for (var i = 0; i < list.length && arr.length < 2; i++) arr.push({ file: list[i], url: URL.createObjectURL(list[i]) });
-    setFiles(arr);
+    if (!list || !list[0]) return;
+    setFiles([{ file: list[0], url: URL.createObjectURL(list[0]) }]);
   };
   var submit = function () {
     b.run(async function () {
-      if (!files.length) throw new Error("캡처를 한 장 이상 올려 주세요");
-      var paths = [];
-      for (var i = 0; i < files.length; i++) paths.push(await api.uploadVerifyShot(app.id, files[i].file, i + 1));
-      await api.submitApplication(app.id, paths);
+      if (!files.length) throw new Error("캡처를 한 장 올려 주세요");
+      var paths = [], checks = [];
+      for (var i = 0; i < files.length; i++) {
+        try { checks.push(await checkShot(files[i].file)); } catch (e) { checks.push({ flags: [{ lv: "info", t: "점검하지 못함" }] }); }
+        paths.push(await api.uploadVerifyShot(app.id, files[i].file, i + 1));
+      }
+      await api.submitApplication(app.id, paths, checks);
       await p.onDone();
     });
   };
   return (<div>
-    <div style={{ display: "flex", gap: 12, alignItems: "center", padding: "16px 18px", borderRadius: 12, background: "rgba(255,213,79,.08)", border: "1px solid rgba(255,213,79,.22)" }}>
-      <div style={{ flex: 1 }}><div style={Object.assign({}, KICK, { color: "var(--acc)" })}>{p.reverify ? "재인증 코드" : "내 인증 코드"}</div>
-        <div style={{ fontFamily: "var(--m)", fontSize: 28, fontWeight: 800, letterSpacing: 4, color: "var(--acc)", marginTop: 4 }}>{app.code}</div></div>
-      <Btn sm icon="copy" onClick={function () { copyText(app.code); b.setOk("코드를 복사했어요"); }}>{"복사"}</Btn>
-    </div>
-    <ol style={{ margin: "16px 0 0", paddingLeft: 18, lineHeight: 1.9, fontSize: 13, color: "var(--t2)" }}>
-      <li>{"인게임 "}<b style={{ color: "var(--t1)" }}>{"클럽 소개글"}</b>{" 끝에 코드를 잠깐 붙여 넣어요"}</li>
-      <li>{"클럽장 표시와 소개글이 한 화면에 보이게 캡처해요"}</li>
-      <li>{"확인이 끝나면 코드는 지워도 돼요"}</li>
-    </ol>
-    {!p.reverify && (<div style={{ display: "flex", gap: 10, padding: "12px 14px", borderRadius: 10, background: "var(--inner)", marginTop: 14 }}>
-      <Icon n="info" style={{ color: "var(--td)", marginTop: 2 }} />
-      <div style={{ fontSize: 12, color: "var(--td)", lineHeight: 1.6 }}>{"소개글은 클럽장만 고칠 수 있어서, 코드가 적힌 캡처는 "}<b style={{ color: "var(--t2)" }}>{"지금 신청한 사람이 그 클럽의 클럽장"}</b>{"이라는 증거가 돼요. 남의 캡처를 주워 와 먼저 등록하는 걸 막아 줍니다."}</div>
+    {p.reverify ? (<React.Fragment>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", padding: "16px 18px", borderRadius: 12, background: "rgba(255,213,79,.08)", border: "1px solid rgba(255,213,79,.22)" }}>
+        <div style={{ flex: 1 }}><div style={Object.assign({}, KICK, { color: "var(--acc)" })}>{"재인증 코드"}</div>
+          <div style={{ fontFamily: "var(--m)", fontSize: 28, fontWeight: 800, letterSpacing: 4, color: "var(--acc)", marginTop: 4 }}>{app.code}</div></div>
+        <Btn sm icon="copy" onClick={function () { copyText(app.code); b.setOk("코드를 복사했어요"); }}>{"복사"}</Btn>
+      </div>
+      <ol style={{ margin: "16px 0 0", paddingLeft: 18, lineHeight: 1.9, fontSize: 13, color: "var(--t2)" }}>
+        <li>{"인게임 "}<b style={{ color: "var(--t1)" }}>{"클럽 소개글"}</b>{" 끝에 코드를 잠깐 붙여 넣어요"}</li>
+        <li>{"클럽장 표시와 소개글이 한 화면에 보이게 캡처해요"}</li>
+        <li>{"확인이 끝나면 코드는 지워도 돼요"}</li>
+      </ol>
+    </React.Fragment>) : (<div style={{ padding: "14px 16px", borderRadius: 12, background: "var(--inner)" }}>
+      <div style={{ fontWeight: 800, marginBottom: 6 }}>{"클럽장임이 보이는 인게임 화면을 캡처해 주세요"}</div>
+      <div style={{ fontSize: 12.5, color: "var(--t2)", lineHeight: 1.8 }}>
+        {"예: 클럽 정보 화면에서 "}<b style={{ color: "var(--t1)" }}>{"클럽 이름 · 클럽장 표시 · 내 닉네임"}</b>{"이 함께 보이게"}<br />
+        {"휴대폰 캡처 원본 그대로 올려 주세요. 자르거나 편집하면 확인이 늦어질 수 있어요."}</div>
     </div>)}
-    <div style={Object.assign({}, KICK, { margin: "20px 0 8px" })}>{"캡처 (최대 2장)"}</div>
+    <div style={Object.assign({}, KICK, { margin: "20px 0 8px" })}>{"캡처 1장"}</div>
     <div style={{ display: "flex", gap: 10 }}>
       {files.map(function (f, i) {
         return (<div key={i} style={{ width: 96, height: 132, borderRadius: 10, border: "1px solid var(--bd)", position: "relative", overflow: "hidden", background: "#111" }}>
           <img src={f.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          <button type="button" onClick={function () { setFiles(files.filter(function (_, j) { return j !== i; })); }}
+          <button type="button" onClick={function () { setFiles([]); }}
             style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,.6)", border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", padding: 2 }}><Icon n="x" size={12} /></button>
         </div>);
       })}
-      {files.length < 2 && (<label style={{ width: 96, height: 132, borderRadius: 10, border: "1px dashed var(--bd)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: "var(--td)", cursor: "pointer" }}>
-        <Icon n="img" /><span style={{ fontSize: 11 }}>{"추가"}</span>
-        <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={function (e) { addFiles(e.target.files || []); e.target.value = ""; }} />
+      {!files.length && (<label style={{ width: 96, height: 132, borderRadius: 10, border: "1px dashed var(--bd)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: "var(--td)", cursor: "pointer" }}>
+        <Icon n="img" /><span style={{ fontSize: 11 }}>{"올리기"}</span>
+        <input type="file" accept="image/*" style={{ display: "none" }} onChange={function (e) { addFiles(e.target.files); e.target.value = ""; }} />
       </label>)}
     </div>
     <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 8 }}>{"캡처는 관리자만 보고, 심사 30일 뒤 지워져요"}</div>
@@ -444,13 +451,29 @@ function ShotSubmit(p) {
   </div>);
 }
 
+/* 관리자 — 캡처 자동 점검 결과. 경고(편집·AI 흔적)는 주황, 참고(비율·카메라)는 회색 */
+function ShotChecks(p) {
+  var list = Array.isArray(p.checks) ? p.checks : [];
+  if (!list.length) return (<div style={{ fontSize: 12, color: "var(--td)", marginTop: 6 }}>{"자동 점검: 기록 없음"}</div>);
+  var flags = []; list.forEach(function (c) { (c.flags || []).forEach(function (f) { flags.push(f); }); });
+  var c0 = list[0] || {};
+  var meta = [c0.w && c0.h ? c0.w + "×" + c0.h : "", c0.type ? c0.type.toUpperCase() : "", c0.size ? Math.round(c0.size / 1024) + "KB" : "",
+    c0.modified ? "파일 날짜 " + fmtWhen(c0.modified).split(" ")[0] : ""].filter(Boolean).join(" · ");
+  return (<div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: flags.some(function (f) { return f.lv === "warn"; }) ? "rgba(255,167,38,.08)" : "var(--inner)", fontSize: 12, lineHeight: 1.7 }}>
+    <div style={{ fontWeight: 700, color: "var(--t2)" }}>{"자동 점검"}{meta && <span style={{ fontWeight: 400, color: "var(--td)" }}>{"  " + meta}</span>}</div>
+    {!flags.length ? <div style={{ color: "#4CAF50" }}>{"✓ 편집·AI 흔적 없음"}</div>
+      : flags.map(function (f, i) { return <div key={i} style={{ color: f.lv === "warn" ? "#FFA726" : "var(--td)" }}>{(f.lv === "warn" ? "⚠ " : "· ") + f.t}</div>; })}
+    <div style={{ fontSize: 11, color: "var(--td)" }}>{"파일 정보만 본 참고용이에요. 정보를 지운 위조는 못 잡아요."}</div>
+  </div>);
+}
+
 function AppPending(p) {
   var b = useBusy(), app = p.app;
   return (<Card style={{ textAlign: "center", padding: "30px 18px" }}>
     <div style={{ fontSize: 36 }}>{"⏳"}</div>
     <div style={{ fontSize: 16, fontWeight: 900, margin: "6px 0" }}>{app.kind === "claim" ? "클럽 되찾기 확인 중" : "클럽장 인증 확인 중"}</div>
     {app.kind === "claim" && <div style={{ fontSize: 12.5, color: "var(--t2)", lineHeight: 1.7, marginBottom: 6 }}>{"이미 등록된 클럽이라 관리자가 기존 클럽장과 함께 확인해요. 기존 등록이 잘못됐으면 그 클럽을 정리하고 같은 이름으로 새로 열어 드려요."}</div>}
-    <div style={{ fontSize: 13, color: "var(--td)", lineHeight: 1.7 }}>{app.club_name + " · " + app.nickname + " · " + ago(app.submitted_at) + " 신청"}<br />{"승인되면 이 화면이 클럽 화면으로 바뀌어요. 그때까지 소개글의 코드 "}<b style={{ fontFamily: "var(--m)", color: "var(--acc)" }}>{app.code}</b>{" 는 남겨 두세요."}</div>
+    <div style={{ fontSize: 13, color: "var(--td)", lineHeight: 1.7 }}>{app.club_name + " · " + app.nickname + " · " + ago(app.submitted_at) + " 신청"}<br />{"승인되면 이 화면이 클럽 화면으로 바뀌어요."}</div>
     <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
       <Btn sm icon="refresh" onClick={p.reload}>{"새로 보기"}</Btn>
       <Btn sm no onClick={function () { if (window.confirm("신청을 취소할까요?")) b.run(async function () { await p.api.cancelApplication(app.id); await p.reload(); }); }}>{"신청 취소"}</Btn>
@@ -528,7 +551,7 @@ function AdminReview(p) {
   };
   var decide = function (a, ok) {
     var reason = "";
-    if (!ok) { reason = window.prompt("반려 사유 (신청자에게 보여요)", "캡처에 인증 코드가 보이지 않아요. 소개글이 보이게 다시 찍어 주세요."); if (reason === null) return; }
+    if (!ok) { reason = window.prompt("반려 사유 (신청자에게 보여요)", "캡처로 클럽장임을 확인하지 못했어요. 클럽 이름·클럽장 표시·닉네임이 함께 보이는 화면으로 다시 올려 주세요."); if (reason === null) return; }
     else if (!window.confirm(a.club_name + " 클럽을 열고 " + a.nickname + " 님을 클럽장으로 정할까요?")) return;
     b.run(async function () { await api.reviewApplication(a.id, ok, reason); await after(); }, ok ? "승인했어요" : "반려했어요");
   };
@@ -562,10 +585,11 @@ function AdminReview(p) {
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 15, fontWeight: 900 }}>{a.club_name}</span>{KIND_TAG[a.kind]}</div>
         <div style={{ fontSize: 12, color: "var(--td)", margin: "3px 0 10px" }}>{"신청 " + a.nickname + " · " + fmtWhen(a.submitted_at || a.created_at) + (a.reviewed_at ? " · 심사 " + fmtWhen(a.reviewed_at) : "")}</div>
         {st === "pending" && (<div style={{ fontSize: 12.5, lineHeight: 1.9, color: "var(--t2)" }}>
-          <div>{"☐ 캡처에 인증 코드 "}<b style={{ fontFamily: "var(--m)", color: "var(--acc)" }}>{a.code}</b>{" 가 소개글에 보임"}</div>
-          <div>{"☐ 클럽장 표시 · 닉네임 " + a.nickname + " 일치"}</div>
+          <div>{"☐ 인게임 화면에 클럽장 표시가 보임"}</div>
+          <div>{"☐ 닉네임 " + a.nickname + " 일치"}</div>
           <div>{"☐ 클럽 이름 " + a.club_name + " 일치 (대소문자까지)"}{sim.length > 0 && <span style={{ color: "#FFA726" }}>{"  ⚠ 비슷한 이름: " + sim.join(", ")}</span>}</div>
         </div>)}
+        {st === "pending" && <ShotChecks checks={a.checks} />}
         {a.reason && <div style={{ fontSize: 12, color: "var(--td)", marginTop: 6 }}>{"메모: " + a.reason}</div>}
         {st === "pending" && (<div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <Btn sm no onClick={function () { decide(a, false); }} disabled={b.busy}>{"반려"}</Btn>
@@ -628,10 +652,12 @@ function DisputeCard(p) {
         <div style={Object.assign({}, KICK, { marginBottom: 8 })}>{"기존 클럽장 · 처음 인증"}</div>
         {d.club ? (<React.Fragment>
           {shots(d.original && d.original.shots, d.original && d.original.shots_purged)}
-          <div style={{ fontSize: 11.5, color: "var(--td)", margin: "6px 0 10px" }}>{d.original ? "코드 " + d.original.code + " · " + fmtWhen(d.original.reviewed_at || d.original.created_at) + " 승인" : "처음 인증 기록 없음"}</div>
+          <div style={{ fontSize: 11.5, color: "var(--td)", margin: "6px 0 10px" }}>{d.original ? fmtWhen(d.original.reviewed_at || d.original.created_at) + " 승인" : "처음 인증 기록 없음"}</div>
           <div style={Object.assign({}, KICK, { marginBottom: 6 })}>{"재인증"}</div>
           <div style={{ fontSize: 12.5, color: rv && due && due < Date.now() && rv.status === "draft" ? "#FFA726" : "var(--t2)", marginBottom: 8 }}>{rvTxt}</div>
           {rv && rv.status === "pending" && shots(rv.shots)}
+          {rv && rv.status === "pending" && <div style={{ fontSize: 12, color: "var(--t2)", marginTop: 6 }}>{"캡처 소개글에 코드 "}<b style={{ fontFamily: "var(--m)", color: "var(--acc)" }}>{rv.code}</b>{" 가 보이는지 확인"}</div>}
+          {rv && rv.status === "pending" && <ShotChecks checks={rv.checks} />}
           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
             <Btn sm icon="refresh" onClick={function () { var h = window.prompt("재인증 기한 (시간)", "48"); if (h === null) return; b.run(async function () { await api.requestReverify(d.clubId, parseInt(h, 10) || 48); await p.after(); }, "기존 클럽장에게 재인증을 요청했어요 — 클럽 화면 맨 위에 안내가 떠요"); }}>{rv ? "새 코드로 다시 요청" : "재인증 요청"}</Btn>
             {!d.claims.length && rv && <Btn sm ok onClick={function () { settle(true); }}>{"진짜 맞음"}</Btn>}
@@ -644,8 +670,9 @@ function DisputeCard(p) {
         {!d.claims.length && <div style={{ fontSize: 12.5, color: "var(--td)" }}>{"없음 — 신고로 재인증만 걸어 둔 클럽이에요"}</div>}
         {d.claims.map(function (a) {
           return (<div key={a.id} style={{ padding: 12, borderRadius: 10, border: "1px solid var(--bd)", marginBottom: 8 }}>
-            <div style={{ marginBottom: 8 }}><b>{a.nickname}</b><span style={{ fontSize: 11.5, color: "var(--td)" }}>{" · " + ago(a.submitted_at) + " · 코드 "}</span><b style={{ fontFamily: "var(--m)", color: "var(--acc)", fontSize: 12 }}>{a.code}</b></div>
+            <div style={{ marginBottom: 8 }}><b>{a.nickname}</b><span style={{ fontSize: 11.5, color: "var(--td)" }}>{" · " + ago(a.submitted_at)}</span></div>
             {shots(a.shots)}
+            <ShotChecks checks={a.checks} />
             <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
               <Btn sm ok onClick={function () { winClaimant(a); }} disabled={b.busy}>{d.club ? "이 사람이 진짜 → 클럽 다시 열기" : "이 사람으로 새로 열기"}</Btn>
               {d.club && <Btn sm no onClick={function () { winLeader(a); }} disabled={b.busy}>{"기존 클럽장이 진짜"}</Btn>}

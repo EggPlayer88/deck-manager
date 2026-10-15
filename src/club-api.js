@@ -64,8 +64,9 @@ export async function uploadVerifyShot(appId, file, n) {
   if (r.error) throw fail(r.error);
   return path;
 }
-export function submitApplication(id, paths) {
-  return rpc('club_submit_application', { p_id: id, p_shots: paths });
+/* checks — 올린 캡처의 간단 점검 결과 (shot-check.js). 관리자 심사 카드에 참고로 뜬다 */
+export function submitApplication(id, paths, checks) {
+  return rpc('club_submit_application', { p_id: id, p_shots: paths, p_checks: checks || null });
 }
 
 /* 관리자 — "대기" 는 새 클럽 신청만. 되찾기·재인증은 분쟁 탭(adminDisputes)이 따로 모은다 */
