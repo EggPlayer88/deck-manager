@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpAppearance, rpOrderMove, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -472,14 +472,16 @@ eq('2/2/2 RP3 은 패전조', slotGroupOf('RP3', 4, false) === '패전조' ? 1 :
 eq('2/2/2 RP5 은 롱릴리프', slotGroupOf('RP5', 4, false) === '롱릴리프' ? 1 : 0, 1);
 eq('CP 는 마무리', slotGroupOf('CP', 4, false) === '마무리' ? 1 : 0, 1);
 eq('SP1 은 선발', slotGroupOf('SP1', 4, false) === '선발' ? 1 : 0, 1);
-eq('3/3/0 분업이면 RP1 은 셋업', slotGroupOf('RP1', 8, true) === '셋업' ? 1 : 0, 1);
+eq('3/3/0 분업 — 1번째(RP1)는 승리조 그대로', slotGroupOf('RP1', 8, true) === '승리조' ? 1 : 0, 1);
+eq('3/3/0 분업 — 2번째(RP2)는 셋업1 · 3번째(RP3)는 셋업2', slotGroupOf('RP2', 8, true) === '셋업1' && slotGroupOf('RP3', 8, true) === '셋업2' ? 1 : 0, 1);
 eq('분업 꺼져 있으면 승리조', slotGroupOf('RP1', 8, false) === '승리조' ? 1 : 0, 1);
 
 console.log('\n[자리 불일치] 라인업을 옮기면 조용히 틀어지는 것을 잡는다');
 eq('승리조에 긴급투입(추격조)', skillSlotHint('긴급투입(추격조)', '승리조', '중계') === '긴급투입(필승조/마무리)' ? 1 : 0, 1);
 eq('패전조면 맞다', skillSlotHint('긴급투입(추격조)', '패전조', '중계') === '' ? 1 : 0, 1);
 eq('승리조에 수호신(셋업2)', skillSlotHint('수호신(셋업2)', '승리조', '중계') === '수호신(승리조)' ? 1 : 0, 1);
-eq('셋업에 수호신(승리조)', skillSlotHint('수호신(승리조)', '셋업', '중계') === '수호신(셋업2)' ? 1 : 0, 1);
+eq('셋업1 에 수호신(승리조)', skillSlotHint('수호신(승리조)', '셋업1', '중계') === '수호신(셋업1)' ? 1 : 0, 1);
+eq('셋업2 에 수호신(승리조)', skillSlotHint('수호신(승리조)', '셋업2', '중계') === '수호신(셋업2)' ? 1 : 0, 1);
 eq('불펜에 마당쇠(선발)', skillSlotHint('마당쇠(선발)', '패전조', '중계') === '마당쇠(불펜)' ? 1 : 0, 1);
 eq('조건 괄호는 자리가 아니다', skillSlotHint('철완(134139)', '승리조', '중계') === '' ? 1 : 0, 1);
 eq('괄호 없는 스킬도 통과', skillSlotHint('파이어볼', '승리조', '중계') === '' ? 1 : 0, 1);
@@ -2692,6 +2694,80 @@ console.log('[저장 기록 — 선수가 빠지는 저장만 적는다 (2026-10
   pushAudit(row2, { t: 2 });
   eq('읽어 온 배열을 직접 고치지 않는다', before.length === 1 && row2.audit.length === 2 ? 1 : 0, 1);
   eq('다 차도 2KB 를 넘지 않는다', JSON.stringify(Array.from({ length: 20 }, () => deckShrinkNote(deck(['a', 'b', 'c']), deck([]), 'dk_1700000000001', { players: true, lineup: true, sd: true }, 'restore', true, Date.now()))).length < 2048 ? 1 : 0, 1);
+}
+
+console.log('');
+console.log('[중계 등판 순서 — 배율은 자리가 아니라 조 안의 등판 차례에 (2026-10-15)]');
+{
+  const S = (a) => a.join(',');
+  /* 순서를 안 주면 전과 같다 — 자리 순서가 곧 등판 순서 */
+  eq('순서를 안 주면 자리 순서', S(rpAppearance(8, null).seq) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('순서를 안 주면 배율도 전과 같다 (3/3/0 기본 RP3 = 0.05)', getRPWeight(8, 'RP3', '기본'), 0.05);
+  for (let bi = 0; bi < 11; bi++) for (const tac of ['기본', '적극', '분업']) for (const s of ['RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6'])
+    if (getRPWeight(bi, s, tac, null) !== getRPWeight(bi, s, tac, ['RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6'])) eq('자리 순서를 그대로 적은 순서 = 순서 없음 (' + bi + ' ' + tac + ' ' + s + ')', 0, 1);
+  /* 3/3/0 — 승리조 RP3 → RP1 → RP2 · 추격조 RP5 → RP4 → RP6 */
+  const ord = ['RP3', 'RP1', 'RP2', 'RP5', 'RP4', 'RP6'];
+  const ap = rpAppearance(8, ord);
+  eq('3/3/0 — 등판 차례', S(ap.seq) === 'RP3,RP1,RP2,RP5,RP4,RP6' ? 1 : 0, 1);
+  eq('RP3 이 승리조 첫 배율 자리', ap.pos.RP3, 0);
+  eq('기본 3/3/0 — RP3 이 1번째로 나오면 0.85', getRPWeight(8, 'RP3', '기본', ord), 0.85);
+  eq('… RP1 은 2번째라 0.35', getRPWeight(8, 'RP1', '기본', ord), 0.35);
+  eq('… RP2 는 3번째라 0.05', getRPWeight(8, 'RP2', '기본', ord), 0.05);
+  eq('… 추격조 RP5 가 1번째라 0.70', getRPWeight(8, 'RP5', '기본', ord), 0.7);
+  eq('분업 3/3/0 — 셋업 1번째(RP3) 0.35 · 3번째(RP2) 0.75', getRPWeight(8, 'RP3', '분업', ord) === 0.35 && getRPWeight(8, 'RP2', '분업', ord) === 0.75 ? 1 : 0, 1);
+  /* 조를 넘지 않는다 */
+  eq('다른 조 자리를 앞에 적어도 조를 넘지 않는다', S(rpAppearance(8, ['RP4', 'RP1', 'RP2', 'RP3']).seq) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('순서에 없는 자리는 그 조 끝에', S(rpAppearance(8, ['RP2']).seq) === 'RP2,RP1,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('이상한 값 · 겹친 값은 버린다', S(rpAppearance(8, ['X', 3, null, 'RP2', 'RP2']).seq) === 'RP2,RP1,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  /* 편성을 바꾸면 조 구성이 바뀐다 — 같은 조에 남은 자리끼리의 앞뒤만 따른다 */
+  eq('3/3/0 순서를 2/2/2 로 — 같은 조에 남은 자리끼리의 앞뒤만 따른다', S(rpAppearance(4, ['RP2', 'RP1', 'RP3', 'RP6', 'RP5', 'RP4']).seq) === 'RP2,RP1,RP3,RP4,RP6,RP5' ? 1 : 0, 1);
+  eq('1/1/4 — 롱릴리프 넷의 차례를 바꿀 수 있다', S(rpAppearance(0, ['RP6', 'RP5', 'RP4', 'RP3']).seq) === 'RP1,RP2,RP6,RP5,RP4,RP3' ? 1 : 0, 1);
+  eq('1/1/4 — 롱릴리프 1번째(RP6) 가 0.45', getRPWeight(0, 'RP6', '기본', ['RP6', 'RP5', 'RP4', 'RP3']), 0.45);
+  /* 한 칸 옮기기 */
+  eq('◀ — 같은 조 안에서 한 칸 앞으로', S(rpOrderMove(8, null, 'RP2', -1)) === 'RP2,RP1,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('조 첫 자리는 더 앞으로 못 간다', S(rpOrderMove(8, null, 'RP1', -1)) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('승리조 끝에서 ▶ 해도 추격조로 못 넘어간다', S(rpOrderMove(8, null, 'RP3', 1)) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('추격조 첫 자리에서 ◀ 해도 승리조로 못 넘어간다', S(rpOrderMove(8, null, 'RP4', -1)) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('▶ — 추격조 안에서 한 칸 뒤로', S(rpOrderMove(8, null, 'RP4', 1)) === 'RP1,RP2,RP3,RP5,RP4,RP6' ? 1 : 0, 1);
+  eq('옮긴 순서를 다시 옮길 수 있다', S(rpOrderMove(8, rpOrderMove(8, null, 'RP3', -1), 'RP3', -1)) === 'RP3,RP1,RP2,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('없는 자리는 그대로', S(rpOrderMove(8, null, 'SP1', 1)) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  /* 총점 — 같은 선수 · 같은 자리(포특 그대로)에서 등판 차례만 바꾸면 배율만 바뀐다 */
+  const relA = { id: 'ra', role: '투수', position: '중계', cardType: '골든글러브', hand: '우', change: 90, stuff: 92, enhance: '9각성', sLvManual: true };
+  const relB = { id: 'rb', role: '투수', position: '중계', cardType: '시그니처', hand: '우', change: 70, stuff: 72, enhance: '9각성', sLvManual: true };
+  const pk = (s) => (s === 'RP1' ? relA : s === 'RP2' ? relB : null);
+  const sd0 = { bpcIdx: 8 }, sd1 = { bpcIdx: 8, rpOrder: ['RP2', 'RP1', 'RP3'] };
+  const tA = lineupPit(relA, 'RP1', sd0, lineupOpts(sd0, 0)).total, tB = lineupPit(relB, 'RP2', sd0, lineupOpts(sd0, 0)).total;
+  eq('등판 차례를 바꿔도 선수 점수(포특 포함)는 그대로', lineupPit(relA, 'RP1', sd1, lineupOpts(sd1, 0)).total === tA ? 1 : 0, 1);
+  eq('순서 없음 — RP1 0.85 · RP2 0.35', calcLineupTotal(pk, sd0, lineupOpts(sd0, 0)), Math.round((tA * 0.85 + tB * 0.35) * 100) / 100);
+  eq('RP2 를 먼저 내보내면 — RP2 0.85 · RP1 0.35', calcLineupTotal(pk, sd1, lineupOpts(sd1, 0)), Math.round((tA * 0.35 + tB * 0.85) * 100) / 100);
+  eq('lineupOpts 가 순서를 실어 나른다', JSON.stringify(lineupOpts(sd1, 0).rpOrder) === JSON.stringify(['RP2', 'RP1', 'RP3']) ? 1 : 0, 1);
+  eq('순서 칸이 배열이 아니면 없는 것으로', lineupOpts({ rpOrder: 'RP2' }, 0).rpOrder === null ? 1 : 0, 1);
+}
+
+console.log('');
+console.log('[셋업1 · 셋업2 — 승리조 3명 + 분업일 때 그 조에서 2 · 3번째로 나오는 투수 (2026-10-15 사용자 확인)]');
+{
+  const ord = ['RP3', 'RP1', 'RP2'];
+  const R = (s, bi, split, o) => slotGroupOf(s, bi, split, o);
+  eq('분업 3/3/0 · 순서를 RP3 → RP1 → RP2 로 — RP3 승리조 · RP1 셋업1 · RP2 셋업2', R('RP3', 8, true, ord) === '승리조' && R('RP1', 8, true, ord) === '셋업1' && R('RP2', 8, true, ord) === '셋업2' ? 1 : 0, 1);
+  eq('분업이 아니면 승리조 셋 다 승리조 (인게임 감독실에 셋업맨이라 떠도 스킬에선 승리조)', ['RP1', 'RP2', 'RP3'].every((s) => R(s, 8, false, ord) === '승리조') ? 1 : 0, 1);
+  eq('승리조가 3명이 아니면 분업이 켜져 있어도 셋업이 없다 (2/2/2)', ['RP1', 'RP2'].every((s) => R(s, 4, true, ['RP2', 'RP1']) === '승리조') ? 1 : 0, 1);
+  eq('1/4/1 도 마찬가지', R('RP1', 10, true, null) === '승리조' ? 1 : 0, 1);
+  eq('3/1/2 · 3/2/1 도 같은 규칙', R('RP2', 6, true, null) === '셋업1' && R('RP3', 7, true, null) === '셋업2' && R('RP1', 7, true, null) === '승리조' ? 1 : 0, 1);
+  eq('추격조 · 롱릴리프 · 마무리 · 선발은 순서와 상관없다', R('RP4', 8, true, ord) === '패전조' && R('RP6', 6, true, null) === '롱릴리프' && R('CP', 8, true, ord) === '마무리' && R('SP1', 8, true, ord) === '선발' ? 1 : 0, 1);
+  eq('추격조 순서를 바꿔도 승리조 역할은 그대로', R('RP2', 8, true, ['RP6', 'RP5', 'RP4']) === '셋업1' ? 1 : 0, 1);
+  /* 스킬 변형 안내 — 순서를 따라간다 */
+  const H = (nm, s, o) => skillSlotHint(nm, slotGroupOf(s, 8, true, o), '중계');
+  eq('셋업1(RP1)에 수호신(셋업2) → 셋업1 변형을 안내', H('수호신(셋업2)', 'RP1', ord) === '수호신(셋업1)' ? 1 : 0, 1);
+  eq('셋업2(RP2)에 수호신(셋업2) → 맞음', H('수호신(셋업2)', 'RP2', ord) === '' ? 1 : 0, 1);
+  eq('분업 1번째(RP3)에 수호신(셋업1) → 승리조 변형을 안내', H('수호신(셋업1)', 'RP3', ord) === '수호신(승리조)' ? 1 : 0, 1);
+  eq('분업 1번째(RP3)에 기선제압(셋업/마무리) → 셋업제외 변형을 안내', H('기선제압(셋업/마무리)', 'RP3', ord) === '기선제압(셋업제외불펜)' ? 1 : 0, 1);
+  eq('셋업1 에 기선제압(셋업/마무리) → 맞음', H('기선제압(셋업/마무리)', 'RP1', ord) === '' ? 1 : 0, 1);
+  eq('셋업2 에 기선제압(셋업제외불펜) → 셋업 변형을 안내', H('기선제압(셋업제외불펜)', 'RP2', ord) === '기선제압(셋업/마무리)' ? 1 : 0, 1);
+  eq('긴급투입(필승조/마무리) 는 승리조 · 셋업 어디서나 맞음', ['RP1', 'RP2', 'RP3'].every((s) => H('긴급투입(필승조/마무리)', s, ord) === '') ? 1 : 0, 1);
+  eq('순서를 바꾸면 안내도 따라간다 — RP1 을 1번째로 올리면 수호신(셋업1) 은 승리조 변형을 안내', H('수호신(셋업1)', 'RP1', ['RP1', 'RP3', 'RP2']) === '수호신(승리조)' ? 1 : 0, 1);
+  eq('분업이 아니면 수호신(셋업1) → 승리조 변형을 안내', skillSlotHint('수호신(셋업1)', slotGroupOf('RP2', 8, false, null), '중계') === '수호신(승리조)' ? 1 : 0, 1);
+  eq('분업을 켜도 배율 · 전술 판정의 조(rpGroupOf)는 승리조 그대로', ['RP1', 'RP2', 'RP3'].every((s) => rpGroupOf(s, 8) === '승리조') ? 1 : 0, 1);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);

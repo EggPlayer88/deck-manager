@@ -3502,14 +3502,48 @@ function rpBudget(tactic) {
   var sp = 0; for (var i = 0; i < a.length; i++) sp += a[i];
   return Math.round((PIT_TOTAL - sp - CP_MULT) * 1000) / 1000;
 }
-/* RP_WEIGHTS 는 11종의 상대비만 담는다(합 3.00). 실제 값은 전술별 예산에 맞춰 늘린다.
-   패전조·롱릴리프는 기본 전술의 값으로 두고, 늘어난 몫은 승리조가 가져간다.
-   적극·분업은 승리조를 더 쓰는 전술이므로 그쪽에 실리는 것이 맞다. */
-function getRPWeight(bpcIdx, slot, tactic) {
+/* 중계 등판 순서 — 2026-10-15 사용자 지정.
+   인게임에서 RP1~RP6 자리는 포지션 특훈(능력치 · 스킬 보너스)을 받는 칸이고, 유저는 그걸 보고 선수를 앉힌다.
+   등판 순서는 감독실에서 따로 정하는데, 같은 조(승리조 · 추격조 · 롱릴리프) 안에서만 바꿀 수 있다.
+   그래서 배율(RP_WEIGHTS)은 자리가 아니라 "그 조 안에서 몇 번째로 나오느냐"에 붙는다.
+   order — 덱 설정의 rpOrder (RP 자리 이름을 등판 차례대로 늘어놓은 것). 없거나 모자라면 자리 순서(RP1 → RP6)로 채운다.
+   돌려주는 값: seq — 조 순서대로 이어 붙인 등판 차례(6칸) · pos — 자리마다 몇 번째 배율을 받는지(0부터).
+   조는 편성(bpcIdx)이 정하므로, 편성을 바꾸면 같은 조에 남은 자리끼리의 앞뒤만 order 를 따른다 */
+function rpAppearance(bpcIdx, order) {
+  var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
+  var rank = {};
+  (Array.isArray(order) ? order : []).forEach(function(s, i) { if (RP_SLOTS.indexOf(s) >= 0 && rank[s] === undefined) rank[s] = i; });
+  var seq = [];
+  [[0, cfg.w], [cfg.w, cfg.w + cfg.l], [cfg.w + cfg.l, RP_SLOTS.length]].forEach(function(g) {
+    var slots = RP_SLOTS.slice(g[0], g[1]);
+    slots.sort(function(a, b) {
+      var ra = rank[a], rb = rank[b];
+      if (ra === undefined || rb === undefined) {
+        if (ra === undefined && rb === undefined) return RP_SLOTS.indexOf(a) - RP_SLOTS.indexOf(b);
+        return ra === undefined ? 1 : -1;   /* 순서에 없는 자리는 그 조의 끝에 */
+      }
+      return ra - rb;
+    });
+    seq = seq.concat(slots);
+  });
+  var pos = {}; seq.forEach(function(s, i) { pos[s] = i; });
+  return { seq: seq, pos: pos };
+}
+/* 등판 순서에서 slot 을 같은 조 안에서 한 칸 앞(dir -1) · 뒤(+1)로 옮긴 새 순서. 조 끝이거나 다른 조로 넘어가면 그대로 */
+function rpOrderMove(bpcIdx, order, slot, dir) {
+  var seq = rpAppearance(bpcIdx, order).seq.slice();
+  var i = seq.indexOf(slot), j = i + dir;
+  if (i < 0 || j < 0 || j >= seq.length || rpGroupOf(seq[j], bpcIdx) !== rpGroupOf(slot, bpcIdx)) return seq;
+  seq[i] = seq[j]; seq[j] = slot;
+  return seq;
+}
+/* 중계 배율 — 편성 · 전술 표에서 그 자리가 받는 값. 배율은 등판 차례에 붙는다 (rpAppearance).
+   order 를 안 주면(덱 연구소처럼 순서를 따로 정하지 않는 곳) 자리 순서가 곧 등판 순서다 */
+function getRPWeight(bpcIdx, slot, tactic, order) {
   var set = RP_WEIGHTS[bpcIdx]; if (!set) return 0;
   var a = set[tactic] || set["기본"]; if (!a) return 0;
-  var si = ["RP1","RP2","RP3","RP4","RP5","RP6"].indexOf(slot);
-  return si < 0 ? 0 : (a[si] || 0);
+  var si = rpAppearance(bpcIdx, order).pos[slot];
+  return si === undefined ? 0 : (a[si] || 0);
 }
 
 /* ── 라인업 총점 ─────────────────────────────────────────────
@@ -3535,7 +3569,9 @@ function lineupOpts(sdState, totalSP) {
     batOrder: (st.batOrder && st.batOrder.length === 9) ? st.batOrder : BAT_SLOTS.slice(),
     totalSP: totalSP || 0,
     tactic: rpTactic(st),
-    bpcIdx: st.bpcIdx !== undefined ? st.bpcIdx : 4
+    bpcIdx: st.bpcIdx !== undefined ? st.bpcIdx : 4,
+    /* 중계 등판 순서 (rpAppearance) — 없으면 자리 순서 */
+    rpOrder: Array.isArray(st.rpOrder) ? st.rpOrder : null
   };
 }
 function lineupBat(pl, slot, sd, o) {
@@ -3563,7 +3599,7 @@ function calcLineupTotal(pk, sd, o) {
   var spSc = spPl.map(function(pl, i) { return pl ? lineupPit(pl, SP_SLOTS[i], sd, o).total : -1e9; });
   var spRk = strRanks(spSc);
   SP_SLOTS.forEach(function(s, i) { if (spPl[i]) t += spSc[i] * spMult(o.tactic, spRk[i]); });
-  RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.tactic); });
+  RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.tactic, o.rpOrder); });
   var cp = pk("CP"); if (cp) t += lineupPit(cp, "CP", sd, o).total * CP_MULT;
   return Math.round(t * 100) / 100;
 }
@@ -3592,6 +3628,30 @@ function PitSlot(p) {
     <span style={{ fontSize: 11, color: "var(--td)" }}>{p.slot}</span></div>);
 }
 
+/* 분업의 셋업1 · 셋업2 표시 색 */
+var SETUP_COLOR = "#F9A825";
+/* 중계 카드 밑 — 같은 조 안에서 등판 차례를 앞(◀) · 뒤(▶)로 옮긴다. 가운데는 차례와 포지션 특훈을 받는 자리.
+   조에 한 명뿐이면 화살표 없이 자리만 적는다. 분업의 셋업이면 그 밑에 셋업1 · 셋업2 (role) */
+function RpOrderBar(p) {
+  var btn = function(dir, on, ch, tip) {
+    return (<button onClick={function(e) { e.stopPropagation(); if (on && p.onMove) p.onMove(p.slot, dir); }} disabled={!on} title={tip}
+      style={{ width: 20, height: 20, padding: 0, borderRadius: 4, border: "1px solid " + (on ? "var(--bd)" : "transparent"), background: on ? "var(--card)" : "transparent",
+        color: on ? "var(--t2)" : "var(--bd)", cursor: on ? "pointer" : "default", fontSize: 9, lineHeight: "18px" }}>{ch}</button>);
+  };
+  var label = (<span title={p.slot + " 자리의 포지션 특훈을 받고, 조 안에서 " + p.no + "번째로 나옵니다"}
+    style={{ fontSize: 11, fontFamily: "var(--m)", color: "var(--t2)", minWidth: 34, textAlign: "center", whiteSpace: "nowrap" }}>
+    <b style={{ color: p.color }}>{p.no}</b>{" · " + p.slot}</span>);
+  var bar = !p.many ? (<div style={{ display: "flex", justifyContent: "center", height: 20, alignItems: "center" }}>{label}</div>)
+    : (<div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+      {btn(-1, p.canUp, "◀", "먼저 나오게 — 같은 조 안에서 한 칸 앞으로")}
+      {label}
+      {btn(1, p.canDown, "▶", "나중에 나오게 — 같은 조 안에서 한 칸 뒤로")}
+    </div>);
+  if (!p.role) return bar;
+  return (<div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>{bar}
+    <span title={"분업 — 승리조 " + p.no + "번째로 나와 스킬의 " + p.role + " 역할을 받습니다"} style={{ fontSize: 10, fontWeight: 800, color: SETUP_COLOR, lineHeight: 1 }}>{p.role}</span></div>);
+}
+
 function BullpenLayout(p) {
   var mob = p.mobile;
   var rps = p.relievers;
@@ -3605,6 +3665,8 @@ function BullpenLayout(p) {
   var rpActive = p.rpActive || false;
   var setRpActive = p.setRpActive || function(){};
   var _o = useState(false); var open = _o[0]; var setOpen = _o[1];
+  /* 분업이면 승리조 2 · 3번째가 셋업1 · 셋업2 (slotGroupOf) */
+  var setupOf = function(slot) { var r = slotGroupOf(slot, idx, isWinSplit, p.rpOrder); return r === "셋업1" || r === "셋업2" ? r : ""; };
   var cfg = BPC[idx];
 
   return (
@@ -3619,27 +3681,34 @@ function BullpenLayout(p) {
             <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, marginTop: 4, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 8, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", width: 170 }}>
               {BPC.map(function(c, i) {
                 var act = i === idx;
-                return (<button key={c.label} onClick={function() { setIdx(i); setOpen(false); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "10px 14px", background: act ? "var(--ta)" : "transparent", border: "none", borderBottom: "1px solid var(--bd)", color: act ? "var(--acc)" : "var(--t2)", cursor: "pointer", fontSize: 14, fontFamily: "var(--m)", fontWeight: act ? 800 : 500, textAlign: "left" }}><span>{c.label}</span><span style={{ fontSize: 11, color: "var(--td)" }}>{"승" + c.w + " 패" + c.l + " 롱" + c.r}</span></button>);
+                return (<button key={c.label} onClick={function() { setIdx(i); setOpen(false); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "10px 14px", background: act ? "var(--ta)" : "transparent", border: "none", borderBottom: "1px solid var(--bd)", color: act ? "var(--acc)" : "var(--t2)", cursor: "pointer", fontSize: 14, fontFamily: "var(--m)", fontWeight: act ? 800 : 500, textAlign: "left" }}><span>{c.label}</span><span style={{ fontSize: 11, color: "var(--td)" }}>{"승" + c.w + " 추" + c.l + " 롱" + c.r}</span></button>);
               })}
             </div>
           )}
         </div>
         {cfg.w === 3 && (
-          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명을 셋업으로 나눠 쓰고 능력치가 2씩 오릅니다. 이 상승은 인게임 덱 화면 수치에는 보이지 않아서, 라인업의 변화·구위 숫자는 그대로이고 점수에만 반영됩니다. 대신 선발 배율이 7.00 에서 6.33 으로 깎이고 그만큼 중계 몫이 커집니다. 적극과는 함께 켤 수 없습니다." style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
+          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명의 능력치가 2씩 오르고, 그 조에서 2번째 · 3번째로 나오는 투수가 스킬의 셋업1 · 셋업2 가 됩니다 (1번째는 승리조 그대로). 이 상승은 인게임 덱 화면 수치에는 보이지 않아서, 라인업의 변화·구위 숫자는 그대로이고 점수에만 반영됩니다. 대신 선발 배율이 7.00 에서 6.33 으로 깎이고 그만큼 중계 몫이 커집니다. 적극과는 함께 켤 수 없습니다." style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
         )}
         <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명과 추격조 " + cfg.l + "명의 능력치가 1씩 오릅니다. 이 상승은 인게임 덱 화면 수치에는 보이지 않아서, 라인업의 변화·구위 숫자는 그대로이고 점수에만 반영됩니다. 대신 선발 배율이 7.00 에서 6.66 으로 깎이고 그만큼 중계 몫이 커집니다. 분업과는 함께 켤 수 없습니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {[
           { label: "승리조", count: cfg.w, color: "#4CAF50", slots: rpSlots.slice(0, cfg.w) },
-          { label: "패전조", count: cfg.l, color: "#FF7043", slots: rpSlots.slice(cfg.w, cfg.w + cfg.l) },
+          { label: "추격조", count: cfg.l, color: "#FF7043", slots: rpSlots.slice(cfg.w, cfg.w + cfg.l) },
           { label: "롱릴리프", count: cfg.r, color: "#42A5F5", slots: rpSlots.slice(cfg.w + cfg.l) },
         ].map(function(col) {
           return (
             <PitchGroup key={col.label} label={col.label} count={col.count} color={col.color}>
-              {col.slots.map(function(s) {
-                if (s.pl) return (<div key={s.slot} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ cursor: onSlotClick ? "pointer" : "default" }}><PCard p={s.pl} size="lg" /></div>);
-                return (<PitSlot key={s.slot} slot={s.slot} size="lg" onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} />);
+              {/* 카드는 등판 차례대로 놓인다 (rpSlots 가 그 순서). 밑의 화살표로 같은 조 안에서만 앞뒤를 바꾼다 */}
+              {col.slots.map(function(s, k) {
+                var card = s.pl
+                  ? (<div onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ cursor: onSlotClick ? "pointer" : "default" }}><PCard p={s.pl} size="lg" /></div>)
+                  : (<PitSlot slot={s.slot} size="lg" onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} />);
+                return (<div key={s.slot} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                  {card}
+                  <RpOrderBar slot={s.slot} no={k + 1} color={col.color} many={col.slots.length > 1} role={setupOf(s.slot)}
+                    canUp={k > 0} canDown={k < col.slots.length - 1} onMove={p.onMove} />
+                </div>);
               })}
             </PitchGroup>
           );
@@ -3654,10 +3723,8 @@ function BullpenLayout(p) {
    라인업/내선수 페이지에서 200+ 스킬 중 검색하여 고르기 위함
    props: value, onChange, options(스킬명 배열), width, fontSize
    ================================================================ */
-/* 슬롯이 실제로 어느 자리인가. 앱의 "패전조" 가 스킬 이름의 "추격조" 다.
-   분업을 켜면 승리조 자리가 셋업이 된다. */
-/* 불펜 자리가 어느 조인가 — 분업으로 '셋업' 이라 불리게 돼도 자리 자체는 그대로다.
-   전술 보너스는 이 판정을 따른다. */
+/* 불펜 자리가 어느 조인가 — 분업으로 셋업 역할을 받아도 조 자체는 그대로다.
+   전술 보너스와 등판 순서를 바꿀 수 있는 범위는 이 판정을 따른다. */
 function rpGroupOf(slot, bpcIdx) {
   var si = RP_SLOTS.indexOf(slot);
   if (si < 0) return "";
@@ -3667,27 +3734,39 @@ function rpGroupOf(slot, bpcIdx) {
   return "롱릴리프";
 }
 function isWinGroupSlot(slot, bpcIdx) { return rpGroupOf(slot, bpcIdx) === "승리조"; }
-function slotGroupOf(slot, bpcIdx, isWinSplit) {
+/* 스킬 변형을 가를 때 보는 역할. 앱의 "패전조" 가 스킬 이름의 "추격조" 다.
+   스킬에서 말하는 셋업맨은 승리조 3명에 분업을 켰을 때 그 조에서 2번째 · 3번째로 나오는 투수뿐이다
+   — 2번째가 셋업1, 3번째가 셋업2, 1번째는 분업이어도 승리조다. 다른 편성에서도 인게임 감독실에
+   '셋업맨' 이라는 이름이 뜨지만 스킬에서는 승리조로 본다 (2026-10-15 사용자 확인).
+   몇 번째인지는 자리 번호가 아니라 등판 순서(order = 덱 설정의 rpOrder, rpAppearance)를 따른다 */
+function slotGroupOf(slot, bpcIdx, isWinSplit, order) {
   if (!slot) return "";
   if (slot === "CP") return "마무리";
   if (SP_SLOTS.indexOf(slot) >= 0) return "선발";
   var si = RP_SLOTS.indexOf(slot);
   if (si < 0) return "타자";
   var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
-  if (si < cfg.w) return isWinSplit ? "셋업" : "승리조";
+  if (si < cfg.w) {
+    if (isWinSplit && cfg.w === 3) {
+      var n = rpAppearance(bpcIdx, order).pos[slot];
+      if (n === 1) return "셋업1";
+      if (n === 2) return "셋업2";
+    }
+    return "승리조";
+  }
   if (si < cfg.w + cfg.l) return "패전조";
   return "롱릴리프";
 }
-/* 괄호 안 자리 표기 -> 그 변형이 유효한 자리들 */
+/* 괄호 안 자리 표기 -> 그 변형이 유효한 역할들 (역할은 slotGroupOf) */
 var SKILL_SLOT_OK = {
   "선발": ["선발"], "배치O": ["선발"], "배치X": ["선발"], "3~5선발": ["선발"],
-  "불펜": ["승리조", "셋업", "패전조", "롱릴리프", "마무리"],
-  "중계": ["승리조", "셋업", "패전조", "롱릴리프"],
+  "불펜": ["승리조", "셋업1", "셋업2", "패전조", "롱릴리프", "마무리"],
+  "중계": ["승리조", "셋업1", "셋업2", "패전조", "롱릴리프"],
   "마무리": ["마무리"],
   "승리조": ["승리조"], "필승조": ["승리조"],
-  "셋업1": ["셋업"], "셋업2": ["셋업"],
-  "셋업/마무리": ["셋업", "마무리"],
-  "필승조/마무리": ["승리조", "셋업", "마무리"],
+  "셋업1": ["셋업1"], "셋업2": ["셋업2"],
+  "셋업/마무리": ["셋업1", "셋업2", "마무리"],
+  "필승조/마무리": ["승리조", "셋업1", "셋업2", "마무리"],
   "셋업제외중계": ["승리조", "패전조", "롱릴리프"],
   "셋업제외불펜": ["승리조", "패전조", "롱릴리프", "마무리"],
   "추격조": ["패전조"], "롱릴리프": ["롱릴리프"],
@@ -4727,6 +4806,31 @@ function LineupPage(p) {
     var on = typeof v === "function" ? v(!!prev.rpActive) : v;
     return Object.assign({}, prev, { rpActive: on, isWinSplit: on ? false : prev.isWinSplit });
   }); };
+  /* 중계 등판 순서 — 자리(RP n)는 포지션 특훈을 받는 칸, 차례는 같은 조 안에서 유저가 정한다 (rpAppearance · 2026-10-15) */
+  var rpAp = rpAppearance(bpcIdx, sdState.rpOrder);
+  var moveRp = function(slot, dir) { setSdState(function(prev) {
+    return Object.assign({}, prev, { rpOrder: rpOrderMove(prev.bpcIdx !== undefined ? prev.bpcIdx : 4, prev.rpOrder, slot, dir) });
+  }); };
+  var RP_GRP_TAG = { "승리조": ["승", "#4CAF50"], "패전조": ["추", "#FF7043"], "롱릴리프": ["롱", "#42A5F5"] };
+  /* 그 자리가 조 안에서 몇 번째로 나오나 — short "승1" · full "승리조 1번째".
+     분업이면 승리조 2 · 3번째가 스킬의 셋업1 · 셋업2 다 (setup) */
+  var rpTagOf = function(slot) {
+    var g = rpGroupOf(slot, bpcIdx), tg = RP_GRP_TAG[g] || ["", "var(--td)"];
+    var n = 1; rpAp.seq.forEach(function(s) { if (rpAp.pos[s] < rpAp.pos[slot] && rpGroupOf(s, bpcIdx) === g) n++; });
+    var role = slotGroupOf(slot, bpcIdx, isWinSplit, sdState.rpOrder);
+    return { short: tg[0] + n, full: (g === "패전조" ? "추격조" : g) + " " + n + "번째", color: tg[1], setup: role === "셋업1" || role === "셋업2" ? role : "" };
+  };
+  /* 투수 줄 맨 앞 칸 — 중계는 "승1" 처럼 조와 등판 차례, 그 밑에 포지션 특훈을 받는 자리(RP n) */
+  var pitNo = function(slot, idx, filled) {
+    if (RP_SLOTS.indexOf(slot) < 0) return filled
+      ? (<div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>)
+      : (<div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--td)", fontFamily: "var(--m)" }}>{slot}</div>);
+    var tg = rpTagOf(slot);
+    return (<div title={tg.full + " 등판" + (tg.setup ? " · 분업이라 스킬은 " + tg.setup + " 역할" : "") + " · 포지션 특훈은 " + slot + " 자리 것을 받습니다"} style={{ textAlign: "center", lineHeight: 1.15 }}>
+      <div style={{ fontSize: 15, fontWeight: 900, color: tg.color, fontFamily: "var(--h)" }}>{tg.short}</div>
+      {tg.setup && (<div style={{ fontSize: 10, fontWeight: 800, color: SETUP_COLOR, whiteSpace: "nowrap", letterSpacing: -0.3 }}>{tg.setup}</div>)}
+      <div style={{ fontSize: 10, color: "var(--td)", fontFamily: "var(--m)" }}>{slot}</div></div>);
+  };
   var skillsDB = p.skills || {};
 
   /* Skill category for position */
@@ -4882,7 +4986,8 @@ function LineupPage(p) {
   var totalScore = calcTotalWith(pick, sdCalc);
   /* 현실 총점은 내 덱 그대로의 선수와 버프로 */
   var realTotal = peakOn ? calcTotalWith(realPick, sdState) : totalScore;
-  var rpSlotData = RP_SLOTS.map(function(s) { return { slot: s, pl: pick(s) }; });
+  /* 불펜 상자는 등판 차례대로 (조마다 이어 붙인 순서라 상자가 조별로 잘라 쓴다) */
+  var rpSlotData = rpAp.seq.map(function(s) { return { slot: s, pl: pick(s) }; });
 
   var diamondPl = Object.keys(batSlotMap).length;
   var spPl = lSP.filter(function(x) { return x.pl; });
@@ -4939,7 +5044,7 @@ function LineupPage(p) {
   var slotWeight = function(slot, idx, isBat) {
     if (isBat) return batMult(idx) * strMult(batRanks[idx]);
     if (slot === "CP") return CP_MULT;
-    if (RP_SLOTS.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTactic(sdState));
+    if (RP_SLOTS.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTactic(sdState), sdState.rpOrder);
     return spMult(rpTactic(sdState), spRanks[idx]);
   };
   var fmtWt = function(w) { var t = w.toFixed(3); return t.charAt(t.length - 1) === "0" ? t.slice(0, -1) : t; };
@@ -4953,7 +5058,9 @@ function LineupPage(p) {
         ? "선발 중 " + (spRanks[idx] + 1) + "번째로 강해서 배율 " + fmtWt(w)
           + " (가장 센 선발 " + fmtWt(spMult(rpTactic(sdState), 0))
           + " · 가장 약한 선발 " + fmtWt(spMult(rpTactic(sdState), SP_SLOTS.length - 1)) + ")"
-        : "이 자리의 배율은 " + fmtWt(w);
+        : RP_SLOTS.indexOf(slot) >= 0
+          ? rpTagOf(slot).full + " 등판이라 배율 " + fmtWt(w) + " (배율은 자리가 아니라 등판 차례에 붙습니다. 포지션 특훈은 " + slot + " 자리 것)"
+          : "이 자리의 배율은 " + fmtWt(w);
     return (<div title={why + ". 총점에는 " + total.toFixed(1) + " x " + fmtWt(w) + " = " + (total * w).toFixed(1) + " 로 들어갑니다."}
       style={{ fontSize: 11, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, textAlign: center ? "center" : "inherit", cursor: "help" }}>
       {"×" + fmtWt(w)}</div>);
@@ -5079,7 +5186,7 @@ function LineupPage(p) {
   var pitRow = function(slot, pl, idx) {
     if (!pl) return (
       <div key={slot} onClick={function() { setPickerSlot(slot); }} style={{ display: "grid", gridTemplateColumns: "32px 68px 1fr", alignItems: "center", gap: 6, padding: "8px 10px", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)", cursor: "pointer" }}>
-        <div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--td)", fontFamily: "var(--m)" }}>{slot}</div>
+        {pitNo(slot, idx, false)}
         <div style={{ width: 64, height: 88, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--inner)" }}><span style={{ fontSize: 20, opacity: 0.2 }}>{"+"}</span></div>
         <div style={{ fontSize: 12, color: "var(--td)" }}>{"클릭하여 선수 등록"}</div>
       </div>
@@ -5089,7 +5196,7 @@ function LineupPage(p) {
     return (
       <React.Fragment key={pl.id}>
         <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : LINEUP_COLS, alignItems: "center", gap: mob ? 6 : LINEUP_GAP, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
-          <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acp)", fontFamily: "var(--h)" }}>{idx + 1}</div>
+          {pitNo(slot, idx, true)}
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name,pl.team); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
@@ -5128,7 +5235,7 @@ function LineupPage(p) {
                 var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
                 var lv = effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), pl.cardType, k, pcat, (sdState["pts_" + slot] || []));
                 /* 자리를 옮기면 변형이 안 맞게 된다 — 옮긴 자리에서 바로 보이게 */
-                var hint = skillSlotHint(nm, slotGroupOf(slot, sdState.bpcIdx, sdState.isWinSplit), pcat);
+                var hint = skillSlotHint(nm, slotGroupOf(slot, sdState.bpcIdx, sdState.isWinSplit, sdState.rpOrder), pcat);
                 var nb = natSkillMismatch(nm, pcat, pl.cardType) ? "국가대표 전용 스킬입니다. 지금 카드 종류에는 붙을 수 없으니 확인해 주세요" : "";
                 return (<SkBadge key={k} name={nm} lv={lv} warn={hint} note={nb} wide={true} />);
               })}
@@ -5194,7 +5301,7 @@ function LineupPage(p) {
         tr: Math.round(shareTrainScore(pl) * 10) / 10, trPct: shareTrainPct(pl),
         pot: sharePot(pl), score: c.total.toFixed(1) };
     }).filter(Boolean);
-    var pits = SP_SLOTS.concat(["CP"]).concat(RP_SLOTS).map(function(sl) {
+    var pits = SP_SLOTS.concat(["CP"]).concat(rpAp.seq).map(function(sl) {
       var pl = pick(sl); if (!pl) return null;
       var c = calcPitSD(pl, sl);
       var pcat = skillCatOf(pl);
@@ -5305,7 +5412,7 @@ function LineupPage(p) {
                       : (<PitSlot slot="CP" size="lg" onClick={function() { setPickerSlot("CP"); }} />)}
             </PitchGroup>
           </div>
-          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} rpActive={rpActive} setRpActive={setRpActive} />
+          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} rpActive={rpActive} setRpActive={setRpActive} onMove={moveRp} rpOrder={sdState.rpOrder} />
           </div>
         </div>
       </div>
@@ -5323,7 +5430,7 @@ function LineupPage(p) {
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="중계진" icon="💪" count={rpPl.length + "/6"} color="#42A5F5" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="중계" stat="변화·구위" />)}{lRP.map(function(x, i) { return pitRow(x.slot, x.pl, i); })}</div>
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="중계" stat="변화·구위" />)}{rpAp.seq.map(function(s, i) { return pitRow(s, pick(s), i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="마무리" icon="🔒" count={cpPl.length + "/1"} color="#EF5350" />
@@ -7993,7 +8100,7 @@ function MyPlayersPage(p) {
     var c = {10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[shownLv] || "var(--t2)";
     /* 배치한 자리와 스킬 변형이 어긋나면 알려준다 — 라인업을 옮기면 조용히 틀어진다 */
     var slotNow = getSlot(pl.id);
-    var grpNow = slotGroupOf(slotNow, sdState.bpcIdx, sdState.isWinSplit);
+    var grpNow = slotGroupOf(slotNow, sdState.bpcIdx, sdState.isWinSplit, sdState.rpOrder);
     var hintName = skillSlotHint(pl[nf], grpNow, cat);
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
