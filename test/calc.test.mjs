@@ -885,6 +885,12 @@ eq('편성마다 값이 다르다', getRPWeight(0,'RP2','기본') === getRPWeigh
 eq('없는 분업 표는 기본으로 떨어진다', getRPWeight(4,'RP1','분업'), getRPWeight(4,'RP1','기본'));
 /* 분업은 승리조 순서가 뒤집힌다 (셋업 배치) */
 eq('분업이면 3번째 승리조가 가장 큼', getRPWeight(6,'RP3','분업') > getRPWeight(6,'RP1','분업') ? 1 : 0, 1);
+/* 분업 승리조 — 6회 이전 0.45 · 7회 0.60 · 8회 0.75 (2026-10-16). 뒤 이닝일수록 같은 폭으로 오르고 합 1.80 은 그대로 */
+[6, 7, 8].forEach(function (bi) {
+  var a = ['RP1', 'RP2', 'RP3'].map(function (s) { return getRPWeight(bi, s, '분업'); });
+  eq('분업 승리조 0.45 · 0.60 · 0.75 (편성 ' + bi + ')', a.join(',') === '0.45,0.6,0.75' ? 1 : 0, 1);
+  eq('분업 승리조 합 1.80 (편성 ' + bi + ')', Math.round((a[0] + a[1] + a[2]) * 1000) / 1000, 1.8);
+});
 eq('기본이면 1번째가 가장 큼', getRPWeight(6,'RP1','기본') > getRPWeight(6,'RP3','기본') ? 1 : 0, 1);
 /* 전술 판정 */
 eq('아무것도 아니면 기본', rpTactic({}) === '기본' ? 1 : 0, 1);
@@ -2714,7 +2720,7 @@ console.log('[중계 등판 순서 — 배율은 자리가 아니라 조 안의 
   eq('… RP1 은 2번째라 0.35', getRPWeight(8, 'RP1', '기본', ord), 0.35);
   eq('… RP2 는 3번째라 0.05', getRPWeight(8, 'RP2', '기본', ord), 0.05);
   eq('… 추격조 RP5 가 1번째라 0.70', getRPWeight(8, 'RP5', '기본', ord), 0.7);
-  eq('분업 3/3/0 — 셋업 1번째(RP3) 0.35 · 3번째(RP2) 0.75', getRPWeight(8, 'RP3', '분업', ord) === 0.35 && getRPWeight(8, 'RP2', '분업', ord) === 0.75 ? 1 : 0, 1);
+  eq('분업 3/3/0 — 1번째(RP3) 0.45 · 3번째(RP2) 0.75', getRPWeight(8, 'RP3', '분업', ord) === 0.45 && getRPWeight(8, 'RP2', '분업', ord) === 0.75 ? 1 : 0, 1);
   /* 조를 넘지 않는다 */
   eq('다른 조 자리를 앞에 적어도 조를 넘지 않는다', S(rpAppearance(8, ['RP4', 'RP1', 'RP2', 'RP3']).seq) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
   eq('순서에 없는 자리는 그 조 끝에', S(rpAppearance(8, ['RP2']).seq) === 'RP2,RP1,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
