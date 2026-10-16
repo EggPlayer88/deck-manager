@@ -3,6 +3,8 @@ import { downloadSquadImage as downloadSquadTemplate } from "./squad-share.js";
 import KboPromoBanner from "./KboPromoBanner.jsx";
 /* 클럽 라운지 — 화면은 club-lounge.jsx, 서버 일은 club-api.js. 이 파일은 덱 계산(카드 표기·점수)만 넘겨 준다 */
 import ClubLoungePage from "./club-lounge.jsx";
+/* 개발자에게 커피 — 메뉴 구석의 작은 버튼과 선물코드 창 (coffee-gift.jsx) */
+import CoffeeModal, { CoffeeLink } from "./coffee-gift.jsx";
 import { autoPublish as clubAutoPublish, addComment as clubAddComment } from "./club-api.js";
 
 /* Supabase: injected via window._SUPABASE from main.jsx (Vercel deployment).
@@ -6463,7 +6465,8 @@ function Nav(p){
         <span style={{fontSize:12,fontWeight:900,fontFamily:"var(--h)",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",whiteSpace:"nowrap"}}>{"DECK"}</span>
         <DeckDropdown {...deckProps}/>
 
-        <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:"auto",padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
+        <CoffeeLink kind="bar" onClick={p.onCoffee}/>
+        <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:2,padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px",paddingBottom:"calc(8px + env(safe-area-inset-bottom, 0px))"}}>
         {tabs.map(function(t){
@@ -6493,6 +6496,7 @@ function Nav(p){
 
           <button onClick={p.toggleTheme} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:6}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
           <button onClick={p.logout} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
+          <CoffeeLink kind="side" onClick={function(){setOpen(false);p.onCoffee();}}/>
         </div>
       </div>
     </React.Fragment>
@@ -6527,6 +6531,7 @@ function Nav(p){
 
         <button onClick={p.toggleTheme} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:4}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
         <button onClick={p.logout} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
+        <CoffeeLink kind="side" onClick={p.onCoffee}/>
       </div>
     </div>
   );
@@ -10954,6 +10959,7 @@ export default function App(){
   var _l=useState(false);var li=_l[0];var setLi=_l[1];
   var _u=useState("");var user=_u[0];var setUser=_u[1];
   var _t=useState("lineup");var tab=_t[0];var setTab=_t[1];
+  var _cf=useState(false);var coffeeOpen=_cf[0];var setCoffeeOpen=_cf[1];
   var _a=useState(false);var isAdmin=_a[0];var setAdmin=_a[1];
   /* 사진 캐시는 모듈 전역(PHOTO_CACHE)이라 React 가 변화를 모른다.
      매니페스트가 도착하면 이 값을 올려 한 번 다시 그리게 한다. */
@@ -11398,8 +11404,9 @@ export default function App(){
         onAddDeck={function(){setShowTeamSelect("add");}}
         onDeleteDeck={handleDeleteDeck}
         onChangeTeam={function(){setTeamPick(true);}}
-        theme={theme} toggleTheme={toggleTheme}/>
+        theme={theme} toggleTheme={toggleTheme} onCoffee={function(){setCoffeeOpen(true);}}/>
       <div style={{flex:1,overflowY:"auto",minHeight:"100vh",paddingTop:mob?44:(tbl?50:0)}}>{pg}</div>
+      <CoffeeModal open={coffeeOpen} onClose={function(){setCoffeeOpen(false);}} mobile={mob} canSend={authType==="google"} isAdmin={isAdmin}/>
       {(needTeam||teamPick)&&curDeckObj&&(
         <TeamPickModal mobile={mob} forced={needTeam} current={needTeam?"":teamKey(curDeckObj.teamName)}
           players={store.players} lineupMap={store.lineupMap}
