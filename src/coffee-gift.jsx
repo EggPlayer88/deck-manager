@@ -44,14 +44,18 @@ var realApi = {
 
 /* ── 구석의 작은 버튼 — 메뉴 맨 아래(side) · 휴대폰 위 막대(bar) ── */
 var HOVER = (<style>{".coffee-link:hover{opacity:1 !important;color:var(--t2) !important}"}</style>);
+/* 글자는 '개발자에게 커피 한 잔' 그대로 — 줄이면 무슨 메뉴인지 모른다 (2026-10-16 사용자 지정).
+   휴대폰 위 막대에서는 칸이 모자라면 뒤를 … 로 자르고 한 줄을 지킨다 */
 export function CoffeeLink(p) {
   var tip = "개발자에게 커피 한 잔 — 카카오톡 기프티콘";
+  var label = "☕ 개발자에게 커피 한 잔";
   if (p.kind === "bar") {
     return (<React.Fragment><button type="button" className="coffee-link" onClick={p.onClick} title={tip} aria-label={tip}
-      style={{ marginLeft: "auto", padding: "4px 6px", fontSize: 13, lineHeight: 1, background: "none", border: "none", cursor: "pointer", opacity: .55, flexShrink: 0 }}>{"☕"}</button>{HOVER}</React.Fragment>);
+      style={{ marginLeft: "auto", padding: "4px 4px", fontSize: 10.5, lineHeight: 1.2, background: "none", border: "none", color: "var(--td)", cursor: "pointer", opacity: .8,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1, fontFamily: "inherit" }}>{label}</button>{HOVER}</React.Fragment>);
   }
   return (<React.Fragment><button type="button" className="coffee-link" onClick={p.onClick} title={tip}
-    style={{ display: "block", width: "100%", marginTop: 6, padding: "2px 0", fontSize: 10, background: "none", border: "none", color: "var(--td)", cursor: "pointer", opacity: .7, fontFamily: "inherit" }}>{"☕ 커피 한 잔"}</button>{HOVER}</React.Fragment>);
+    style={{ display: "block", width: "100%", marginTop: 6, padding: "2px 0", fontSize: 10, background: "none", border: "none", color: "var(--td)", cursor: "pointer", opacity: .75, fontFamily: "inherit", whiteSpace: "nowrap" }}>{label}</button>{HOVER}</React.Fragment>);
 }
 
 var INP = { width: "100%", padding: "9px 11px", borderRadius: 9, border: "1px solid var(--bd)", background: "var(--inner)", color: "var(--t1)", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" };
