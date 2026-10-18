@@ -7,7 +7,7 @@ import {
   __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
-  launchAngleReq, launchAngleBonus, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills,
+  launchAngleReq, launchAngleBonus, launchAngleSkillAdj, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills,
   ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME,
   dexAll, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
   isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat, deckLosesAllPlayers, canonJson, normDeck, deckSnap, classifyDeckSave, classifyKeySave, deckShrinkNote, pushAudit,
@@ -45,17 +45,36 @@ eq('철완(지구력140-149) → 철완(140149)', getSkillScore('철완(지구�
 eq('약속의8회 → 약속의 8회', getSkillScore('약속의8회', 5, '마무리'), getSkillScore('약속의 8회', 5, '마무리'));
 eq('오버페이스(중계 카테고리)', getSkillScore('오버페이스', 5, '중계'), getSkillScore('오버페이스(중계)', 5, '중계'));
 
-console.log('\n[발사각] 필요파워 = |16-발사각|*3+160, 보너스 = MIN(5, ...)');
+console.log('\n[발사각] 2026-10-19 수치 — 필요파워 13~16도 162 · 17도 165 · 18도 168 · 1도마다 +3 / 스킬 보정 45점 +1 · 3점마다 +1 / 보너스 13~14도 +3 · 15~18도 +7 · 19도~ +5');
 eq('발사각 12 → 미달(null)', launchAngleReq(12) === null ? 1 : 0, 1);
-eq('발사각 13 필요파워', launchAngleReq(13), 169);
-eq('발사각 16 필요파워', launchAngleReq(16), 160);
-eq('발사각 20 필요파워', launchAngleReq(20), 172);
-eq('발사각 13 보너스', launchAngleBonus(13), 1);
-eq('발사각 16 보너스', launchAngleBonus(16), 4);
-eq('발사각 20 보너스', launchAngleBonus(20), 5);   /* 4+(20-16)*0.5 = 6 → 상한 5 */
+eq('발사각 13 필요파워', launchAngleReq(13), 162);
+eq('발사각 16 필요파워', launchAngleReq(16), 162);
+eq('발사각 17 필요파워', launchAngleReq(17), 165);
+eq('발사각 18 필요파워', launchAngleReq(18), 168);
+eq('발사각 20 필요파워', launchAngleReq(20), 174);
+eq('발사각 22 필요파워', launchAngleReq(22), 180);
+eq('발사각 12 보너스', launchAngleBonus(12), 0);
+eq('발사각 13 보너스', launchAngleBonus(13), 3);
+eq('발사각 14 보너스', launchAngleBonus(14), 3);
+eq('발사각 15 보너스', launchAngleBonus(15), 7);
+eq('발사각 18 보너스', launchAngleBonus(18), 7);
+eq('발사각 19 보너스', launchAngleBonus(19), 5);
 eq('발사각 30 보너스', launchAngleBonus(30), 5);
-eq('파워 미달이면 0', launchAngleGain(20, 171), 0);
-eq('파워 충족이면 지급', launchAngleGain(20, 172), 5);
+eq('스킬 44.99 → 보정 0', launchAngleSkillAdj(44.99), 0);
+eq('스킬 45 → 보정 1', launchAngleSkillAdj(45), 1);
+eq('스킬 47.99 → 보정 1', launchAngleSkillAdj(47.99), 1);
+eq('스킬 48 → 보정 2', launchAngleSkillAdj(48), 2);
+eq('스킬 51 → 보정 3', launchAngleSkillAdj(51), 3);
+eq('스킬 60 → 보정 6', launchAngleSkillAdj(60), 6);
+eq('세 스킬 합의 소수 오차(47.9999999)는 48 로 본다', launchAngleSkillAdj(47.9999999), 2);
+eq('스킬 없음 → 보정 0', launchAngleSkillAdj(undefined), 0);
+eq('파워 미달이면 0', launchAngleGain(20, 173), 0);
+eq('파워 충족이면 지급', launchAngleGain(20, 174), 5);
+eq('예시 최정 — 스킬 51 · 파워 177 · 22도 → +5', launchAngleGain(22, 177, 51), 5);
+eq('예시 올스틴 — 스킬 60 · 파워 156 · 14도 → +3', launchAngleGain(14, 156, 60), 3);
+eq('보정이 모자라면 0 — 스킬 50(+2) · 파워 177 · 22도', launchAngleGain(22, 177, 50), 0);
+eq('15도 파워 162 → +7', launchAngleGain(15, 162, 0), 7);
+eq('16도 파워 161 → 0 (예전 160 문턱보다 2 올랐다)', launchAngleGain(16, 161, 0), 0);
 
 console.log('\n[핫콜존 파싱] 선수도감 양식의 「핫콜존」 칸 (흰=흰존, 파=콜존)');
 /* 실제 파일에 나온 20가지 형식을 모두 확인한다 */
@@ -95,13 +114,40 @@ eq('없으면 0', zonePenalty({}), 0);
 console.log('\n[calcBat] 손계산 대조');
 /* 파워200 정확100 선구50, 좌타, 발사각20, 흰존2 콜존1, 강화없음, 스킬없음
    200*1.0 + 100*0.85 + 50*0.4 = 305
-   좌타 -4 → 301 / 존 -6 → 295 / 발사각 +5 → 300   (좌타 감점은 2026-10-12 에 2.5 → 4) */
+   좌타 -4 → 301 / 존 -6 → 295 / 발사각 +5 → 300   (좌타 감점은 2026-10-12 에 2.5 → 4)
+   발사각 20도 필요파워는 2026-10-19 에 172 → 174, 19도 이상 보너스는 그대로 +5 */
 const batL = calcBat(
   { hand: '좌', power: 200, accuracy: 100, eye: 50, launchAngle: 20, whiteZone: 2, coldZone: 1, cardType: '시즌' },
   {}, null);
 eq('좌타 종합', batL.total, 300);
-eq('발사각 필요파워', batL.laReq, 172);
+eq('발사각 필요파워', batL.laReq, 174);
 eq('발사각 획득', batL.laGain, 5);
+eq('스킬 없음 → 보정 0', batL.laAdj, 0);
+
+/* calcBat 이 스킬점수로 보정하는지 — 파워 177 · 22도 · 스킬 51점(수동 레벨)이면 필요파워 180 을 보정 +3 으로 넘는다 */
+{
+  const sk51 = (() => {
+    /* 스킬 표에서 세 스킬 합이 51~54 가 되는 조합을 고른다 (표가 바뀌어도 시험이 깨지지 않게) */
+    const names = Object.keys(DEFAULT_SKILLS['타자'] || {}).filter((n) => !/타순/.test(n));
+    for (const a of names) for (const b of names) for (const c of names) {
+      if (a >= b || b >= c) continue;
+      const t = getSkillScore(a, 5, '타자') + getSkillScore(b, 5, '타자') + getSkillScore(c, 5, '타자');
+      if (t >= 51 && t < 54) return [a, b, c];
+    }
+    return null;
+  })();
+  if (sk51) {
+    const lu51 = { skill1: sk51[0], s1Lv: 5, skill2: sk51[1], s2Lv: 5, skill3: sk51[2], s3Lv: 5 };
+    const b51 = calcBat({ hand: '우', power: 177, accuracy: 100, eye: 50, launchAngle: 22, cardType: '시즌', sLvManual: true }, lu51, null);
+    const b0 = calcBat({ hand: '우', power: 177, accuracy: 100, eye: 50, launchAngle: 22, cardType: '시즌', sLvManual: true }, {}, null);
+    eq('calcBat 스킬 51점대 → 보정 3', b51.laAdj, 3);
+    eq('calcBat 스킬 51점대 → 22도 달성 +5', b51.laGain, 5);
+    eq('calcBat 스킬 없음 → 22도 미달 0', b0.laGain, 0);
+    eq('보정은 판정에만 — 점수의 파워는 그대로', b51.power, 177);
+  } else {
+    eq('스킬 51점대 조합을 찾았다', 0, 1);
+  }
+}
 
 /* 같은 조건에 우타면 좌타 감점 4가 없다 */
 const batR = calcBat(

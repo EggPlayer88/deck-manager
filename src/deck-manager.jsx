@@ -414,10 +414,13 @@ function snapAgo(ts){
 /* ================================================================
    CALCULATION
    ================================================================ */
-/* ── 260814 시트 신규 계산 ──────────────────────────────────
-   발사각 보너스: 발사각 13 미만이면 없음.
-   필요파워 = |16-발사각|*3 + 160, 최종파워가 이를 넘으면 보너스 획득.
-   보너스   = MIN(5, 발사각<=16 ? 발사각-12 : 4+(발사각-16)*0.5)         */
+/* ── 발사각 보너스 (2026-10-19 사용자 지정 수치 업데이트) ───────────
+   발사각 13 미만이면 없음.
+   필요파워 = 13~16도 162 · 17도 165 · 18도 168 · 그 뒤 1도마다 +3 (22도 180).
+   스킬 보정 = 스킬점수 45점 +1 · 48점 +2 · 51점 +3 … (3점마다 +1).
+     필요파워를 넘었는지 볼 때만 최종파워에 더한다 — 점수에 들어가는 파워는 그대로.
+   보너스   = 13~14도 +3 · 15~18도 +7 · 19도 이상 +5.
+   (예전 260814 시트: 필요파워 |16-발사각|*3+160, 보너스 13도 1 ~ 18도 이상 5)   */
 /* 선수도감 양식의 「핫콜존」 칸을 흰존/콜존 개수로 푼다.
    예: "흰3" → 흰 3, "파1흰2" → 콜 1 / 흰 2, "파2" → 콜 2, "0"·빈칸 → 0
    파(파란색)가 콜드존이다. */
@@ -440,14 +443,19 @@ function zonesFromRow(row) {
   return parseHotColdZone(row["핫콜존"]);
 }
 
-function launchAngleReq(la){ la=la||0; return la<13?null:Math.abs(16-la)*3+160; }
+function launchAngleReq(la){ la=la||0; return la<13?null:(la<=16?162:162+(la-16)*3); }
 function launchAngleBonus(la){
   la=la||0; if(la<13)return 0;
-  return Math.min(5, la<=16 ? la-12 : 4+(la-16)*0.5);
+  return la<=14?3:la<=18?7:5;
 }
-function launchAngleGain(la,finalPower){
+/* 스킬점수는 소수 둘째 자리로 맞춰서 본다 (세 스킬을 더하면 47.99999 처럼 떨어질 수 있다) */
+function launchAngleSkillAdj(ss){
+  var s=Math.round((ss||0)*100)/100;
+  return s<45?0:Math.floor((s-45)/3+1e-9)+1;
+}
+function launchAngleGain(la,finalPower,ss){
   var req=launchAngleReq(la);
-  return (req!==null && finalPower>=req) ? launchAngleBonus(la) : 0;
+  return (req!==null && finalPower+launchAngleSkillAdj(ss)>=req) ? launchAngleBonus(la) : 0;
 }
 /* 타순을 타는 스킬 — 그 자리에 서면 "타순O" 값을 받는다.
    at 은 타순 번호에서 1 을 뺀 값(0 = 1번타자). la 는 같이 움직이는 발사각.
@@ -676,7 +684,7 @@ function calcBat(pl,lu,sdB){
      좌타 감점은 2.5 → 4 (2026-10-12 사용자 지정 — 좌승사자 투수가 늘어 좌타자가 그만큼 더 불리해졌다) */
   if(pl.hand==="좌") t-=4;
   t+=zonePenalty(pl);
-  t+=launchAngleGain(pl.launchAngle,fP);
+  t+=launchAngleGain(pl.launchAngle,fP,ss);
   /* 국대에이스(타자): 종합점수에만 반영 */
   if(sdB&&sdB._sdState){var nb2=sdB._sdState.natBat||sdB._sdState._autoNatBat||"없음";if(nb2==="5렙"){t+=1*w.p+1*w.a;}if(nb2==="6렙"){t+=2*w.p+2*w.a;}}
   /* 잠재력 점수 */
@@ -684,8 +692,8 @@ function calcBat(pl,lu,sdB){
   /* 각성 잠재력 (C~S). 종류를 고르지 않았거나 라이브·올스타면 0 */
   t += awakenScore(pl);
   return{power:fP,accuracy:fA,eye:fE,patience:fN,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100,
-    laReq:launchAngleReq(pl.launchAngle),laBonus:launchAngleBonus(pl.launchAngle),
-    laGain:launchAngleGain(pl.launchAngle,fP),zonePen:zonePenalty(pl)};
+    laReq:launchAngleReq(pl.launchAngle),laBonus:launchAngleBonus(pl.launchAngle),laAdj:launchAngleSkillAdj(ss),
+    laGain:launchAngleGain(pl.launchAngle,fP,ss),zonePen:zonePenalty(pl)};
 }
 
 function calcPit(pl,lu,sdB){
@@ -8459,10 +8467,14 @@ function MyPlayersPage(p) {
                         : (<span style={{ color: "var(--td)" }}>{epl.launchAngle + "°"}</span>)}
                       <span style={{ color: "var(--td)" }}>{"필요파워 " + calc.laReq}</span>
                       <span style={{ color: "var(--td)" }}>{"현재파워 " + calc.power}</span>
+                      {calc.laAdj > 0 && (
+                        <span title={"스킬점수 " + calc.skillScore + "점 — 45점부터 3점마다 파워 +1 로 쳐서 필요파워를 넘었는지 봅니다 (점수에 들어가는 파워는 그대로)"}
+                          style={{ color: "#4FC3F7" }}>{"스킬보정 +" + calc.laAdj}</span>
+                      )}
                       <span style={{ color: calc.laGain ? "#66BB6A" : "#EF5350", fontWeight: 800 }}>
                         {calc.laGain
-                          ? "달성 +" + calc.laBonus + " (여유 " + (calc.power - calc.laReq) + ")"
-                          : "미달 " + (calc.laReq - calc.power) + " 부족"}
+                          ? "달성 +" + calc.laBonus + " (여유 " + (calc.power + calc.laAdj - calc.laReq) + ")"
+                          : "미달 " + (calc.laReq - calc.power - calc.laAdj) + " 부족"}
                       </span>
                       {!sdbMy.inLineup && (
                         <span title="세트덱 효과는 라인업에 배치해야 붙습니다. 배치하면 파워가 올라가 달성될 수 있습니다."
