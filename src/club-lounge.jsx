@@ -1,9 +1,76 @@
 /* 클럽 라운지 화면 — 클럽장 인증 · 가입 승인 · 덱 현황 · 라운지(글·댓글·투표·일정).
    서버 일은 club-api.js, 덱 계산(카드 표기·점수)은 deck-manager.jsx 가 tools 로 넘겨 준다.
    시안: data/mockups/club/club_v2_*.png (2026-10-15 사용자 확인) */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import * as realApi from "./club-api.js";
 import { checkShot } from "./shot-check.js";
+
+/* ── 바탕 장치 (2026-10-18 점검 보강) ─────────────────────── */
+
+/* 테마별 색 — 라이트 모드에서 입력칸이 회색으로 꺼져 보이고 노란 버튼 글씨가 어둡던 것 */
+var THEME_CSS = ".club-root{--cinp:rgba(0,0,0,.18);--conacc:#1a1300;--cscheme:dark}"
+  + ".light .club-root{--cinp:var(--card);--conacc:#fff;--cscheme:light}"
+  + ".club-chips{scrollbar-width:none}.club-chips::-webkit-scrollbar{display:none}";
+
+/* 화면 한 부분이 깨져도 그 부분만 막는다 — 예전에는 이상한 글 하나로 사이트 전체가 하얗게 됐다 */
+class Safe extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(e) { return { err: e || new Error("화면 오류") }; }
+  componentDidCatch(e) { try { console.warn("[club] 화면 일부를 그리지 못했어요:", e && e.message); } catch (x) { /* 무시 */ } }
+  render() {
+    if (!this.state.err) return this.props.children;
+    var self = this;
+    var retry = function () { self.setState({ err: null }); };
+    return this.props.fallback ? this.props.fallback(retry) : null;
+  }
+}
+function SafeBox(p) {
+  return (<Safe fallback={function (retry) {
+    return (<Card style={{ textAlign: "center", padding: "24px 18px" }}>
+      <div style={{ fontWeight: 800, marginBottom: 6 }}>{(p.what || "이 화면") + "을 표시하지 못했어요"}</div>
+      <div style={{ fontSize: 12.5, color: "var(--td)", marginBottom: 12 }}>{"다른 탭은 그대로 쓸 수 있어요. 계속되면 관리자에게 알려 주세요."}</div>
+      <Btn sm icon="refresh" onClick={retry}>{"다시 시도"}</Btn>
+    </Card>);
+  }}>{p.children}</Safe>);
+}
+
+/* 휴대폰 뒤로가기 — 글 보기 · 창이 열려 있으면 그것만 닫는다 (예전에는 사이트를 나가 버렸다).
+   창을 열 때마다 방문 기록을 하나 쌓고 그 기록에 '몇 겹째인지(club)'를 적어 둔다.
+   뒤로가기로 기록이 바뀌면, 바뀐 기록의 겹 수보다 위에 열려 있는 창을 모두 닫는다 —
+   한 칸씩 돌아가든, 길게 눌러 여러 칸을 한 번에 돌아가든 같다.
+   화면에서 닫을 때는 쌓아 둔 기록을 되돌리는데, 그때 오는 popstate 는 이미 겹 수가 맞아 아무것도 닫지 않는다 */
+var backStack = [], popBound = false;
+function bindPop() {
+  if (popBound || typeof window === "undefined") return;
+  popBound = true;
+  /* 기록을 되돌릴 때 브라우저가 스크롤을 맨 위로 되돌려 놓던 것 — 스크롤은 화면이 직접 맞춘다 */
+  try { if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual"; } catch (e) { /* 무시 */ }
+  window.addEventListener("popstate", function (e) {
+    var depth = e.state && typeof e.state.club === "number" ? e.state.club : 0;
+    var guard = 0;
+    while (backStack.length > depth && guard++ < 50) {
+      var top = backStack.pop();
+      try { top(); } catch (x) { /* 닫기 실패는 무시 */ }
+    }
+  });
+}
+function useBackClose(open, close) {
+  var ref = useRef(close); ref.current = close;
+  useEffect(function () {
+    if (!open) return;
+    bindPop();
+    var fn = function () { ref.current(); };
+    /* 기록을 쌓지 못한 환경(막힘 · 횟수 제한)에서는 아예 맡지 않는다 — 닫을 때 진짜 이전 페이지로 가 버리지 않게 */
+    try { window.history.pushState({ club: backStack.length + 1 }, ""); } catch (e) { return; }
+    backStack.push(fn);
+    return function () {
+      var i = backStack.indexOf(fn);
+      if (i < 0) return;
+      backStack.splice(i, 1);
+      try { window.history.back(); } catch (e) { /* 무시 */ }
+    };
+  }, [open]);
+}
 
 /* ── 작은 부품 ──────────────────────────────────────────── */
 
@@ -41,12 +108,12 @@ var BTN = { display: "inline-flex", alignItems: "center", justifyContent: "cente
   borderRadius: 9, borderWidth: 1, borderStyle: "solid", borderColor: "var(--bd)", background: "transparent", color: "var(--t2)", whiteSpace: "nowrap", cursor: "pointer", fontFamily: "inherit", minHeight: 32 };
 function Btn(p) {
   var st = Object.assign({}, BTN,
-    p.pri ? { background: "var(--acc)", color: "#1a1300", borderColor: "var(--acc)", fontWeight: 800 } : null,
+    p.pri ? { background: "var(--acc)", color: "var(--conacc)", borderColor: "var(--acc)", fontWeight: 800 } : null,
     p.ok ? { color: "#4CAF50", borderColor: "rgba(76,175,80,.4)" } : null,
     p.no ? { color: "#FF6B6B", borderColor: "rgba(255,107,107,.35)" } : null,
     p.ghost ? { borderColor: "transparent" } : null,
     p.purple ? { color: "var(--acp)" } : null,
-    p.sm ? { padding: "4px 9px", fontSize: 12, minHeight: 28 } : null,
+    p.sm ? { padding: "5px 10px", fontSize: 12, minHeight: 30 } : null,
     p.disabled ? { opacity: .45, cursor: "default" } : null, p.style);
   return (<button type="button" title={p.title} disabled={p.disabled} onClick={p.disabled ? undefined : p.onClick} style={st}>
     {p.icon && <Icon n={p.icon} />}{p.children}</button>);
@@ -69,7 +136,7 @@ function Avatar(p) {
 var CARD = { background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 14 };
 function Card(p) { return (<div style={Object.assign({}, CARD, { padding: p.pad === 0 ? 0 : (p.pad || "16px 18px") }, p.style)}>{p.children}</div>); }
 var KICK = { fontSize: 11, fontWeight: 700, color: "var(--td)", letterSpacing: .3 };
-var INP = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--bd)", background: "rgba(0,0,0,.18)", color: "var(--t1)",
+var INP = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--bd)", background: "var(--cinp)", color: "var(--t1)",
   fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" };
 function Field(p) {
   return (<label style={{ display: "block", marginBottom: p.mb === undefined ? 12 : p.mb }}>
@@ -87,16 +154,29 @@ function Msg(p) {
     <Icon n={bad ? "info" : "check"} style={{ marginTop: 2 }} /><span style={{ flex: 1 }}>{p.text}</span></div>);
 }
 function Modal(p) {
+  useBackClose(true, p.onClose);
   return (<div onClick={p.onClose} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(5,8,12,.7)", display: "flex", alignItems: p.mobile ? "flex-end" : "center", justifyContent: "center" }}>
     <div onClick={function (e) { e.stopPropagation(); }} style={Object.assign({}, CARD, { background: "var(--bg)", width: p.mobile ? "100%" : (p.width || 560), maxHeight: p.mobile ? "92vh" : "88vh",
       overflowY: "auto", borderRadius: p.mobile ? "16px 16px 0 0" : 14, boxShadow: "0 20px 60px rgba(0,0,0,.45)" })}>
       <div style={{ display: "flex", alignItems: "center", padding: "14px 18px", borderBottom: "1px solid var(--bd)", position: "sticky", top: 0, background: "var(--bg)", zIndex: 1 }}>
         <b style={{ fontSize: 15 }}>{p.title}</b>{p.sub && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--td)" }}>{p.sub}</span>}
-        <button type="button" onClick={p.onClose} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--td)", cursor: "pointer", padding: 4 }}><Icon n="x" /></button>
+        <button type="button" onClick={p.onClose} title="닫기" aria-label="닫기" style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", padding: 8, margin: "-6px -6px -6px auto" }}><Icon n="x" size={17} /></button>
       </div>
       <div style={{ padding: "16px 18px" }}>{p.children}</div>
       {p.foot && <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 18px", borderTop: "1px solid var(--bd)", position: "sticky", bottom: 0, background: "var(--bg)" }}>{p.foot}</div>}
     </div></div>);
+}
+/* 사진 크게 보기 — 새 창으로 나가지 않고 이 화면 위에서 (뒤로가기 · 바깥 누르기로 닫힘) */
+function Viewer(p) {
+  useBackClose(true, p.onClose);
+  var btn = { display: "inline-flex", alignItems: "center", gap: 4, padding: "8px 12px", borderRadius: 9, background: "rgba(0,0,0,.6)", color: "#fff", border: "1px solid rgba(255,255,255,.2)", fontSize: 12.5, cursor: "pointer", textDecoration: "none", fontFamily: "inherit" };
+  return (<div onClick={p.onClose} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,.9)", display: "flex", alignItems: "center", justifyContent: "center", padding: "56px 10px 10px", cursor: "zoom-out" }}>
+    <img src={p.url} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 6 }} />
+    <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 6 }}>
+      <a href={p.url} target="_blank" rel="noopener" onClick={function (e) { e.stopPropagation(); }} style={btn}>{"새 창으로"}</a>
+      <button type="button" onClick={p.onClose} style={btn}><Icon n="x" size={14} />{"닫기"}</button>
+    </div>
+  </div>);
 }
 function ago(ts) {
   if (!ts) return "";
@@ -114,6 +194,8 @@ function fmtWhen(ts) {
   return (d.getMonth() + 1) + "/" + d.getDate() + "(" + W[d.getDay()] + ") " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 }
 function num(v, d) { var n = Number(v); return isFinite(n) ? n.toFixed(d === undefined ? 1 : d) : "—"; }
+/* 서버에서 온 값을 글자로 — 글자 · 숫자가 아니면 빈칸 (객체를 그리려다 화면이 깨지지 않게) */
+function txt(v) { return typeof v === "string" ? v : (typeof v === "number" && isFinite(v)) ? String(v) : ""; }
 function copyText(t) {
   try { navigator.clipboard.writeText(t); return true; } catch (e) { return false; }
 }
@@ -137,38 +219,41 @@ var SPS = ["SP1", "SP2", "SP3", "SP4", "SP5"];
 var RPS = ["RP1", "RP2", "RP3", "RP4", "RP5", "RP6"];
 var ALL_SLOTS = BATS.concat(SPS).concat(["CP"]).concat(RPS);
 function SlotLine(p) {
-  var e = p.e;
+  var e = p.e && typeof p.e === "object" ? p.e : null;
   return (<div style={{ fontSize: 12, padding: "2px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: p.dim ? .45 : 1 }}>
     <span style={{ fontFamily: "var(--h)", fontSize: 11, color: "var(--td)", width: 30, display: "inline-block" }}>{p.slot}</span>
-    {e ? (<span style={{ color: CT_COL[e.ct] || "var(--t1)", textDecoration: p.strike ? "line-through" : "none" }}>{(e.l ? e.l + " " : "") + e.n}</span>)
+    {e ? (<span style={{ color: CT_COL[txt(e.ct)] || "var(--t1)", textDecoration: p.strike ? "line-through" : "none" }}>{(txt(e.l) ? txt(e.l) + " " : "") + txt(e.n)}</span>)
       : (<span style={{ color: "var(--td)" }}>{"—"}</span>)}
   </div>);
 }
+function deckView(deck) { return deck && deck.view && typeof deck.view === "object" ? deck.view : {}; }
 function deckCounts(deck) {
-  var c = {};
-  ALL_SLOTS.forEach(function (s) { var e = deck && deck.view && deck.view[s]; if (e) c[e.ct] = (c[e.ct] || 0) + 1; });
+  var c = {}; var v = deckView(deck);
+  ALL_SLOTS.forEach(function (s) { var e = v[s]; if (e && typeof e === "object" && txt(e.ct)) c[txt(e.ct)] = (c[txt(e.ct)] || 0) + 1; });
   return c;
 }
 var CT_SHORT = { "골든글러브": "골글", "시그니처": "시그", "임팩트": "임팩", "국가대표": "국대", "올스타": "올스타", "라이브": "라이브", "시즌": "시즌" };
 function deckScoreText(deck) {
   if (!deck) return "";
-  if (deck.scores && deck.scores.length) return { main: num(deck.scores[0]), sub: "0.1% 가정 · 5% " + num(deck.scores[1]) + " · 20% " + num(deck.scores[2]) };
-  if (deck.total) return { main: num(deck.total), sub: "TOTAL SCORE" + (deck.setPoint ? " · 세트덱 " + deck.setPoint : "") };
+  if (Array.isArray(deck.scores) && deck.scores.length) return { main: num(deck.scores[0]), sub: "0.1% 가정 · 5% " + num(deck.scores[1]) + " · 20% " + num(deck.scores[2]) };
+  if (deck.total) return { main: num(deck.total), sub: "TOTAL SCORE" + (deck.setPoint ? " · 세트덱 " + num(deck.setPoint, 0) : "") };
   return { main: "", sub: "" };
 }
 /* 붙인 덱 한 장 — 글·덱 현황·작성 창에서 같이 쓴다 */
 function DeckBox(p) {
-  var d = p.deck; if (!d) return null;
+  var d = p.deck; if (!d || typeof d !== "object") return null;
   var mob = p.mobile;
   var _rp = useState(false); var showRp = _rp[0]; var setShowRp = _rp[1];
   var sc = deckScoreText(d);
   var cnt = deckCounts(d);
-  var col = function (slots) { return slots.map(function (s) { return <SlotLine key={s} slot={s} e={d.view && d.view[s]} />; }); };
+  var view = deckView(d);
+  var col = function (slots) { return slots.map(function (s) { return <SlotLine key={s} slot={s} e={view[s]} />; }); };
   return (<div style={{ border: "1px solid var(--bd)", borderRadius: 12, background: "var(--inner)", overflow: "hidden", marginTop: p.mt === undefined ? 10 : p.mt }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--bd)" }}>
       <Icon n={d.src === "lab" ? "flask" : "deck"} style={{ color: d.src === "lab" ? "var(--acp)" : "var(--t2)" }} />
-      <span style={{ fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{(d.team || "") + (d.name ? " · " + d.name : "")}</span>
-      {d.src === "lab" ? <Tag c="purple">{mob ? "실험본" : "연구소 실험본"}</Tag> : <Tag>{"내 덱"}</Tag>}
+      <span style={{ fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{txt(d.team) + (txt(d.name) ? " · " + txt(d.name) : "")}</span>
+      {d.src === "lab" ? <Tag c="purple" title="덱 연구소에서 도감 카드로 짜 본 덱이에요">{mob ? "실험본" : "연구소 실험본"}</Tag>
+        : <Tag title="클럽원이 실제로 쓰는 라인업이에요">{"실전 덱"}</Tag>}
       <span style={{ marginLeft: "auto", textAlign: "right", whiteSpace: "nowrap" }}>
         <span style={{ fontFamily: "var(--m)", color: "var(--acc)", fontWeight: 800 }}>{sc.main}</span>
         {!mob && <span style={{ fontSize: 11, color: "var(--td)", marginLeft: 6 }}>{sc.sub}</span>}
@@ -178,7 +263,7 @@ function DeckBox(p) {
       <div>{col(BATS.slice(0, mob ? 9 : 5))}</div>
       {!mob && <div>{col(BATS.slice(5))}</div>}
       <div>{col(SPS.concat(["CP"]))}
-        <button type="button" onClick={function () { setShowRp(!showRp); }} style={{ background: "none", border: "none", padding: "3px 0", color: "var(--td)", fontSize: 11.5, cursor: "pointer" }}>{"중계 6명 " + (showRp ? "▴" : "▾")}</button>
+        <button type="button" onClick={function () { setShowRp(!showRp); }} style={{ background: "none", border: "none", padding: "6px 8px 6px 0", color: "var(--td)", fontSize: 11.5, cursor: "pointer" }}>{"중계 6명 " + (showRp ? "▴" : "▾")}</button>
         {showRp && col(RPS)}
       </div>
     </div>
@@ -198,8 +283,8 @@ function DeckCompare(p) {
       <div>{p.aName}</div><div>{p.bName}</div>
     </div>
     {ALL_SLOTS.map(function (s) {
-      var x = a.view && a.view[s], y = b.view && b.view[s];
-      var same = x && y && x.n === y.n && x.ct === y.ct && x.l === y.l;
+      var x = deckView(a)[s], y = deckView(b)[s];
+      var same = x && y && typeof x === "object" && typeof y === "object" && txt(x.n) === txt(y.n) && txt(x.ct) === txt(y.ct) && txt(x.l) === txt(y.l);
       return (<div key={s} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: "1px 6px", borderRadius: 6, background: same ? "transparent" : "rgba(255,213,79,.06)" }}>
         <SlotLine slot={s} e={x} dim={same} /><SlotLine slot={s} e={y} dim={same} />
       </div>);
@@ -210,19 +295,47 @@ function DeckCompare(p) {
 
 /* ── 맨 위: 페이지 ─────────────────────────────────────── */
 
+/* 페이지 전체를 감싼다 — 테마 색을 깔고, 어디서 깨져도 사이트 전체가 하얗게 되지 않게 */
 export default function ClubLoungePage(p) {
+  return (<div className="club-root"><style>{THEME_CSS}</style>
+    <Safe fallback={function (retry) {
+      return (<div style={{ padding: p.mobile ? "12px 12px 100px" : "22px 26px", maxWidth: 1080 }}>
+        <Card style={{ textAlign: "center", padding: "30px 18px" }}>
+          <div style={{ fontSize: 34 }}>{"🧯"}</div>
+          <div style={{ fontSize: 16, fontWeight: 900, margin: "6px 0" }}>{"클럽 라운지를 그리다 문제가 생겼어요"}</div>
+          <div style={{ fontSize: 13, color: "var(--td)", lineHeight: 1.7, marginBottom: 14 }}>{"다른 메뉴는 그대로 쓸 수 있어요. 계속되면 관리자에게 알려 주세요."}</div>
+          <Btn icon="refresh" onClick={retry}>{"다시 시도"}</Btn>
+        </Card></div>);
+    }}><ClubLoungeInner {...p} /></Safe></div>);
+}
+
+function ClubLoungeInner(p) {
   var api = p.api || realApi;
   var mob = p.mobile;
   var _me = useState(null); var me = _me[0]; var setMe = _me[1];
   var _err = useState(""); var err = _err[0]; var setErr = _err[1];
   var _view = useState("club"); var view = _view[0]; var setView = _view[1];
   var _appForm = useState(false); var appForm = _appForm[0]; var setAppForm = _appForm[1];
+  var _acnt = useState(0); var adminCnt = _acnt[0]; var setAdminCnt = _acnt[1];
   var reload = useCallback(async function () {
     setErr("");
     try { setMe(await api.loadMe()); }
     catch (e) { setErr(e && e.message || String(e)); setMe(null); }
   }, [api]);
   useEffect(function () { if (p.authType === "google" || p.api) reload(); }, [p.userId]);
+  /* 관리자 — 심사할 것(대기 · 분쟁 · 신고)이 몇 건인지 버튼에 띄운다 */
+  useEffect(function () {
+    if (!p.isAdmin) return;
+    Promise.all([api.adminApplications("pending"), api.adminDisputes(), api.adminReports()])
+      .then(function (r) { setAdminCnt(r[0].length + r[1].length + r[2].length); }).catch(function () {});
+  }, [p.isAdmin, view]);
+  useBackClose(appForm, function () { setAppForm(false); });
+  /* 신청서를 낸 뒤(작성 · 심사 중)에는 신청 화면이 따로 뜨므로 빈 양식 상태를 닫는다 — 뒤로가기를 한 번 헛누르지 않게 */
+  useEffect(function () {
+    var a = me && me.app;
+    if (appForm && a && a.kind !== "reverify" && (a.status === "draft" || a.status === "pending")) setAppForm(false);
+  }, [me]);
+  useBackClose(p.isAdmin && view === "review", function () { setView("club"); reload(); });
 
   var wrap = function (inner) {
     return (<div style={{ padding: mob ? "12px 12px 100px" : "22px 26px", maxWidth: 1080 }}>{inner}</div>);
@@ -231,7 +344,8 @@ export default function ClubLoungePage(p) {
     <h2 style={{ fontSize: 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: 0 }}>{"🎙️ 클럽 라운지"}</h2>
     {p.isAdmin && (<div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
       <Btn sm style={view === "club" ? { color: "var(--acc)", borderColor: "var(--acc)" } : null} onClick={function () { setView("club"); reload(); }}>{"내 클럽"}</Btn>
-      <Btn sm icon="shield" style={view === "review" ? { color: "var(--acc)", borderColor: "var(--acc)" } : null} onClick={function () { setView("review"); }}>{"인증 심사"}</Btn>
+      <Btn sm icon="shield" style={view === "review" ? { color: "var(--acc)", borderColor: "var(--acc)" } : null} onClick={function () { setView("review"); }}>{"인증 심사"}
+        {adminCnt > 0 && <span style={{ minWidth: 17, height: 17, padding: "0 5px", borderRadius: 9, background: "#FF5A5A", color: "#fff", fontSize: 10.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{adminCnt}</span>}</Btn>
     </div>)}
   </div>);
 
@@ -242,7 +356,7 @@ export default function ClubLoungePage(p) {
       <div style={{ fontSize: 13, color: "var(--td)", lineHeight: 1.7 }}>{"클럽 라운지는 클럽원끼리 덱과 글을 주고받는 곳이라"}<br />{"게스트로는 들어갈 수 없어요."}</div>
     </Card></React.Fragment>);
 
-  if (p.isAdmin && view === "review") return wrap(<React.Fragment>{title}<AdminReview api={api} mobile={mob} /></React.Fragment>);
+  if (p.isAdmin && view === "review") return wrap(<React.Fragment>{title}<SafeBox what="심사 화면"><AdminReview api={api} mobile={mob} /></SafeBox></React.Fragment>);
   if (err) return wrap(<React.Fragment>{title}<Msg text={"클럽 정보를 불러오지 못했어요: " + err} /><Btn icon="refresh" onClick={reload}>{"다시 시도"}</Btn></React.Fragment>);
   if (!me) return wrap(<React.Fragment>{title}<div style={{ color: "var(--td)", fontSize: 13 }}>{"불러오는 중…"}</div></React.Fragment>);
 
@@ -292,16 +406,12 @@ function StartView(p) {
       <div style={{ fontSize: 13, color: "var(--td)" }}>{"클럽장은 인증 후 클럽을 열고, 클럽원은 초대 코드로 가입해요"}</div>
     </Card>
     <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 12 }}>
-      <Card>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Icon n="crown" size={18} style={{ color: "var(--acc)" }} /><b style={{ fontSize: 15 }}>{"클럽장 등록"}</b></div>
-        <div style={{ fontSize: 12.5, color: "var(--td)", lineHeight: 1.7, margin: "8px 0 14px" }}>{"클럽장임이 보이는 인게임 캡처 1장으로 인증해요."}<br />{"관리자가 확인하면 클럽이 열려요."}</div>
-        <Btn pri style={{ width: "100%" }} onClick={p.onApply}>{"인증 신청"}</Btn>
-      </Card>
+      {/* 들어오는 사람 대부분은 가입하려는 클럽원이라 가입을 먼저 */}
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Icon n="link" size={18} style={{ color: "#5AA9F0" }} /><b style={{ fontSize: 15 }}>{"클럽 가입"}</b></div>
         <div style={{ fontSize: 12.5, color: "var(--td)", lineHeight: 1.7, margin: "8px 0 10px" }}>{"클럽장에게 받은 초대 코드를 넣어 주세요."}</div>
         {!found ? (<div style={{ display: "flex", gap: 6 }}>
-          <input value={code} onChange={function (e) { setCode(e.target.value.toUpperCase()); }} placeholder="예: GULL-7K2Q" maxLength={12}
+          <input value={code} onChange={function (e) { setCode(e.target.value.toUpperCase()); if (b.err) b.setErr(""); }} placeholder="예: GULL-7K2Q" maxLength={12}
             onKeyDown={function (e) { if (e.key === "Enter") find(); }}
             style={Object.assign({}, INP, { width: 0, flex: 1, fontFamily: "var(--m)", letterSpacing: 1 })} />
           <Btn pri onClick={find} disabled={b.busy}>{"찾기"}</Btn>
@@ -309,13 +419,21 @@ function StartView(p) {
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: "var(--inner)", marginBottom: 10 }}>
             <Emblem name={found.name} size={36} />
             <div style={{ flex: 1, minWidth: 0 }}><b>{found.name}</b><div style={{ fontSize: 11.5, color: "var(--td)" }}>{"클럽원 " + found.members + " / " + found.capacity}</div></div>
-            <Btn sm ghost onClick={function () { setFound(null); }}>{"다른 코드"}</Btn>
+            <Btn sm ghost onClick={function () { setFound(null); b.setErr(""); }}>{"다른 코드"}</Btn>
           </div>
           {found.intro && <div style={{ fontSize: 12.5, color: "var(--t2)", margin: "0 0 10px", lineHeight: 1.6 }}>{found.intro}</div>}
-          <Field label="인게임 닉네임" value={nick} onChange={setNick} max={20} ph="클럽장이 알아볼 수 있게" />
-          <Btn pri style={{ width: "100%" }} onClick={join} disabled={b.busy}>{"가입 신청"}</Btn>
+          {found.members >= found.capacity ? (<Msg text={"이 클럽은 정원(" + found.capacity + "명)이 다 찼어요. 자리가 나면 다시 신청해 주세요."} />)
+            : (<React.Fragment>
+              <Field label="인게임 닉네임" value={nick} onChange={function (v) { setNick(v); if (b.err) b.setErr(""); }} max={20} ph="클럽장이 알아볼 수 있게" />
+              <Btn pri style={{ width: "100%" }} onClick={join} disabled={b.busy}>{b.busy ? "보내는 중…" : "가입 신청"}</Btn>
+            </React.Fragment>)}
         </div>)}
         <Msg text={b.err} />
+      </Card>
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Icon n="crown" size={18} style={{ color: "var(--acc)" }} /><b style={{ fontSize: 15 }}>{"클럽장 등록"}</b></div>
+        <div style={{ fontSize: 12.5, color: "var(--td)", lineHeight: 1.7, margin: "8px 0 14px" }}>{"인게임 클럽장이라면 — 클럽장임이 보이는 캡처 1장으로 인증해요."}<br />{"관리자가 확인하면 클럽이 열려요."}</div>
+        <Btn pri style={{ width: "100%" }} onClick={p.onApply}>{"인증 신청"}</Btn>
       </Card>
     </div>
   </div>);
@@ -397,6 +515,7 @@ function ShotSubmit(p) {
   var addFiles = function (list) {
     if (!list || !list[0]) return;
     setFiles([{ file: list[0], url: URL.createObjectURL(list[0]) }]);
+    b.setErr("");
   };
   var submit = function () {
     b.run(async function () {
@@ -433,8 +552,8 @@ function ShotSubmit(p) {
       {files.map(function (f, i) {
         return (<div key={i} style={{ width: 96, height: 132, borderRadius: 10, border: "1px solid var(--bd)", position: "relative", overflow: "hidden", background: "#111" }}>
           <img src={f.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          <button type="button" onClick={function () { setFiles([]); }}
-            style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,.6)", border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", padding: 2 }}><Icon n="x" size={12} /></button>
+          <button type="button" onClick={function () { setFiles([]); }} title="빼기" aria-label="캡처 빼기"
+            style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,.6)", border: "none", borderRadius: 8, color: "#fff", cursor: "pointer", padding: 6 }}><Icon n="x" size={13} /></button>
         </div>);
       })}
       {!files.length && (<label style={{ width: 96, height: 132, borderRadius: 10, border: "1px dashed var(--bd)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: "var(--td)", cursor: "pointer" }}>
@@ -442,7 +561,7 @@ function ShotSubmit(p) {
         <input type="file" accept="image/*" style={{ display: "none" }} onChange={function (e) { addFiles(e.target.files); e.target.value = ""; }} />
       </label>)}
     </div>
-    <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 8 }}>{"캡처는 관리자만 보고, 심사 30일 뒤 지워져요"}</div>
+    <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 8 }}>{"캡처는 관리자만 보고, 심사가 끝나면 30일 안에 지워져요"}</div>
     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 22 }}>
       {p.left || <span />}
       <Btn pri onClick={submit} disabled={b.busy}>{b.busy ? "올리는 중…" : (p.reverify ? "재인증 제출" : "신청하기")}</Btn>
@@ -453,16 +572,17 @@ function ShotSubmit(p) {
 
 /* 관리자 — 캡처 자동 점검 결과. 경고(편집·AI 흔적)는 주황, 참고(비율·카메라)는 회색 */
 function ShotChecks(p) {
-  var list = Array.isArray(p.checks) ? p.checks : [];
+  /* 점검 결과는 신청자 화면이 만들어 보낸 값이라 모양을 믿지 않는다 */
+  var list = Array.isArray(p.checks) ? p.checks.filter(function (c) { return c && typeof c === "object"; }) : [];
   if (!list.length) return (<div style={{ fontSize: 12, color: "var(--td)", marginTop: 6 }}>{"자동 점검: 기록 없음"}</div>);
-  var flags = []; list.forEach(function (c) { (c.flags || []).forEach(function (f) { flags.push(f); }); });
-  var c0 = list[0] || {};
-  var meta = [c0.w && c0.h ? c0.w + "×" + c0.h : "", c0.type ? c0.type.toUpperCase() : "", c0.size ? Math.round(c0.size / 1024) + "KB" : "",
-    c0.modified ? "파일 날짜 " + fmtWhen(c0.modified).split(" ")[0] : ""].filter(Boolean).join(" · ");
+  var flags = []; list.forEach(function (c) { (Array.isArray(c.flags) ? c.flags : []).forEach(function (f) { if (f && typeof f === "object" && txt(f.t)) flags.push(f); }); });
+  var c0 = list[0];
+  var meta = [txt(c0.w) && txt(c0.h) ? txt(c0.w) + "×" + txt(c0.h) : "", txt(c0.type) ? txt(c0.type).toUpperCase() : "", Number(c0.size) > 0 ? Math.round(Number(c0.size) / 1024) + "KB" : "",
+    txt(c0.modified) && !isNaN(new Date(txt(c0.modified)).getTime()) ? "파일 날짜 " + fmtWhen(txt(c0.modified)).split(" ")[0] : ""].filter(Boolean).join(" · ");
   return (<div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: flags.some(function (f) { return f.lv === "warn"; }) ? "rgba(255,167,38,.08)" : "var(--inner)", fontSize: 12, lineHeight: 1.7 }}>
     <div style={{ fontWeight: 700, color: "var(--t2)" }}>{"자동 점검"}{meta && <span style={{ fontWeight: 400, color: "var(--td)" }}>{"  " + meta}</span>}</div>
     {!flags.length ? <div style={{ color: "#4CAF50" }}>{"✓ 편집·AI 흔적 없음"}</div>
-      : flags.map(function (f, i) { return <div key={i} style={{ color: f.lv === "warn" ? "#FFA726" : "var(--td)" }}>{(f.lv === "warn" ? "⚠ " : "· ") + f.t}</div>; })}
+      : flags.map(function (f, i) { return <div key={i} style={{ color: f.lv === "warn" ? "#FFA726" : "var(--td)" }}>{(f.lv === "warn" ? "⚠ " : "· ") + txt(f.t)}</div>; })}
     <div style={{ fontSize: 11, color: "var(--td)" }}>{"파일 정보만 본 참고용이에요. 정보를 지운 위조는 못 잡아요."}</div>
   </div>);
 }
@@ -486,10 +606,10 @@ function JoinWait(p) {
   return (<Card style={{ textAlign: "center", padding: "30px 18px" }}>
     <div style={{ fontSize: 36 }}>{"📨"}</div>
     <div style={{ fontSize: 16, fontWeight: 900, margin: "6px 0" }}>{(p.me.club ? p.me.club.name : "클럽") + "에 가입 신청했어요"}</div>
-    <div style={{ fontSize: 13, color: "var(--td)" }}>{"클럽장이 승인하면 들어갈 수 있어요. (" + p.me.member.nickname + " 으로 신청)"}</div>
+    <div style={{ fontSize: 13, color: "var(--td)", lineHeight: 1.7 }}>{"클럽장이 승인하면 들어갈 수 있어요."}<br />{"신청한 닉네임: "}<b style={{ color: "var(--t2)" }}>{p.me.member.nickname}</b></div>
     <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
       <Btn sm icon="refresh" onClick={p.reload}>{"새로 보기"}</Btn>
-      <Btn sm no onClick={function () { b.run(async function () { await p.api.cancelJoin(); await p.reload(); }); }}>{"신청 취소"}</Btn>
+      <Btn sm no onClick={function () { if (window.confirm("가입 신청을 취소할까요?")) b.run(async function () { await p.api.cancelJoin(); await p.reload(); }); }}>{"신청 취소"}</Btn>
     </div><Msg text={b.err} />
   </Card>);
 }
@@ -519,7 +639,11 @@ function AdminReview(p) {
       setCnt({ pending: r[0].length, dispute: r[1].length, report: r[2].length });
     } catch (e) {}
   };
+  var _zoom = useState(null); var zoom = _zoom[0]; var setZoom = _zoom[1];
+  /* 탭을 빨리 바꾸면 늦게 온 옛 탭의 목록이 새 탭을 덮어 '불러오는 중…' 에 멈추던 것 — 지금 탭의 것만 받는다 */
+  var stRef = useRef(st); stRef.current = st;
   var load = async function () {
+    var mySt = st;
     b.setErr("");
     try {
       var l;
@@ -539,8 +663,9 @@ function AdminReview(p) {
         var all = []; l.forEach(function (a) { (a.shots || []).forEach(function (s) { all.push(s); }); });
         await signAll(all);
       }
-      setListBox({ st: st, items: l });
-    } catch (e) { b.setErr(e.message); setListBox({ st: st, items: [] }); }
+      if (stRef.current !== mySt) return;
+      setListBox({ st: mySt, items: l });
+    } catch (e) { if (stRef.current !== mySt) return; b.setErr(e.message); setListBox({ st: mySt, items: [] }); }
   };
   useEffect(function () { load(); }, [st]);
   useEffect(function () { counts(); api.purgeOldShots().catch(function () {}); }, []);
@@ -556,12 +681,15 @@ function AdminReview(p) {
     b.run(async function () { await api.reviewApplication(a.id, ok, reason); await after(); }, ok ? "승인했어요" : "반려했어요");
   };
   var TABS = [["pending", "대기", cnt.pending], ["dispute", "분쟁", cnt.dispute], ["report", "신고", cnt.report], ["ban", "제한"], ["approved", "승인됨"], ["rejected", "반려"]];
+  /* 캡처는 위쪽(클럽 이름 · 클럽장 표시)이 보이게 크게, 누르면 이 화면 위에서 원본 크기로 */
   var shots = function (arr, purged) {
+    var w = mob ? 112 : 136, h = mob ? 200 : 242;
     return (<div style={{ display: "flex", gap: 8 }}>
       {(arr || []).length ? arr.map(function (s) {
-        return (<a key={s} href={urls[s]} target="_blank" rel="noopener" title="크게 보기" style={{ width: 110, height: 156, borderRadius: 10, overflow: "hidden", border: "1px solid var(--bd)", background: "#111", display: "block", flexShrink: 0 }}>
-          {urls[s] && <img src={urls[s]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}</a>);
-      }) : <div style={{ width: 110, fontSize: 11.5, color: "var(--td)", padding: "6px 0" }}>{purged ? "캡처 삭제됨 (30일)" : "캡처 없음"}</div>}
+        return (<button key={s} type="button" title="크게 보기" onClick={function () { if (urls[s]) setZoom(urls[s]); }} style={{ width: w, height: h, padding: 0, borderRadius: 10, overflow: "hidden", border: "1px solid var(--bd)", background: "#111", display: "block", flexShrink: 0, cursor: "zoom-in", position: "relative" }}>
+          {urls[s] && <img src={urls[s]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} />}
+          <span style={{ position: "absolute", left: 6, bottom: 6, fontSize: 10.5, padding: "2px 6px", borderRadius: 6, background: "rgba(0,0,0,.6)", color: "#fff" }}>{"크게 보기"}</span></button>);
+      }) : <div style={{ width: w, fontSize: 11.5, color: "var(--td)", padding: "6px 0" }}>{purged ? "캡처 삭제됨 (30일)" : "캡처 없음"}</div>}
     </div>);
   };
   var KIND_TAG = { claim: <Tag c="orange">{"되찾기"}</Tag>, reverify: <Tag c="purple">{"재인증"}</Tag> };
@@ -585,9 +713,10 @@ function AdminReview(p) {
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 15, fontWeight: 900 }}>{a.club_name}</span>{KIND_TAG[a.kind]}</div>
         <div style={{ fontSize: 12, color: "var(--td)", margin: "3px 0 10px" }}>{"신청 " + a.nickname + " · " + fmtWhen(a.submitted_at || a.created_at) + (a.reviewed_at ? " · 심사 " + fmtWhen(a.reviewed_at) : "")}</div>
         {st === "pending" && (<div style={{ fontSize: 12.5, lineHeight: 1.9, color: "var(--t2)" }}>
-          <div>{"☐ 인게임 화면에 클럽장 표시가 보임"}</div>
-          <div>{"☐ 닉네임 " + a.nickname + " 일치"}</div>
-          <div>{"☐ 클럽 이름 " + a.club_name + " 일치 (대소문자까지)"}{sim.length > 0 && <span style={{ color: "#FFA726" }}>{"  ⚠ 비슷한 이름: " + sim.join(", ")}</span>}</div>
+          <div style={Object.assign({}, KICK, { marginBottom: 2 })}>{"캡처에서 확인할 것"}</div>
+          <div>{"· 인게임 화면에 클럽장 표시가 보이는지"}</div>
+          <div>{"· 닉네임이 "}<b style={{ color: "var(--t1)" }}>{a.nickname}</b>{" 와 같은지"}</div>
+          <div>{"· 클럽 이름이 "}<b style={{ color: "var(--t1)" }}>{a.club_name}</b>{" 와 같은지 (대소문자까지)"}{sim.length > 0 && <span style={{ color: "#FFA726" }}>{"  ⚠ 비슷한 이름: " + sim.join(", ")}</span>}</div>
         </div>)}
         {st === "pending" && <ShotChecks checks={a.checks} />}
         {a.reason && <div style={{ fontSize: 12, color: "var(--td)", marginTop: 6 }}>{"메모: " + a.reason}</div>}
@@ -611,6 +740,7 @@ function AdminReview(p) {
     {st === "dispute" && <div style={{ fontSize: 12, color: "var(--td)", lineHeight: 1.6, marginBottom: 12 }}>{"같은 이름으로 다시 신청(되찾기)이 들어왔거나 재인증을 걸어 둔 클럽이에요. 위조범은 진짜 소개글에 새 코드를 적을 수 없으니, 애매하면 기존 클럽장에게 재인증을 요청하세요."}</div>}
     <Msg text={b.err} /><Msg bad={false} text={b.ok} />
     {body}
+    {zoom && <Viewer url={zoom} onClose={function () { setZoom(null); }} />}
   </div>);
 }
 
@@ -733,14 +863,16 @@ function ReverifyBanner(p) {
 /* 신고 창 — 클럽(가짜 클럽장 의심·기타)이나 글 */
 function ReportModal(p) {
   var ctx = p.ctx;
-  var _k = useState(p.kind === "post" ? "post" : "fake_leader"); var kind = _k[0]; var setKind = _k[1];
-  var _t = useState(""); var txt = _t[0]; var setTxt = _t[1];
+  /* 클럽 신고는 이유를 직접 고르게 한다 — 예전에는 가장 무거운 '가짜 클럽장'이 미리 골라져 있었다 */
+  var _k = useState(p.kind === "post" ? "post" : ""); var kind = _k[0]; var setKind = _k[1];
+  var _t = useState(""); var note = _t[0]; var setNote = _t[1];
   var _done = useState(false); var done = _done[0]; var setDone = _done[1];
   var b = useBusy();
   var send = function () {
     b.run(async function () {
-      if (kind !== "fake_leader" && !txt.trim()) throw new Error("무엇이 문제인지 한 줄만 적어 주세요");
-      await ctx.api.reportClub(ctx.club.id, kind, txt.trim(), p.post ? p.post.id : null);
+      if (!kind) throw new Error("신고 이유를 골라 주세요");
+      if (kind !== "fake_leader" && !note.trim()) throw new Error("무엇이 문제인지 한 줄만 적어 주세요");
+      await ctx.api.reportClub(ctx.club.id, kind, note.trim(), p.post ? p.post.id : null);
       setDone(true);
     });
   };
@@ -754,11 +886,11 @@ function ReportModal(p) {
       : (<div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
         {[["fake_leader", "클럽장이 진짜 인게임 클럽장이 아닌 것 같아요"], ["other", "기타 (광고·욕설·사칭 등)"]].map(function (x) {
           var on = kind === x[0];
-          return (<button key={x[0]} type="button" onClick={function () { setKind(x[0]); }} style={Object.assign({}, BTN, { justifyContent: "flex-start", padding: "10px 12px", whiteSpace: "normal", textAlign: "left" },
+          return (<button key={x[0]} type="button" onClick={function () { setKind(x[0]); if (b.err) b.setErr(""); }} style={Object.assign({}, BTN, { justifyContent: "flex-start", padding: "10px 12px", whiteSpace: "normal", textAlign: "left" },
             on ? { borderColor: "var(--acc)", color: "var(--t1)", background: "rgba(255,213,79,.06)" } : null)}>
             <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid " + (on ? "var(--acc)" : "var(--bd)"), background: on ? "var(--acc)" : "transparent", flexShrink: 0 }} />{x[1]}</button>);
         })}</div>)}
-      <Field label={kind === "fake_leader" ? "덧붙일 말 (선택)" : "무엇이 문제인가요"} area value={txt} onChange={setTxt} max={500} rows={3}
+      <Field label={kind === "fake_leader" ? "덧붙일 말 (선택)" : "무엇이 문제인가요"} area value={note} onChange={function (v) { setNote(v); if (b.err) b.setErr(""); }} max={500} rows={3}
         ph={kind === "fake_leader" ? "예: 인게임 클럽장 닉네임이 달라요" : ""} />
       <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6 }}>{"신고는 관리자만 봐요. 가짜 클럽장으로 확인되면 클럽이 정리되고, 진짜 클럽장이 다시 열 수 있어요."}</div>
       <Msg text={b.err} />
@@ -775,6 +907,10 @@ function ClubHome(p) {
   useEffect(function () { loadMembers(); }, [club.id]);
   /* 연구소에서 넘어온 공유·제안은 라운지 탭에서 연다 */
   useEffect(function () { if (p.draft || p.focusPostId) setTab("feed"); }, [p.draft, p.focusPostId]);
+  /* 클럽장을 넘기면 클럽장 전용 탭(덱 현황 · 관리)에 머물러 있지 않게 */
+  useEffect(function () { if (!leader && (tab === "status" || tab === "manage")) setTab("feed"); }, [leader]);
+  var _toast = useState(""); var toast = _toast[0]; var setToast = _toast[1];
+  useEffect(function () { if (!toast) return; var t = setTimeout(function () { setToast(""); }, 3500); return function () { clearTimeout(t); }; }, [toast]);
   var active = members.filter(function (m) { return m.status === "active"; });
   var pending = members.filter(function (m) { return m.status === "pending"; });
   var tabs = [["feed", "라운지"]];
@@ -782,22 +918,31 @@ function ClubHome(p) {
   tabs.push(["members", "클럽원"]);
   if (leader) tabs.push(["manage", "관리", pending.length]);
   var _rep = useState(null); var report = _rep[0]; var setReport = _rep[1];
-  var ctx = { api: api, mob: mob, me: me, club: club, leader: leader, members: members, active: active, reloadMembers: loadMembers, reload: p.reload,
-    report: function (kind, post) { setReport({ kind: kind, post: post || null }); } };
+  /* 내 정보가 바뀌는 일(클럽장 넘기기 · 닉네임 · 덱 공개)은 클럽원 명단도 같이 새로 읽는다 —
+     예전에는 클럽장을 넘긴 뒤에도 '클럽장 ○○ · 나' 가 그대로 남았다 */
+  var reloadAll = async function () { await p.reload(); await loadMembers(); };
+  var ctx = { api: api, mob: mob, me: me, club: club, leader: leader, members: members, active: active, reloadMembers: loadMembers, reload: reloadAll,
+    goTab: setTab, report: function (kind, post) { setReport({ kind: kind, post: post || null }); } };
   var rv = me.app && me.app.kind === "reverify" && (me.app.status === "draft" || me.app.status === "pending") && me.app.target_club_id === club.id ? me.app : null;
+  var invite = function () {
+    var msg = "[덱 매니저 클럽 라운지] " + club.name + " 초대 코드: " + club.invite_code + "\ndeck-manager.vercel.app → 클럽라운지 → 클럽 가입에 넣어 주세요";
+    copyText(msg);
+    setToast("초대 안내문을 복사했어요 — 인게임 클럽 채팅에 붙여 넣으세요 (코드 " + club.invite_code + ")");
+  };
   return (<div style={{ padding: mob ? "12px 12px 100px" : "22px 26px", maxWidth: 1080 }}>
     {p.title}
-    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: mob ? 10 : 14, marginBottom: 14 }}>
       <Emblem name={club.name} size={mob ? 44 : 52} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ fontSize: mob ? 17 : 20, fontWeight: 900, letterSpacing: -.4 }}>{club.name}</span><Tag c="acc"><Icon n="shield" size={11} />{"인증"}</Tag></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}><span style={{ fontSize: mob ? 17 : 20, fontWeight: 900, letterSpacing: -.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{club.name}</span><Tag c="acc"><Icon n="shield" size={11} />{"인증"}</Tag></div>
         <div style={{ fontSize: 12, color: "var(--td)", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {"클럽원 " + active.length + " / " + club.capacity + " · 클럽장 " + ((active.find(function (m) { return m.role === "leader"; }) || {}).nickname || "")}</div>
       </div>
-      {leader && <Btn icon="link" title={"초대 코드 " + club.invite_code + " 복사"} onClick={function () { copyText(club.invite_code); window.alert("초대 코드 " + club.invite_code + " 를 복사했어요"); }}>{mob ? "" : "초대"}</Btn>}
-      {!leader && <Btn ghost icon="flag" title="이 클럽이나 클럽장을 관리자에게 신고해요" onClick={function () { ctx.report("fake_leader"); }}>{mob ? "" : "신고"}</Btn>}
+      {leader && <Btn icon="link" title={"초대 안내문 복사 (코드 " + club.invite_code + ")"} onClick={invite}>{"초대"}</Btn>}
+      {!leader && <Btn ghost icon="flag" title="이 클럽이나 클럽장을 관리자에게 신고해요" onClick={function () { ctx.report(""); }}>{"신고"}</Btn>}
     </div>
-    {rv && <ReverifyBanner api={api} app={rv} reload={p.reload} mobile={mob} />}
+    {toast && <Msg bad={false} text={toast} />}
+    {rv && <ReverifyBanner api={api} app={rv} reload={reloadAll} mobile={mob} />}
     <div style={{ display: "flex", gap: 2, borderBottom: "1px solid var(--bd)", marginBottom: 18 }}>
       {tabs.map(function (t) {
         var on = t[0] === tab;
@@ -807,10 +952,10 @@ function ClubHome(p) {
         </button>);
       })}
     </div>
-    {tab === "feed" && <Feed ctx={ctx} {...p} />}
-    {tab === "status" && leader && <DeckStatus ctx={ctx} onOpenLab={p.onOpenLab} />}
-    {tab === "members" && <Members ctx={ctx} decks={p.decks} curDeckId={p.curDeckId} tools={p.tools} />}
-    {tab === "manage" && leader && <Manage ctx={ctx} pending={pending} />}
+    {tab === "feed" && <SafeBox what="라운지"><Feed ctx={ctx} {...p} /></SafeBox>}
+    {tab === "status" && leader && <SafeBox what="덱 현황"><DeckStatus ctx={ctx} onOpenLab={p.onOpenLab} /></SafeBox>}
+    {tab === "members" && <SafeBox what="클럽원 명단"><Members ctx={ctx} decks={p.decks} curDeckId={p.curDeckId} tools={p.tools} /></SafeBox>}
+    {tab === "manage" && leader && <SafeBox what="관리 화면"><Manage ctx={ctx} pending={pending} /></SafeBox>}
     {report && <ReportModal ctx={ctx} kind={report.kind} post={report.post} onClose={function () { setReport(null); }} />}
   </div>);
 }
@@ -827,43 +972,115 @@ function Feed(p) {
   var _open = useState(null); var openId = _open[0]; var setOpenId = _open[1];
   var _comp = useState(null); var comp = _comp[0]; var setComp = _comp[1];
   var _ev = useState(null); var ev = _ev[0]; var setEv = _ev[1];
-  var b = useBusy();
+  var _pinAll = useState(false); var pinAll = _pinAll[0]; var setPinAll = _pinAll[1];
+  var b = useBusy(), nb = useBusy();
+  var feedRef = useRef(null); feedRef.current = feed;
+  var fltRef = useRef(flt); fltRef.current = flt;
+  var scrollRef = useRef(null);
+  var EMPTY = { pinned: [], posts: [], extra: { comments: {}, reactions: {}, votes: {} } };
+  /* 말머리는 서버에서 거른다 — 예전에는 불러온 20개 안에서만 찾아 '이 말머리의 글이 아직 없어요'가 잘못 떴다.
+     말머리를 빨리 바꾸면 늦게 온 옛 말머리 결과가 새 화면을 덮지 않게, 지금 말머리의 결과만 받는다 */
   var load = useCallback(async function () {
-    try { setFeed(await api.loadFeed(ctx.club.id)); } catch (e) { b.setErr(e.message); setFeed({ pinned: [], posts: [], extra: { comments: {}, reactions: {}, votes: {} } }); }
-  }, [ctx.club.id]);
+    var my = flt;
+    try { b.setErr(""); var r = await api.loadFeed(ctx.club.id, null, my || null); if (fltRef.current !== my) return; setFeed(r); }
+    catch (e) { if (fltRef.current !== my) return; b.setErr(e.message); setFeed(EMPTY); }
+  }, [ctx.club.id, flt]);
   var loadEv = useCallback(async function () { try { setEv(await api.loadEvents(ctx.club.id)); } catch (e) { setEv({ events: [], rsvps: [] }); } }, [ctx.club.id]);
-  useEffect(function () { load(); loadEv(); }, [ctx.club.id]);
+  useEffect(function () { load(); }, [ctx.club.id, flt]);
+  useEffect(function () { loadEv(); }, [ctx.club.id]);
   useEffect(function () {
     if (p.draft) { setComp({ kind: "deck", deck: p.draft.deck }); if (p.onDraftUsed) p.onDraftUsed(); }
   }, [p.draft]);
   useEffect(function () { if (p.focusPostId) { setOpenId(p.focusPostId); if (p.onFocusUsed) p.onFocusUsed(); } }, [p.focusPostId]);
+  /* 글 하나만 다시 읽어 그 자리에 넣는다 — 반응 · 투표 · 댓글 뒤에 '더 보기'로 불러온 글이 사라지고 맨 위로 가던 것 */
+  var refreshPost = async function (id) {
+    if (!id) return;
+    try {
+      var r = await api.loadPost(id);
+      var cur = feedRef.current;
+      var has = function (arr) { return arr.some(function (x) { return x.id === id; }); };
+      /* 고정이 바뀐 글은 자리가 바뀌므로 통째로 */
+      if (r && cur && !flt && ((has(cur.pinned) && !r.post.pinned) || (has(cur.posts) && r.post.pinned))) { load(); return; }
+      setFeed(function (f) {
+        if (!f) return f;
+        var put = function (arr) { return r ? arr.map(function (x) { return x.id === id ? r.post : x; }) : arr.filter(function (x) { return x.id !== id; }); };
+        var ex = { comments: Object.assign({}, f.extra.comments), reactions: Object.assign({}, f.extra.reactions), votes: Object.assign({}, f.extra.votes) };
+        delete ex.comments[id]; delete ex.reactions[id]; delete ex.votes[id];
+        if (r) ["comments", "reactions", "votes"].forEach(function (k) { if (r.extra[k] && r.extra[k][id] !== undefined) ex[k][id] = r.extra[k][id]; });
+        return Object.assign({}, f, { pinned: put(f.pinned), posts: put(f.posts), extra: ex });
+      });
+    } catch (e) { load(); }
+  };
   var more = function () {
-    var last = feed.posts[feed.posts.length - 1];
+    var last = feed && feed.posts[feed.posts.length - 1];
+    if (!last) return;
+    var my = flt;
     b.run(async function () {
-      var r = await api.loadFeed(ctx.club.id, last.created_at);
-      setFeed({ pinned: feed.pinned, posts: feed.posts.concat(r.posts), more: r.more,
-        extra: { comments: Object.assign({}, feed.extra.comments, r.extra.comments), reactions: Object.assign({}, feed.extra.reactions, r.extra.reactions), votes: Object.assign({}, feed.extra.votes, r.extra.votes) } });
+      var r = await api.loadFeed(ctx.club.id, last.created_at, my || null);
+      if (fltRef.current !== my) return;
+      setFeed(function (f) {
+        if (!f) return f;
+        return { pinned: f.pinned, posts: f.posts.concat(r.posts), more: r.more,
+          extra: { comments: Object.assign({}, f.extra.comments, r.extra.comments), reactions: Object.assign({}, f.extra.reactions, r.extra.reactions), votes: Object.assign({}, f.extra.votes, r.extra.votes) } };
+      });
     });
   };
+  /* 글을 열 때 목록 위치를 기억했다가, 돌아오면 그 자리로 (휴대폰 뒤로가기로도 닫힌다) */
+  var openPost = function (id) { scrollRef.current = window.scrollY || 0; setOpenId(id); try { window.scrollTo(0, 0); } catch (e) { /* 무시 */ } };
+  var closePost = function () { var id = openId; setOpenId(null); refreshPost(id); };
+  useBackClose(!!openId, closePost);
+  useEffect(function () {
+    if (openId || scrollRef.current === null) return;
+    var y = scrollRef.current; scrollRef.current = null;
+    requestAnimationFrame(function () { try { window.scrollTo(0, y); } catch (e) { /* 무시 */ } });
+  }, [openId]);
+  /* 덱을 아직 공개하지 않은 사람에게 — 클럽장의 '덱 현황'은 공개해야 보인다. 닫으면 2주 동안 안 띄운다 */
+  var nudgeKey = "club-share-nudge-" + ctx.club.id + "-" + ctx.me.uid;
+  var _nudge = useState(function () { try { return Date.now() - Number(localStorage.getItem(nudgeKey) || 0) > 14 * 864e5; } catch (e) { return true; } });
+  var curDeck = (p.decks || []).find(function (d) { return d.deckId === p.curDeckId; });
+  var showNudge = _nudge[0] && !ctx.me.member.share_deck_id && !!p.curDeckId && !!(p.tools && p.tools.publishNow);
+  var hideNudge = function () { try { localStorage.setItem(nudgeKey, String(Date.now())); } catch (e) { /* 무시 */ } _nudge[1](false); };
+  var shareNow = function () {
+    nb.run(async function () {
+      await api.setShare(p.curDeckId);
+      await p.tools.publishNow();
+      await ctx.reload();
+    }, "공개했어요. 덱을 바꿀 때마다 요약본이 새로 올라가요 (공개 설정은 클럽원 탭에서 바꿀 수 있어요)");
+  };
   var composer = comp && (<Composer ctx={ctx} init={comp} tools={p.tools} labSaves={p.labSaves} onClose={function () { setComp(null); }}
-    onDone={function () { setComp(null); load(); }} />);
-  if (openId) return (<React.Fragment>
-    <PostDetail ctx={ctx} postId={openId} onBack={function () { setOpenId(null); load(); }} onOpenLab={p.onOpenLab} tools={p.tools} />
-    {composer}</React.Fragment>);
-  var postProps = { ctx: ctx, onOpen: function (id) { setOpenId(id); }, onChanged: load, onOpenLab: p.onOpenLab, tools: p.tools };
-  var list = feed ? feed.posts.filter(function (x) { return !flt || x.kind === flt; }) : [];
+    onDone={function () { setComp(null); if (flt) { setFeed(null); setFlt(""); } else load(); }} />);
+  var postProps = { ctx: ctx, onOpen: openPost, onChanged: load, onPostChanged: refreshPost, onOpenLab: p.onOpenLab, tools: p.tools };
+  var list = feed ? feed.posts : [];
   var notices = feed ? feed.pinned : [];
-  var Week = (<EventsBox ctx={ctx} ev={ev} reload={loadEv} />);
+  var shown = pinAll ? notices : notices.slice(0, 3);
+  var Week = (<SafeBox what="일정"><EventsBox ctx={ctx} ev={ev} reload={loadEv} /></SafeBox>);
   var main = (<div style={{ minWidth: 0 }}>
-    {notices.map(function (n) {
-      return (<div key={n.id} onClick={function () { setOpenId(n.id); }} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 16px", borderRadius: 14, cursor: "pointer",
-        background: "linear-gradient(90deg,rgba(255,213,79,.10),rgba(255,213,79,.02))", border: "1px solid rgba(255,213,79,.2)", marginBottom: 10 }}>
-        <Icon n="pin" style={{ color: "var(--acc)", marginTop: 2 }} />
-        <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 800 }}>{n.title || n.body.slice(0, 40)}</div>
-          {n.title && n.body && <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.body}</div>}</div>
-        <span style={{ fontSize: 11, color: "var(--td)", whiteSpace: "nowrap" }}>{(KINDS[n.kind] || KINDS.talk)[0] + " · " + n.author_name}</span>
-      </div>);
-    })}
+    <Safe fallback={function () { return null; }}>
+      {shown.map(function (n) {
+        return (<div key={n.id} onClick={function () { openPost(n.id); }} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 16px", borderRadius: 14, cursor: "pointer",
+          background: "linear-gradient(90deg,rgba(255,213,79,.10),rgba(255,213,79,.02))", border: "1px solid rgba(255,213,79,.2)", marginBottom: 10 }}>
+          <Icon n="pin" style={{ color: "var(--acc)", marginTop: 2 }} />
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 800 }}>{txt(n.title) || txt(n.body).slice(0, 40)}</div>
+            {txt(n.title) && txt(n.body) && <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{txt(n.body)}</div>}</div>
+          <span style={{ fontSize: 11, color: "var(--td)", whiteSpace: "nowrap" }}>{(KINDS[n.kind] || KINDS.talk)[0] + " · " + txt(n.author_name)}</span>
+        </div>);
+      })}
+      {notices.length > 3 && (<button type="button" onClick={function () { setPinAll(!pinAll); }} style={{ display: "block", width: "100%", padding: "8px 0", marginBottom: 10, background: "none", border: "1px dashed rgba(255,213,79,.3)", borderRadius: 10, color: "var(--acc)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+        {pinAll ? "고정 글 접기 ▴" : "고정 글 " + (notices.length - 3) + "개 더 보기 ▾"}</button>)}
+    </Safe>
+    {showNudge && (<div style={{ display: "flex", alignItems: mob ? "stretch" : "center", flexDirection: mob ? "column" : "row", gap: 10, padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(108,184,255,.28)", background: "rgba(108,184,255,.06)", marginBottom: 12 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 800, fontSize: 13.5 }}>{"내 덱이 아직 클럽에 공개되지 않았어요"}</div>
+        <div style={{ fontSize: 12, color: "var(--td)", marginTop: 3, lineHeight: 1.6 }}>{ctx.leader
+          ? "공개하면 '덱 현황'에 내 덱도 함께 보여요. 선수 능력치 · 훈련 값은 올라가지 않아요."
+          : "공개하면 클럽장이 '덱 현황'에서 내 라인업 요약(TOTAL · 세트덱)을 봐요. 선수 능력치 · 훈련 값은 올라가지 않아요."}</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0, justifyContent: mob ? "flex-end" : "flex-start" }}>
+        <Btn sm ghost onClick={hideNudge} title="2주 동안 안 띄워요">{"나중에"}</Btn>
+        <Btn sm pri onClick={shareNow} disabled={nb.busy}>{nb.busy ? "공개하는 중…" : (curDeck && curDeck.teamName ? "지금 덱(" + curDeck.teamName + ") 공개" : "지금 덱 공개")}</Btn>
+      </div>
+    </div>)}
+    <Msg text={nb.err} /><Msg bad={false} text={nb.ok} />
     {mob && Week}
     <Card style={{ marginBottom: 12 }}>
       <div onClick={function () { setComp({ kind: "talk" }); }} style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
@@ -877,44 +1094,89 @@ function Feed(p) {
         {ctx.leader && <Btn ghost icon="pin" onClick={function () { setComp({ kind: "notice" }); }}>{"공지"}</Btn>}
       </div>
     </Card>
-    <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-      {[["", "전체"], ["deck", "덱 공유"], ["question", "질문"], ["poll", "투표"], ["brag", "자랑"], ["talk", "자유"]].map(function (x) {
-        var on = flt === x[0];
-        return (<button key={x[0]} type="button" onClick={function () { setFlt(x[0]); }} style={{ padding: "5px 11px", fontSize: 12, fontWeight: 700, borderRadius: 7, border: "none", cursor: "pointer",
-          background: on ? "rgba(255,213,79,.14)" : "var(--inner)", color: on ? "var(--acc)" : "var(--t2)" }}>{x[1]}</button>);
-      })}
-      <Btn sm ghost icon="refresh" style={{ marginLeft: "auto" }} onClick={load} title="새로 보기" />
+    {/* 말머리는 한 줄 — 휴대폰에서 넘치면 옆으로 밀어 본다 (새로 보기 버튼이 혼자 다음 줄로 떨어지지 않게) */}
+    <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center" }}>
+      <div className="club-chips" style={{ display: "flex", gap: 6, flex: 1, minWidth: 0, overflowX: "auto" }}>
+        {[["", "전체"], ["deck", "덱 공유"], ["question", "질문"], ["poll", "투표"], ["brag", "자랑"], ["talk", "자유"]].map(function (x) {
+          var on = flt === x[0];
+          return (<button key={x[0]} type="button" onClick={function () { if (x[0] !== flt) { setFeed(null); setFlt(x[0]); } }} style={{ padding: "7px 12px", fontSize: 12.5, fontWeight: 700, borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0,
+            background: on ? "rgba(255,213,79,.14)" : "var(--inner)", color: on ? "var(--acc)" : "var(--t2)" }}>{x[1]}</button>);
+        })}
+      </div>
+      <Btn sm ghost icon="refresh" style={{ flexShrink: 0 }} onClick={function () { load(); loadEv(); }} title="새로 보기" />
     </div>
     <Msg text={b.err} />
     {!feed ? <div style={{ color: "var(--td)", fontSize: 13 }}>{"불러오는 중…"}</div>
-      : !list.length ? <Card style={{ textAlign: "center", color: "var(--td)", fontSize: 13, padding: 30 }}>{flt ? "이 말머리의 글이 아직 없어요" : "첫 글을 남겨 보세요 👋"}</Card>
-      : list.map(function (x) { return <PostCard key={x.id} post={x} extra={feed.extra} {...postProps} />; })}
-    {feed && feed.more && !flt && <div style={{ textAlign: "center", margin: "8px 0" }}><Btn onClick={more} disabled={b.busy}>{"더 보기"}</Btn></div>}
+      : !list.length ? (flt ? <Card style={{ textAlign: "center", color: "var(--td)", fontSize: 13, padding: 30 }}>{"이 말머리의 글이 아직 없어요"}</Card>
+        : notices.length ? <div style={{ textAlign: "center", color: "var(--td)", fontSize: 12.5, padding: "16px 0" }}>{"고정 글 말고는 아직 글이 없어요"}</div>
+        : <Card style={{ textAlign: "center", color: "var(--td)", fontSize: 13, padding: 30 }}>{"첫 글을 남겨 보세요 👋"}</Card>)
+      : list.map(function (x) {
+        return (<Safe key={x.id} fallback={function () { return <BadPost ctx={ctx} post={x} onDelete={async function () { await api.deletePost(x); load(); }} />; }}>
+          <PostCard post={x} extra={feed.extra} {...postProps} /></Safe>);
+      })}
+    {feed && feed.more && <div style={{ textAlign: "center", margin: "8px 0" }}><Btn onClick={more} disabled={b.busy}>{b.busy ? "불러오는 중…" : "더 보기"}</Btn></div>}
   </div>);
+  /* 글을 보는 동안에도 목록은 숨겨 둔 채 남겨 둔다 — 다시 그리면 사진이 늦게 들어와 높이가 바뀌어
+     돌아왔을 때 보던 자리가 어긋났다. 펼쳐 둔 덱 · 불러온 사진도 그대로 남는다 */
   return (<React.Fragment>
-    {mob ? main : (<div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 290px", gap: 18, alignItems: "start" }}>{main}<div style={{ position: "sticky", top: 16 }}>{Week}</div></div>)}
+    {openId && <PostDetail ctx={ctx} postId={openId} onBack={closePost} onOpenLab={p.onOpenLab} tools={p.tools} />}
+    <div style={{ display: openId ? "none" : "block" }}>
+      {mob ? main : (<div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 290px", gap: 18, alignItems: "start" }}>{main}<div style={{ position: "sticky", top: 16 }}>{Week}</div></div>)}
+    </div>
     {composer}
   </React.Fragment>);
+}
+
+/* 그리다 깨진 글 · 댓글 — 내용 대신 짧은 안내만. 쓴 사람이나 클럽장은 여기서 지울 수 있다 */
+function BadPost(p) {
+  var ctx = p.ctx, x = p.post || {};
+  var b = useBusy();
+  var what = p.what || "글";
+  var can = x.author_id === ctx.me.uid || ctx.leader;
+  return (<Card style={{ marginBottom: 12 }} pad="12px 16px">
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <Icon n="alert" style={{ color: "#FFA726" }} />
+      <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: "var(--t2)" }}>{"이 " + what + "은 표시할 수 없어요" + (txt(x.author_name) ? " · " + txt(x.author_name) : "")}</div>
+      {can && p.onDelete && <Btn sm no icon="trash" disabled={b.busy} onClick={function () { if (window.confirm("이 " + what + "을 지울까요?")) b.run(p.onDelete); }}>{"지우기"}</Btn>}
+    </div>
+    <Msg text={b.err} />
+  </Card>);
 }
 
 function EventsBox(p) {
   var ctx = p.ctx, ev = p.ev;
   var b = useBusy();
+  var _who = useState(null); var who = _who[0]; var setWho = _who[1];
   if (!ev) return null;
   if (!ev.events.length && !ctx.leader) return null;
-  var mine = {}; var cnt = {};
-  ev.rsvps.forEach(function (r) { cnt[r.event_id] = (cnt[r.event_id] || 0) + 1; if (r.user_id === ctx.me.uid) mine[r.event_id] = 1; });
+  /* 지금 클럽원의 참여만 센다 — 내보낸 사람 것까지 세어 '23/22 참여' 가 되던 것. 누르면 누가 참여하는지 보인다.
+     내 참여 표시는 명단과 상관없이 본다 (명단이 늦게 오거나 못 읽어도 '참여'가 그대로 보이고 취소할 수 있게).
+     명단을 아직 못 읽었으면 예전처럼 전부 센다 */
+  var act = {}; ctx.active.forEach(function (m) { act[m.user_id] = m; });
+  var known = ctx.active.length > 0;
+  var mine = {}; var names = {};
+  ev.rsvps.forEach(function (r) {
+    if (r.user_id === ctx.me.uid) mine[r.event_id] = 1;
+    if (known && !act[r.user_id]) return;
+    (names[r.event_id] = names[r.event_id] || []).push(act[r.user_id] ? act[r.user_id].nickname : "클럽원");
+  });
   var W = ["일", "월", "화", "수", "목", "금", "토"];
   return (<Card style={{ marginBottom: 12 }} pad="14px 16px">
     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}><Icon n="cal" style={{ color: "var(--t2)" }} /><b>{"일정"}</b></div>
     {!ev.events.length && <div style={{ fontSize: 12, color: "var(--td)", padding: "6px 0" }}>{"관리 탭에서 클럽전 같은 일정을 만들 수 있어요"}</div>}
     {ev.events.map(function (e) {
       var d = new Date(e.starts_at); var on = !!mine[e.id];
-      return (<div key={e.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--bd)" }}>
-        <div style={{ width: 38, textAlign: "center" }}><div style={{ fontSize: 10, color: "var(--td)" }}>{(d.getMonth() + 1) + "/" + d.getDate()}</div><div style={{ fontWeight: 800 }}>{W[d.getDay()]}</div></div>
-        <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.title}</div>
-          <div style={{ fontSize: 11.5, color: "var(--td)" }}>{String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + " · " + (cnt[e.id] || 0) + "/" + ctx.active.length + " 참여"}</div></div>
-        <Btn sm ok={on} icon={on ? "check" : null} onClick={function () { b.run(async function () { await ctx.api.setRsvp(e, !on); await p.reload(); }); }}>{on ? "참여" : "참여하기"}</Btn>
+      var list = names[e.id] || [];
+      return (<div key={e.id} style={{ padding: "8px 0", borderTop: "1px solid var(--bd)" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ width: 38, textAlign: "center" }}><div style={{ fontSize: 10.5, color: "var(--td)" }}>{(d.getMonth() + 1) + "/" + d.getDate()}</div><div style={{ fontWeight: 800 }}>{W[d.getDay()]}</div></div>
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{txt(e.title)}</div>
+            <button type="button" onClick={function () { setWho(who === e.id ? null : e.id); }} title="누가 참여하는지 보기"
+              style={{ background: "none", border: "none", padding: "7px 0", margin: "-3px 0", color: "var(--td)", fontSize: 11.5, cursor: "pointer", fontFamily: "inherit" }}>
+              {String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + " · " + list.length + (known ? "/" + ctx.active.length : "") + "명 참여 " + (who === e.id ? "▴" : "▾")}</button></div>
+          <Btn sm ok={on} icon={on ? "check" : null} onClick={function () { b.run(async function () { await ctx.api.setRsvp(e, !on); await p.reload(); }); }}>{on ? "참여" : "참여하기"}</Btn>
+        </div>
+        {who === e.id && <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.7, margin: "4px 0 0 48px" }}>{list.length ? list.join(" · ") : "아직 참여한 사람이 없어요"}</div>}
       </div>);
     })}
     <Msg text={b.err} />
@@ -927,9 +1189,9 @@ function PostHead(p) {
   var mine = x.author_id === ctx.me.uid;
   var isLeaderAuthor = ctx.active.some(function (m) { return m.user_id === x.author_id && m.role === "leader"; });
   return (<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-    <Avatar name={x.author_name} />
+    <Avatar name={txt(x.author_name)} />
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><b>{x.author_name || "떠난 클럽원"}</b>{isLeaderAuthor && <Tag c="acc">{"클럽장"}</Tag>}<Tag c={k[1]}>{k[0]}</Tag>{x.pinned && <Tag c="acc"><Icon n="pin" size={10} />{"고정"}</Tag>}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><b>{txt(x.author_name) || "떠난 클럽원"}</b>{isLeaderAuthor && <Tag c="acc">{"클럽장"}</Tag>}<Tag c={k[1]}>{k[0]}</Tag>{x.pinned && <Tag c="acc"><Icon n="pin" size={10} />{"고정"}</Tag>}</div>
       <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 1 }}>{ago(x.created_at) + (x.deck && x.deck.src === "lab" ? " · 덱 연구소에서" : "")}</div>
     </div>
     {p.onMenu && <PostMenu {...p} mine={mine} />}
@@ -941,42 +1203,50 @@ function PostMenu(p) {
   var b = useBusy();
   var act = function (fn) { setO(false); b.run(fn); };
   return (<div style={{ position: "relative" }}>
-    <button type="button" onClick={function (e) { e.stopPropagation(); setO(!o); }} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", padding: 4, fontSize: 16, lineHeight: 1 }}>{"⋯"}</button>
+    {/* 손가락으로 누르기 쉽게 누르는 자리를 넓힌다 (예전 22×24) */}
+    <button type="button" aria-label="글 메뉴" title="글 메뉴" onClick={function (e) { e.stopPropagation(); setO(!o); }} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", padding: "9px 11px", margin: "-9px -9px -9px 0", fontSize: 18, lineHeight: 1, minWidth: 40, minHeight: 40 }}>{"⋯"}</button>
     {o && (<React.Fragment><div onClick={function (e) { e.stopPropagation(); setO(false); }} style={{ position: "fixed", inset: 0, zIndex: 50 }} />
-      <div onClick={function (e) { e.stopPropagation(); }} style={Object.assign({}, CARD, { position: "absolute", right: 0, top: 26, zIndex: 51, background: "var(--bg)", padding: 4, minWidth: 130, boxShadow: "0 8px 30px rgba(0,0,0,.4)" })}>
+      <div onClick={function (e) { e.stopPropagation(); }} style={Object.assign({}, CARD, { position: "absolute", right: 0, top: 34, zIndex: 51, background: "var(--bg)", padding: 4, minWidth: 140, boxShadow: "0 8px 30px rgba(0,0,0,.4)" })}>
         {ctx.leader && <MenuItem onClick={function () { act(async function () { await ctx.api.pinPost(x.id, !x.pinned); p.onMenu(); }); }}>{x.pinned ? "고정 풀기" : "맨 위에 고정"}</MenuItem>}
         {(p.mine || ctx.leader) && <MenuItem red onClick={function () { if (window.confirm("이 글을 지울까요?" + (p.mine ? "" : " (클럽장 권한)"))) act(async function () { await ctx.api.deletePost(x); p.onMenu(true); }); }}>{"지우기"}</MenuItem>}
         {!p.mine && <MenuItem onClick={function () { setO(false); ctx.report("post", x); }}>{"신고"}</MenuItem>}
       </div></React.Fragment>)}
-    {b.err && <div style={{ position: "absolute", right: 0, top: 26, width: 200, zIndex: 52 }}><Msg text={b.err} /></div>}
+    {b.err && <div style={{ position: "absolute", right: 0, top: 34, width: 200, zIndex: 52 }}><Msg text={b.err} /></div>}
   </div>);
 }
 function MenuItem(p) {
-  return (<button type="button" onClick={p.onClick} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", background: "none", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, color: p.red ? "#FF6B6B" : "var(--t1)" }}>{p.children}</button>);
+  return (<button type="button" onClick={p.onClick} style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: "none", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13.5, color: p.red ? "#FF6B6B" : "var(--t1)", fontFamily: "inherit" }}>{p.children}</button>);
 }
 
+/* 글 사진 — 누르면 새 창 대신 이 화면 위에서 크게 */
 function MediaGrid(p) {
+  var paths = Array.isArray(p.paths) ? p.paths.filter(function (s) { return typeof s === "string" && s; }) : [];
   var _u = useState({}); var u = _u[0]; var setU = _u[1];
-  useEffect(function () { var live = true; p.api.mediaUrls(p.paths).then(function (m) { if (live) setU(m); }); return function () { live = false; }; }, [p.paths.join("|")]);
-  if (!p.paths.length) return null;
-  var n = p.paths.length;
+  var _z = useState(null); var zoom = _z[0]; var setZoom = _z[1];
+  useEffect(function () { var live = true; if (paths.length) p.api.mediaUrls(paths).then(function (m) { if (live) setU(m || {}); }).catch(function () {}); return function () { live = false; }; }, [paths.join("|")]);
+  if (!paths.length) return null;
+  var n = paths.length;
   return (<div style={{ display: "grid", gridTemplateColumns: n === 1 ? "1fr" : "1fr 1fr", gap: 6, marginTop: 10 }}>
-    {p.paths.map(function (s) {
-      return (<a key={s} href={u[s]} target="_blank" rel="noopener" onClick={function (e) { e.stopPropagation(); }} style={{ display: "block", borderRadius: 10, overflow: "hidden", background: "var(--inner)", aspectRatio: n === 1 ? "auto" : "1", maxHeight: n === 1 ? 420 : "none" }}>
-        {u[s] && <img src={u[s]} alt="" style={{ width: "100%", height: "100%", objectFit: n === 1 ? "contain" : "cover", display: "block", maxHeight: n === 1 ? 420 : "none" }} />}</a>);
-    })}</div>);
+    {paths.map(function (s) {
+      return (<button key={s} type="button" title="크게 보기" onClick={function (e) { e.stopPropagation(); if (u[s]) setZoom(u[s]); }} style={{ display: "block", width: "100%", padding: 0, border: "none", cursor: "zoom-in", borderRadius: 10, overflow: "hidden", background: "var(--inner)", aspectRatio: n === 1 ? "auto" : "1", maxHeight: n === 1 ? 420 : "none" }}>
+        {u[s] && <img src={u[s]} alt="" style={{ width: "100%", height: "100%", objectFit: n === 1 ? "contain" : "cover", display: "block", maxHeight: n === 1 ? 420 : "none" }} />}</button>);
+    })}
+    {zoom && <Viewer url={zoom} onClose={function () { setZoom(null); }} />}</div>);
 }
 
 function Poll(p) {
-  var x = p.post, ctx = p.ctx, votes = p.votes || [];
-  var opts = (x.poll && x.poll.options) || [];
-  var closed = x.poll && x.poll.closes_at && new Date(x.poll.closes_at).getTime() < Date.now();
+  var x = p.post, ctx = p.ctx, votes = Array.isArray(p.votes) ? p.votes : [];
+  var opts = x.poll && Array.isArray(x.poll.options) ? x.poll.options : [];
+  var closeAt = x.poll ? new Date(txt(x.poll.closes_at)).getTime() : NaN;
+  var hasClose = isFinite(closeAt);
+  var closed = hasClose && closeAt < Date.now();
   var mine = votes.find(function (v) { return v.user_id === ctx.me.uid; });
   var b = useBusy();
   var total = votes.length;
   var pick = function (i, e) {
     e.stopPropagation();
-    if (closed) return;
+    /* 화면을 켜 둔 사이 마감됐을 수 있어 누르는 순간 다시 본다 */
+    if (closed || (hasClose && closeAt < Date.now())) { b.setErr("마감된 투표예요"); return; }
     b.run(async function () { await ctx.api.vote(x, mine && mine.choice === i ? null : i); p.onChanged(); });
   };
   return (<div style={{ marginTop: 10 }}>
@@ -984,37 +1254,39 @@ function Poll(p) {
       var n = votes.filter(function (v) { return v.choice === i; }).length;
       var pct = total ? Math.round(n / total * 100) : 0;
       var me = mine && mine.choice === i;
-      return (<div key={i} onClick={function (e) { pick(i, e); }} style={{ position: "relative", border: "1px solid " + (me ? "rgba(255,213,79,.45)" : "var(--bd)"), borderRadius: 10, padding: "9px 12px", marginBottom: 6, overflow: "hidden", cursor: closed ? "default" : "pointer" }}>
+      return (<div key={i} onClick={function (e) { pick(i, e); }} style={{ position: "relative", border: "1px solid " + (me ? "rgba(255,213,79,.45)" : "var(--bd)"), borderRadius: 10, padding: "11px 12px", marginBottom: 6, overflow: "hidden", cursor: closed ? "default" : "pointer" }}>
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pct + "%", background: me ? "rgba(255,213,79,.12)" : "var(--inner)" }} />
         <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 8 }}>
-          <span style={{ fontWeight: me ? 800 : 500 }}>{me && <Icon n="check" style={{ color: "var(--acc)", marginRight: 4 }} />}{o}</span>
-          <span style={{ fontFamily: "var(--m)", color: "var(--td)", fontSize: 12 }}>{n + "명 · " + pct + "%"}</span>
+          <span style={{ fontWeight: me ? 800 : 500, minWidth: 0, wordBreak: "break-word" }}>{me && <Icon n="check" style={{ color: "var(--acc)", marginRight: 4 }} />}{txt(o) || "(표시할 수 없는 선택지)"}</span>
+          <span style={{ fontFamily: "var(--m)", color: "var(--td)", fontSize: 12, whiteSpace: "nowrap" }}>{n + "명 · " + pct + "%"}</span>
         </div></div>);
     })}
-    <div style={{ fontSize: 11.5, color: "var(--td)" }}>{total + "명 참여" + (x.poll && x.poll.closes_at ? (closed ? " · 마감됨" : " · " + fmtWhen(x.poll.closes_at) + " 마감") : "") + (mine && !closed ? " · 다시 누르면 취소" : "")}</div>
+    <div style={{ fontSize: 11.5, color: "var(--td)" }}>{total + "명 참여" + (hasClose ? (closed ? " · 마감됨" : " · " + fmtWhen(closeAt) + " 마감") : "") + (mine && !closed ? " · 다시 누르면 취소" : "")}</div>
     <Msg text={b.err} />
   </div>);
 }
 
 function Reactions(p) {
-  var x = p.post, ctx = p.ctx, list = p.list || [];
+  var x = p.post, ctx = p.ctx, list = Array.isArray(p.list) ? p.list : [];
   var _pick = useState(false); var pick = _pick[0]; var setPick = _pick[1];
   var b = useBusy();
   var cnt = {}, mine = {};
   list.forEach(function (r) { cnt[r.emoji] = (cnt[r.emoji] || 0) + 1; if (r.user_id === ctx.me.uid) mine[r.emoji] = 1; });
   var toggle = function (k, e) { e.stopPropagation(); setPick(false); b.run(async function () { await ctx.api.setReaction(x, k, !mine[k]); p.onChanged(); }); };
+  /* 휴대폰에서 누르기 쉽게 버튼 높이를 30px 안팎으로 */
+  var chip = { padding: "5px 10px", borderRadius: 14, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", minHeight: 30 };
   return (<div style={{ display: "flex", gap: 6, marginTop: 12, alignItems: "center", flexWrap: "wrap", position: "relative" }}>
-    <button type="button" onClick={function (e) { toggle("heart", e); }} style={{ display: "flex", gap: 5, alignItems: "center", background: "none", border: "none", cursor: "pointer", fontSize: 12.5, padding: "3px 4px", color: mine.heart ? "#FF6B6B" : "var(--td)" }}>
+    <button type="button" onClick={function (e) { toggle("heart", e); }} style={{ display: "flex", gap: 5, alignItems: "center", background: "none", border: "none", cursor: "pointer", fontSize: 12.5, padding: "6px 6px", minHeight: 32, color: mine.heart ? "#FF6B6B" : "var(--td)", fontFamily: "inherit" }}>
       <Icon n="heart" fill={mine.heart ? "#FF6B6B" : "none"} />{cnt.heart || 0}</button>
-    <button type="button" onClick={function (e) { e.stopPropagation(); p.onOpen && p.onOpen(); }} style={{ display: "flex", gap: 5, alignItems: "center", background: "none", border: "none", cursor: "pointer", fontSize: 12.5, padding: "3px 4px", color: "var(--td)" }}>
+    <button type="button" onClick={function (e) { e.stopPropagation(); p.onOpen && p.onOpen(); }} style={{ display: "flex", gap: 5, alignItems: "center", background: "none", border: "none", cursor: "pointer", fontSize: 12.5, padding: "6px 6px", minHeight: 32, color: "var(--td)", fontFamily: "inherit" }}>
       <Icon n="chat" />{"댓글 " + (p.comments || 0)}</button>
     {EMOJI.slice(1).filter(function (e) { return cnt[e[0]]; }).map(function (e) {
-      return (<button key={e[0]} type="button" onClick={function (ev) { toggle(e[0], ev); }} style={{ padding: "2px 8px", borderRadius: 12, fontSize: 12, cursor: "pointer",
-        border: "1px solid " + (mine[e[0]] ? "rgba(255,213,79,.45)" : "var(--bd)"), background: mine[e[0]] ? "rgba(255,213,79,.1)" : "transparent", color: "var(--t2)" }}>{e[1] + " " + cnt[e[0]]}</button>);
+      return (<button key={e[0]} type="button" onClick={function (ev) { toggle(e[0], ev); }} style={Object.assign({}, chip, {
+        border: "1px solid " + (mine[e[0]] ? "rgba(255,213,79,.45)" : "var(--bd)"), background: mine[e[0]] ? "rgba(255,213,79,.1)" : "transparent", color: "var(--t2)" })}>{e[1] + " " + cnt[e[0]]}</button>);
     })}
-    <button type="button" title="반응 남기기" onClick={function (e) { e.stopPropagation(); setPick(!pick); }} style={{ padding: "2px 8px", borderRadius: 12, fontSize: 12, cursor: "pointer", border: "1px dashed var(--bd)", background: "transparent", color: "var(--td)" }}>{"+ 😊"}</button>
-    {pick && (<div onClick={function (e) { e.stopPropagation(); }} style={Object.assign({}, CARD, { position: "absolute", left: 120, top: 28, zIndex: 20, background: "var(--bg)", padding: 4, display: "flex", gap: 2 })}>
-      {EMOJI.slice(1).map(function (e) { return (<button key={e[0]} type="button" onClick={function (ev) { toggle(e[0], ev); }} style={{ fontSize: 18, background: "none", border: "none", cursor: "pointer", padding: "4px 6px" }}>{e[1]}</button>); })}
+    <button type="button" title="반응 남기기" onClick={function (e) { e.stopPropagation(); setPick(!pick); }} style={Object.assign({}, chip, { border: "1px dashed var(--bd)", background: "transparent", color: "var(--td)" })}>{"+ 😊"}</button>
+    {pick && (<div onClick={function (e) { e.stopPropagation(); }} style={Object.assign({}, CARD, { position: "absolute", left: 0, top: 38, zIndex: 20, background: "var(--bg)", padding: 4, display: "flex", gap: 2, boxShadow: "0 8px 30px rgba(0,0,0,.35)" })}>
+      {EMOJI.slice(1).map(function (e) { return (<button key={e[0]} type="button" onClick={function (ev) { toggle(e[0], ev); }} style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", padding: "6px 8px" }}>{e[1]}</button>); })}
     </div>)}
     {b.err && <span style={{ fontSize: 11.5, color: "#FF6B6B" }}>{b.err}</span>}
   </div>);
@@ -1031,7 +1303,7 @@ function DeckActions(p) {
     {p.tools && p.tools.summaryNow && <Btn ghost icon="swap" onClick={function () { setCmp(true); }}>{mob ? "비교" : "내 덱과 비교"}</Btn>}
     {p.suggest && canCopy && !mine && <Btn ghost icon="swap" purple onClick={function () { p.onOpenLab(x.deck, { mode: "suggest", post: x }); }}>{"수정 제안"}</Btn>}
     {cmp && (<Modal title="내 덱과 비교" mobile={mob} onClose={function () { setCmp(false); }} width={620}>
-      {my ? <DeckCompare a={x.deck} b={my.deck} aName={(x.author_name || "") + " · " + (x.deck.team || "")} bName={"내 덱 · " + (my.deck.team || "")} />
+      {my && my.deck ? <DeckCompare a={x.deck} b={my.deck} aName={txt(x.author_name) + " · " + txt(x.deck.team)} bName={"내 덱 · " + txt(my.deck.team)} />
         : <div style={{ color: "var(--td)", fontSize: 13 }}>{"지금 열린 덱이 비어 있어요"}</div>}
     </Modal>)}
   </React.Fragment>);
@@ -1039,38 +1311,49 @@ function DeckActions(p) {
 
 function PostCard(p) {
   var x = p.post, ctx = p.ctx, ex = p.extra || {};
-  var long = x.body.length > 280;
+  var body = txt(x.body), title = txt(x.title);
+  var long = body.length > 280;
+  /* 반응 · 투표는 이 글만 다시 읽는다 (목록이 처음으로 돌아가지 않게) */
+  var changed = function () { if (p.onPostChanged) p.onPostChanged(x.id); else p.onChanged(); };
   return (<Card style={{ marginBottom: 12, cursor: "pointer" }}>
     <div onClick={function () { p.onOpen(x.id); }}>
       <PostHead post={x} ctx={ctx} onMenu={function () { p.onChanged(); }} />
-      {x.title && <div style={{ fontSize: 15, fontWeight: 800, marginTop: 12, letterSpacing: -.3 }}>{x.title}</div>}
-      {x.body && <div style={{ fontSize: 13.5, lineHeight: 1.65, marginTop: 6, color: "var(--t2)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{long ? x.body.slice(0, 280) + "… 더 보기" : x.body}</div>}
+      {title && <div style={{ fontSize: 15, fontWeight: 800, marginTop: 12, letterSpacing: -.3, wordBreak: "break-word" }}>{title}</div>}
+      {body && <div style={{ fontSize: 13.5, lineHeight: 1.65, marginTop: 6, color: "var(--t2)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{long ? body.slice(0, 280) + "… 더 보기" : body}</div>}
     </div>
-    {x.kind === "poll" && <Poll post={x} ctx={ctx} votes={(ex.votes || {})[x.id]} onChanged={p.onChanged} />}
-    {x.images && x.images.length > 0 && <MediaGrid api={ctx.api} paths={x.images} />}
+    {x.kind === "poll" && <Poll post={x} ctx={ctx} votes={(ex.votes || {})[x.id]} onChanged={changed} />}
+    <MediaGrid api={ctx.api} paths={x.images} />
     {x.deck && <DeckBox deck={x.deck} mobile={ctx.mob} actions={<DeckActions post={x} ctx={ctx} onOpenLab={p.onOpenLab} tools={p.tools} />} />}
-    <Reactions post={x} ctx={ctx} list={(ex.reactions || {})[x.id]} comments={(ex.comments || {})[x.id]} onChanged={p.onChanged} onOpen={function () { p.onOpen(x.id); }} />
+    <Reactions post={x} ctx={ctx} list={(ex.reactions || {})[x.id]} comments={(ex.comments || {})[x.id]} onChanged={changed} onOpen={function () { p.onOpen(x.id); }} />
   </Card>);
 }
 
+/* 수정 제안 한 건. 점수는 덱 연구소 기준이라 글의 TOTAL SCORE 와 다르다 — 바뀐 폭을 크게, 기준을 글로 밝힌다 */
 function Suggestion(p) {
-  var s = p.s, ctx = p.ctx;
+  var s = p.s && typeof p.s === "object" ? p.s : {};
+  var ch = Array.isArray(s.changes) ? s.changes.filter(function (c) { return c && typeof c === "object"; }) : [];
+  var card = function (e) { return e && typeof e === "object" ? e : null; };
+  var bf = Array.isArray(s.before) ? Number(s.before[0]) : NaN, af = Array.isArray(s.after) ? Number(s.after[0]) : NaN;
+  var hasScore = isFinite(bf) && isFinite(af);
+  var dlt = hasScore ? af - bf : 0;
   return (<div style={{ marginTop: 8, border: "1px solid rgba(206,147,216,.3)", background: "rgba(206,147,216,.05)", borderRadius: 10, padding: "10px 12px" }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, color: "var(--acp)", fontSize: 12 }}><Icon n="swap" />{"수정 제안 · " + (s.changes || []).length + "자리"}</div>
+    <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, color: "var(--acp)", fontSize: 12 }}><Icon n="swap" />{"수정 제안 · " + ch.length + "자리"}</div>
     <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.9 }}>
-      {(s.changes || []).map(function (c) {
-        return (<div key={c.slot} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          <span style={{ fontFamily: "var(--h)", fontSize: 11, color: "var(--td)", width: 30, display: "inline-block" }}>{c.slot}</span>
-          {c.from ? <span style={{ color: CT_COL[c.from.ct], textDecoration: "line-through", opacity: .6 }}>{(c.from.l ? c.from.l + " " : "") + c.from.n}</span> : <span style={{ color: "var(--td)" }}>{"빈 자리"}</span>}
+      {ch.map(function (c, i) {
+        var f = card(c.from), t = card(c.to);
+        return (<div key={txt(c.slot) || i} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <span style={{ fontFamily: "var(--h)", fontSize: 11, color: "var(--td)", width: 30, display: "inline-block" }}>{txt(c.slot)}</span>
+          {f ? <span style={{ color: CT_COL[txt(f.ct)], textDecoration: "line-through", opacity: .6 }}>{(txt(f.l) ? txt(f.l) + " " : "") + txt(f.n)}</span> : <span style={{ color: "var(--td)" }}>{"빈 자리"}</span>}
           {" → "}
-          {c.to ? <span style={{ color: CT_COL[c.to.ct] }}>{(c.to.l ? c.to.l + " " : "") + c.to.n}</span> : <span style={{ color: "var(--td)" }}>{"비움"}</span>}
+          {t ? <span style={{ color: CT_COL[txt(t.ct)] }}>{(txt(t.l) ? txt(t.l) + " " : "") + txt(t.n)}</span> : <span style={{ color: "var(--td)" }}>{"비움"}</span>}
         </div>);
       })}
     </div>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 12, flexWrap: "wrap" }}>
-      {s.before && s.after && (<React.Fragment><span style={{ color: "var(--td)" }}>{"0.1% 가정"}</span><span style={{ fontFamily: "var(--m)" }}>{num(s.before[0])}</span><span>{"→"}</span>
-        <span style={{ fontFamily: "var(--m)", fontWeight: 800, color: s.after[0] >= s.before[0] ? "#4CAF50" : "#FF6B6B" }}>{num(s.after[0]) + " (" + (s.after[0] >= s.before[0] ? "+" : "") + num(s.after[0] - s.before[0]) + ")"}</span></React.Fragment>)}
-      {s.deck && <Btn sm ghost purple icon="flask" style={{ marginLeft: "auto" }} onClick={function () { p.onOpenLab(s.deck, { mode: "open" }); }}>{"적용해서 열기"}</Btn>}
+      {hasScore && (<span title="덱 연구소(상위 0.1% 훈련 가정)로 센 점수예요. 글에 보이는 TOTAL SCORE 와는 계산 기준이 달라요" style={{ display: "inline-flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+        <span style={{ fontFamily: "var(--m)", fontWeight: 800, fontSize: 13.5, color: dlt >= 0 ? "#4CAF50" : "#FF6B6B" }}>{(dlt >= 0 ? "▲ " : "▼ ") + num(Math.abs(dlt))}</span>
+        <span style={{ color: "var(--td)", fontSize: 11.5 }}>{"연구소 기준 점수 " + num(bf) + " → " + num(af)}</span></span>)}
+      {s.deck && typeof s.deck === "object" && <Btn sm ghost purple icon="flask" style={{ marginLeft: "auto" }} onClick={function () { p.onOpenLab(s.deck, { mode: "open" }); }}>{"적용해서 열기"}</Btn>}
     </div>
   </div>);
 }
@@ -1079,7 +1362,7 @@ function PostDetail(p) {
   var ctx = p.ctx, api = ctx.api, mob = ctx.mob;
   var _d = useState(null); var d = _d[0]; var setD = _d[1];
   var _cm = useState([]); var cms = _cm[0]; var setCms = _cm[1];
-  var _txt = useState(""); var txt = _txt[0]; var setTxt = _txt[1];
+  var _msg = useState(""); var msg = _msg[0]; var setMsg = _msg[1];
   var b = useBusy();
   var load = async function () {
     try {
@@ -1090,42 +1373,46 @@ function PostDetail(p) {
   };
   useEffect(function () { load(); }, [p.postId]);
   var send = function () {
-    if (!txt.trim()) return;
-    b.run(async function () { await api.addComment(d.post, txt.trim()); setTxt(""); await load(); });
+    if (!msg.trim()) return;
+    b.run(async function () { await api.addComment(d.post, msg.trim()); setMsg(""); await load(); });
   };
-  var back = (<button type="button" onClick={p.onBack} style={{ background: "none", border: "none", color: "var(--td)", fontSize: 12, cursor: "pointer", padding: 0, marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}><Icon n="back" size={13} />{"라운지"}</button>);
+  var back = (<button type="button" onClick={p.onBack} style={{ background: "none", border: "none", color: "var(--t2)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "8px 10px 8px 0", marginBottom: 4, minHeight: 36, display: "flex", alignItems: "center", gap: 5, fontFamily: "inherit" }}><Icon n="back" size={15} />{"라운지로"}</button>);
   if (!d) return (<div>{back}{d === false ? <Msg text={b.err} /> : <div style={{ color: "var(--td)", fontSize: 13 }}>{"불러오는 중…"}</div>}</div>);
   var x = d.post;
+  var ex = d.extra || {};
   return (<div style={{ maxWidth: 760 }}>
     {back}
+    <Safe fallback={function () { return <BadPost ctx={ctx} post={x} onDelete={async function () { await api.deletePost(x); p.onBack(); }} />; }}>
     <Card style={{ borderRadius: "14px 14px 0 0" }}>
       <PostHead post={x} ctx={ctx} onMenu={function (gone) { if (gone) p.onBack(); else load(); }} />
-      {x.title && <div style={{ fontSize: 16, fontWeight: 800, marginTop: 12, letterSpacing: -.3 }}>{x.title}</div>}
-      {x.body && <div style={{ fontSize: 13.5, lineHeight: 1.7, marginTop: 6, color: "var(--t2)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{x.body}</div>}
-      {x.kind === "poll" && <Poll post={x} ctx={ctx} votes={d.extra.votes[x.id]} onChanged={load} />}
-      {x.images && x.images.length > 0 && <MediaGrid api={api} paths={x.images} />}
+      {txt(x.title) && <div style={{ fontSize: 16, fontWeight: 800, marginTop: 12, letterSpacing: -.3, wordBreak: "break-word" }}>{txt(x.title)}</div>}
+      {txt(x.body) && <div style={{ fontSize: 13.5, lineHeight: 1.7, marginTop: 6, color: "var(--t2)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{txt(x.body)}</div>}
+      {x.kind === "poll" && <Poll post={x} ctx={ctx} votes={(ex.votes || {})[x.id]} onChanged={load} />}
+      <MediaGrid api={api} paths={x.images} />
       {x.deck && <DeckBox deck={x.deck} mobile={mob} actions={<DeckActions post={x} ctx={ctx} onOpenLab={p.onOpenLab} tools={p.tools} suggest />} />}
-      <Reactions post={x} ctx={ctx} list={d.extra.reactions[x.id]} comments={cms.length} onChanged={load} />
+      <Reactions post={x} ctx={ctx} list={(ex.reactions || {})[x.id]} comments={cms.length} onChanged={load} />
     </Card>
+    </Safe>
     <Card style={{ borderTop: "none", borderRadius: "0 0 14px 14px", paddingTop: 4 }}>
       {cms.map(function (c) {
         var mine = c.author_id === ctx.me.uid;
-        return (<div key={c.id} style={{ display: "flex", gap: 10, padding: "12px 0", borderTop: "1px solid var(--bd)" }}>
-          <Avatar name={c.author_name} size={28} />
+        return (<Safe key={c.id} fallback={function () { return <BadPost ctx={ctx} post={c} what="댓글" onDelete={async function () { await api.deleteComment(c.id); await load(); }} />; }}>
+          <div style={{ display: "flex", gap: 10, padding: "12px 0", borderTop: "1px solid var(--bd)" }}>
+          <Avatar name={txt(c.author_name)} size={28} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div><b>{c.author_name || "떠난 클럽원"}</b>{" "}<span style={{ fontSize: 11.5, color: "var(--td)" }}>{ago(c.created_at)}</span>
-              {(mine || ctx.leader) && <button type="button" onClick={function () { if (window.confirm("댓글을 지울까요?")) b.run(async function () { await api.deleteComment(c.id); await load(); }); }}
-                style={{ float: "right", background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 11.5 }}>{"지우기"}</button>}</div>
-            {c.body && <div style={{ color: "var(--t2)", marginTop: 3, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{c.body}</div>}
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><b>{txt(c.author_name) || "떠난 클럽원"}</b><span style={{ fontSize: 11.5, color: "var(--td)" }}>{ago(c.created_at)}</span>
+              {(mine || ctx.leader) && <button type="button" onClick={function () { if (window.confirm("댓글을 지울까요?" + (mine ? "" : " (클럽장 권한)"))) b.run(async function () { await api.deleteComment(c.id); await load(); }); }}
+                style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 12, padding: "6px 8px", margin: "-6px -8px -6px auto", fontFamily: "inherit" }}>{"지우기"}</button>}</div>
+            {txt(c.body) && <div style={{ color: "var(--t2)", marginTop: 3, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{txt(c.body)}</div>}
             {c.suggestion && <Suggestion s={c.suggestion} ctx={ctx} onOpenLab={p.onOpenLab} />}
           </div>
-        </div>);
+        </div></Safe>);
       })}
       <div style={{ display: "flex", gap: 8, alignItems: "center", paddingTop: 12, borderTop: cms.length ? "1px solid var(--bd)" : "none" }}>
         <Avatar name={ctx.me.member.nickname} size={28} />
-        <input value={txt} onChange={function (e) { setTxt(e.target.value); }} maxLength={1000} placeholder="댓글 달기…" onKeyDown={function (e) { if (e.key === "Enter" && !e.nativeEvent.isComposing) send(); }}
+        <input value={msg} onChange={function (e) { setMsg(e.target.value); if (b.err) b.setErr(""); }} maxLength={1000} placeholder="댓글 달기…" onKeyDown={function (e) { if (e.key === "Enter" && !e.nativeEvent.isComposing) send(); }}
           style={Object.assign({}, INP, { borderRadius: 18, flex: 1, width: 0 })} />
-        <Btn pri icon="send" onClick={send} disabled={b.busy || !txt.trim()} style={{ borderRadius: "50%", padding: 8 }} title="보내기" />
+        <Btn pri icon="send" onClick={send} disabled={b.busy || !msg.trim()} style={{ borderRadius: "50%", padding: 9, minWidth: 38, minHeight: 38 }} title="보내기" />
       </div>
       {x.deck && x.author_id !== ctx.me.uid && (x.allow_copy) && <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 8 }}>{"덱을 고쳐 제안하려면 위의 ‘수정 제안’ — 덱 연구소에서 바꾼 뒤 보내면 댓글로 붙어요"}</div>}
       <Msg text={b.err} />
@@ -1146,6 +1433,8 @@ function Composer(p) {
   var _f = useState([]); var files = _f[0]; var setFiles = _f[1];
   var _cp = useState(true); var allowCopy = _cp[0]; var setAllowCopy = _cp[1];
   var b = useBusy();
+  /* 고치는 대로 앞의 오류 문구는 지운다 (고친 뒤에도 '내용을 넣어 주세요'가 남아 있던 것) */
+  useEffect(function () { if (b.err) b.setErr(""); }, [kind, title, body, deck, files.length, opts.join("\u0001")]);
   var fileRef = React.useRef(null);
   useEffect(function () { if (init.pickImage && fileRef.current) fileRef.current.click(); }, []);
   var kinds = ["talk", "deck", "question", "poll", "brag"].concat(ctx.leader ? ["notice"] : []);
@@ -1189,7 +1478,8 @@ function Composer(p) {
           on ? { borderColor: "var(--acc)", color: "var(--acc)", background: "rgba(255,213,79,.08)" } : null)}>{KINDS[k][0]}</button>);
       })}
     </div>
-    <Field label={kind === "poll" || kind === "notice" ? "제목" : "제목 (선택)"} value={title} onChange={setTitle} max={60} ph={kind === "poll" ? "예: 이번 주 다 같이 특훈 뭐 할까요" : ""} />
+    {kind === "notice" && <div style={{ fontSize: 12, color: "var(--td)", margin: "-6px 0 12px", lineHeight: 1.6 }}>{"공지는 라운지 맨 위에 고정돼요. 고정은 글 오른쪽 위 … 메뉴에서 풀 수 있어요."}</div>}
+    <Field label={kind === "poll" || kind === "notice" ? "제목" : "제목 (선택)"} value={title} onChange={setTitle} max={60} ph={kind === "poll" ? "예: 이번 주 다 같이 특훈 뭐 할까요" : kind === "notice" ? "예: 이번 주 클럽전은 토요일 밤 9시" : ""} />
     <Field label="내용" area value={body} onChange={setBody} max={2000} rows={mob ? 3 : 4} ph={kind === "question" ? "궁금한 걸 적어 주세요. 덱을 붙이면 더 정확한 답을 받을 수 있어요" : ""} />
     {kind === "poll" && (<div style={{ marginBottom: 12 }}>
       <div style={Object.assign({}, KICK, { marginBottom: 6 })}>{"선택지"}</div>
@@ -1243,7 +1533,8 @@ function DeckStatus(p) {
   var load = async function () { try { setDecks(await api.loadClubDecks(ctx.club.id)); } catch (e) { b.setErr(e.message); setDecks([]); } };
   useEffect(function () { load(); }, [ctx.club.id]);
   if (!decks) return <div style={{ color: "var(--td)", fontSize: 13 }}>{"불러오는 중…"}</div>;
-  var byUser = {}; decks.forEach(function (d) { byUser[d.user_id] = d; });
+  /* 요약본은 클럽원 화면이 만들어 올린 것이라 모양을 믿지 않는다 */
+  var byUser = {}; decks.forEach(function (d) { byUser[d.user_id] = Object.assign({}, d, { deck: d.deck && typeof d.deck === "object" ? d.deck : {} }); });
   var rows = ctx.active.map(function (m) { return { m: m, d: byUser[m.user_id] || null }; });
   var shared = rows.filter(function (r) { return r.d; });
   rows.sort(function (a, b2) {
@@ -1286,9 +1577,9 @@ function DeckStatus(p) {
       if (!d) return (<Card key={m.user_id} pad="12px 14px" style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 10, opacity: .55 }}><Avatar name={m.nickname} size={30} /><b style={{ flex: 1 }}>{m.nickname}</b><span style={{ fontSize: 12, color: "var(--td)" }}>{"비공개"}</span></Card>);
       return (<Card key={m.user_id} pad="12px 14px" style={Object.assign({ marginBottom: 8 }, on ? { borderColor: "rgba(255,213,79,.35)" } : null)}>
         <div onClick={function () { setOpen(on ? null : m.user_id); }} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-          <Avatar name={m.nickname} team={d.deck.team} size={30} />
+          <Avatar name={m.nickname} team={txt(d.deck.team)} size={30} />
           <div style={{ flex: 1, minWidth: 0 }}><div><b>{m.nickname}</b>{m.role === "leader" && <Tag c="acc" style={{ marginLeft: 5 }}>{"클럽장"}</Tag>}</div>
-            <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 2 }}>{(d.deck.team || "") + " · 세트덱 " + d.set_point + " · "}<span style={{ color: daysSince(d.saved_at) > 7 ? "#FFA726" : "inherit" }}>{ago(d.saved_at)}</span></div></div>
+            <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 2 }}>{txt(d.deck.team) + " · 세트덱 " + num(d.set_point, 0) + " · "}<span style={{ color: daysSince(d.saved_at) > 7 ? "#FFA726" : "inherit" }}>{ago(d.saved_at)}</span></div></div>
           <div style={{ textAlign: "right" }}><div style={{ fontFamily: "var(--m)", fontWeight: 800, color: "var(--acc)" }}>{num(d.total)}</div><div style={{ fontSize: 11 }}>{wkCell(d)}</div></div>
         </div>
         {on && <DeckBox deck={d.deck} mobile actions={<Btn sm ghost purple icon="flask" onClick={function () { lab(d); }}>{"연구소로"}</Btn>} />}
@@ -1305,8 +1596,8 @@ function DeckStatus(p) {
           var w = Math.max(4, Number(d.total) / maxT * 100);
           return (<React.Fragment key={m.user_id}>
             <tr onClick={function () { setOpen(on ? null : m.user_id); }} style={{ cursor: "pointer", background: on ? "rgba(255,213,79,.04)" : "transparent" }}>
-              <td style={td}><div style={{ display: "flex", alignItems: "center", gap: 9 }}><Avatar name={m.nickname} team={d.deck.team} size={26} /><b>{m.nickname}</b>{m.role === "leader" && <Tag c="acc">{"클럽장"}</Tag>}</div></td>
-              <td style={Object.assign({}, td, { color: "var(--t2)" })}>{d.deck.team}</td>
+              <td style={td}><div style={{ display: "flex", alignItems: "center", gap: 9 }}><Avatar name={m.nickname} team={txt(d.deck.team)} size={26} /><b>{m.nickname}</b>{m.role === "leader" && <Tag c="acc">{"클럽장"}</Tag>}</div></td>
+              <td style={Object.assign({}, td, { color: "var(--t2)" })}>{txt(d.deck.team)}</td>
               <td style={Object.assign({}, td, { width: 220 })}><div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1, height: 6, borderRadius: 3, background: "var(--inner)", overflow: "hidden" }}><div style={{ width: w + "%", height: "100%", background: "var(--acc)" }} /></div>
                 <span style={{ fontFamily: "var(--m)", fontWeight: 800 }}>{num(d.total)}</span></div></td>
@@ -1334,7 +1625,8 @@ function Members(p) {
   var _share = useState(me.share_deck_id || ""); var share = _share[0]; var setShareSt = _share[1];
   var _snap = useState(null); var snap = _snap[0]; var setSnap = _snap[1];
   var _nick = useState(null); var nick = _nick[0]; var setNick = _nick[1];
-  var b = useBusy();
+  /* 알림은 누른 곳 가까이 — 내 설정(덱 공개 · 닉네임)과 명단(넘기기 · 내보내기)을 따로 */
+  var bMe = useBusy(), bList = useBusy();
   var loadSnap = async function () { try { setSnap(await api.loadMyDeck()); } catch (e) {} };
   useEffect(function () { loadSnap(); }, []);
   var decks = p.decks || [];
@@ -1345,7 +1637,7 @@ function Members(p) {
     return d.teamName + (same.length > 1 ? " " + (same.indexOf(d) + 1) : "");
   };
   var choose = function (id) {
-    b.run(async function () {
+    bMe.run(async function () {
       await api.setShare(id || null);
       setShareSt(id || "");
       if (id && id === p.curDeckId && p.tools && p.tools.publishNow) await p.tools.publishNow();
@@ -1353,51 +1645,60 @@ function Members(p) {
       await ctx.reload();
     }, id ? (id === p.curDeckId ? "공개했어요. 덱을 바꿀 때마다 요약본이 새로 올라가요" : "공개할 덱을 정했어요. 그 덱을 열면 요약본이 올라가요") : "공개를 껐어요. 올라가 있던 요약본도 지웠어요");
   };
-  var act = function (q, fn, okText) { if (window.confirm(q)) b.run(fn, okText); };
-  return (<div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "minmax(0,1fr) 320px", gap: 16, alignItems: "start" }}>
-    <div style={{ minWidth: 0 }}>
-      <Card pad={0}>
-        {ctx.active.map(function (m, i) {
-          var self = m.user_id === ctx.me.uid;
-          return (<div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderTop: i ? "1px solid var(--bd)" : "none" }}>
-            <Avatar name={m.nickname} />
-            <div style={{ flex: 1, minWidth: 0 }}><div><b>{m.nickname}</b>{m.role === "leader" && <Tag c="acc" style={{ marginLeft: 6 }}>{"클럽장"}</Tag>}{self && <Tag style={{ marginLeft: 6 }}>{"나"}</Tag>}</div>
-              <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 2 }}>{m.joined_at ? fmtWhen(m.joined_at).split(" ")[0] + " 가입" : ""}{m.share_deck_id ? " · 덱 공개" : ""}</div></div>
-            {ctx.leader && !self && (<React.Fragment>
-              <Btn sm ghost title="클럽장 넘기기" onClick={function () { act(m.nickname + " 님에게 클럽장을 넘길까요? 넘기면 나는 일반 클럽원이 돼요.", async function () { await api.transferLeader(ctx.club.id, m.user_id); await ctx.reload(); }); }}>{mob ? "위임" : "클럽장 넘기기"}</Btn>
-              <Btn sm ghost no onClick={function () { act(m.nickname + " 님을 내보낼까요?", async function () { await api.kickMember(ctx.club.id, m.user_id); await ctx.reloadMembers(); }, "내보냈어요"); }}>{"내보내기"}</Btn>
-            </React.Fragment>)}
-          </div>);
+  var act = function (b, q, fn, okText) { if (window.confirm(q)) b.run(fn, okText); };
+  var listCol = (<div style={{ minWidth: 0 }}>
+    {mob && <div style={Object.assign({}, KICK, { margin: "6px 2px 8px" })}>{"클럽원 " + ctx.active.length + "명"}</div>}
+    <Msg text={bList.err} /><Msg bad={false} text={bList.ok} />
+    <Card pad={0}>
+      {ctx.active.map(function (m, i) {
+        var self = m.user_id === ctx.me.uid;
+        return (<div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderTop: i ? "1px solid var(--bd)" : "none" }}>
+          <Avatar name={m.nickname} />
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}><b style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{m.nickname}</b>{m.role === "leader" && <Tag c="acc">{"클럽장"}</Tag>}{self && <Tag>{"나"}</Tag>}</div>
+            <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 2 }}>{m.joined_at ? fmtWhen(m.joined_at).split(" ")[0] + " 가입" : ""}{m.share_deck_id ? " · 덱 공개" : " · 덱 비공개"}</div></div>
+          {ctx.leader && !self && (<React.Fragment>
+            <Btn sm ghost title="클럽장 넘기기" onClick={function () { act(bList, m.nickname + " 님에게 클럽장을 넘길까요? 넘기면 나는 일반 클럽원이 돼요.", async function () { await api.transferLeader(ctx.club.id, m.user_id); await ctx.reload(); }, m.nickname + " 님에게 클럽장을 넘겼어요"); }}>{mob ? "위임" : "클럽장 넘기기"}</Btn>
+            <Btn sm ghost no onClick={function () { act(bList, m.nickname + " 님을 내보낼까요?", async function () { await api.kickMember(ctx.club.id, m.user_id); await ctx.reloadMembers(); }, m.nickname + " 님을 내보냈어요"); }}>{"내보내기"}</Btn>
+          </React.Fragment>)}
+        </div>);
+      })}
+    </Card>
+  </div>);
+  var meCards = (<div>
+    <Card style={{ marginBottom: 12 }}>
+      <b style={{ fontSize: 14 }}>{"클럽에 내 덱 공개"}</b>
+      <div style={{ fontSize: 12, color: "var(--td)", lineHeight: 1.6, margin: "6px 0 12px" }}>{ctx.leader
+        ? "고른 덱의 요약본(라인업 · TOTAL · 세트덱)이 '덱 현황'에 같이 보여요. 원본 저장은 그대로이고, 선수 능력치 · 훈련 값은 올라가지 않아요."
+        : "고른 덱의 요약본(라인업 · TOTAL · 세트덱)만 클럽장에게 보여요. 원본 저장은 그대로이고, 선수 능력치 · 훈련 값은 올라가지 않아요."}</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <Btn sm style={!share ? { color: "var(--acc)", borderColor: "var(--acc)" } : null} onClick={function () { if (share) choose(""); }} disabled={bMe.busy}>{"공개 안 함"}</Btn>
+        {decks.map(function (d) {
+          var on = share === d.deckId;
+          return <Btn key={d.deckId} sm style={on ? { color: "var(--acc)", borderColor: "var(--acc)", background: "rgba(255,213,79,.08)" } : null} onClick={function () { if (!on) choose(d.deckId); }} disabled={bMe.busy}>{deckName(d.deckId) + (d.deckId === p.curDeckId ? " (열림)" : "")}</Btn>;
         })}
-      </Card>
-      <Msg text={b.err} /><Msg bad={false} text={b.ok} />
-    </div>
-    <div>
-      <Card style={{ marginBottom: 12 }}>
-        <b style={{ fontSize: 14 }}>{"클럽에 내 덱 공개"}</b>
-        <div style={{ fontSize: 12, color: "var(--td)", lineHeight: 1.6, margin: "6px 0 12px" }}>{"고른 덱의 요약본(라인업·TOTAL·세트덱)만 클럽장에게 보여요. 원본 저장은 그대로이고, 선수 능력치·훈련 값은 올라가지 않아요."}</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <Btn sm style={!share ? { color: "var(--acc)", borderColor: "var(--acc)" } : null} onClick={function () { if (share) choose(""); }} disabled={b.busy}>{"공개 안 함"}</Btn>
-          {decks.map(function (d) {
-            var on = share === d.deckId;
-            return <Btn key={d.deckId} sm style={on ? { color: "var(--acc)", borderColor: "var(--acc)", background: "rgba(255,213,79,.08)" } : null} onClick={function () { if (!on) choose(d.deckId); }} disabled={b.busy}>{deckName(d.deckId) + (d.deckId === p.curDeckId ? " (열림)" : "")}</Btn>;
-          })}
-        </div>
-        {share && (<div style={{ fontSize: 12, color: "var(--td)", marginTop: 10, lineHeight: 1.6 }}>
-          {snap ? <span>{"올라간 요약본: " + fmtWhen(snap.saved_at) + " · TOTAL "}<b style={{ fontFamily: "var(--m)", color: "var(--acc)" }}>{num(snap.total)}</b></span> : "아직 올라간 요약본이 없어요"}
-          {share !== p.curDeckId && <div style={{ color: "#FFA726" }}>{"지금 열린 덱이 아니에요 — " + deckName(share) + " 덱을 열면 올라가요"}</div>}
-        </div>)}
-      </Card>
-      <Card style={{ marginBottom: 12 }}>
-        <b style={{ fontSize: 14 }}>{"내 닉네임"}</b>
-        {nick === null ? (<div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}><span style={{ flex: 1 }}>{me.nickname}</span><Btn sm onClick={function () { setNick(me.nickname); }}>{"바꾸기"}</Btn></div>)
-          : (<div style={{ display: "flex", gap: 6, marginTop: 8 }}><input value={nick} maxLength={20} onChange={function (e) { setNick(e.target.value); }} style={Object.assign({}, INP, { width: 0, flex: 1 })} />
-            <Btn sm pri onClick={function () { b.run(async function () { if (!nick.trim()) throw new Error("닉네임을 넣어 주세요"); await api.setNickname(nick.trim()); setNick(null); await ctx.reload(); }); }}>{"저장"}</Btn></div>)}
-        <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 6 }}>{"이미 쓴 글의 이름은 그대로예요"}</div>
-      </Card>
-      {!ctx.leader ? <Btn no style={{ width: "100%" }} onClick={function () { act("클럽에서 나갈까요? 공개한 덱 요약본도 지워져요.", async function () { await api.leaveClub(); realApi.forgetShareCache(); await ctx.reload(); }); }}>{"클럽 탈퇴"}</Btn>
-        : <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6 }}>{"클럽장은 다른 클럽원에게 넘긴 뒤 탈퇴할 수 있어요. 클럽을 닫으려면 관리 탭에서."}</div>}
-    </div>
+      </div>
+      {share && (<div style={{ fontSize: 12, color: "var(--td)", marginTop: 10, lineHeight: 1.6 }}>
+        {snap ? <span>{"올라간 요약본: " + fmtWhen(snap.saved_at) + " · TOTAL "}<b style={{ fontFamily: "var(--m)", color: "var(--acc)" }}>{num(snap.total)}</b></span> : "아직 올라간 요약본이 없어요"}
+        {share !== p.curDeckId && <div style={{ color: "#FFA726" }}>{"지금 열린 덱이 아니에요 — " + deckName(share) + " 덱을 열면 올라가요"}</div>}
+      </div>)}
+    </Card>
+    <Card style={{ marginBottom: 12 }}>
+      <b style={{ fontSize: 14 }}>{"내 닉네임"}</b>
+      {nick === null ? (<div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{me.nickname}</span><Btn sm onClick={function () { setNick(me.nickname); }}>{"바꾸기"}</Btn></div>)
+        : (<div style={{ display: "flex", gap: 6, marginTop: 8 }}><input value={nick} maxLength={20} onChange={function (e) { setNick(e.target.value); if (bMe.err) bMe.setErr(""); }} style={Object.assign({}, INP, { width: 0, flex: 1 })} />
+          <Btn sm onClick={function () { setNick(null); }}>{"취소"}</Btn>
+          <Btn sm pri onClick={function () { bMe.run(async function () { if (!nick.trim()) throw new Error("닉네임을 넣어 주세요"); await api.setNickname(nick.trim()); setNick(null); await ctx.reload(); }, "닉네임을 바꿨어요"); }}>{"저장"}</Btn></div>)}
+      <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 6 }}>{"이미 쓴 글의 이름은 그대로예요"}</div>
+    </Card>
+    <Msg text={bMe.err} /><Msg bad={false} text={bMe.ok} />
+  </div>);
+  var leave = (!ctx.leader ? <Btn no style={{ width: "100%", marginTop: mob ? 16 : 0 }} onClick={function () { act(bMe, "클럽에서 나갈까요? 공개한 덱 요약본도 지워져요.", async function () { await api.leaveClub(); realApi.forgetShareCache(); await ctx.reload(); }); }}>{"클럽 탈퇴"}</Btn>
+    : <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6, marginTop: mob ? 14 : 0 }}>{"클럽장은 다른 클럽원에게 넘긴 뒤 탈퇴할 수 있어요. 클럽을 닫으려면 관리 탭에서."}</div>);
+  /* 휴대폰은 한 줄이라 명단이 길면 내 설정이 맨 아래로 묻혔다 — 내 설정을 먼저, 탈퇴는 맨 끝에 */
+  if (mob) return (<div>{meCards}{listCol}{leave}</div>);
+  return (<div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 16, alignItems: "start" }}>
+    {listCol}
+    <div>{meCards}{leave}</div>
   </div>);
 }
 
@@ -1409,60 +1710,77 @@ function Manage(p) {
   var _et = useState(""); var et = _et[0]; var setEt = _et[1];
   var _ed = useState(""); var ed = _ed[0]; var setEd = _ed[1];
   var _ev = useState(null); var ev = _ev[0]; var setEv = _ev[1];
-  var b = useBusy();
+  /* 알림은 누른 칸 바로 아래에 — 예전에는 관리 탭 맨 아래에 떠서, 휴대폰에서는 승인을 눌러도 반응이 없는 것처럼 보였다 */
+  var bJoin = useBusy(), bCode = useBusy(), bIntro = useBusy(), bEv = useBusy(), bClose = useBusy();
   var loadEv = async function () { try { setEv(await api.loadEvents(club.id)); } catch (e) { setEv({ events: [], rsvps: [] }); } };
   useEffect(function () { loadEv(); }, []);
+  var full = ctx.active.length >= club.capacity;
   var sec = function (t, children, sub) {
     return (<Card style={{ marginBottom: 12 }}><div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}><b style={{ fontSize: 14 }}>{t}</b>{sub && <span style={{ fontSize: 12, color: "var(--td)" }}>{sub}</span>}</div>{children}</Card>);
   };
+  var decide = function (m, ok) {
+    if (!ok && !window.confirm(m.nickname + " 님의 가입 신청을 거절할까요?")) return;
+    bJoin.run(async function () { await api.decideMember(club.id, m.user_id, ok); await ctx.reloadMembers(); },
+      ok ? m.nickname + " 님을 받았어요" : m.nickname + " 님의 신청을 거절했어요");
+  };
   return (<div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: "0 16px", alignItems: "start" }}>
     <div>
-      {sec("가입 신청", p.pending.length ? p.pending.map(function (m) {
-        return (<div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid var(--bd)" }}>
-          <Avatar name={m.nickname} size={30} />
-          <div style={{ flex: 1, minWidth: 0 }}><b>{m.nickname}</b><div style={{ fontSize: 11.5, color: "var(--td)" }}>{ago(m.created_at) + " 신청 · 인게임 닉네임"}</div></div>
-          <Btn sm no onClick={function () { b.run(async function () { await api.decideMember(club.id, m.user_id, false); await ctx.reloadMembers(); }); }} disabled={b.busy}>{"거절"}</Btn>
-          <Btn sm ok onClick={function () { b.run(async function () { await api.decideMember(club.id, m.user_id, true); await ctx.reloadMembers(); }, m.nickname + " 님을 받았어요"); }} disabled={b.busy}>{"승인"}</Btn>
-        </div>);
-      }) : <div style={{ fontSize: 12.5, color: "var(--td)" }}>{"대기 중인 신청이 없어요"}</div>, p.pending.length ? p.pending.length + "명" : "")}
+      {sec("가입 신청", (<div>
+        {full && p.pending.length > 0 && (<div style={{ fontSize: 12.5, color: "#FFA726", background: "rgba(255,167,38,.08)", border: "1px solid rgba(255,167,38,.3)", borderRadius: 10, padding: "9px 12px", marginBottom: 8, lineHeight: 1.6 }}>
+          {"정원(" + club.capacity + "명)이 다 찼어요. 클럽원 탭에서 자리를 비워야 승인할 수 있어요."}</div>)}
+        {p.pending.length ? p.pending.map(function (m) {
+          return (<div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid var(--bd)" }}>
+            <Avatar name={m.nickname} size={30} />
+            <div style={{ flex: 1, minWidth: 0 }}><b style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.nickname}</b><div style={{ fontSize: 11.5, color: "var(--td)" }}>{ago(m.created_at) + " 신청 · 인게임 닉네임"}</div></div>
+            <Btn sm no onClick={function () { decide(m, false); }} disabled={bJoin.busy}>{"거절"}</Btn>
+            <Btn sm ok onClick={function () { decide(m, true); }} disabled={bJoin.busy || full} title={full ? "정원이 다 찼어요" : ""}>{"승인"}</Btn>
+          </div>);
+        }) : <div style={{ fontSize: 12.5, color: "var(--td)" }}>{"대기 중인 신청이 없어요"}</div>}
+        <Msg text={bJoin.err} /><Msg bad={false} text={bJoin.ok} />
+      </div>), p.pending.length ? p.pending.length + "명" : "")}
       {sec("초대 코드", (<div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontFamily: "var(--m)", fontSize: 22, fontWeight: 800, letterSpacing: 2, color: "var(--acc)", flex: 1 }}>{club.invite_code}</span>
-          <Btn sm icon="copy" onClick={function () { copyText(club.invite_code); b.setOk("코드를 복사했어요"); }}>{"복사"}</Btn>
-          <Btn sm icon="refresh" onClick={function () { if (window.confirm("코드를 새로 만들까요? 예전 코드로는 더 신청할 수 없어요.")) b.run(async function () { await api.regenInvite(club.id); await ctx.reload(); }, "새 코드를 만들었어요"); }}>{"새로"}</Btn>
+          <span style={{ fontFamily: "var(--m)", fontSize: 22, fontWeight: 800, letterSpacing: 2, color: "var(--acc)", flex: 1, minWidth: 0 }}>{club.invite_code}</span>
+          <Btn sm icon="copy" onClick={function () { copyText(club.invite_code); bCode.setErr(""); bCode.setOk("코드를 복사했어요"); }}>{"복사"}</Btn>
+          <Btn sm icon="refresh" onClick={function () { if (window.confirm("코드를 새로 만들까요? 예전 코드로는 더 신청할 수 없어요.")) bCode.run(async function () { await api.regenInvite(club.id); await ctx.reload(); }, "새 코드를 만들었어요"); }}>{"새로"}</Btn>
         </div>
         <div style={{ fontSize: 12, color: "var(--td)", marginTop: 6, lineHeight: 1.6 }}>{"인게임 클럽 채팅에 이 코드를 알려 주세요. 클럽 라운지 → 클럽 가입에 넣으면 신청이 여기로 와요."}</div>
+        <Msg text={bCode.err} /><Msg bad={false} text={bCode.ok} />
       </div>), "정원 " + club.capacity + "명")}
       {sec("클럽 소개", (<div>
-        <Field area value={intro} onChange={setIntro} max={200} rows={3} ph="가입 신청할 때 보이는 한두 줄" mb={8} />
-        <div style={{ textAlign: "right" }}><Btn sm pri onClick={function () { b.run(async function () { await api.updateIntro(club.id, intro); await ctx.reload(); }, "소개를 저장했어요"); }}>{"저장"}</Btn></div>
+        <Field area value={intro} onChange={function (v) { setIntro(v); if (bIntro.err) bIntro.setErr(""); }} max={200} rows={3} ph="가입 신청할 때 보이는 한두 줄" mb={8} />
+        <div style={{ textAlign: "right" }}><Btn sm pri onClick={function () { bIntro.run(async function () { await api.updateIntro(club.id, intro); await ctx.reload(); }, "소개를 저장했어요"); }} disabled={bIntro.busy}>{"저장"}</Btn></div>
+        <Msg text={bIntro.err} /><Msg bad={false} text={bIntro.ok} />
       </div>))}
     </div>
     <div>
       {sec("일정", (<div>
         {ev && ev.events.map(function (e) {
           return (<div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid var(--bd)" }}>
-            <span style={{ fontSize: 12, color: "var(--td)", fontFamily: "var(--m)", width: 104 }}>{fmtWhen(e.starts_at)}</span><span style={{ flex: 1, minWidth: 0 }}>{e.title}</span>
-            <Btn sm ghost no icon="trash" onClick={function () { b.run(async function () { await api.deleteEvent(e.id); await loadEv(); }); }} />
+            <span style={{ fontSize: 12, color: "var(--td)", fontFamily: "var(--m)", width: 104, flexShrink: 0 }}>{fmtWhen(e.starts_at)}</span><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{txt(e.title)}</span>
+            <Btn sm ghost no icon="trash" title="일정 지우기" onClick={function () { if (window.confirm("‘" + txt(e.title) + "’ 일정을 지울까요? 참여 표시도 함께 지워져요.")) bEv.run(async function () { await api.deleteEvent(e.id); await loadEv(); }, "일정을 지웠어요"); }} />
           </div>);
         })}
-        <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-          <input value={et} onChange={function (e) { setEt(e.target.value); }} maxLength={40} placeholder="예: 클럽전 3라운드" style={Object.assign({}, INP, { flex: "1 1 140px", width: 0 })} />
-          <input type="datetime-local" value={ed} onChange={function (e) { setEd(e.target.value); }} style={Object.assign({}, INP, { flex: "1 1 160px", width: 0, colorScheme: "dark" })} />
-          <Btn sm pri onClick={function () { b.run(async function () { if (!et.trim() || !ed) throw new Error("일정 이름과 날짜를 넣어 주세요"); await api.createEvent(club.id, et.trim(), new Date(ed).toISOString()); setEt(""); setEd(""); await loadEv(); }, "일정을 만들었어요"); }}>{"추가"}</Btn>
+        <div style={{ marginTop: 10 }}>
+          <input value={et} onChange={function (e) { setEt(e.target.value); if (bEv.err) bEv.setErr(""); }} maxLength={40} placeholder="일정 이름 (예: 클럽전 3라운드)" style={Object.assign({}, INP, { marginBottom: 6 })} />
+          <div style={{ display: "flex", gap: 6 }}>
+            <input type="datetime-local" value={ed} onChange={function (e) { setEd(e.target.value); if (bEv.err) bEv.setErr(""); }} style={Object.assign({}, INP, { flex: 1, width: 0, colorScheme: "var(--cscheme)" })} />
+            <Btn pri onClick={function () { bEv.run(async function () { if (!et.trim() || !ed) throw new Error("일정 이름과 날짜를 넣어 주세요"); await api.createEvent(club.id, et.trim(), new Date(ed).toISOString()); setEt(""); setEd(""); await loadEv(); }, "일정을 만들었어요"); }} disabled={bEv.busy}>{"추가"}</Btn>
+          </div>
         </div>
-        <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 6 }}>{"라운지 옆 일정 칸에 뜨고, 클럽원이 참여를 누를 수 있어요"}</div>
+        <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 6 }}>{"라운지 일정 칸에 뜨고, 클럽원이 참여를 누를 수 있어요"}</div>
+        <Msg text={bEv.err} /><Msg bad={false} text={bEv.ok} />
       </div>))}
       {sec("클럽 닫기", (<div>
-        <div style={{ fontSize: 12, color: "var(--td)", lineHeight: 1.6, marginBottom: 10 }}>{"글·댓글·덱 요약본이 모두 지워지고 되돌릴 수 없어요."}</div>
+        <div style={{ fontSize: 12, color: "var(--td)", lineHeight: 1.6, marginBottom: 10 }}>{"글 · 댓글 · 덱 요약본이 모두 지워지고 되돌릴 수 없어요."}</div>
         <Btn sm no icon="trash" onClick={function () {
           var t = window.prompt("정말 닫으려면 클럽 이름 ‘" + club.name + "’ 을 그대로 적어 주세요");
           if (t === null) return;
-          if (t.trim() !== club.name) { b.setErr("클럽 이름이 달라서 닫지 않았어요"); return; }
-          b.run(async function () { await api.disbandClub(club.id); realApi.forgetShareCache(); await ctx.reload(); });
+          if (t.trim() !== club.name) { bClose.setErr("클럽 이름이 달라서 닫지 않았어요"); return; }
+          bClose.run(async function () { await api.disbandClub(club.id); realApi.forgetShareCache(); await ctx.reload(); });
         }}>{"클럽 닫기"}</Btn>
+        <Msg text={bClose.err} />
       </div>))}
-      <Msg text={b.err} /><Msg bad={false} text={b.ok} />
     </div>
   </div>);
 }

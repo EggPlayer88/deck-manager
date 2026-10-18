@@ -11,10 +11,20 @@ function sb() {
   if (!supabase) throw new Error('서버에 연결돼 있지 않아요');
   return supabase;
 }
-/* Postgres 가 던진 문구를 그대로 보여 준다 — 함수들이 한국어로 던지게 만들어 두었다 */
+/* Postgres 가 던진 문구를 보여 준다 — 함수들은 한국어로 던지게 만들어 두었다.
+   표 정책(RLS) · 중복 · 통신 오류는 영어 원문이 그대로 나오던 것을 한국어로 바꾼다 (2026-10-18) */
 function fail(error) {
   var m = (error && (error.message || error.error_description)) || String(error || '알 수 없는 오류');
-  if (/JWT|not authenticated|permission denied/i.test(m)) m = '권한이 없어요. 다시 로그인해 주세요. (' + m + ')';
+  var code = error && error.code;
+  if (/JWT|not authenticated/i.test(m)) m = '로그인이 풀렸어요. 다시 로그인해 주세요.';
+  else if (code === '42501' || /row-level security|permission denied/i.test(m)) m = '할 수 없는 일이에요. 클럽에서 나갔거나 글이 지워졌을 수 있어요 — 새로 보기를 눌러 주세요.';
+  else if (code === '23505' || /duplicate key|unique constraint/i.test(m)) m = '이미 처리된 일이에요. 새로 보기를 눌러 주세요.';
+  else if (code === '23503' || /foreign key/i.test(m)) m = '대상이 이미 지워졌어요. 새로 보기를 눌러 주세요.';
+  else if (code === '23514' || /check constraint/i.test(m)) m = '넣은 값이 허용 범위를 벗어났어요.';
+  else if (code === '22007' || code === '22P02' || /invalid input syntax/i.test(m)) m = '글에 들어 있는 값의 형식이 맞지 않아 처리하지 못했어요.';
+  else if (/Failed to fetch|NetworkError|Load failed|network/i.test(m)) m = '인터넷 연결이 불안정해요. 잠시 뒤 다시 해 주세요.';
+  /* 그래도 한글이 하나도 없는 원문이면 짧은 한국어 안내로 (원문은 오류 번호만 덧붙인다) */
+  else if (!/[가-힣]/.test(m)) m = '처리하지 못했어요. 새로 보기 뒤 다시 해 주세요.' + (code ? ' (오류 ' + code + ')' : '');
   var e = new Error(m); e.raw = error; return e;
 }
 async function rpc(name, args) {
@@ -103,17 +113,22 @@ export async function adminDisputes() {
   });
 }
 export function requestReverify(clubId, hours) { return rpc('club_request_reverify', { p_club: clubId, p_hours: hours || 48 }); }
+/* 사진은 처리가 끝난 뒤에 지운다 — 예전에는 먼저 지워서, 처리가 실패하면 클럽은 남고 사진만 사라졌다.
+   클럽이 없어진 뒤에도 관리자는 그 폴더를 지울 수 있다 (club_media_delete 정책) */
 export async function resolveDispute(claimId, winner, ban, reason, clubId) {
+  var r = await rpc('club_resolve_dispute', { p_claim: claimId, p_winner: winner, p_ban: !!ban, p_reason: reason || '' });
   if (winner === 'claimant' && clubId) await purgeClubMedia(clubId);
-  return rpc('club_resolve_dispute', { p_claim: claimId, p_winner: winner, p_ban: !!ban, p_reason: reason || '' });
+  return r;
 }
 export async function settleReverify(clubId, okay, ban, reason) {
+  var r = await rpc('club_settle_reverify', { p_club: clubId, p_ok: !!okay, p_ban: !!ban, p_reason: reason || '' });
   if (!okay) await purgeClubMedia(clubId);
-  return rpc('club_settle_reverify', { p_club: clubId, p_ok: !!okay, p_ban: !!ban, p_reason: reason || '' });
+  return r;
 }
 export async function adminCloseClub(clubId, ban, reason) {
+  var r = await rpc('club_admin_close', { p_club: clubId, p_ban: !!ban, p_reason: reason || '' });
   await purgeClubMedia(clubId);
-  return rpc('club_admin_close', { p_club: clubId, p_ban: !!ban, p_reason: reason || '' });
+  return r;
 }
 /* 클럽을 없애기 전에 그 클럽의 글 사진을 지운다 (club-media/<클럽>/<사람>/<파일>). 실패해도 클럽 닫기는 계속한다 */
 async function purgeClubMedia(clubId) {
@@ -262,14 +277,17 @@ export function forgetShareCache() { shareCache = { uid: null, deckId: null }; l
 
 var FEED_PAGE = 20;
 
-/* 고정 글 + 최신 글 한 쪽. before 를 주면 그보다 오래된 글을 더 */
-export async function loadFeed(clubId, before) {
-  var q = sb().from('club_posts').select('*').eq('club_id', clubId).eq('pinned', false)
-    .order('created_at', { ascending: false }).limit(FEED_PAGE);
+/* 고정 글 + 최신 글 한 쪽. before 를 주면 그보다 오래된 글을 더.
+   kind(말머리)를 주면 서버에서 거르고, 그때는 고정 글도 목록에 섞는다 (고정된 투표도 '투표'에서 보이게).
+   고정 글은 20개까지 읽는다 — 예전에는 5개만 읽어 6번째 고정 글부터 아무 데도 안 보였다 (화면이 3개 넘으면 접는다) */
+export async function loadFeed(clubId, before, kind) {
+  var q = sb().from('club_posts').select('*').eq('club_id', clubId);
+  q = kind ? q.eq('kind', kind) : q.eq('pinned', false);
+  q = q.order('created_at', { ascending: false }).limit(FEED_PAGE);
   if (before) q = q.lt('created_at', before);
   var list = await rows(q);
-  var pinned = before ? [] : await rows(sb().from('club_posts').select('*').eq('club_id', clubId).eq('pinned', true)
-    .order('created_at', { ascending: false }).limit(5));
+  var pinned = before || kind ? [] : await rows(sb().from('club_posts').select('*').eq('club_id', clubId).eq('pinned', true)
+    .order('created_at', { ascending: false }).limit(20));
   var all = pinned.concat(list);
   var extra = await postExtras(all.map(function (p) { return p.id; }));
   return { pinned: pinned, posts: list, more: list.length === FEED_PAGE, extra: extra };
@@ -281,15 +299,24 @@ export async function loadPost(postId) {
   return { post: p, extra: extra };
 }
 /* 글마다 댓글 수 · 반응 · 투표 */
+/* 서버는 한 번에 1000줄까지만 돌려준다 — 글이 많으면 개수가 잘리지 않게 20개씩 나눠 한꺼번에 묻는다 */
 async function postExtras(ids) {
   var out = { comments: {}, reactions: {}, votes: {} };
   if (!ids.length) return out;
-  var cm = await rows(sb().from('club_comments').select('post_id').in('post_id', ids));
-  cm.forEach(function (c) { out.comments[c.post_id] = (out.comments[c.post_id] || 0) + 1; });
-  var rx = await rows(sb().from('club_reactions').select('post_id,user_id,emoji').in('post_id', ids));
-  rx.forEach(function (r) { (out.reactions[r.post_id] = out.reactions[r.post_id] || []).push(r); });
-  var vt = await rows(sb().from('club_votes').select('post_id,user_id,choice').in('post_id', ids));
-  vt.forEach(function (v) { (out.votes[v.post_id] = out.votes[v.post_id] || []).push(v); });
+  var parts = [];
+  for (var i = 0; i < ids.length; i += 20) parts.push(ids.slice(i, i + 20));
+  var res = await Promise.all(parts.map(function (part) {
+    return Promise.all([
+      rows(sb().from('club_comments').select('post_id').in('post_id', part)),
+      rows(sb().from('club_reactions').select('post_id,user_id,emoji').in('post_id', part)),
+      rows(sb().from('club_votes').select('post_id,user_id,choice').in('post_id', part))
+    ]);
+  }));
+  res.forEach(function (r) {
+    r[0].forEach(function (c) { out.comments[c.post_id] = (out.comments[c.post_id] || 0) + 1; });
+    r[1].forEach(function (x) { (out.reactions[x.post_id] = out.reactions[x.post_id] || []).push(x); });
+    r[2].forEach(function (v) { (out.votes[v.post_id] = out.votes[v.post_id] || []).push(v); });
+  });
   return out;
 }
 
