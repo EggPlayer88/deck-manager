@@ -447,3 +447,34 @@ function shrinkImage(file, max, quality) {
     img.src = url;
   });
 }
+
+/* ── 메뉴 알림 (클럽라운지 메뉴의 빨간 점) ───────────────── */
+
+/* 클럽장: 내 클럽에 들어온 가입 신청 수 (관리 탭 숫자와 같다).
+   관리자: 심사 화면의 대기 + 분쟁 + 신고 수 — 라운지 안 '인증 심사' 버튼 숫자와 같은 기준.
+   줄 수만 센다 (분쟁만 클럽을 가리려고 몇 칸 읽는다). 실패해도 0 으로 — 메뉴가 깨지면 안 된다 */
+export async function loadAlerts(isAdmin) {
+  var out = { join: 0, review: 0, leader: false };
+  if (!supabase) return out;
+  var me = null;
+  try { me = await myId(); } catch (e) { return out; }
+  var count = async function (q) { var r = await q; if (r.error) throw fail(r.error); return r.count || 0; };
+  var m = (await rows(sb().from('club_members').select('club_id,role,status').eq('user_id', me)))[0];
+  if (m && m.role === 'leader' && m.status === 'active') {
+    out.leader = true;
+    out.join = await count(sb().from('club_members').select('user_id', { count: 'exact', head: true })
+      .eq('club_id', m.club_id).eq('status', 'pending'));
+  }
+  if (isAdmin) {
+    var r = await Promise.all([
+      count(sb().from('club_applications').select('id', { count: 'exact', head: true }).eq('status', 'pending').eq('kind', 'new')),
+      rows(sb().from('club_applications').select('kind,status,target_club_id').in('kind', ['claim', 'reverify']).in('status', ['draft', 'pending'])),
+      count(sb().from('club_reports').select('id', { count: 'exact', head: true }).eq('status', 'open'))
+    ]);
+    /* 분쟁은 클럽마다 하나 — 되찾기는 캡처까지 낸 것만, 재인증은 요청 중인 것도 (adminDisputes 와 같은 기준) */
+    var disputes = {};
+    r[1].forEach(function (a) { if (a.target_club_id && (a.kind === 'reverify' || a.status === 'pending')) disputes[a.target_club_id] = 1; });
+    out.review = r[0] + Object.keys(disputes).length + r[2];
+  }
+  return out;
+}

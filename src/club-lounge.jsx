@@ -356,7 +356,7 @@ function ClubLoungeInner(p) {
       <div style={{ fontSize: 13, color: "var(--td)", lineHeight: 1.7 }}>{"클럽 라운지는 클럽원끼리 덱과 글을 주고받는 곳이라"}<br />{"게스트로는 들어갈 수 없어요."}</div>
     </Card></React.Fragment>);
 
-  if (p.isAdmin && view === "review") return wrap(<React.Fragment>{title}<SafeBox what="심사 화면"><AdminReview api={api} mobile={mob} /></SafeBox></React.Fragment>);
+  if (p.isAdmin && view === "review") return wrap(<React.Fragment>{title}<SafeBox what="심사 화면"><AdminReview api={api} mobile={mob} onAlerts={p.onAlerts} /></SafeBox></React.Fragment>);
   if (err) return wrap(<React.Fragment>{title}<Msg text={"클럽 정보를 불러오지 못했어요: " + err} /><Btn icon="refresh" onClick={reload}>{"다시 시도"}</Btn></React.Fragment>);
   if (!me) return wrap(<React.Fragment>{title}<div style={{ color: "var(--td)", fontSize: 13 }}>{"불러오는 중…"}</div></React.Fragment>);
 
@@ -669,7 +669,8 @@ function AdminReview(p) {
   };
   useEffect(function () { load(); }, [st]);
   useEffect(function () { counts(); api.purgeOldShots().catch(function () {}); }, []);
-  var after = async function () { await load(); await counts(); };
+  /* 처리한 뒤 목록 · 숫자 · 메뉴의 빨간 점을 함께 고친다 */
+  var after = async function () { await load(); await counts(); if (p.onAlerts) p.onAlerts(); };
   var similar = function (n) {
     var k = String(n || "").replace(/\s/g, "").toLowerCase();
     return names.filter(function (x) { var y = x.replace(/\s/g, "").toLowerCase(); return x !== n && (y.indexOf(k) >= 0 || k.indexOf(y) >= 0); });
@@ -913,6 +914,8 @@ function ClubHome(p) {
   useEffect(function () { if (!toast) return; var t = setTimeout(function () { setToast(""); }, 3500); return function () { clearTimeout(t); }; }, [toast]);
   var active = members.filter(function (m) { return m.status === "active"; });
   var pending = members.filter(function (m) { return m.status === "pending"; });
+  /* 가입 신청 수가 바뀌면(읽어 오거나 승인 · 거절하면) 메뉴의 빨간 점도 다시 센다 */
+  useEffect(function () { if (p.onAlerts) p.onAlerts(); }, [pending.length]);
   var tabs = [["feed", "라운지"]];
   if (leader) tabs.push(["status", "덱 현황"]);
   tabs.push(["members", "클럽원"]);

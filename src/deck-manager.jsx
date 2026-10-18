@@ -5,7 +5,7 @@ import KboPromoBanner from "./KboPromoBanner.jsx";
 import ClubLoungePage from "./club-lounge.jsx";
 /* 개발자에게 커피 — 메뉴 구석의 작은 버튼과 선물코드 창 (coffee-gift.jsx) */
 import CoffeeModal, { CoffeeLink } from "./coffee-gift.jsx";
-import { autoPublish as clubAutoPublish, addComment as clubAddComment } from "./club-api.js";
+import { autoPublish as clubAutoPublish, addComment as clubAddComment, loadAlerts as clubLoadAlerts } from "./club-api.js";
 
 /* Supabase: injected via window._SUPABASE from main.jsx (Vercel deployment).
    In artifact preview / standalone, these remain as stubs → localStorage-only mode. */
@@ -6457,6 +6457,9 @@ function Nav(p){
   if(showGame)tabs.push({id:"kbogame",label:"KBO 구단주",short:"구단주",icon:"⚾",beta:true,href:p.gameUrl});
   /* 관리자 칸은 라커룸 앞에 — 메뉴 순서가 바뀌어도 자리를 찾아 넣는다 */
   if(p.isAdmin){var at=tabs.map(function(t){return t.id;}).indexOf("locker");tabs.splice(at<0?tabs.length:at,0,{id:"db",label:"선수도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
+  /* 클럽라운지 빨간 점 — 클럽장에게는 가입 신청, 관리자에게는 인증 심사 · 신고가 기다릴 때 (App 의 clubAlerts) */
+  tabs.forEach(function(t){if(t.id==="clublounge"&&p.clubDot){t.dot=true;t.dotTitle=p.clubDotTitle||"확인할 것이 있어요";}});
+  var anyDot=tabs.some(function(t){return t.dot;});
   var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck,onChangeTeam:p.onChangeTeam};
 
   if(p.mobile){return(
@@ -6471,7 +6474,7 @@ function Nav(p){
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px",paddingBottom:"calc(8px + env(safe-area-inset-bottom, 0px))"}}>
         {tabs.map(function(t){
           var st={flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44};
-          var inner=(<React.Fragment><span style={{fontSize:18,lineHeight:1}}>{t.icon}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}{t.beta&&(<span style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></React.Fragment>);
+          var inner=(<React.Fragment><span style={{fontSize:18,lineHeight:1,position:"relative"}}>{t.icon}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{position:"absolute",top:-3,right:-7,width:9,height:9,borderRadius:"50%",background:"#FF5A5A",boxShadow:"0 0 0 2px var(--side)"}}/>)}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}{t.beta&&(<span style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></React.Fragment>);
           if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} style={Object.assign({},st,{textDecoration:"none"})}>{inner}</a>);
           return(<button key={t.id} onClick={function(){p.setTab(t.id);}} title={t.label+(t.soon?" (준비중)":"")} style={st}>{inner}</button>);
         })}
@@ -6481,13 +6484,13 @@ function Nav(p){
 
   if(p.tablet){return(
     <React.Fragment>
-      <button onClick={function(){setOpen(!open);}} style={{position:"fixed",top:10,left:10,zIndex:200,width:40,height:40,borderRadius:8,background:"var(--card)",border:"1px solid var(--bd)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"var(--t1)"}}>{open?"✕":"☰"}</button>
+      <button onClick={function(){setOpen(!open);}} style={{position:"fixed",top:10,left:10,zIndex:200,width:40,height:40,borderRadius:8,background:"var(--card)",border:"1px solid var(--bd)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"var(--t1)"}}>{open?"✕":"☰"}{!open&&anyDot&&(<span style={{position:"absolute",top:5,right:5,width:9,height:9,borderRadius:"50%",background:"#FF5A5A",boxShadow:"0 0 0 2px var(--card)"}}/>)}</button>
       {open&&(<div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:150}}/>)}
       <div style={{position:"fixed",left:open?0:-260,top:0,bottom:0,width:240,background:"var(--side)",borderRight:"1px solid var(--bd)",zIndex:160,transition:"left 0.25s ease",display:"flex",flexDirection:"column",padding:"14px 0 16px"}}>
         <div style={{padding:"0 14px 12px"}}><DeckDropdown {...deckProps}/></div>
         {tabs.map(function(t){
           var st={display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44};
-          var inner=(<React.Fragment><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}</React.Fragment>);
+          var inner=(<React.Fragment><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{marginLeft:"auto",width:8,height:8,borderRadius:"50%",background:"#FF5A5A",flexShrink:0}}/>)}</React.Fragment>);
           if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} onClick={function(){setOpen(false);}} style={Object.assign({},st,{textDecoration:"none",boxSizing:"border-box"})}>{inner}</a>);
           return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={st}>{inner}</button>);
         })}
@@ -6511,7 +6514,7 @@ function Nav(p){
       <div style={{flex:1}}>
         {tabs.map(function(t){
           var st={display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:13,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40};
-          var inner=(<React.Fragment><span style={{fontSize:15}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}</React.Fragment>);
+          var inner=(<React.Fragment><span style={{fontSize:15}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{marginLeft:"auto",width:8,height:8,borderRadius:"50%",background:"#FF5A5A",flexShrink:0}}/>)}</React.Fragment>);
           if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} style={Object.assign({},st,{textDecoration:"none",boxSizing:"border-box"})}>{inner}</a>);
           return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={st}>{inner}</button>);
         })}
@@ -11025,6 +11028,31 @@ export default function App(){
     },4000);
     return function(){clearTimeout(t);};
   },[isGoogle,userId,curDeckId,store.players,store.lineupMap,sdStateWithTeam,store.loading]);
+  /* 클럽라운지 메뉴의 빨간 점. 클럽장: 내 클럽 가입 신청 대기, 관리자: 인증 심사 · 신고 대기.
+     앱을 열 때 한 번 묻고, 클럽장 · 관리자만 화면이 보일 때 3분마다 · 메뉴를 옮길 때 · 창으로 돌아올 때 다시 묻는다.
+     클럽장이 아닌 사람에게는 처음 한 번(내 회원 줄 하나)이 전부다. 실패해도 점만 안 뜰 뿐 다른 데는 영향이 없다 */
+  var _cal=useState(null);var clubAlerts=_cal[0];var setClubAlerts=_cal[1];
+  /* force 가 아니면 15초 안에 다시 묻지 않는다(메뉴를 빨리 옮겨 다닐 때). 늦게 온 옛 대답은 버린다(계정을 바꿨을 때 포함) */
+  var alertRef=React.useRef({seq:0,at:0});
+  var refreshClubAlerts=React.useCallback(function(force){
+    if(!isGoogle)return;
+    var r=alertRef.current;
+    if(force!==true&&Date.now()-r.at<15000)return;
+    r.at=Date.now();var my=++r.seq;
+    clubLoadAlerts(isAdmin).then(function(a){ if(my===alertRef.current.seq)setClubAlerts(a); }).catch(function(){});
+  },[isGoogle,isAdmin,userId]);
+  useEffect(function(){ if(!isGoogle){alertRef.current.seq++;setClubAlerts(null);return;} refreshClubAlerts(true); },[isGoogle,isAdmin,userId]);
+  var clubWatch=!!clubAlerts&&(clubAlerts.leader||isAdmin);
+  useEffect(function(){
+    if(!clubWatch)return;
+    var seen=function(){ if(document.visibilityState==="visible")refreshClubAlerts(); };
+    var iv=setInterval(seen,180000);
+    document.addEventListener("visibilitychange",seen);
+    return function(){clearInterval(iv);document.removeEventListener("visibilitychange",seen);};
+  },[clubWatch,refreshClubAlerts]);
+  useEffect(function(){ if(clubWatch)refreshClubAlerts(); },[tab]);
+  var clubDotN=clubAlerts?(clubAlerts.join||0)+(clubAlerts.review||0):0;
+  var clubDotTitle=clubAlerts?[clubAlerts.join?"가입 신청 "+clubAlerts.join+"명":"",clubAlerts.review?"인증 심사 · 신고 "+clubAlerts.review+"건":""].filter(Boolean).join(" · "):"";
   var clubTools={
     summaryNow:clubSummaryNow,
     labDeck:function(team,slots,name){ return new Promise(function(res,rej){ setTimeout(function(){ try{res(clubLabDeck(team,slots,name));}catch(e){rej(e);} },20); }); },
@@ -11390,7 +11418,7 @@ export default function App(){
   else if(tab==="datacenter")pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin}/>);
   else if(tab==="clublounge")pg=(<ClubLoungePage mobile={mob} userId={userId} authType={isGoogle?"google":authType} isAdmin={isAdmin}
     decks={decks} curDeckId={curDeckId} labSaves={store.labSaves} tools={clubTools} onOpenLab={openInLab}
-    draft={clubDraft} onDraftUsed={function(){setClubDraft(null);}} focusPostId={clubFocus} onFocusUsed={function(){setClubFocus(null);}}/>);
+    draft={clubDraft} onDraftUsed={function(){setClubDraft(null);}} focusPostId={clubFocus} onFocusUsed={function(){setClubFocus(null);}} onAlerts={function(){refreshClubAlerts(true);}}/>);
   else pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin}/>);
 
   /* 구단 없는 덱(예전 '내 덱')은 구단을 고를 때까지 선택 창을 띄운다 — 세트덱 선택 팀·드림/나눔이 덱 구단을 따른다 */
@@ -11398,7 +11426,7 @@ export default function App(){
 
   return(
     <div className={theme==="light"?"light":""} style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
-      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin} gameUrl={kboGameUrl(googleId)}
+      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin} gameUrl={kboGameUrl(googleId)} clubDot={clubDotN>0} clubDotTitle={clubDotTitle}
         decks={decks} curDeckId={curDeckId}
         onSwitchDeck={handleSwitchDeck}
         onAddDeck={function(){setShowTeamSelect("add");}}
