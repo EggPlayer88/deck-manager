@@ -239,12 +239,17 @@ function getSkillScore(name,lv,pt,withBuff){
      어느 쪽 이름이 저장돼 있든 같은 결과가 나오므로 데이터 마이그레이션이 필요 없다 */
   name = buffName(canonSkillName(name, pt), pt, withBuff);
   var t=SKILL_DATA[pt];if(!t)return 0;
-  var s=t[name];
+  /* 스킬 값은 레벨별 배열이다. 배열이 아닌 것은 스킬로 보지 않는다 —
+     스킬 이름이 '선발' 로 들어간 덱이 _major.선발(메이저 분류 표)을 스킬 값으로 읽어
+     그 덱 점수 계산이 통째로 멈췄다 (2026-10-19) */
+  var s=Array.isArray(t[name])?t[name]:null;
   /* 260814 시트 개명 대응: 구 스킬명이면 신 이름으로 바꿔 재조회 */
-  if(!s){var al=SKILL_ALIAS[pt]&&SKILL_ALIAS[pt][name];if(al){s=t[al];name=al;}}
-  if(!s){for(var k in SKILL_DATA){if(k!=="weights"&&SKILL_DATA[k]&&SKILL_DATA[k][name]){s=SKILL_DATA[k][name];break;}}}
+  if(!s){var al=SKILL_ALIAS[pt]&&SKILL_ALIAS[pt][name];if(typeof al==="string"){s=Array.isArray(t[al])?t[al]:null;name=al;}}
+  /* 다른 역할 표에서도 찾아본다 — 스킬 표(타자·선발·중계·마무리)만. _major · potScoresByType 같은 칸은 스킬 표가 아니다 */
+  if(!s){for(var k in SKILL_DATA){if(SKILL_CATS.indexOf(k)>=0&&SKILL_DATA[k]&&Array.isArray(SKILL_DATA[k][name])){s=SKILL_DATA[k][name];break;}}}
   if(!s)return 0;var i=lv-5;if(i<0||i>=s.length)return 0;
   var entry=s[i];
+  if(entry==null)return 0;
   if(typeof entry==="number")return entry;
   var w=getW();
   return(entry.pV||0)*(entry.pF||0)*w.p+(entry.aV||0)*(entry.aF||0)*w.a+(entry.eV||0)*(entry.eF||0)*w.e+(entry.cV||0)*(entry.cF||0)*w.c+(entry.sV||0)*(entry.sF||0)*w.s;
@@ -475,26 +480,38 @@ var ORDER_SKILLS = {
   "리드오프":       { at: [0, 1],                on: "리드오프(타순O)",        off: "리드오프(타순X)",     la: 0 },
   "빈틈없는타선":   { at: [5, 6, 7, 8],          on: "빈틈없는타선(타순O)",    off: "빈틈없는타선(타순X)", la: 0 }
 };
+/* 스킬표에 있는 이름 — 띄어쓰기만 다른 이름(canonSkillName)과 옛 이름(SKILL_ALIAS)을 푼다.
+   예: 컨택트히터(타순O) → 컨택트히터(타순배치) */
+function skillTableName(nm, cat) {
+  var c = canonSkillName(nm, cat);
+  var al = SKILL_ALIAS[cat] && SKILL_ALIAS[cat][c];
+  return typeof al === "string" ? al : c;
+}
 /* 그 타순에서 실제로 쓰이는 모습. 바뀔 게 없으면 null — 부르는 쪽이 원래 객체를 그대로 쓴다.
-   반환: { pl, swaps:[{k,from,to}], laBase, la, laDelta } */
+   반환: { pl, swaps:[{k,from,to}], laBase, la, laDelta } — swaps 는 화면에 띄울 것만 */
 function orderAdjust(pl, batIdx) {
   if (!pl || pl.role !== "타자") return null;
   if (batIdx === undefined || batIdx === null || batIdx < 0) return null;
-  var swaps = [], d = 0;
+  var ren = [], swaps = [], d = 0;
   for (var k = 1; k <= 3; k++) {
     var nm = pl["skill" + k]; if (!nm) continue;
     var r = ORDER_SKILLS[skillBaseName(nm)]; if (!r) continue;
     var on = r.at.indexOf(batIdx) >= 0;
     var want = on ? r.on : r.off;
-    if (nm !== want) swaps.push({ k: k, from: nm, to: want });
+    if (nm !== want) {
+      ren.push({ k: k, to: want });
+      /* 옛 이름은 같은 스킬이다(컨택트히터(타순O) = 컨택트히터(타순배치)). 계산용 이름만 표 이름으로 맞추고
+         화면에는 바뀐 것으로 띄우지 않는다 — 같은 뜻인데 작대기를 그으면 이상하다 (2026-10-19 사용자 지적) */
+      if (skillTableName(nm, "타자") !== want) swaps.push({ k: k, from: nm, to: want });
+    }
     if (on) d += r.la;
   }
   /* 발사각이 비어 있으면(정보 없음) 손대지 않는다 — 없는 값을 만들어 내면 안 된다 */
   var base = pl.launchAngle || 0;
   var next = (base && d) ? Math.max(0, base + d) : base;
-  if (!swaps.length && next === base) return null;
+  if (!ren.length && next === base) return null;
   var out = Object.assign({}, pl);
-  swaps.forEach(function(x) { out["skill" + x.k] = x.to; });
+  ren.forEach(function(x) { out["skill" + x.k] = x.to; });
   out.launchAngle = next;
   return { pl: out, swaps: swaps, laBase: base, la: next, laDelta: next - base };
 }

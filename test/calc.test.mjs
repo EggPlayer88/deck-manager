@@ -4,12 +4,13 @@
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
   pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpAppearance, rpOrderMove, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
-  __setLiveWeights, __setGlobalPotm, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
+  __setLiveWeights, __setGlobalPotm, __setSkillData, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
   launchAngleReq, launchAngleBonus, launchAngleSkillAdj, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills,
   ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME,
   dexAll, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
+  skillTableName,
   isSelTeam, sdLeagueOf, matchOne, buildIndex, SD_RULES, SD_ROWS, SD_BAT_ALL, SD_PIT_ALL, suggestDeckTeam, sdSideOf, toDeckFormat, deckLosesAllPlayers, canonJson, normDeck, deckSnap, classifyDeckSave, classifyKeySave, deckShrinkNote, pushAudit,
   isOtherTeam, applyTeamFlags, teamFlagStatAdj, specTrialsOf, specDistKey, cardSetPenalty, parseCardCode,
   LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST,
@@ -44,6 +45,32 @@ console.log('\n[스킬 개명] 구 이름으로도 조회돼야 한다');
 eq('철완(지구력140-149) → 철완(140149)', getSkillScore('철완(지구력140-149)', 5, '선발'), getSkillScore('철완(140149)', 5, '선발'));
 eq('약속의8회 → 약속의 8회', getSkillScore('약속의8회', 5, '마무리'), getSkillScore('약속의 8회', 5, '마무리'));
 eq('오버페이스(중계 카테고리)', getSkillScore('오버페이스', 5, '중계'), getSkillScore('오버페이스(중계)', 5, '중계'));
+
+console.log('\n[이상한 스킬 이름] 표 칸 이름 · 역할 이름이어도 계산이 멈추지 않는다 (2026-10-19 — 스킬 이름이 \'선발\' 로 들어간 덱)');
+{
+  const okBat = getSkillScore('정밀타격', 5, '타자');
+  const okCross = getSkillScore('정밀타격', 5, '선발');
+  /* 서버 스킬표처럼 _major(메이저 분류) · potScoresByType 칸이 같이 든 표, 레벨 칸이 빈 스킬 하나 */
+  const live = Object.assign({}, DEFAULT_SKILLS, {
+    _major: { '타자': { '정밀타격': true }, '선발': { '집념': true }, '중계': {}, '마무리': {} },
+    potScoresByType: { '풀스윙': { S: 3, A: 2 } },
+    '타자': Object.assign({}, DEFAULT_SKILLS['타자'], { '빈칸스킬': [10, null, 12] }) });
+  __setSkillData(live);
+  eq('스킬 이름이 선발 이면 0점 (예전엔 _major.선발 을 읽다 멈췄다)', getSkillScore('선발', 6, '선발'), 0);
+  eq('타자 도 0점', getSkillScore('타자', 6, '타자'), 0);
+  eq('표 칸 이름 _major 도 0점', getSkillScore('_major', 6, '선발'), 0);
+  eq('잠재력 이름(풀스윙)을 스킬 값으로 읽지 않는다', getSkillScore('풀스윙', 5, '타자'), 0);
+  eq('constructor 같은 이름도 0점', getSkillScore('constructor', 5, '타자'), 0);
+  eq('레벨 칸이 비면 그 레벨은 0점', getSkillScore('빈칸스킬', 6, '타자'), 0);
+  eq('빈칸 스킬도 다른 레벨은 그대로', getSkillScore('빈칸스킬', 7, '타자'), 12);
+  eq('정상 스킬은 그대로', getSkillScore('정밀타격', 5, '타자'), okBat);
+  eq('다른 역할 표 교차 조회도 그대로', getSkillScore('정밀타격', 5, '선발'), okCross);
+  let threw = 0;
+  try { calcPit({ role: '투수', position: '선발', change: 100, stuff: 100, cardType: '시즌', sLvManual: true }, { skill1: '선발', s1Lv: 6 }, null); } catch (e) { threw = 1; }
+  eq('스킬 이름이 선발 인 투수도 점수가 나온다', threw, 0);
+  __setSkillData(null);
+  eq('표를 되돌리면 기본 표', getSkillScore('정밀타격', 5, '타자'), okBat);
+}
 
 console.log('\n[발사각] 2026-10-19 수치 — 필요파워 13~16도 162 · 17도 165 · 18도 168 · 1도마다 +3 / 스킬 보정 45점 +1 · 3점마다 +1 / 보너스 13~14도 +3 · 15~18도 +7 · 19도~ +5');
 eq('발사각 12 → 미달(null)', launchAngleReq(12) === null ? 1 : 0, 1);
@@ -2455,6 +2482,22 @@ console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 �
   const cX0 = orderAdjust(cX, 0);
   eq('컨택 1번에 타순X 면 타순배치로 올라간다', cX0.pl.skill1 === '컨택트히터(타순배치)' ? 1 : 0, 1);
   eq('그때 발사각도 같이 내려간다', cX0.la, 17);
+
+  /* ── 옛 이름(타순O)은 같은 스킬 — 바뀐 것으로 띄우지 않는다 (2026-10-19 사용자 지적) ── */
+  eq('옛 이름 컨택트히터(타순O) 의 표 이름은 타순배치', skillTableName('컨택트히터(타순O)', '타자') === '컨택트히터(타순배치)' ? 1 : 0, 1);
+  eq('표에 있는 이름은 그대로', skillTableName('핵타선(타순O)', '타자') === '핵타선(타순O)' ? 1 : 0, 1);
+  eq('옛 이름도 점수는 같다', getSkillScore('컨택트히터(타순O)', 6, '타자'), getSkillScore('컨택트히터(타순배치)', 6, '타자'));
+  const cO = bat({ skill1: '컨택트히터(타순O)' });
+  const o0 = orderAdjust(cO, 0);
+  eq('컨택 1번에 옛 이름 — 화면에 이름 바뀜을 띄우지 않는다', o0 && o0.swaps.length === 0 ? 1 : 0, 1);
+  eq('계산용 이름은 표 이름(타순배치)으로 맞춘다', o0.pl.skill1 === '컨택트히터(타순배치)' ? 1 : 0, 1);
+  eq('발사각은 그대로 20 → 17', o0.la, 17);
+  const o4 = orderAdjust(cO, 4);
+  eq('컨택 5번에 옛 이름 — 타순X 로 바뀌는 것은 띄운다', o4.swaps.length === 1 && o4.swaps[0].to === '컨택트히터(타순X)' ? 1 : 0, 1);
+  eq('진짜로 바뀌면(타순X → 타순배치) 띄운다', orderAdjust(cX, 0).swaps.length, 1);
+  const cO0 = bat({ skill1: '컨택트히터(타순O)', launchAngle: 0 });
+  const oz = orderAdjust(cO0, 0);
+  eq('발사각 정보가 없어도 계산용 이름은 맞춘다 (띄울 것은 없음)', oz && oz.pl.skill1 === '컨택트히터(타순배치)' && oz.swaps.length === 0 && oz.laDelta === 0 ? 1 : 0, 1);
 
   /* ── 핵타선: 3·4·5번에서 타순O + 발사각 +3 ── */
   const h = bat({ skill2: '핵타선(타순X)' });
