@@ -182,6 +182,25 @@ export function unban(userId) { return rpc('club_unban', { p_user: userId }); }
 export async function adminClubNames() {
   return rows(sb().from('clubs').select('id,name'));
 }
+/* 관리자 — 클럽 현황. 모든 클럽 · 클럽원 · 최근 활동을 한 번에 읽는다 (관리자는 정책상 모든 클럽을 읽을 수 있고,
+   관리자가 아니면 서버가 자기 클럽 것만 돌려준다 — 화면을 고쳐 열어도 남의 클럽은 안 보인다).
+   글은 최근 30일 · 댓글은 최근 7일 것만 센다. 서버가 한 번에 1000줄까지만 주므로 그만큼 차면 capped 로 알린다 */
+export async function adminOverview() {
+  var t = Date.now(), DAY = 864e5;
+  var since = function (ms) { return new Date(t - ms).toISOString(); };
+  var r = await Promise.all([
+    rows(sb().from('clubs').select('id,name,leader_id,invite_code,intro,capacity,created_at').order('created_at', { ascending: true }).limit(1000)),
+    rows(sb().from('club_members').select('club_id,user_id,nickname,role,status,share_deck_id,created_at,joined_at').limit(1000)),
+    rows(sb().from('club_posts').select('club_id,created_at').gte('created_at', since(30 * DAY)).order('created_at', { ascending: false }).limit(1000)),
+    rows(sb().from('club_comments').select('club_id,created_at').gte('created_at', since(7 * DAY)).limit(1000)),
+    rows(sb().from('club_decks').select('club_id,user_id,total,saved_at').limit(1000)),
+    rows(sb().from('club_events').select('club_id,starts_at').gte('starts_at', since(6 * 3600e3)).limit(1000)),
+    rows(sb().from('club_reports').select('club_id').eq('status', 'open').limit(1000)),
+    rows(sb().from('club_applications').select('kind,status,target_club_id').in('kind', ['new', 'claim', 'reverify']).in('status', ['draft', 'pending']).limit(1000))
+  ]);
+  return { clubs: r[0], members: r[1], posts: r[2], comments: r[3], decks: r[4], events: r[5], reports: r[6], apps: r[7], at: t,
+    capped: r[1].length >= 1000 || r[2].length >= 1000 || r[3].length >= 1000 };
+}
 export function reviewApplication(id, approve, reason) {
   return rpc('club_review_application', { p_id: id, p_approve: !!approve, p_reason: reason || '' });
 }

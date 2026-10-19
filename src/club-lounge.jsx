@@ -40,12 +40,19 @@ function SafeBox(p) {
    한 칸씩 돌아가든, 길게 눌러 여러 칸을 한 번에 돌아가든 같다.
    화면에서 닫을 때는 쌓아 둔 기록을 되돌리는데, 그때 오는 popstate 는 이미 겹 수가 맞아 아무것도 닫지 않는다 */
 var backStack = [], popBound = false;
+/* 화면이 스스로 되돌린 기록 가운데 아직 popstate 가 오지 않은 수, 그동안 미뤄 둔 '기록 쌓기'.
+   창을 닫으며 되돌리는 일과 다른 창을 여는 일이 한꺼번에 일어나면(예: 클럽장 화면 → 인증 심사)
+   브라우저가 되돌리기를 나중에 처리해 새로 쌓은 기록까지 지웠다 — 그래서 되돌리기가 다 끝난 뒤에 쌓는다 (2026-10-19) */
+var selfBacks = 0, pushQueue = [], backGuard = null;
+function flushPush() { var q = pushQueue; pushQueue = []; q.forEach(function (f) { f(); }); }
 function bindPop() {
   if (popBound || typeof window === "undefined") return;
   popBound = true;
   /* 기록을 되돌릴 때 브라우저가 스크롤을 맨 위로 되돌려 놓던 것 — 스크롤은 화면이 직접 맞춘다 */
   try { if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual"; } catch (e) { /* 무시 */ }
   window.addEventListener("popstate", function (e) {
+    /* 화면이 스스로 되돌린 것 — 이미 닫은 창의 기록이라 할 일이 없다 */
+    if (selfBacks > 0) { selfBacks--; if (!selfBacks) { clearTimeout(backGuard); flushPush(); } return; }
     var depth = e.state && typeof e.state.club === "number" ? e.state.club : 0;
     var guard = 0;
     while (backStack.length > depth && guard++ < 50) {
@@ -54,20 +61,33 @@ function bindPop() {
     }
   });
 }
+function selfBack() {
+  selfBacks++;
+  /* popstate 가 끝내 오지 않으면(브라우저가 되돌리기를 버림) 1초 뒤 풀어 준다 — 미뤄 둔 창이 기록을 영영 못 쌓는 일이 없게 */
+  clearTimeout(backGuard);
+  backGuard = setTimeout(function () { selfBacks = 0; flushPush(); }, 1000);
+  try { window.history.back(); } catch (e) { selfBacks = Math.max(0, selfBacks - 1); if (!selfBacks) { clearTimeout(backGuard); flushPush(); } }
+}
 function useBackClose(open, close) {
   var ref = useRef(close); ref.current = close;
   useEffect(function () {
     if (!open) return;
     bindPop();
     var fn = function () { ref.current(); };
-    /* 기록을 쌓지 못한 환경(막힘 · 횟수 제한)에서는 아예 맡지 않는다 — 닫을 때 진짜 이전 페이지로 가 버리지 않게 */
-    try { window.history.pushState({ club: backStack.length + 1 }, ""); } catch (e) { return; }
-    backStack.push(fn);
+    var gone = false;
+    var push = function () {
+      if (gone) return;
+      /* 기록을 쌓지 못한 환경(막힘 · 횟수 제한)에서는 아예 맡지 않는다 — 닫을 때 진짜 이전 페이지로 가 버리지 않게 */
+      try { window.history.pushState({ club: backStack.length + 1 }, ""); } catch (e) { return; }
+      backStack.push(fn);
+    };
+    if (selfBacks > 0) pushQueue.push(push); else push();
     return function () {
+      gone = true;
       var i = backStack.indexOf(fn);
       if (i < 0) return;
       backStack.splice(i, 1);
-      try { window.history.back(); } catch (e) { /* 무시 */ }
+      selfBack();
     };
   }, [open]);
 }
@@ -96,7 +116,9 @@ var IC = {
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   crown: '<path d="m2 7 5 5 5-8 5 8 5-5-2 12H4z"/>',
   flag: '<path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/>',
-  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>'
+  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'
 };
 function Icon(p) {
   var s = p.size || 15;
@@ -211,6 +233,18 @@ function useBusy() {
   return { busy: _b[0], err: _m[0], ok: _ok[0], run: run, setErr: _m[1], setOk: _ok[1] };
 }
 
+/* 관리자 보기(읽기 전용) — 읽는 일만 통과시키고 나머지는 서버에 가기 전에 막는다.
+   목록에 없는 일은 모두 막힌다 — 나중에 쓰는 기능이 늘어도 관리자 보기에서 남의 클럽을 실수로 바꾸지 않게 */
+var WATCH_READ = { loadMembers: 1, loadClubDecks: 1, loadFeed: 1, loadPost: 1, loadComments: 1, loadEvents: 1, mediaUrls: 1 };
+function watchApi(api) {
+  var out = {};
+  Object.keys(api).forEach(function (k) {
+    if (typeof api[k] !== "function") return;
+    out[k] = WATCH_READ[k] ? api[k] : function () { return Promise.reject(new Error("관리자 보기는 읽기 전용이라 바꿀 수 없어요")); };
+  });
+  return out;
+}
+
 /* ── 덱 표시 ────────────────────────────────────────────── */
 
 var CT_COL = { "골든글러브": "#D9A514", "시그니처": "#E5484D", "임팩트": "#2EAD5B", "국가대표": "#3B82F6", "올스타": "#A855F7", "라이브": "#F97316", "시즌": "#4CAF50" };
@@ -317,6 +351,8 @@ function ClubLoungeInner(p) {
   var _view = useState("club"); var view = _view[0]; var setView = _view[1];
   var _appForm = useState(false); var appForm = _appForm[0]; var setAppForm = _appForm[1];
   var _acnt = useState(0); var adminCnt = _acnt[0]; var setAdminCnt = _acnt[1];
+  /* 클럽 현황 단추를 다시 누르면(클럽장 화면을 보던 중이라도) 목록으로 돌아가며 새로 읽는다 */
+  var _mon = useState(0); var monKey = _mon[0]; var setMonKey = _mon[1];
   var reload = useCallback(async function () {
     setErr("");
     try { setMe(await api.loadMe()); }
@@ -336,14 +372,18 @@ function ClubLoungeInner(p) {
     if (appForm && a && a.kind !== "reverify" && (a.status === "draft" || a.status === "pending")) setAppForm(false);
   }, [me]);
   useBackClose(p.isAdmin && view === "review", function () { setView("club"); reload(); });
+  useBackClose(p.isAdmin && view === "monitor", function () { setView("club"); reload(); });
 
   var wrap = function (inner) {
     return (<div style={{ padding: mob ? "12px 12px 100px" : "22px 26px", maxWidth: 1080 }}>{inner}</div>);
   };
-  var title = (<div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 16px" }}>
+  /* 관리자 단추가 휴대폰 폭에 다 안 들어가면 단추 줄만 다음 줄로 (오른쪽 정렬) */
+  var title = (<div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 16px", flexWrap: "wrap" }}>
     <h2 style={{ fontSize: 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: 0 }}>{"🎙️ 클럽 라운지"}</h2>
     {p.isAdmin && (<div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
       <Btn sm style={view === "club" ? { color: "var(--acc)", borderColor: "var(--acc)" } : null} onClick={function () { setView("club"); reload(); }}>{"내 클럽"}</Btn>
+      <Btn sm icon="grid" title="모든 클럽의 클럽원 · 활동 · 상태와 클럽장 화면 (관리자에게만 보여요)" style={view === "monitor" ? { color: "var(--acc)", borderColor: "var(--acc)" } : null}
+        onClick={function () { setView("monitor"); setMonKey(function (k) { return k + 1; }); }}>{"클럽 현황"}</Btn>
       <Btn sm icon="shield" style={view === "review" ? { color: "var(--acc)", borderColor: "var(--acc)" } : null} onClick={function () { setView("review"); }}>{"인증 심사"}
         {adminCnt > 0 && <span style={{ minWidth: 17, height: 17, padding: "0 5px", borderRadius: 9, background: "#FF5A5A", color: "#fff", fontSize: 10.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{adminCnt}</span>}</Btn>
     </div>)}
@@ -357,6 +397,8 @@ function ClubLoungeInner(p) {
     </Card></React.Fragment>);
 
   if (p.isAdmin && view === "review") return wrap(<React.Fragment>{title}<SafeBox what="심사 화면"><AdminReview api={api} mobile={mob} onAlerts={p.onAlerts} /></SafeBox></React.Fragment>);
+  if (p.isAdmin && view === "monitor") return (<AdminMonitor api={api} mobile={mob} title={title} wrap={wrap} nonce={monKey} onOpenLab={p.onOpenLab}
+    onReview={function () { setView("review"); }} />);
   if (err) return wrap(<React.Fragment>{title}<Msg text={"클럽 정보를 불러오지 못했어요: " + err} /><Btn icon="refresh" onClick={reload}>{"다시 시도"}</Btn></React.Fragment>);
   if (!me) return wrap(<React.Fragment>{title}<div style={{ color: "var(--td)", fontSize: 13 }}>{"불러오는 중…"}</div></React.Fragment>);
 
@@ -899,9 +941,268 @@ function ReportModal(p) {
   </Modal>);
 }
 
+/* ── 관리자: 클럽 현황 (관리자에게만 보인다) ────────────────────
+   모든 클럽의 클럽원 · 가입 대기 · 활동 · 상태를 한눈에 보고, 클럽을 누르면 그 클럽장에게 보이는 화면을 읽기 전용으로 연다.
+   단추는 관리자(profiles.is_admin)에게만 뜨고, 데이터도 관리자 읽기 정책으로만 온다 —
+   관리자가 아닌 사람이 화면을 고쳐 열어도 서버가 남의 클럽을 돌려주지 않는다 (2026-10-19 사용자 요청) */
+
+/* adminOverview 가 읽은 줄들을 클럽마다 센다 */
+function overviewStats(d) {
+  var now = d.at || Date.now(), DAY = 864e5;
+  var by = {}, list = [];
+  (d.clubs || []).forEach(function (c) {
+    if (!c || !c.id || by[c.id]) return;
+    var s = { club: c, active: [], pending: [], leader: null, posts7: 0, posts30: 0, lastPost: 0, comments7: 0, decks: 0, events: 0, reports: 0, dispute: false };
+    by[c.id] = s; list.push(s);
+  });
+  (d.members || []).forEach(function (m) {
+    var s = m && by[m.club_id]; if (!s) return;
+    if (m.status === "active") { s.active.push(m); if (m.role === "leader") s.leader = m; }
+    else if (m.status === "pending") s.pending.push(m);
+  });
+  (d.posts || []).forEach(function (x) {
+    var s = x && by[x.club_id]; if (!s) return;
+    var t = new Date(x.created_at).getTime(); if (!isFinite(t)) return;
+    s.posts30++; if (now - t <= 7 * DAY) s.posts7++; if (t > s.lastPost) s.lastPost = t;
+  });
+  (d.comments || []).forEach(function (x) { var s = x && by[x.club_id]; if (s) s.comments7++; });
+  (d.events || []).forEach(function (x) { var s = x && by[x.club_id]; if (s) s.events++; });
+  (d.reports || []).forEach(function (x) { var s = x && by[x.club_id]; if (s) s.reports++; });
+  var apps = 0;
+  (d.apps || []).forEach(function (a) {
+    if (!a) return;
+    if (a.kind === "new") { if (a.status === "pending") apps++; return; }
+    /* 분쟁 — 되찾기는 캡처까지 낸 것만, 재인증은 요청 중인 것도 (인증 심사의 분쟁 탭과 같은 기준) */
+    var s = by[a.target_club_id]; if (s && (a.kind === "reverify" || a.status === "pending")) s.dispute = true;
+  });
+  /* 덱 공개는 지금 클럽원 것만 센다 (나간 사람의 요약본은 빼고) */
+  var dk = {}; (d.decks || []).forEach(function (x) { if (x) (dk[x.club_id] = dk[x.club_id] || []).push(x); });
+  list.forEach(function (s) {
+    var act = {}; s.active.forEach(function (m) { act[m.user_id] = 1; });
+    (dk[s.club.id] || []).forEach(function (x) { if (act[x.user_id]) s.decks++; });
+    var cap = Number(s.club.capacity) || 0;
+    var age = (now - new Date(s.club.created_at).getTime()) / DAY;
+    s.full = cap > 0 && s.active.length >= cap;
+    s.isNew = isFinite(age) && age <= 7;
+    s.quiet = !s.isNew && (!s.lastPost || now - s.lastPost > 14 * DAY);
+    s.todo = s.dispute || s.reports > 0;
+  });
+  var T = { clubs: list.length, newWeek: 0, members: 0, pending: 0, pendingClubs: 0, disputes: 0, reports: 0, apps: apps, posts7: 0, comments7: 0, decks: 0 };
+  list.forEach(function (s) {
+    if (s.isNew) T.newWeek++;
+    T.members += s.active.length; T.pending += s.pending.length; if (s.pending.length) T.pendingClubs++;
+    if (s.dispute) T.disputes++;
+    T.reports += s.reports; T.posts7 += s.posts7; T.comments7 += s.comments7; T.decks += s.decks;
+  });
+  T.avg = T.clubs ? T.members / T.clubs : 0;
+  T.todo = T.apps + T.disputes + T.reports;
+  return { list: list, byId: by, totals: T };
+}
+function clubTags(s) {
+  var t = [];
+  if (s.dispute) t.push(<Tag key="d" c="red" title="되찾기 신청이나 재인증이 걸려 있어요 — 인증 심사의 분쟁 탭">{"분쟁"}</Tag>);
+  if (s.reports) t.push(<Tag key="r" c="red" title="처리 안 된 신고 — 인증 심사의 신고 탭">{"신고 " + s.reports}</Tag>);
+  if (s.pending.length) t.push(<Tag key="p" c="blue" title="클럽장이 아직 승인하지 않은 가입 신청">{"대기 " + s.pending.length}</Tag>);
+  if (s.full) t.push(<Tag key="f" c="orange" title="정원이 다 찼어요">{"꽉 참"}</Tag>);
+  if (s.isNew) t.push(<Tag key="n" c="green" title="연 지 7일이 안 됐어요">{"새 클럽"}</Tag>);
+  if (s.quiet) t.push(<Tag key="q" title="14일 넘게 새 글이 없어요">{"조용함"}</Tag>);
+  if (s.active.length <= 1) t.push(<Tag key="a" title="클럽원이 클럽장 한 명뿐이에요">{"혼자"}</Tag>);
+  return t;
+}
+function lastPostText(s) {
+  if (s.lastPost) return ago(s.lastPost);
+  return daysSince(s.club.created_at) < 30 ? "아직 없음" : "30일 넘음";
+}
+function dayOf(ts) { return ts ? fmtWhen(ts).split(" ")[0] : ""; }
+
+function AdminMonitor(p) {
+  var api = p.api, mob = p.mobile;
+  var _d = useState(null); var data = _d[0]; var setData = _d[1];
+  var _w = useState(null); var watchId = _w[0]; var setWatchId = _w[1];
+  var b = useBusy();
+  var scrollRef = useRef(null);
+  var load = async function () {
+    b.setErr("");
+    try { setData(await api.adminOverview()); }
+    catch (e) { b.setErr(e && e.message || String(e)); }
+  };
+  useEffect(function () { load(); }, []);
+  /* 위의 '클럽 현황' 단추를 다시 누르면 목록으로 */
+  var first = useRef(true);
+  useEffect(function () { if (first.current) { first.current = false; return; } setWatchId(null); load(); }, [p.nonce]);
+  /* 클럽을 열 때 목록 위치를 기억했다가 돌아오면 그 자리로 (휴대폰 뒤로가기로도 닫힌다) */
+  var open = function (id) { scrollRef.current = window.scrollY || 0; setWatchId(id); try { window.scrollTo(0, 0); } catch (e) { /* 무시 */ } };
+  var close = function () { setWatchId(null); load(); };
+  useBackClose(!!watchId, close);
+  useEffect(function () {
+    if (watchId || scrollRef.current === null) return;
+    var y = scrollRef.current; scrollRef.current = null;
+    requestAnimationFrame(function () { try { window.scrollTo(0, y); } catch (e) { /* 무시 */ } });
+  }, [watchId]);
+  var st = data ? overviewStats(data) : null;
+  var s = watchId && st ? st.byId[watchId] || null : null;
+  /* 보던 클럽이 없어졌으면(닫힘 · 정리) 목록으로 */
+  useEffect(function () { if (watchId && st && !st.byId[watchId]) { setWatchId(null); b.setErr("보던 클럽이 이제 없어요 (닫혔거나 정리됐어요)"); } }, [data]);
+  return (<React.Fragment>
+    <div style={{ display: s ? "none" : "block" }}>{p.wrap(<React.Fragment>{p.title}
+      {!st ? (b.err ? <React.Fragment><Msg text={"클럽 현황을 불러오지 못했어요: " + b.err} /><Btn icon="refresh" onClick={load}>{"다시 시도"}</Btn></React.Fragment>
+        : <div style={{ color: "var(--td)", fontSize: 13 }}>{"불러오는 중…"}</div>)
+        : <SafeBox what="클럽 현황"><ClubsBoard st={st} data={data} mobile={mob} err={b.err} onReload={load} onWatch={open} onReview={p.onReview} /></SafeBox>}
+    </React.Fragment>)}</div>
+    {s && <ClubWatch key={s.club.id} s={s} api={api} mobile={mob} title={p.title} onBack={close} reload={load} onOpenLab={p.onOpenLab} onReview={p.onReview} />}
+  </React.Fragment>);
+}
+
+function ClubsBoard(p) {
+  var st = p.st, T = st.totals, mob = p.mobile;
+  var _f = useState(""); var flt = _f[0]; var setFlt = _f[1];
+  var _s = useState("recent"); var sort = _s[0]; var setSort = _s[1];
+  var _q = useState(""); var q = _q[0]; var setQ = _q[1];
+  var FL = { todo: function (s) { return s.todo; }, pending: function (s) { return s.pending.length > 0; }, quiet: function (s) { return s.quiet; },
+    full: function (s) { return s.full; }, fresh: function (s) { return s.isNew; } };
+  var CHIPS = [["", "전체"], ["todo", "확인 필요"], ["pending", "가입 대기"], ["quiet", "조용함"], ["full", "꽉 참"], ["fresh", "새 클럽"]];
+  var key = q.trim().toLowerCase();
+  var hit = function (s) {
+    if (!key) return true;
+    return String(s.club.name || "").toLowerCase().indexOf(key) >= 0 || String((s.leader && s.leader.nickname) || "").toLowerCase().indexOf(key) >= 0;
+  };
+  /* 기본(최근 활동순)은 확인할 것이 있는 클럽을 맨 위에 */
+  var SORTS = {
+    recent: function (a, b) { return (b.todo ? 1 : 0) - (a.todo ? 1 : 0) || (b.lastPost || 0) - (a.lastPost || 0) || b.active.length - a.active.length; },
+    members: function (a, b) { return b.active.length - a.active.length || (b.lastPost || 0) - (a.lastPost || 0); },
+    newest: function (a, b) { return new Date(b.club.created_at) - new Date(a.club.created_at); }
+  };
+  var rows = st.list.filter(function (s) { return (!flt || FL[flt](s)) && hit(s); }).sort(SORTS[sort] || SORTS.recent);
+  var cnt = function (k) { return k ? st.list.filter(FL[k]).length : st.list.length; };
+  var kpis = [
+    ["클럽", T.clubs + "개", T.newWeek ? "이번 주 새 클럽 " + T.newWeek : "이번 주 새 클럽 없음"],
+    ["클럽원", T.members + "명", "클럽당 평균 " + num(T.avg)],
+    ["가입 대기", T.pending + "명", T.pendingClubs ? T.pendingClubs + "개 클럽" : "없음", T.pending ? "#5AA9F0" : null],
+    ["확인할 것", T.todo + "건", "신청 " + T.apps + " · 분쟁 " + T.disputes + " · 신고 " + T.reports, T.todo ? "#FF6B6B" : null, T.todo ? p.onReview : null],
+    ["최근 7일 글", T.posts7 + "개", "댓글 " + T.comments7 + "개"],
+    ["덱 공개", T.decks + " / " + T.members, T.members ? Math.round(T.decks / T.members * 100) + "% 공개" : "—"]
+  ];
+  var watch = function (s) { p.onWatch(s.club.id); };
+  var memberCell = function (s) {
+    var cap = Number(s.club.capacity) || 0, w = cap ? Math.min(100, s.active.length / cap * 100) : 0;
+    return (<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ width: 56, height: 6, borderRadius: 3, background: "var(--inner)", overflow: "hidden", flexShrink: 0 }}><div style={{ width: w + "%", height: "100%", background: s.full ? "#FFA726" : "var(--acc)" }} /></div>
+      <span style={{ fontFamily: "var(--m)", fontWeight: 700 }}>{s.active.length + "/" + cap}</span></div>);
+  };
+  var list;
+  if (!rows.length) list = (<Card style={{ textAlign: "center", color: "var(--td)", fontSize: 13, padding: 30 }}>{st.list.length ? "조건에 맞는 클럽이 없어요" : "아직 열린 클럽이 없어요"}</Card>);
+  else if (mob) list = rows.map(function (s) {
+    var c = s.club;
+    return (<div key={c.id} onClick={function () { watch(s); }} style={Object.assign({}, CARD, { padding: "12px 14px", marginBottom: 8, cursor: "pointer" }, s.todo ? { borderColor: "rgba(255,107,107,.45)" } : null)}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Emblem name={c.name} size={38} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}><b style={{ fontSize: 14, wordBreak: "break-all" }}>{txt(c.name)}</b>{clubTags(s)}</div>
+          <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{"클럽장 " + (s.leader ? txt(s.leader.nickname) : "?") + " · " + dayOf(c.created_at) + " 개설"}</div>
+        </div>
+        <Icon n="eye" style={{ color: "var(--td)" }} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 6, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)" }}>
+        {[["클럽원", s.active.length + "/" + (Number(c.capacity) || 0)], ["덱 공개", s.decks + "명"], ["7일 글", s.posts7 + "개"], ["마지막 글", lastPostText(s)]].map(function (x) {
+          return (<div key={x[0]} style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: "var(--td)" }}>{x[0]}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: x[0] === "마지막 글" && s.quiet ? "#FFA726" : "var(--t1)" }}>{x[1]}</div></div>);
+        })}
+      </div>
+    </div>);
+  });
+  else list = (<Card pad={0} style={{ overflowX: "auto" }}>
+    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <thead><tr>{["클럽", "클럽장", "클럽원", "덱 공개", "최근 7일", "마지막 글", "개설", ""].map(function (h, i) {
+        return <th key={i} style={{ fontSize: 11, color: "var(--td)", fontWeight: 600, textAlign: "left", padding: "10px 12px", borderBottom: "1px solid var(--bd)", whiteSpace: "nowrap" }}>{h}</th>;
+      })}</tr></thead>
+      <tbody>{rows.map(function (s) {
+        var c = s.club;
+        var td = { fontSize: 13, padding: "11px 12px", borderBottom: "1px solid var(--bd)", whiteSpace: "nowrap", verticalAlign: "middle" };
+        var tags = clubTags(s);
+        return (<tr key={c.id} onClick={function () { watch(s); }} style={{ cursor: "pointer", background: s.todo ? "rgba(255,107,107,.05)" : "transparent" }}>
+          <td style={Object.assign({}, td, { whiteSpace: "normal", minWidth: 210 })}><div style={{ display: "flex", alignItems: "center", gap: 9 }}><Emblem name={c.name} size={30} />
+            <div style={{ minWidth: 0 }}><b style={{ wordBreak: "break-all" }}>{txt(c.name)}</b>{tags.length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 3 }}>{tags}</div>}</div></div></td>
+          <td style={Object.assign({}, td, { color: "var(--t2)" })}>{s.leader ? txt(s.leader.nickname) : "?"}</td>
+          <td style={td}>{memberCell(s)}</td>
+          <td style={Object.assign({}, td, { fontFamily: "var(--m)", color: "var(--t2)" })}>{s.decks + "/" + s.active.length}</td>
+          <td style={Object.assign({}, td, { color: "var(--t2)" })}>{"글 " + s.posts7 + " · 댓글 " + s.comments7}</td>
+          <td style={Object.assign({}, td, { color: s.quiet ? "#FFA726" : "var(--td)" })}>{lastPostText(s)}</td>
+          <td style={Object.assign({}, td, { color: "var(--td)" })}>{dayOf(c.created_at)}</td>
+          <td style={Object.assign({}, td, { textAlign: "right" })}><Btn sm icon="eye" onClick={function (e) { e.stopPropagation(); watch(s); }} title="그 클럽장에게 보이는 화면 (읽기 전용)">{"클럽장 화면"}</Btn></td>
+        </tr>);
+      })}</tbody>
+    </table>
+  </Card>);
+  return (<div>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+      <b style={{ fontSize: 15 }}>{"클럽 현황"}</b><Tag c="blue"><Icon n="eye" size={11} />{"관리자에게만 보여요"}</Tag>
+      <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--td)" }}>{ago(p.data.at) + " 확인"}</span>
+      <Btn sm ghost icon="refresh" onClick={p.onReload} title="새로 보기" />
+    </div>
+    <Msg text={p.err} />
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(" + (mob ? 2 : 6) + ",minmax(0,1fr))", gap: 10, marginBottom: 16 }}>
+      {kpis.map(function (k) {
+        return (<div key={k[0]} onClick={k[4] || undefined} title={k[4] ? "인증 심사로" : undefined} style={Object.assign({}, CARD, { padding: "13px 15px", cursor: k[4] ? "pointer" : "default", minWidth: 0 })}>
+          <div style={KICK}>{k[0]}</div>
+          <div style={{ fontSize: 19, fontWeight: 900, margin: "5px 0 2px", letterSpacing: -.4, color: k[3] || "var(--t1)", fontFamily: "var(--m)", whiteSpace: "nowrap" }}>{k[1]}</div>
+          <div style={{ fontSize: 11.5, color: "var(--td)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{k[2]}</div></div>);
+      })}
+    </div>
+    <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center", flexWrap: mob ? "wrap" : "nowrap" }}>
+      <div className="club-chips" style={{ display: "flex", gap: 6, flex: mob ? "1 1 100%" : 1, minWidth: 0, overflowX: "auto" }}>
+        {CHIPS.map(function (x) {
+          var on = flt === x[0], n = cnt(x[0]);
+          return (<button key={x[0]} type="button" onClick={function () { setFlt(x[0]); }} style={{ padding: "7px 12px", fontSize: 12.5, fontWeight: 700, borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0,
+            background: on ? "rgba(255,213,79,.14)" : "var(--inner)", color: on ? "var(--acc)" : "var(--t2)", opacity: n || !x[0] ? 1 : .5 }}>{x[1] + " " + n}</button>);
+        })}
+      </div>
+      <input value={q} onChange={function (e) { setQ(e.target.value); }} placeholder="클럽 · 클럽장 찾기" style={Object.assign({}, INP, { width: mob ? 0 : 160, flex: mob ? 1 : "none", padding: "7px 10px", fontSize: 12.5 })} />
+      <select value={sort} onChange={function (e) { setSort(e.target.value); }} title="정렬" style={Object.assign({}, INP, { width: "auto", padding: "7px 8px", fontSize: 12.5, colorScheme: "var(--cscheme)" })}>
+        <option value="recent">{"최근 활동순"}</option><option value="members">{"클럽원 많은 순"}</option><option value="newest">{"새로 연 순"}</option>
+      </select>
+    </div>
+    {list}
+    <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 10, lineHeight: 1.7 }}>
+      {"클럽을 누르면 그 클럽장에게 보이는 화면을 읽기 전용으로 열어요. 글은 최근 30일 · 댓글은 최근 7일 것을 세고, 클럽원 접속 시각은 따로 기록하지 않아요."}
+      {p.data.capped && <div style={{ color: "#FFA726" }}>{"줄이 많아 일부만 셌어요 — 서버가 한 번에 1000줄까지만 줘요"}</div>}
+    </div>
+  </div>);
+}
+
+/* 클럽장 화면을 읽기 전용으로 — 그 클럽장이 보는 것과 같은 화면(라운지 · 덱 현황 · 클럽원 · 관리)에 관리자 띠를 얹는다.
+   '내가 누른 반응 · 투표 · 참여'는 그 클럽장의 것으로 보인다 */
+function ClubWatch(p) {
+  var s = p.s, c = s.club, mob = p.mobile;
+  var lead = s.leader || { club_id: c.id, user_id: c.leader_id, nickname: "(클럽장 정보 없음)", role: "leader", status: "active", share_deck_id: null };
+  var me = { uid: lead.user_id, member: lead, club: c, app: null };
+  var ro = useRef(null);
+  if (!ro.current || ro.current.src !== p.api) ro.current = { src: p.api, api: watchApi(p.api) };
+  /* 연구소로 여는 것은 관리자 자기 연구소에 사본을 여는 것이라 그대로 둔다 (수정 제안 보내기는 숨김) */
+  var openLab = p.onOpenLab ? function (deck) { p.onOpenLab(deck, { mode: "open" }); } : null;
+  var id8 = function (v) { return String(v || "").slice(0, 8); };
+  var banner = (<Card style={{ marginBottom: 14, borderColor: "rgba(108,184,255,.4)", background: "rgba(108,184,255,.07)" }} pad="12px 14px">
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+      <Icon n="eye" size={18} style={{ color: "#5AA9F0", marginTop: 1 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 800, fontSize: 13.5 }}>{"관리자 보기 · 읽기 전용"}</div>
+        <div style={{ fontSize: 12, color: "var(--t2)", marginTop: 2, lineHeight: 1.6 }}>{"‘" + txt(c.name) + "’ 클럽장 " + txt(lead.nickname) + " 님에게 보이는 화면 그대로예요. 여기서는 눌러도 아무것도 바뀌지 않아요."}</div>
+        <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 4, lineHeight: 1.6 }}>{"개설 " + dayOf(c.created_at) + " · 초대 코드 " + txt(c.invite_code) + " · 클럽 " + id8(c.id) + " · 클럽장 " + id8(lead.user_id)}</div>
+      </div>
+      <Btn sm icon="back" onClick={p.onBack} style={{ flexShrink: 0 }}>{mob ? "목록" : "클럽 현황"}</Btn>
+    </div>
+    {s.todo && (<div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--bd)", fontSize: 12.5, color: "#FF8A80", flexWrap: "wrap" }}>
+      <Icon n="alert" /><span style={{ flex: 1, minWidth: 0 }}>{[s.dispute ? "분쟁(되찾기 · 재인증) 진행 중" : "", s.reports ? "처리 안 된 신고 " + s.reports + "건" : ""].filter(Boolean).join(" · ")}</span>
+      {p.onReview && <Btn sm icon="shield" onClick={p.onReview}>{"인증 심사에서 보기"}</Btn>}</div>)}
+  </Card>);
+  return (<ClubHome mobile={mob} api={ro.current.api} me={me} reload={p.reload} watch onOpenLab={openLab}
+    title={<React.Fragment>{p.title}{banner}</React.Fragment>} />);
+}
+
 function ClubHome(p) {
   var api = p.api, mob = p.mobile, me = p.me, club = me.club;
   var leader = me.member.role === "leader";
+  /* 관리자 보기(ClubWatch) — 클럽장 화면을 읽기 전용으로 그린다. 쓰는 단추는 숨기고 api 도 읽기만 통과한다 */
+  var watch = !!p.watch;
   var _tab = useState("feed"); var tab = _tab[0]; var setTab = _tab[1];
   var _mem = useState([]); var members = _mem[0]; var setMembers = _mem[1];
   var loadMembers = useCallback(async function () { try { setMembers(await api.loadMembers(club.id)); } catch (e) {} }, [club.id]);
@@ -924,7 +1225,7 @@ function ClubHome(p) {
   /* 내 정보가 바뀌는 일(클럽장 넘기기 · 닉네임 · 덱 공개)은 클럽원 명단도 같이 새로 읽는다 —
      예전에는 클럽장을 넘긴 뒤에도 '클럽장 ○○ · 나' 가 그대로 남았다 */
   var reloadAll = async function () { await p.reload(); await loadMembers(); };
-  var ctx = { api: api, mob: mob, me: me, club: club, leader: leader, members: members, active: active, reloadMembers: loadMembers, reload: reloadAll,
+  var ctx = { api: api, mob: mob, me: me, club: club, leader: leader, watch: watch, members: members, active: active, reloadMembers: loadMembers, reload: reloadAll,
     goTab: setTab, report: function (kind, post) { setReport({ kind: kind, post: post || null }); } };
   var rv = me.app && me.app.kind === "reverify" && (me.app.status === "draft" || me.app.status === "pending") && me.app.target_club_id === club.id ? me.app : null;
   var invite = function () {
@@ -941,8 +1242,8 @@ function ClubHome(p) {
         <div style={{ fontSize: 12, color: "var(--td)", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {"클럽원 " + active.length + " / " + club.capacity + " · 클럽장 " + ((active.find(function (m) { return m.role === "leader"; }) || {}).nickname || "")}</div>
       </div>
-      {leader && <Btn icon="link" title={"초대 안내문 복사 (코드 " + club.invite_code + ")"} onClick={invite}>{"초대"}</Btn>}
-      {!leader && <Btn ghost icon="flag" title="이 클럽이나 클럽장을 관리자에게 신고해요" onClick={function () { ctx.report(""); }}>{"신고"}</Btn>}
+      {leader && !watch && <Btn icon="link" title={"초대 안내문 복사 (코드 " + club.invite_code + ")"} onClick={invite}>{"초대"}</Btn>}
+      {!leader && !watch && <Btn ghost icon="flag" title="이 클럽이나 클럽장을 관리자에게 신고해요" onClick={function () { ctx.report(""); }}>{"신고"}</Btn>}
     </div>
     {toast && <Msg bad={false} text={toast} />}
     {rv && <ReverifyBanner api={api} app={rv} reload={reloadAll} mobile={mob} />}
@@ -1085,7 +1386,7 @@ function Feed(p) {
     </div>)}
     <Msg text={nb.err} /><Msg bad={false} text={nb.ok} />
     {mob && Week}
-    <Card style={{ marginBottom: 12 }}>
+    {!ctx.watch && (<Card style={{ marginBottom: 12 }}>
       <div onClick={function () { setComp({ kind: "talk" }); }} style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
         <Avatar name={ctx.me.member.nickname} />
         <div style={Object.assign({}, INP, { color: "var(--td)", borderRadius: 20 })}>{"클럽원에게 한마디 남기기…"}</div>
@@ -1096,7 +1397,7 @@ function Feed(p) {
         <Btn ghost icon="poll" onClick={function () { setComp({ kind: "poll" }); }}>{"투표"}</Btn>
         {ctx.leader && <Btn ghost icon="pin" onClick={function () { setComp({ kind: "notice" }); }}>{"공지"}</Btn>}
       </div>
-    </Card>
+    </Card>)}
     {/* 말머리는 한 줄 — 휴대폰에서 넘치면 옆으로 밀어 본다 (새로 보기 버튼이 혼자 다음 줄로 떨어지지 않게) */}
     <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center" }}>
       <div className="club-chips" style={{ display: "flex", gap: 6, flex: 1, minWidth: 0, overflowX: "auto" }}>
@@ -1135,7 +1436,7 @@ function BadPost(p) {
   var ctx = p.ctx, x = p.post || {};
   var b = useBusy();
   var what = p.what || "글";
-  var can = x.author_id === ctx.me.uid || ctx.leader;
+  var can = (x.author_id === ctx.me.uid || ctx.leader) && !ctx.watch;
   return (<Card style={{ marginBottom: 12 }} pad="12px 16px">
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <Icon n="alert" style={{ color: "#FFA726" }} />
@@ -1177,7 +1478,8 @@ function EventsBox(p) {
             <button type="button" onClick={function () { setWho(who === e.id ? null : e.id); }} title="누가 참여하는지 보기"
               style={{ background: "none", border: "none", padding: "7px 0", margin: "-3px 0", color: "var(--td)", fontSize: 11.5, cursor: "pointer", fontFamily: "inherit" }}>
               {String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + " · " + list.length + (known ? "/" + ctx.active.length : "") + "명 참여 " + (who === e.id ? "▴" : "▾")}</button></div>
-          <Btn sm ok={on} icon={on ? "check" : null} onClick={function () { b.run(async function () { await ctx.api.setRsvp(e, !on); await p.reload(); }); }}>{on ? "참여" : "참여하기"}</Btn>
+          {ctx.watch ? (on ? <Tag c="green" title="클럽장이 참여를 눌렀어요">{"클럽장 참여"}</Tag> : null)
+            : <Btn sm ok={on} icon={on ? "check" : null} onClick={function () { b.run(async function () { await ctx.api.setRsvp(e, !on); await p.reload(); }); }}>{on ? "참여" : "참여하기"}</Btn>}
         </div>
         {who === e.id && <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.7, margin: "4px 0 0 48px" }}>{list.length ? list.join(" · ") : "아직 참여한 사람이 없어요"}</div>}
       </div>);
@@ -1197,7 +1499,7 @@ function PostHead(p) {
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><b>{txt(x.author_name) || "떠난 클럽원"}</b>{isLeaderAuthor && <Tag c="acc">{"클럽장"}</Tag>}<Tag c={k[1]}>{k[0]}</Tag>{x.pinned && <Tag c="acc"><Icon n="pin" size={10} />{"고정"}</Tag>}</div>
       <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 1 }}>{ago(x.created_at) + (x.deck && x.deck.src === "lab" ? " · 덱 연구소에서" : "")}</div>
     </div>
-    {p.onMenu && <PostMenu {...p} mine={mine} />}
+    {p.onMenu && !ctx.watch && <PostMenu {...p} mine={mine} />}
   </div>);
 }
 function PostMenu(p) {
@@ -1248,6 +1550,7 @@ function Poll(p) {
   var total = votes.length;
   var pick = function (i, e) {
     e.stopPropagation();
+    if (ctx.watch) return;
     /* 화면을 켜 둔 사이 마감됐을 수 있어 누르는 순간 다시 본다 */
     if (closed || (hasClose && closeAt < Date.now())) { b.setErr("마감된 투표예요"); return; }
     b.run(async function () { await ctx.api.vote(x, mine && mine.choice === i ? null : i); p.onChanged(); });
@@ -1257,14 +1560,14 @@ function Poll(p) {
       var n = votes.filter(function (v) { return v.choice === i; }).length;
       var pct = total ? Math.round(n / total * 100) : 0;
       var me = mine && mine.choice === i;
-      return (<div key={i} onClick={function (e) { pick(i, e); }} style={{ position: "relative", border: "1px solid " + (me ? "rgba(255,213,79,.45)" : "var(--bd)"), borderRadius: 10, padding: "11px 12px", marginBottom: 6, overflow: "hidden", cursor: closed ? "default" : "pointer" }}>
+      return (<div key={i} onClick={function (e) { pick(i, e); }} style={{ position: "relative", border: "1px solid " + (me ? "rgba(255,213,79,.45)" : "var(--bd)"), borderRadius: 10, padding: "11px 12px", marginBottom: 6, overflow: "hidden", cursor: closed || ctx.watch ? "default" : "pointer" }}>
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pct + "%", background: me ? "rgba(255,213,79,.12)" : "var(--inner)" }} />
         <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 8 }}>
           <span style={{ fontWeight: me ? 800 : 500, minWidth: 0, wordBreak: "break-word" }}>{me && <Icon n="check" style={{ color: "var(--acc)", marginRight: 4 }} />}{txt(o) || "(표시할 수 없는 선택지)"}</span>
           <span style={{ fontFamily: "var(--m)", color: "var(--td)", fontSize: 12, whiteSpace: "nowrap" }}>{n + "명 · " + pct + "%"}</span>
         </div></div>);
     })}
-    <div style={{ fontSize: 11.5, color: "var(--td)" }}>{total + "명 참여" + (hasClose ? (closed ? " · 마감됨" : " · " + fmtWhen(closeAt) + " 마감") : "") + (mine && !closed ? " · 다시 누르면 취소" : "")}</div>
+    <div style={{ fontSize: 11.5, color: "var(--td)" }}>{total + "명 참여" + (hasClose ? (closed ? " · 마감됨" : " · " + fmtWhen(closeAt) + " 마감") : "") + (mine && !closed && !ctx.watch ? " · 다시 누르면 취소" : "")}</div>
     <Msg text={b.err} />
   </div>);
 }
@@ -1275,7 +1578,7 @@ function Reactions(p) {
   var b = useBusy();
   var cnt = {}, mine = {};
   list.forEach(function (r) { cnt[r.emoji] = (cnt[r.emoji] || 0) + 1; if (r.user_id === ctx.me.uid) mine[r.emoji] = 1; });
-  var toggle = function (k, e) { e.stopPropagation(); setPick(false); b.run(async function () { await ctx.api.setReaction(x, k, !mine[k]); p.onChanged(); }); };
+  var toggle = function (k, e) { e.stopPropagation(); if (ctx.watch) return; setPick(false); b.run(async function () { await ctx.api.setReaction(x, k, !mine[k]); p.onChanged(); }); };
   /* 휴대폰에서 누르기 쉽게 버튼 높이를 30px 안팎으로 */
   var chip = { padding: "5px 10px", borderRadius: 14, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", minHeight: 30 };
   return (<div style={{ display: "flex", gap: 6, marginTop: 12, alignItems: "center", flexWrap: "wrap", position: "relative" }}>
@@ -1287,7 +1590,7 @@ function Reactions(p) {
       return (<button key={e[0]} type="button" onClick={function (ev) { toggle(e[0], ev); }} style={Object.assign({}, chip, {
         border: "1px solid " + (mine[e[0]] ? "rgba(255,213,79,.45)" : "var(--bd)"), background: mine[e[0]] ? "rgba(255,213,79,.1)" : "transparent", color: "var(--t2)" })}>{e[1] + " " + cnt[e[0]]}</button>);
     })}
-    <button type="button" title="반응 남기기" onClick={function (e) { e.stopPropagation(); setPick(!pick); }} style={Object.assign({}, chip, { border: "1px dashed var(--bd)", background: "transparent", color: "var(--td)" })}>{"+ 😊"}</button>
+    {!ctx.watch && <button type="button" title="반응 남기기" onClick={function (e) { e.stopPropagation(); setPick(!pick); }} style={Object.assign({}, chip, { border: "1px dashed var(--bd)", background: "transparent", color: "var(--td)" })}>{"+ 😊"}</button>}
     {pick && (<div onClick={function (e) { e.stopPropagation(); }} style={Object.assign({}, CARD, { position: "absolute", left: 0, top: 38, zIndex: 20, background: "var(--bg)", padding: 4, display: "flex", gap: 2, boxShadow: "0 8px 30px rgba(0,0,0,.35)" })}>
       {EMOJI.slice(1).map(function (e) { return (<button key={e[0]} type="button" onClick={function (ev) { toggle(e[0], ev); }} style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", padding: "6px 8px" }}>{e[1]}</button>); })}
     </div>)}
@@ -1302,9 +1605,9 @@ function DeckActions(p) {
   var canCopy = x.allow_copy || mine;
   var my = cmp && p.tools && p.tools.summaryNow ? p.tools.summaryNow() : null;
   return (<React.Fragment>
-    {canCopy && <Btn ghost purple icon="flask" onClick={function (e) { p.onOpenLab(x.deck, { mode: "open" }); }}>{mob ? "연구소로" : "연구소에서 열기"}</Btn>}
-    {p.tools && p.tools.summaryNow && <Btn ghost icon="swap" onClick={function () { setCmp(true); }}>{mob ? "비교" : "내 덱과 비교"}</Btn>}
-    {p.suggest && canCopy && !mine && <Btn ghost icon="swap" purple onClick={function () { p.onOpenLab(x.deck, { mode: "suggest", post: x }); }}>{"수정 제안"}</Btn>}
+    {canCopy && p.onOpenLab && <Btn ghost purple icon="flask" onClick={function (e) { p.onOpenLab(x.deck, { mode: "open" }); }}>{mob ? "연구소로" : "연구소에서 열기"}</Btn>}
+    {p.tools && p.tools.summaryNow && !ctx.watch && <Btn ghost icon="swap" onClick={function () { setCmp(true); }}>{mob ? "비교" : "내 덱과 비교"}</Btn>}
+    {p.suggest && canCopy && !mine && !ctx.watch && p.onOpenLab && <Btn ghost icon="swap" purple onClick={function () { p.onOpenLab(x.deck, { mode: "suggest", post: x }); }}>{"수정 제안"}</Btn>}
     {cmp && (<Modal title="내 덱과 비교" mobile={mob} onClose={function () { setCmp(false); }} width={620}>
       {my && my.deck ? <DeckCompare a={x.deck} b={my.deck} aName={txt(x.author_name) + " · " + txt(x.deck.team)} bName={"내 덱 · " + txt(my.deck.team)} />
         : <div style={{ color: "var(--td)", fontSize: 13 }}>{"지금 열린 덱이 비어 있어요"}</div>}
@@ -1404,20 +1707,21 @@ function PostDetail(p) {
           <Avatar name={txt(c.author_name)} size={28} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}><b>{txt(c.author_name) || "떠난 클럽원"}</b><span style={{ fontSize: 11.5, color: "var(--td)" }}>{ago(c.created_at)}</span>
-              {(mine || ctx.leader) && <button type="button" onClick={function () { if (window.confirm("댓글을 지울까요?" + (mine ? "" : " (클럽장 권한)"))) b.run(async function () { await api.deleteComment(c.id); await load(); }); }}
+              {(mine || ctx.leader) && !ctx.watch && <button type="button" onClick={function () { if (window.confirm("댓글을 지울까요?" + (mine ? "" : " (클럽장 권한)"))) b.run(async function () { await api.deleteComment(c.id); await load(); }); }}
                 style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 12, padding: "6px 8px", margin: "-6px -8px -6px auto", fontFamily: "inherit" }}>{"지우기"}</button>}</div>
             {txt(c.body) && <div style={{ color: "var(--t2)", marginTop: 3, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{txt(c.body)}</div>}
             {c.suggestion && <Suggestion s={c.suggestion} ctx={ctx} onOpenLab={p.onOpenLab} />}
           </div>
         </div></Safe>);
       })}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", paddingTop: 12, borderTop: cms.length ? "1px solid var(--bd)" : "none" }}>
+      {!ctx.watch && (<div style={{ display: "flex", gap: 8, alignItems: "center", paddingTop: 12, borderTop: cms.length ? "1px solid var(--bd)" : "none" }}>
         <Avatar name={ctx.me.member.nickname} size={28} />
         <input value={msg} onChange={function (e) { setMsg(e.target.value); if (b.err) b.setErr(""); }} maxLength={1000} placeholder="댓글 달기…" onKeyDown={function (e) { if (e.key === "Enter" && !e.nativeEvent.isComposing) send(); }}
           style={Object.assign({}, INP, { borderRadius: 18, flex: 1, width: 0 })} />
         <Btn pri icon="send" onClick={send} disabled={b.busy || !msg.trim()} style={{ borderRadius: "50%", padding: 9, minWidth: 38, minHeight: 38 }} title="보내기" />
-      </div>
-      {x.deck && x.author_id !== ctx.me.uid && (x.allow_copy) && <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 8 }}>{"덱을 고쳐 제안하려면 위의 ‘수정 제안’ — 덱 연구소에서 바꾼 뒤 보내면 댓글로 붙어요"}</div>}
+      </div>)}
+      {ctx.watch && !cms.length && <div style={{ fontSize: 12.5, color: "var(--td)", padding: "12px 0 2px" }}>{"아직 댓글이 없어요"}</div>}
+      {!ctx.watch && x.deck && x.author_id !== ctx.me.uid && (x.allow_copy) && <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 8 }}>{"덱을 고쳐 제안하려면 위의 ‘수정 제안’ — 덱 연구소에서 바꾼 뒤 보내면 댓글로 붙어요"}</div>}
       <Msg text={b.err} />
     </Card>
   </div>);
@@ -1631,7 +1935,7 @@ function Members(p) {
   /* 알림은 누른 곳 가까이 — 내 설정(덱 공개 · 닉네임)과 명단(넘기기 · 내보내기)을 따로 */
   var bMe = useBusy(), bList = useBusy();
   var loadSnap = async function () { try { setSnap(await api.loadMyDeck()); } catch (e) {} };
-  useEffect(function () { loadSnap(); }, []);
+  useEffect(function () { if (!ctx.watch) loadSnap(); }, []);
   var decks = p.decks || [];
   var deckName = function (id) {
     var i = decks.findIndex(function (d) { return d.deckId === id; });
@@ -1657,9 +1961,9 @@ function Members(p) {
         var self = m.user_id === ctx.me.uid;
         return (<div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderTop: i ? "1px solid var(--bd)" : "none" }}>
           <Avatar name={m.nickname} />
-          <div style={{ flex: 1, minWidth: 0 }}><div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}><b style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{m.nickname}</b>{m.role === "leader" && <Tag c="acc">{"클럽장"}</Tag>}{self && <Tag>{"나"}</Tag>}</div>
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}><b style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{m.nickname}</b>{m.role === "leader" && <Tag c="acc">{"클럽장"}</Tag>}{self && !ctx.watch && <Tag>{"나"}</Tag>}</div>
             <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 2 }}>{m.joined_at ? fmtWhen(m.joined_at).split(" ")[0] + " 가입" : ""}{m.share_deck_id ? " · 덱 공개" : " · 덱 비공개"}</div></div>
-          {ctx.leader && !self && (<React.Fragment>
+          {ctx.leader && !self && !ctx.watch && (<React.Fragment>
             <Btn sm ghost title="클럽장 넘기기" onClick={function () { act(bList, m.nickname + " 님에게 클럽장을 넘길까요? 넘기면 나는 일반 클럽원이 돼요.", async function () { await api.transferLeader(ctx.club.id, m.user_id); await ctx.reload(); }, m.nickname + " 님에게 클럽장을 넘겼어요"); }}>{mob ? "위임" : "클럽장 넘기기"}</Btn>
             <Btn sm ghost no onClick={function () { act(bList, m.nickname + " 님을 내보낼까요?", async function () { await api.kickMember(ctx.club.id, m.user_id); await ctx.reloadMembers(); }, m.nickname + " 님을 내보냈어요"); }}>{"내보내기"}</Btn>
           </React.Fragment>)}
@@ -1697,6 +2001,8 @@ function Members(p) {
   </div>);
   var leave = (!ctx.leader ? <Btn no style={{ width: "100%", marginTop: mob ? 16 : 0 }} onClick={function () { act(bMe, "클럽에서 나갈까요? 공개한 덱 요약본도 지워져요.", async function () { await api.leaveClub(); realApi.forgetShareCache(); await ctx.reload(); }); }}>{"클럽 탈퇴"}</Btn>
     : <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6, marginTop: mob ? 14 : 0 }}>{"클럽장은 다른 클럽원에게 넘긴 뒤 탈퇴할 수 있어요. 클럽을 닫으려면 관리 탭에서."}</div>);
+  /* 관리자 보기는 명단만 — 내 설정 · 탈퇴는 보는 사람(관리자)의 것이 아니다 */
+  if (ctx.watch) return listCol;
   /* 휴대폰은 한 줄이라 명단이 길면 내 설정이 맨 아래로 묻혔다 — 내 설정을 먼저, 탈퇴는 맨 끝에 */
   if (mob) return (<div>{meCards}{listCol}{leave}</div>);
   return (<div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 16, alignItems: "start" }}>
@@ -1735,24 +2041,26 @@ function Manage(p) {
           return (<div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid var(--bd)" }}>
             <Avatar name={m.nickname} size={30} />
             <div style={{ flex: 1, minWidth: 0 }}><b style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.nickname}</b><div style={{ fontSize: 11.5, color: "var(--td)" }}>{ago(m.created_at) + " 신청 · 인게임 닉네임"}</div></div>
-            <Btn sm no onClick={function () { decide(m, false); }} disabled={bJoin.busy}>{"거절"}</Btn>
-            <Btn sm ok onClick={function () { decide(m, true); }} disabled={bJoin.busy || full} title={full ? "정원이 다 찼어요" : ""}>{"승인"}</Btn>
+            {!ctx.watch && <Btn sm no onClick={function () { decide(m, false); }} disabled={bJoin.busy}>{"거절"}</Btn>}
+            {!ctx.watch && <Btn sm ok onClick={function () { decide(m, true); }} disabled={bJoin.busy || full} title={full ? "정원이 다 찼어요" : ""}>{"승인"}</Btn>}
           </div>);
         }) : <div style={{ fontSize: 12.5, color: "var(--td)" }}>{"대기 중인 신청이 없어요"}</div>}
+        {ctx.watch && p.pending.length > 0 && <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 6 }}>{"승인 · 거절은 클럽장이 해요"}</div>}
         <Msg text={bJoin.err} /><Msg bad={false} text={bJoin.ok} />
       </div>), p.pending.length ? p.pending.length + "명" : "")}
       {sec("초대 코드", (<div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontFamily: "var(--m)", fontSize: 22, fontWeight: 800, letterSpacing: 2, color: "var(--acc)", flex: 1, minWidth: 0 }}>{club.invite_code}</span>
           <Btn sm icon="copy" onClick={function () { copyText(club.invite_code); bCode.setErr(""); bCode.setOk("코드를 복사했어요"); }}>{"복사"}</Btn>
-          <Btn sm icon="refresh" onClick={function () { if (window.confirm("코드를 새로 만들까요? 예전 코드로는 더 신청할 수 없어요.")) bCode.run(async function () { await api.regenInvite(club.id); await ctx.reload(); }, "새 코드를 만들었어요"); }}>{"새로"}</Btn>
+          {!ctx.watch && <Btn sm icon="refresh" onClick={function () { if (window.confirm("코드를 새로 만들까요? 예전 코드로는 더 신청할 수 없어요.")) bCode.run(async function () { await api.regenInvite(club.id); await ctx.reload(); }, "새 코드를 만들었어요"); }}>{"새로"}</Btn>}
         </div>
         <div style={{ fontSize: 12, color: "var(--td)", marginTop: 6, lineHeight: 1.6 }}>{"인게임 클럽 채팅에 이 코드를 알려 주세요. 클럽 라운지 → 클럽 가입에 넣으면 신청이 여기로 와요."}</div>
         <Msg text={bCode.err} /><Msg bad={false} text={bCode.ok} />
       </div>), "정원 " + club.capacity + "명")}
       {sec("클럽 소개", (<div>
-        <Field area value={intro} onChange={function (v) { setIntro(v); if (bIntro.err) bIntro.setErr(""); }} max={200} rows={3} ph="가입 신청할 때 보이는 한두 줄" mb={8} />
-        <div style={{ textAlign: "right" }}><Btn sm pri onClick={function () { bIntro.run(async function () { await api.updateIntro(club.id, intro); await ctx.reload(); }, "소개를 저장했어요"); }} disabled={bIntro.busy}>{"저장"}</Btn></div>
+        {ctx.watch ? <div style={{ fontSize: 13, color: txt(club.intro) ? "var(--t2)" : "var(--td)", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{txt(club.intro) || "소개를 아직 안 적었어요"}</div>
+          : (<React.Fragment><Field area value={intro} onChange={function (v) { setIntro(v); if (bIntro.err) bIntro.setErr(""); }} max={200} rows={3} ph="가입 신청할 때 보이는 한두 줄" mb={8} />
+        <div style={{ textAlign: "right" }}><Btn sm pri onClick={function () { bIntro.run(async function () { await api.updateIntro(club.id, intro); await ctx.reload(); }, "소개를 저장했어요"); }} disabled={bIntro.busy}>{"저장"}</Btn></div></React.Fragment>)}
         <Msg text={bIntro.err} /><Msg bad={false} text={bIntro.ok} />
       </div>))}
     </div>
@@ -1761,20 +2069,21 @@ function Manage(p) {
         {ev && ev.events.map(function (e) {
           return (<div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid var(--bd)" }}>
             <span style={{ fontSize: 12, color: "var(--td)", fontFamily: "var(--m)", width: 104, flexShrink: 0 }}>{fmtWhen(e.starts_at)}</span><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{txt(e.title)}</span>
-            <Btn sm ghost no icon="trash" title="일정 지우기" onClick={function () { if (window.confirm("‘" + txt(e.title) + "’ 일정을 지울까요? 참여 표시도 함께 지워져요.")) bEv.run(async function () { await api.deleteEvent(e.id); await loadEv(); }, "일정을 지웠어요"); }} />
+            {!ctx.watch && <Btn sm ghost no icon="trash" title="일정 지우기" onClick={function () { if (window.confirm("‘" + txt(e.title) + "’ 일정을 지울까요? 참여 표시도 함께 지워져요.")) bEv.run(async function () { await api.deleteEvent(e.id); await loadEv(); }, "일정을 지웠어요"); }} />}
           </div>);
         })}
-        <div style={{ marginTop: 10 }}>
+        {ctx.watch && ev && !ev.events.length && <div style={{ fontSize: 12.5, color: "var(--td)" }}>{"다가오는 일정이 없어요"}</div>}
+        {!ctx.watch && (<div style={{ marginTop: 10 }}>
           <input value={et} onChange={function (e) { setEt(e.target.value); if (bEv.err) bEv.setErr(""); }} maxLength={40} placeholder="일정 이름 (예: 클럽전 3라운드)" style={Object.assign({}, INP, { marginBottom: 6 })} />
           <div style={{ display: "flex", gap: 6 }}>
             <input type="datetime-local" value={ed} onChange={function (e) { setEd(e.target.value); if (bEv.err) bEv.setErr(""); }} style={Object.assign({}, INP, { flex: 1, width: 0, colorScheme: "var(--cscheme)" })} />
             <Btn pri onClick={function () { bEv.run(async function () { if (!et.trim() || !ed) throw new Error("일정 이름과 날짜를 넣어 주세요"); await api.createEvent(club.id, et.trim(), new Date(ed).toISOString()); setEt(""); setEd(""); await loadEv(); }, "일정을 만들었어요"); }} disabled={bEv.busy}>{"추가"}</Btn>
           </div>
-        </div>
+        </div>)}
         <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 6 }}>{"라운지 일정 칸에 뜨고, 클럽원이 참여를 누를 수 있어요"}</div>
         <Msg text={bEv.err} /><Msg bad={false} text={bEv.ok} />
       </div>))}
-      {sec("클럽 닫기", (<div>
+      {!ctx.watch && sec("클럽 닫기", (<div>
         <div style={{ fontSize: 12, color: "var(--td)", lineHeight: 1.6, marginBottom: 10 }}>{"글 · 댓글 · 덱 요약본이 모두 지워지고 되돌릴 수 없어요."}</div>
         <Btn sm no icon="trash" onClick={function () {
           var t = window.prompt("정말 닫으려면 클럽 이름 ‘" + club.name + "’ 을 그대로 적어 주세요");
