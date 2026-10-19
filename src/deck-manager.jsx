@@ -1024,6 +1024,15 @@ function sdWho(w, x) {
   return true;
 }
 
+/* 라이브 시너지는 라이브 · 국가대표 · 올스타 카드를 합쳐 7장 이상 (주전 · 후보 27칸).
+   올스타도 라이브 시너지에 센다 (2026-10-19 사용자 확인 — 예전에는 라이브 · 국가대표만 셌다) */
+var LIVE_SYN_TYPES = ["라이브", "국가대표", "올스타"];
+function liveSynCount(counts) {
+  var n = 0;
+  LIVE_SYN_TYPES.forEach(function(t) { n += (counts && counts[t]) || 0; });
+  return n;
+}
+
 function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!pl) return {p:0,a:0,e:0,n:0,c:0,s:0};
   pl = applyTeamFlags(pl, sdState && sdState.teamName);
@@ -1061,7 +1070,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
 
   /* Synergy */
   var synCounts = sdState._synCounts || {};
-  var autoLive = (synCounts["라이브"]||0) + (synCounts["국가대표"]||0) >= 7;
+  var autoLive = liveSynCount(synCounts) >= 7;
   var autoImp = (synCounts["임팩트"]||0) >= 5;
   var autoSig = (synCounts["시그니처"]||0) >= 5;
   var synLive = sdState.synLive !== undefined ? sdState.synLive : autoLive;
@@ -1112,20 +1121,18 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
 
   /* 중계 전술 능력치 보너스 — 인게임 덱 화면의 수치로는 안 보이지만 경기에서는 실제로 오른다.
-       적극 : 승리조와 추격조 모두 +1 (편성과 상관없이 켤 수 있다)
-       분업 : 승리조만 +2 (승리조가 3명일 때만 켤 수 있다)
+     승리조 · 추격조 전술을 따로 고른다 (2026-10-19, rpTactic · rpChaseTactic).
+       승리조 적극 : 승리조 +1 / 승리조 분업 : 승리조 +2 (승리조가 3명일 때만)
+       추격조 적극 : 추격조 +1
      롱릴리프와 마무리는 어느 쪽에서도 받지 않는다.
      라인업에 보이는 능력치는 인게임 덱 화면의 수치와 같아야 하므로(스킬 · 전술로 오르는 것은 거기에 안 보인다)
      화면 능력치(c · s)에는 더하지 않고 따로 돌려준다(tac) — calcPit 이 종합점수에만 얹는다 (국대에이스 · 포수리드와 같은 식.
      2026-10-12 사용자 지정: 전에는 c · s 에 더해서 적극 · 분업을 켜면 라인업의 변화 · 구위 수치가 1 · 2씩 올라 보였다) */
   var tacB = 0;
   if (!isBat) {
-    var rpTac = rpTactic(sdState);
-    if (rpTac !== "기본") {
-      var rpGrp = rpGroupOf(slot, sdState.bpcIdx);
-      if (rpTac === "적극" && (rpGrp === "승리조" || rpGrp === "패전조")) tacB = 1;
-      else if (rpTac === "분업" && rpGrp === "승리조") tacB = 2;
-    }
+    var rpGrp = rpGroupOf(slot, sdState.bpcIdx);
+    if (rpGrp === "승리조") { var rpTac = rpTactic(sdState); tacB = rpTac === "분업" ? 2 : rpTac === "적극" ? 1 : 0; }
+    else if (rpGrp === "패전조") tacB = rpChaseTactic(sdState) === "적극" ? 1 : 0;
   }
 
   /* POTM 능력치 — 모든 능력치에 오른다 (potmEffect) */
@@ -3464,23 +3471,31 @@ function potmSummary(e, role) {
 }
 
 var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1}];
-/* 중계 가중치 — 편성 11종 x 전술 3가지의 자리값을 그대로 적어 둔다.
-   합: 기본 2.200 / 적극 2.540 / 분업 2.870.
-   분업은 승리조가 3명인 편성에서만 켤 수 있어 나머지는 null 이다.
+/* 중계 가중치 — 편성 11종 x (승리조 전술 / 추격조 전술) 조합마다 등판 차례대로 적어 둔다
+   (승리조 1번째 … → 추격조 1번째 … → 롱릴리프 1번째 …).
+   승리조: 기본 · 적극 · 분업(승리조가 3명인 편성만) / 추격조: 기본 · 적극 / 롱릴리프는 고르는 것이 없다.
+   중계 합은 승리조 전술이 정한다 — 기본 2.200 / 적극 2.540 / 분업 2.870 (선발 배율 SP_MULT 도 승리조 전술로만 정한다).
    분업 승리조는 나오는 차례대로 6회 이전 0.45 · 7회 0.60 · 8회 0.75 — 뒤 이닝일수록 같은 폭으로 중요해진다
-   (2026-10-16 사용자 승인. 전에는 0.35 · 0.70 · 0.75 로 7회와 8회 차이가 0.05 뿐이었다. 승리조 합 1.80 은 그대로) */
+   (2026-10-16 사용자 승인. 전에는 0.35 · 0.70 · 0.75 로 7회와 8회 차이가 0.05 뿐이었다. 승리조 합 1.80 은 그대로).
+   2026-10-19 — 승리조 · 추격조 전술을 따로 고른다 (사용자 지정 2026-10-15). 값은 엑셀 불펜가중치_수정안_20261015 의 '수정' 줄 그대로다.
+     · 기본/기본 · 적극/적극 · 분업/기본 은 전의 기본 · 적극 · 분업과 같은 값이다
+     · 적극/기본: 승리조 칸과 중계 합은 적극/적극과 같고, 추격조 · 롱릴리프 몫은 기본의 비율(앞 차례를 길게 씀)로 다시 나눈다.
+       추격조 1번째는 적극/적극 값을 넘지 않게 묶고, 남는 몫은 뒤 차례 · 롱릴리프에 준다
+     · 추격조 적극(승리조 기본 · 분업): 일찍 들어가고 일찍 내려가는 만큼 추격조 투수마다 제 몫의 15% 를 다음 차례가 이어 받는다
+       (마지막 추격조 몫은 롱릴리프 1번째가, 롱릴리프가 없으면 그대로). 선발이 그대로라 중계 합도 그대로다
+   분업이 없는 편성은 분업 칸이 null 이다 (getRPWeight 가 승리조 기본으로 떨어뜨린다) */
 var RP_WEIGHTS = [
-  /* 1/1/4 */ { "기본":[0.900,0.675,0.450,0.125,0.050,0.000], "적극":[0.850,0.740,0.600,0.300,0.050,0.000], "분업":null },
-  /* 1/2/3 */ { "기본":[0.900,0.650,0.150,0.450,0.050,0.000], "적극":[0.850,0.700,0.265,0.500,0.225,0.000], "분업":null },
-  /* 1/3/2 */ { "기본":[0.900,0.650,0.150,0.000,0.450,0.050], "적극":[0.850,0.700,0.240,0.050,0.500,0.200], "분업":null },
-  /* 2/1/3 */ { "기본":[0.850,0.300,0.550,0.450,0.050,0.000], "적극":[0.800,0.550,0.650,0.400,0.140,0.000], "분업":null },
-  /* 2/2/2 */ { "기본":[0.850,0.300,0.500,0.150,0.350,0.050], "적극":[0.800,0.550,0.600,0.150,0.400,0.040], "분업":null },
-  /* 2/3/1 */ { "기본":[0.850,0.300,0.500,0.150,0.000,0.400], "적극":[0.800,0.550,0.600,0.150,0.000,0.440], "분업":null },
-  /* 3/1/2 */ { "기본":[0.850,0.300,0.050,0.600,0.400,0.000], "적극":[0.800,0.500,0.100,0.700,0.400,0.040], "분업":[0.450,0.600,0.750,0.700,0.350,0.020] },
-  /* 3/2/1 */ { "기본":[0.850,0.300,0.050,0.550,0.050,0.400], "적극":[0.800,0.500,0.100,0.650,0.090,0.400], "분업":[0.450,0.600,0.750,0.650,0.070,0.350] },
-  /* 3/3/0 */ { "기본":[0.850,0.350,0.050,0.700,0.250,0.000], "적극":[0.800,0.500,0.100,0.750,0.340,0.050], "분업":[0.450,0.600,0.750,0.725,0.295,0.050] },
-  /* 2/4/0 */ { "기본":[0.850,0.300,0.650,0.350,0.050,0.000], "적극":[0.800,0.550,0.750,0.350,0.090,0.000], "분업":null },
-  /* 1/4/1 */ { "기본":[0.900,0.650,0.200,0.050,0.000,0.400], "적극":[0.850,0.650,0.300,0.140,0.000,0.600], "분업":null },
+  /* 1/1/4 */ { "기본/기본":[0.900,0.675,0.450,0.125,0.050,0.000], "적극/기본":[0.850,0.740,0.685,0.190,0.075,0.000], "기본/적극":[0.900,0.575,0.550,0.125,0.050,0.000], "적극/적극":[0.850,0.740,0.600,0.300,0.050,0.000], "분업/기본":null, "분업/적극":null },
+  /* 1/2/3 */ { "기본/기본":[0.900,0.650,0.150,0.450,0.050,0.000], "적극/기본":[0.850,0.700,0.230,0.685,0.075,0.000], "기본/적극":[0.900,0.555,0.210,0.485,0.050,0.000], "적극/적극":[0.850,0.700,0.265,0.500,0.225,0.000], "분업/기본":null, "분업/적극":null },
+  /* 1/3/2 */ { "기본/기본":[0.900,0.650,0.150,0.000,0.450,0.050], "적극/기본":[0.850,0.700,0.230,0.000,0.685,0.075], "기본/적극":[0.900,0.555,0.210,0.030,0.455,0.050], "적극/적극":[0.850,0.700,0.240,0.050,0.500,0.200], "분업/기본":null, "분업/적극":null },
+  /* 2/1/3 */ { "기본/기본":[0.850,0.300,0.550,0.450,0.050,0.000], "적극/기본":[0.800,0.550,0.625,0.510,0.055,0.000], "기본/적극":[0.850,0.300,0.470,0.530,0.050,0.000], "적극/적극":[0.800,0.550,0.650,0.400,0.140,0.000], "분업/기본":null, "분업/적극":null },
+  /* 2/2/2 */ { "기본/기본":[0.850,0.300,0.500,0.150,0.350,0.050], "적극/기본":[0.800,0.550,0.570,0.170,0.395,0.055], "기본/적극":[0.850,0.300,0.425,0.190,0.385,0.050], "적극/적극":[0.800,0.550,0.600,0.150,0.400,0.040], "분업/기본":null, "분업/적극":null },
+  /* 2/3/1 */ { "기본/기본":[0.850,0.300,0.500,0.150,0.000,0.400], "적극/기본":[0.800,0.550,0.565,0.170,0.000,0.455], "기본/적극":[0.850,0.300,0.425,0.190,0.030,0.405], "적극/적극":[0.800,0.550,0.600,0.150,0.000,0.440], "분업/기본":null, "분업/적극":null },
+  /* 3/1/2 */ { "기본/기본":[0.850,0.300,0.050,0.600,0.400,0.000], "적극/기본":[0.800,0.500,0.100,0.685,0.455,0.000], "기본/적극":[0.850,0.300,0.050,0.510,0.490,0.000], "적극/적극":[0.800,0.500,0.100,0.700,0.400,0.040], "분업/기본":[0.450,0.600,0.750,0.700,0.350,0.020], "분업/적극":[0.450,0.600,0.750,0.595,0.455,0.020] },
+  /* 3/2/1 */ { "기본/기본":[0.850,0.300,0.050,0.550,0.050,0.400], "적극/기본":[0.800,0.500,0.100,0.630,0.055,0.455], "기본/적극":[0.850,0.300,0.050,0.465,0.115,0.420], "적극/적극":[0.800,0.500,0.100,0.650,0.090,0.400], "분업/기본":[0.450,0.600,0.750,0.650,0.070,0.350], "분업/적극":[0.450,0.600,0.750,0.555,0.140,0.375] },
+  /* 3/3/0 */ { "기본/기본":[0.850,0.350,0.050,0.700,0.250,0.000], "적극/기본":[0.800,0.500,0.100,0.750,0.390,0.000], "기본/적극":[0.850,0.350,0.050,0.595,0.300,0.055], "적극/적극":[0.800,0.500,0.100,0.750,0.340,0.050], "분업/기본":[0.450,0.600,0.750,0.725,0.295,0.050], "분업/적극":[0.450,0.600,0.750,0.615,0.345,0.110] },
+  /* 2/4/0 */ { "기본/기본":[0.850,0.300,0.650,0.350,0.050,0.000], "적극/기본":[0.800,0.550,0.740,0.395,0.055,0.000], "기본/적극":[0.850,0.300,0.550,0.380,0.100,0.020], "적극/적극":[0.800,0.550,0.750,0.350,0.090,0.000], "분업/기본":null, "분업/적극":null },
+  /* 1/4/1 */ { "기본/기본":[0.900,0.650,0.200,0.050,0.000,0.400], "적극/기본":[0.850,0.650,0.320,0.080,0.000,0.640], "기본/적극":[0.900,0.555,0.255,0.080,0.010,0.400], "적극/적극":[0.850,0.650,0.300,0.140,0.000,0.600], "분업/기본":null, "분업/적극":null },
 ];
 /* 투수 가중치 총합은 10 이다 (타자와 같은 눈금).
    마무리가 0.8 로 고정이고, 선발 배율이 중계 전술에 따라 달라지므로
@@ -3514,8 +3529,11 @@ var SP_MULT = {
 };
 var CP_MULT = 0.8;
 var PIT_TOTAL = 10;
-/* 저장된 값은 그대로 두고(구덱 호환) 여기서 하나로 읽는다. 둘은 함께 켜지지 않는다 */
-/* 지금 실제로 걸려 있는 중계 전술.
+/* 중계 전술 — 2026-10-19 부터 승리조 · 추격조를 따로 고른다 (사용자 지정 2026-10-15).
+   저장 값: isWinSplit(승리조 분업) · rpWinActive(승리조 적극) · rpChaseActive(추격조 적극).
+   옛 덱의 rpActive 는 '적극' 하나가 두 조에 함께 걸리던 값이라 새 값이 없을 때만 읽는다
+   — 적극 → 적극/적극, 분업 → 분업/기본, 기본 → 기본/기본 (그래서 옛 덱의 점수는 그대로다) */
+/* 승리조 전술 — 기본 · 적극 · 분업. 선발 배율(SP_MULT)도 이것으로만 정한다.
    분업은 승리조가 3명인 편성에서만 성립한다. 화면은 버튼을 숨겨서 막지만
    시트 가져오기는 편성과 전술을 따로 읽어오기 때문에 2/4/0 + 분업 같은
    조합이 들어올 수 있다. 그대로 두면 선발은 분업 배율(6.331)을 쓰는데
@@ -3525,8 +3543,28 @@ function rpTactic(sdState) {
   if (!sdState) return "기본";
   var cfg = BPC[sdState.bpcIdx === undefined ? 4 : sdState.bpcIdx] || BPC[4];
   if (sdState.isWinSplit && cfg.w === 3) return "분업";
-  if (sdState.rpActive) return "적극";
-  return "기본";
+  var on = sdState.rpWinActive !== undefined ? sdState.rpWinActive : sdState.rpActive;
+  return on ? "적극" : "기본";
+}
+/* 추격조 전술 — 기본 · 적극. 옛 덱은 '적극' 하나가 추격조에도 걸렸다 (분업일 때는 걸리지 않았다) */
+function rpChaseTactic(sdState) {
+  if (!sdState) return "기본";
+  var on = sdState.rpChaseActive !== undefined ? sdState.rpChaseActive : (!!sdState.rpActive && rpTactic(sdState) !== "분업");
+  return on ? "적극" : "기본";
+}
+/* 가중치 표(RP_WEIGHTS) 열쇠 "승리조/추격조" */
+function rpTacKey(sdState) { return rpTactic(sdState) + "/" + rpChaseTactic(sdState); }
+/* 옛 한 단어 이름(기본 · 적극 · 분업)도 표 열쇠로 — 적극은 두 조 모두, 분업은 추격조 기본이었다 */
+function rpTacNorm(t) {
+  if (!t) return "기본/기본";
+  if (t.indexOf("/") >= 0) return t;
+  return t === "분업" ? "분업/기본" : t + "/" + t;
+}
+/* 화면 · 공유 그림에 쓰는 짧은 이름 — 두 조가 같으면 한 단어 */
+function rpTacLabel(sdState) {
+  var w = rpTactic(sdState), c = rpChaseTactic(sdState);
+  if (w === "분업") return c === "적극" ? "분업 · 추격조 적극" : "분업";
+  return w === c ? w : "승리조 " + w + " · 추격조 " + c;
 }
 function spMult(tactic, i) { var a = SP_MULT[tactic] || SP_MULT["기본"]; return a[i] || a[a.length - 1]; }
 function rpBudget(tactic) {
@@ -3570,10 +3608,12 @@ function rpOrderMove(bpcIdx, order, slot, dir) {
   return seq;
 }
 /* 중계 배율 — 편성 · 전술 표에서 그 자리가 받는 값. 배율은 등판 차례에 붙는다 (rpAppearance).
+   tactic 은 "승리조/추격조"(rpTacKey) 나 옛 한 단어(rpTacNorm). 그 편성에 없는 조합(분업)은 승리조 기본으로 떨어진다.
    order 를 안 주면(덱 연구소처럼 순서를 따로 정하지 않는 곳) 자리 순서가 곧 등판 순서다 */
 function getRPWeight(bpcIdx, slot, tactic, order) {
   var set = RP_WEIGHTS[bpcIdx]; if (!set) return 0;
-  var a = set[tactic] || set["기본"]; if (!a) return 0;
+  var key = rpTacNorm(tactic);
+  var a = set[key] || set["기본/" + key.split("/")[1]] || set["기본/기본"]; if (!a) return 0;
   var si = rpAppearance(bpcIdx, order).pos[slot];
   return si === undefined ? 0 : (a[si] || 0);
 }
@@ -3600,7 +3640,8 @@ function lineupOpts(sdState, totalSP) {
   return {
     batOrder: (st.batOrder && st.batOrder.length === 9) ? st.batOrder : BAT_SLOTS.slice(),
     totalSP: totalSP || 0,
-    tactic: rpTactic(st),
+    tactic: rpTactic(st),            /* 승리조 전술 — 선발 배율 */
+    chase: rpChaseTactic(st),        /* 추격조 전술 — 중계 배율에만 */
     bpcIdx: st.bpcIdx !== undefined ? st.bpcIdx : 4,
     /* 중계 등판 순서 (rpAppearance) — 없으면 자리 순서 */
     rpOrder: Array.isArray(st.rpOrder) ? st.rpOrder : null
@@ -3631,7 +3672,7 @@ function calcLineupTotal(pk, sd, o) {
   var spSc = spPl.map(function(pl, i) { return pl ? lineupPit(pl, SP_SLOTS[i], sd, o).total : -1e9; });
   var spRk = strRanks(spSc);
   SP_SLOTS.forEach(function(s, i) { if (spPl[i]) t += spSc[i] * spMult(o.tactic, spRk[i]); });
-  RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.tactic, o.rpOrder); });
+  RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.chase ? o.tactic + "/" + o.chase : o.tactic, o.rpOrder); });
   var cp = pk("CP"); if (cp) t += lineupPit(cp, "CP", sd, o).total * CP_MULT;
   return Math.round(t * 100) / 100;
 }
@@ -3641,7 +3682,7 @@ function calcLineupTotal(pk, sd, o) {
    창이 좁아지면 상자 단위로 다음 줄에 접힌다 */
 function PitchGroup(p) {
   return (
-    <div style={{ alignSelf: p.stretch ? "stretch" : "flex-start", flex: p.grow ? 1 : "none", minWidth: 0,
+    <div style={{ alignSelf: p.stretch ? "stretch" : "flex-start", flex: p.grow ? 1 : "none", minWidth: 0, maxWidth: "100%", boxSizing: "border-box",
       background: p.accent ? p.color + "14" : "var(--inner)", borderRadius: 8,
       border: "1px solid " + (p.accent ? p.color + "55" : "var(--bd)"), borderTop: "2px solid " + p.color,
       boxShadow: p.accent ? "0 0 0 1px " + p.color + "22" : "none", padding: "5px 8px 7px" }}>
@@ -3650,6 +3691,23 @@ function PitchGroup(p) {
         {p.count !== undefined && (<span style={{ fontSize: 11, color: "var(--td)", fontWeight: 500 }}>{" " + p.count}</span>)}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: p.spread ? "space-between" : "flex-start" }}>{p.children}</div>
+    </div>
+  );
+}
+/* 중계 전술 고르기 — 조 이름 + 붙어 있는 단추. 고른 것은 그 조 색으로 칠한다.
+   opts: [{ v: 값이자 글자, t: 마우스를 올리면 보이는 설명 }] */
+function TacPick(p) {
+  return (
+    <div role="radiogroup" aria-label={p.label + " 전술"} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: p.color, whiteSpace: "nowrap" }}>{p.label}</span>
+      <div style={{ display: "inline-flex", border: "1px solid var(--bd)", borderRadius: 7, overflow: "hidden" }}>
+        {p.opts.map(function(o, i) {
+          var on = p.value === o.v;
+          return (<button key={o.v} type="button" role="radio" aria-checked={on} title={o.t} onClick={function() { if (!on) p.onPick(o.v); }}
+            style={{ padding: "4px 10px", minHeight: 30, fontSize: 13, fontWeight: on ? 800 : 600, border: "none", borderLeft: i ? "1px solid var(--bd)" : "none",
+              background: on ? p.color : "var(--inner)", color: on ? "#fff" : "var(--t2)", cursor: on ? "default" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>{o.v}</button>);
+        })}
+      </div>
     </div>
   );
 }
@@ -3692,10 +3750,11 @@ function BullpenLayout(p) {
   var onSlotClick = p.onSlotClick;
   var idx = p.bpcIdx !== undefined ? p.bpcIdx : 4;
   var setIdx = p.setBpcIdx || function(){};
-  var isWinSplit = p.isWinSplit || false;
-  var setIsWinSplit = p.setIsWinSplit || function(){};
-  var rpActive = p.rpActive || false;
-  var setRpActive = p.setRpActive || function(){};
+  var winTac = p.winTac || "기본";
+  var setWinTac = p.setWinTac || function(){};
+  var chaseTac = p.chaseTac || "기본";
+  var setChaseTac = p.setChaseTac || function(){};
+  var isWinSplit = winTac === "분업";
   var _o = useState(false); var open = _o[0]; var setOpen = _o[1];
   /* 분업이면 승리조 2 · 3번째가 셋업1 · 셋업2 (slotGroupOf) */
   var setupOf = function(slot) { var r = slotGroupOf(slot, idx, isWinSplit, p.rpOrder); return r === "셋업1" || r === "셋업2" ? r : ""; };
@@ -3718,17 +3777,24 @@ function BullpenLayout(p) {
             </div>
           )}
         </div>
-        {cfg.w === 3 && (
-          <button onClick={function() { setIsWinSplit(!isWinSplit); }} title="승리조 3명의 능력치가 2씩 오르고, 그 조에서 2번째 · 3번째로 나오는 투수가 스킬의 셋업1 · 셋업2 가 됩니다 (1번째는 승리조 그대로). 이 상승은 인게임 덱 화면 수치에는 보이지 않아서, 라인업의 변화·구위 숫자는 그대로이고 점수에만 반영됩니다. 대신 선발 배율이 7.00 에서 6.33 으로 깎이고 그만큼 중계 몫이 커집니다. 적극과는 함께 켤 수 없습니다." style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: isWinSplit ? "#1565C0" : "var(--inner)", color: isWinSplit ? "#fff" : "var(--t2)", border: "1px solid " + (isWinSplit ? "#1565C0" : "var(--bd)"), cursor: "pointer" }}>{"분업" + (isWinSplit ? " ON" : "")}</button>
-        )}
-        <button onClick={function() { setRpActive(!rpActive); }} title={"중계 전술 '적극' — 승리조 " + cfg.w + "명과 추격조 " + cfg.l + "명의 능력치가 1씩 오릅니다. 이 상승은 인게임 덱 화면 수치에는 보이지 않아서, 라인업의 변화·구위 숫자는 그대로이고 점수에만 반영됩니다. 대신 선발 배율이 7.00 에서 6.66 으로 깎이고 그만큼 중계 몫이 커집니다. 분업과는 함께 켤 수 없습니다."} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: rpActive ? "#2E7D32" : "var(--inner)", color: rpActive ? "#fff" : "var(--t2)", border: "1px solid " + (rpActive ? "#2E7D32" : "var(--bd)"), cursor: "pointer" }}>{"적극" + (rpActive ? " ON" : "")}</button>
+        {/* 중계 전술 — 승리조(기본 · 적극 · 분업)와 추격조(기본 · 적극)를 따로 고른다 (2026-10-19). 분업은 승리조 3명일 때만 */}
+        <TacPick label="승리조" color="#4CAF50" value={winTac} onPick={setWinTac} opts={[
+          { v: "기본", t: "승리조 기본 — 선발을 길게 씁니다 (선발 배율 합 7.00)" },
+          { v: "적극", t: "승리조 적극 — 승리조가 일찍 들어가고 일찍 내려갑니다. 승리조 능력치 +1 (인게임 덱 화면 수치에는 안 보여서 라인업 숫자는 그대로이고 점수에만 들어갑니다). 선발 배율 합이 7.00 에서 6.66 으로 줄고 그만큼 중계 몫이 커집니다" }
+        ].concat(cfg.w === 3 ? [{ v: "분업", t: "분업 — 승리조 3명의 능력치가 2씩 오르고, 그 조에서 2번째 · 3번째로 나오는 투수가 스킬의 셋업1 · 셋업2 가 됩니다 (1번째는 승리조 그대로). 능력치 상승은 점수에만 들어갑니다. 선발 배율 합이 7.00 에서 6.33 으로 줄고 그만큼 중계 몫이 커집니다" }] : [])} />
+        <TacPick label="추격조" color="#FF7043" value={chaseTac} onPick={setChaseTac} opts={[
+          { v: "기본", t: "추격조 기본" },
+          { v: "적극", t: "추격조 적극 — 추격조가 일찍 들어가고 일찍 내려갑니다. 추격조 능력치 +1 (점수에만 들어갑니다). 선발 배율은 그대로이고, 추격조 몫의 일부가 다음 차례로 넘어갑니다" }
+        ]} />
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {[
           { label: "승리조", count: cfg.w, color: "#4CAF50", slots: rpSlots.slice(0, cfg.w) },
           { label: "추격조", count: cfg.l, color: "#FF7043", slots: rpSlots.slice(cfg.w, cfg.w + cfg.l) },
           { label: "롱릴리프", count: cfg.r, color: "#42A5F5", slots: rpSlots.slice(cfg.w + cfg.l) },
-        ].map(function(col) {
+        /* 0명인 조(3/3/0 · 2/4/0 의 롱릴리프)는 상자째 뺀다 — 빈 상자가 한 자리를 차지해 불펜 줄이 7칸 폭이 되고,
+           위의 선발 줄까지 그 폭으로 늘어났다 (2026-10-19 사용자 요청) */
+        ].filter(function(col) { return col.count > 0; }).map(function(col) {
           return (
             <PitchGroup key={col.label} label={col.label} count={col.count} color={col.color}>
               {/* 카드는 등판 차례대로 놓인다 (rpSlots 가 그 순서). 밑의 화살표로 같은 조 안에서만 앞뒤를 바꾼다 */}
@@ -4306,12 +4372,13 @@ function readTeam(grid, origin) {
     var bi = -1; for (var bj = 0; bj < BPC.length; bj++) { if (BPC[bj].label === lab) { bi = bj; break; } }
     if (bi >= 0) out.sd.bpcIdx = bi; else out.warn.push("불펜 배치 '" + bp + "' 를 앱에서 못 찾음");
   }
-  /* 승리조 전술 J7 — 분업만 앱에 있다 */
+  /* 중계 전술 — J7 승리조(기본 · 적극 · 분업), J8 추격조(기본 · 적극). 2026-10-19 부터 두 조를 따로 받는다.
+     네 칸을 다 적어야 덱에 남아 있던 값이 섞이지 않는다. rpActive 는 옛 값(두 조 함께)이라 승리조 적극과 같게 둔다 */
   var tac = at(7, 10);
-  if (tac === "분업") { out.sd.isWinSplit = true; out.sd.rpActive = false; }
-  else if (tac === "적극") { out.sd.rpActive = true; out.sd.isWinSplit = false; }
-  else { out.sd.isWinSplit = false; out.sd.rpActive = false; }
-  if (at(8, 10) === "적극") out.warn.push("추격조 '적극' 은 앱에 아직 없어 넘어감");
+  out.sd.isWinSplit = tac === "분업";
+  out.sd.rpWinActive = tac === "적극";
+  out.sd.rpActive = tac === "적극";
+  out.sd.rpChaseActive = at(8, 10) === "적극";
 
   /* 연도 W4 / Y4 */
   var yBat = at(4, 23), yPit = at(4, 25);
@@ -4698,11 +4765,11 @@ function SetDeckPanel(p) {
             var counts = {};
             var allSlots2 = ["C","1B","2B","3B","SS","LF","CF","RF","DH","SP1","SP2","SP3","SP4","SP5","RP1","RP2","RP3","RP4","RP5","RP6","CP","BN1","BN2","BN3","BN4","BN5","BN6"];
             allSlots2.forEach(function(sl) { var pid = p.lineupMap && p.lineupMap[sl]; if (!pid) return; var pl2 = null; if(p.players){for(var i=0;i<p.players.length;i++){if(p.players[i].id===pid){pl2=p.players[i];break;}}} if(!pl2)return; var ct=pl2.cardType; counts[ct]=(counts[ct]||0)+1; });
-            var liveNat = (counts["라이브"]||0) + (counts["국가대표"]||0);
+            var liveNat = liveSynCount(counts);
             var impCnt = counts["임팩트"]||0;
             var sigCnt = counts["시그니처"]||0;
             var syns = [
-              {key:"synLive",label:"라이브",auto:liveNat>=7,desc:"라이브+국대 "+liveNat+"/7",effect:"모두 +1"},
+              {key:"synLive",label:"라이브",auto:liveNat>=7,desc:"라이브·국대·올스타 "+liveNat+"/7",effect:"모두 +1"},
               {key:"synImpact",label:"임팩트",auto:impCnt>=5,desc:"임팩트 "+impCnt+"/5",effect:"타자 +1"},
               {key:"synSig",label:"시그니처",auto:sigCnt>=5,desc:"시그 "+sigCnt+"/5",effect:"투수 +1"}
             ];
@@ -4824,19 +4891,19 @@ function LineupPage(p) {
   var _dragOver = useState(null); var dragOverSlot = _dragOver[0]; var setDragOverSlot = _dragOver[1];
   var _sdOpen = useState(false); var sdOpen = _sdOpen[0]; var setSdOpen = _sdOpen[1];
   var sdState = p.sdState; var setSdState = p.setSdState;
-  /* bpcIdx/isWinSplit는 sdState에서 읽고, 변경 시 sdState에 저장 */
+  /* bpcIdx · 중계 전술은 sdState에서 읽고, 변경 시 sdState에 저장 */
   var bpcIdx = sdState.bpcIdx !== undefined ? sdState.bpcIdx : 4;
-  var isWinSplit = sdState.isWinSplit || false;
+  var isWinSplit = rpTactic(sdState) === "분업";
   var setBpcIdx = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { bpcIdx: typeof v === "function" ? v(prev.bpcIdx !== undefined ? prev.bpcIdx : 4) : v }); }); };
-  /* 승리조 전술은 시트에서도 칸이 하나다 — 분업과 적극은 같이 켜지지 않는다 */
-  var setIsWinSplit = function(v) { setSdState(function(prev) {
-    var on = typeof v === "function" ? v(!!prev.isWinSplit) : v;
-    return Object.assign({}, prev, { isWinSplit: on, rpActive: on ? false : prev.rpActive });
+  /* 승리조 전술(기본 · 적극 · 분업)과 추격조 전술(기본 · 적극)을 따로 고른다 (2026-10-19).
+     하나를 바꿀 때 다른 조의 지금 값도 새 칸에 적어 둔다 — 옛 덱의 rpActive(두 조 함께)를 다시 읽지 않게.
+     rpActive 는 승리조 적극과 같게 둔다 (이 화면을 띄워 둔 옛 탭이 읽는 값) */
+  var setWinTac = function(t) { setSdState(function(prev) {
+    return Object.assign({}, prev, { isWinSplit: t === "분업", rpWinActive: t === "적극", rpActive: t === "적극", rpChaseActive: rpChaseTactic(prev) === "적극" });
   }); };
-  var rpActive = sdState.rpActive || false;
-  var setRpActive = function(v) { setSdState(function(prev) {
-    var on = typeof v === "function" ? v(!!prev.rpActive) : v;
-    return Object.assign({}, prev, { rpActive: on, isWinSplit: on ? false : prev.isWinSplit });
+  var setChaseTac = function(t) { setSdState(function(prev) {
+    var w = rpTactic(prev);
+    return Object.assign({}, prev, { rpChaseActive: t === "적극", rpWinActive: w === "적극", rpActive: w === "적극" });
   }); };
   /* 중계 등판 순서 — 자리(RP n)는 포지션 특훈을 받는 칸, 차례는 같은 조 안에서 유저가 정한다 (rpAppearance · 2026-10-15) */
   var rpAp = rpAppearance(bpcIdx, sdState.rpOrder);
@@ -5076,7 +5143,7 @@ function LineupPage(p) {
   var slotWeight = function(slot, idx, isBat) {
     if (isBat) return batMult(idx) * strMult(batRanks[idx]);
     if (slot === "CP") return CP_MULT;
-    if (RP_SLOTS.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTactic(sdState), sdState.rpOrder);
+    if (RP_SLOTS.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTacKey(sdState), sdState.rpOrder);
     return spMult(rpTactic(sdState), spRanks[idx]);
   };
   var fmtWt = function(w) { var t = w.toFixed(3); return t.charAt(t.length - 1) === "0" ? t.slice(0, -1) : t; };
@@ -5347,7 +5414,7 @@ function LineupPage(p) {
     var yb = sdSideOf(sdPick(sdState, 185)).year || sdSideOf(sdPick(sdState, 75)).year || "";
     var bpc = BPC[sdState.bpcIdx === undefined ? 4 : sdState.bpcIdx] || BPC[4];
     var sub = [(yb ? yb + " 연도덱" : ""), "셋포 " + totalSP,
-      rpTactic(sdState) + " " + bpc.label].filter(Boolean).join(" · ");
+      rpTacLabel(sdState) + " " + bpc.label].filter(Boolean).join(" · ");
     var bf = [];
     if (sdCalc.natBat && sdCalc.natBat !== "없음") bf.push("국대에이스(타) " + sdCalc.natBat);
     if (sdCalc.natPit && sdCalc.natPit !== "없음") bf.push("국대에이스(투) " + sdCalc.natPit);
@@ -5444,7 +5511,7 @@ function LineupPage(p) {
                       : (<PitSlot slot="CP" size="lg" onClick={function() { setPickerSlot("CP"); }} />)}
             </PitchGroup>
           </div>
-          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} isWinSplit={isWinSplit} setIsWinSplit={setIsWinSplit} rpActive={rpActive} setRpActive={setRpActive} onMove={moveRp} rpOrder={sdState.rpOrder} />
+          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} winTac={rpTactic(sdState)} setWinTac={setWinTac} chaseTac={rpChaseTactic(sdState)} setChaseTac={setChaseTac} onMove={moveRp} rpOrder={sdState.rpOrder} />
           </div>
         </div>
       </div>
@@ -8620,7 +8687,7 @@ function MyPlayersPage(p) {
               )}
 
               <div style={{ background: "var(--inner)", borderRadius: 6, padding: "8px 10px", fontSize: 11, color: "var(--td)", lineHeight: 1.7 }}>
-                {"가져오지 않는 항목: 선수별 셋포 체크·포틈, 연도 세트덱, 송/변 잠재, 중계 전술 '적극'"}
+                {"가져오지 않는 항목: 선수별 셋포 체크·포틈, 연도 세트덱, 송/변 잠재"}
                 {(impPrev.team && impPrev.team.warn.length > 0) && impPrev.team.warn.map(function(w, i) { return (<div key={i} style={{ color: "#FFA726" }}>{"· " + w}</div>); })}
                 {natBad.length > 0 && (<div style={{ color: "#FFA726", marginTop: 4 }}>
                   {"· 국가대표 전용 스킬이 국대가 아닌 카드에 적혀 있습니다 — " + natBad.slice(0, 6).join(", ") + (natBad.length > 6 ? " 외 " + (natBad.length - 6) + "건" : "")}

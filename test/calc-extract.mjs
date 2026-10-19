@@ -1007,17 +1007,17 @@ var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
 var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
 var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1}];
 var RP_WEIGHTS = [
-  /* 1/1/4 */ { "기본":[0.900,0.675,0.450,0.125,0.050,0.000], "적극":[0.850,0.740,0.600,0.300,0.050,0.000], "분업":null },
-  /* 1/2/3 */ { "기본":[0.900,0.650,0.150,0.450,0.050,0.000], "적극":[0.850,0.700,0.265,0.500,0.225,0.000], "분업":null },
-  /* 1/3/2 */ { "기본":[0.900,0.650,0.150,0.000,0.450,0.050], "적극":[0.850,0.700,0.240,0.050,0.500,0.200], "분업":null },
-  /* 2/1/3 */ { "기본":[0.850,0.300,0.550,0.450,0.050,0.000], "적극":[0.800,0.550,0.650,0.400,0.140,0.000], "분업":null },
-  /* 2/2/2 */ { "기본":[0.850,0.300,0.500,0.150,0.350,0.050], "적극":[0.800,0.550,0.600,0.150,0.400,0.040], "분업":null },
-  /* 2/3/1 */ { "기본":[0.850,0.300,0.500,0.150,0.000,0.400], "적극":[0.800,0.550,0.600,0.150,0.000,0.440], "분업":null },
-  /* 3/1/2 */ { "기본":[0.850,0.300,0.050,0.600,0.400,0.000], "적극":[0.800,0.500,0.100,0.700,0.400,0.040], "분업":[0.450,0.600,0.750,0.700,0.350,0.020] },
-  /* 3/2/1 */ { "기본":[0.850,0.300,0.050,0.550,0.050,0.400], "적극":[0.800,0.500,0.100,0.650,0.090,0.400], "분업":[0.450,0.600,0.750,0.650,0.070,0.350] },
-  /* 3/3/0 */ { "기본":[0.850,0.350,0.050,0.700,0.250,0.000], "적극":[0.800,0.500,0.100,0.750,0.340,0.050], "분업":[0.450,0.600,0.750,0.725,0.295,0.050] },
-  /* 2/4/0 */ { "기본":[0.850,0.300,0.650,0.350,0.050,0.000], "적극":[0.800,0.550,0.750,0.350,0.090,0.000], "분업":null },
-  /* 1/4/1 */ { "기본":[0.900,0.650,0.200,0.050,0.000,0.400], "적극":[0.850,0.650,0.300,0.140,0.000,0.600], "분업":null },
+  /* 1/1/4 */ { "기본/기본":[0.900,0.675,0.450,0.125,0.050,0.000], "적극/기본":[0.850,0.740,0.685,0.190,0.075,0.000], "기본/적극":[0.900,0.575,0.550,0.125,0.050,0.000], "적극/적극":[0.850,0.740,0.600,0.300,0.050,0.000], "분업/기본":null, "분업/적극":null },
+  /* 1/2/3 */ { "기본/기본":[0.900,0.650,0.150,0.450,0.050,0.000], "적극/기본":[0.850,0.700,0.230,0.685,0.075,0.000], "기본/적극":[0.900,0.555,0.210,0.485,0.050,0.000], "적극/적극":[0.850,0.700,0.265,0.500,0.225,0.000], "분업/기본":null, "분업/적극":null },
+  /* 1/3/2 */ { "기본/기본":[0.900,0.650,0.150,0.000,0.450,0.050], "적극/기본":[0.850,0.700,0.230,0.000,0.685,0.075], "기본/적극":[0.900,0.555,0.210,0.030,0.455,0.050], "적극/적극":[0.850,0.700,0.240,0.050,0.500,0.200], "분업/기본":null, "분업/적극":null },
+  /* 2/1/3 */ { "기본/기본":[0.850,0.300,0.550,0.450,0.050,0.000], "적극/기본":[0.800,0.550,0.625,0.510,0.055,0.000], "기본/적극":[0.850,0.300,0.470,0.530,0.050,0.000], "적극/적극":[0.800,0.550,0.650,0.400,0.140,0.000], "분업/기본":null, "분업/적극":null },
+  /* 2/2/2 */ { "기본/기본":[0.850,0.300,0.500,0.150,0.350,0.050], "적극/기본":[0.800,0.550,0.570,0.170,0.395,0.055], "기본/적극":[0.850,0.300,0.425,0.190,0.385,0.050], "적극/적극":[0.800,0.550,0.600,0.150,0.400,0.040], "분업/기본":null, "분업/적극":null },
+  /* 2/3/1 */ { "기본/기본":[0.850,0.300,0.500,0.150,0.000,0.400], "적극/기본":[0.800,0.550,0.565,0.170,0.000,0.455], "기본/적극":[0.850,0.300,0.425,0.190,0.030,0.405], "적극/적극":[0.800,0.550,0.600,0.150,0.000,0.440], "분업/기본":null, "분업/적극":null },
+  /* 3/1/2 */ { "기본/기본":[0.850,0.300,0.050,0.600,0.400,0.000], "적극/기본":[0.800,0.500,0.100,0.685,0.455,0.000], "기본/적극":[0.850,0.300,0.050,0.510,0.490,0.000], "적극/적극":[0.800,0.500,0.100,0.700,0.400,0.040], "분업/기본":[0.450,0.600,0.750,0.700,0.350,0.020], "분업/적극":[0.450,0.600,0.750,0.595,0.455,0.020] },
+  /* 3/2/1 */ { "기본/기본":[0.850,0.300,0.050,0.550,0.050,0.400], "적극/기본":[0.800,0.500,0.100,0.630,0.055,0.455], "기본/적극":[0.850,0.300,0.050,0.465,0.115,0.420], "적극/적극":[0.800,0.500,0.100,0.650,0.090,0.400], "분업/기본":[0.450,0.600,0.750,0.650,0.070,0.350], "분업/적극":[0.450,0.600,0.750,0.555,0.140,0.375] },
+  /* 3/3/0 */ { "기본/기본":[0.850,0.350,0.050,0.700,0.250,0.000], "적극/기본":[0.800,0.500,0.100,0.750,0.390,0.000], "기본/적극":[0.850,0.350,0.050,0.595,0.300,0.055], "적극/적극":[0.800,0.500,0.100,0.750,0.340,0.050], "분업/기본":[0.450,0.600,0.750,0.725,0.295,0.050], "분업/적극":[0.450,0.600,0.750,0.615,0.345,0.110] },
+  /* 2/4/0 */ { "기본/기본":[0.850,0.300,0.650,0.350,0.050,0.000], "적극/기본":[0.800,0.550,0.740,0.395,0.055,0.000], "기본/적극":[0.850,0.300,0.550,0.380,0.100,0.020], "적극/적극":[0.800,0.550,0.750,0.350,0.090,0.000], "분업/기본":null, "분업/적극":null },
+  /* 1/4/1 */ { "기본/기본":[0.900,0.650,0.200,0.050,0.000,0.400], "적극/기본":[0.850,0.650,0.320,0.080,0.000,0.640], "기본/적극":[0.900,0.555,0.255,0.080,0.010,0.400], "적극/적극":[0.850,0.650,0.300,0.140,0.000,0.600], "분업/기본":null, "분업/적극":null },
 ];
 var BAT_MULT = [1.100, 1.100, 1.150, 1.150, 1.000, 0.900, 0.900, 0.850, 0.850];
 var STR_MULT = [1.350, 1.350, 1.200, 1.200, 1.200, 1.000, 1.000, 0.850, 0.850];
@@ -1041,8 +1041,24 @@ function rpTactic(sdState) {
   if (!sdState) return "기본";
   var cfg = BPC[sdState.bpcIdx === undefined ? 4 : sdState.bpcIdx] || BPC[4];
   if (sdState.isWinSplit && cfg.w === 3) return "분업";
-  if (sdState.rpActive) return "적극";
-  return "기본";
+  var on = sdState.rpWinActive !== undefined ? sdState.rpWinActive : sdState.rpActive;
+  return on ? "적극" : "기본";
+}
+function rpChaseTactic(sdState) {
+  if (!sdState) return "기본";
+  var on = sdState.rpChaseActive !== undefined ? sdState.rpChaseActive : (!!sdState.rpActive && rpTactic(sdState) !== "분업");
+  return on ? "적극" : "기본";
+}
+function rpTacKey(sdState) { return rpTactic(sdState) + "/" + rpChaseTactic(sdState); }
+function rpTacNorm(t) {
+  if (!t) return "기본/기본";
+  if (t.indexOf("/") >= 0) return t;
+  return t === "분업" ? "분업/기본" : t + "/" + t;
+}
+function rpTacLabel(sdState) {
+  var w = rpTactic(sdState), c = rpChaseTactic(sdState);
+  if (w === "분업") return c === "적극" ? "분업 · 추격조 적극" : "분업";
+  return w === c ? w : "승리조 " + w + " · 추격조 " + c;
 }
 function spMult(tactic, i) { var a = SP_MULT[tactic] || SP_MULT["기본"]; return a[i] || a[a.length - 1]; }
 function rpBudget(tactic) {
@@ -1079,7 +1095,8 @@ function rpOrderMove(bpcIdx, order, slot, dir) {
 }
 function getRPWeight(bpcIdx, slot, tactic, order) {
   var set = RP_WEIGHTS[bpcIdx]; if (!set) return 0;
-  var a = set[tactic] || set["기본"]; if (!a) return 0;
+  var key = rpTacNorm(tactic);
+  var a = set[key] || set["기본/" + key.split("/")[1]] || set["기본/기본"]; if (!a) return 0;
   var si = rpAppearance(bpcIdx, order).pos[slot];
   return si === undefined ? 0 : (a[si] || 0);
 }
@@ -1625,6 +1642,12 @@ function computeLineupSetDeck(pickRaw, sdState) {
     sdState._autoNatBat = buffs.natBat; sdState._autoNatPit = buffs.natPit; sdState._autoCatch = buffs.catchLead;
       return calcSetPoint() + (sdState.liveSetPo || 0);
 }
+var LIVE_SYN_TYPES = ["라이브", "국가대표", "올스타"];
+function liveSynCount(counts) {
+  var n = 0;
+  LIVE_SYN_TYPES.forEach(function(t) { n += (counts && counts[t]) || 0; });
+  return n;
+}
 function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!pl) return {p:0,a:0,e:0,n:0,c:0,s:0};
   pl = applyTeamFlags(pl, sdState && sdState.teamName);
@@ -1662,7 +1685,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
 
   /* Synergy */
   var synCounts = sdState._synCounts || {};
-  var autoLive = (synCounts["라이브"]||0) + (synCounts["국가대표"]||0) >= 7;
+  var autoLive = liveSynCount(synCounts) >= 7;
   var autoImp = (synCounts["임팩트"]||0) >= 5;
   var autoSig = (synCounts["시그니처"]||0) >= 5;
   var synLive = sdState.synLive !== undefined ? sdState.synLive : autoLive;
@@ -1713,20 +1736,18 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; }
 
   /* 중계 전술 능력치 보너스 — 인게임 덱 화면의 수치로는 안 보이지만 경기에서는 실제로 오른다.
-       적극 : 승리조와 추격조 모두 +1 (편성과 상관없이 켤 수 있다)
-       분업 : 승리조만 +2 (승리조가 3명일 때만 켤 수 있다)
+     승리조 · 추격조 전술을 따로 고른다 (2026-10-19, rpTactic · rpChaseTactic).
+       승리조 적극 : 승리조 +1 / 승리조 분업 : 승리조 +2 (승리조가 3명일 때만)
+       추격조 적극 : 추격조 +1
      롱릴리프와 마무리는 어느 쪽에서도 받지 않는다.
      라인업에 보이는 능력치는 인게임 덱 화면의 수치와 같아야 하므로(스킬 · 전술로 오르는 것은 거기에 안 보인다)
      화면 능력치(c · s)에는 더하지 않고 따로 돌려준다(tac) — calcPit 이 종합점수에만 얹는다 (국대에이스 · 포수리드와 같은 식.
      2026-10-12 사용자 지정: 전에는 c · s 에 더해서 적극 · 분업을 켜면 라인업의 변화 · 구위 수치가 1 · 2씩 올라 보였다) */
   var tacB = 0;
   if (!isBat) {
-    var rpTac = rpTactic(sdState);
-    if (rpTac !== "기본") {
-      var rpGrp = rpGroupOf(slot, sdState.bpcIdx);
-      if (rpTac === "적극" && (rpGrp === "승리조" || rpGrp === "패전조")) tacB = 1;
-      else if (rpTac === "분업" && rpGrp === "승리조") tacB = 2;
-    }
+    var rpGrp = rpGroupOf(slot, sdState.bpcIdx);
+    if (rpGrp === "승리조") { var rpTac = rpTactic(sdState); tacB = rpTac === "분업" ? 2 : rpTac === "적극" ? 1 : 0; }
+    else if (rpGrp === "패전조") tacB = rpChaseTactic(sdState) === "적극" ? 1 : 0;
   }
 
   /* POTM 능력치 — 모든 능력치에 오른다 (potmEffect) */
@@ -2125,7 +2146,8 @@ function lineupOpts(sdState, totalSP) {
   return {
     batOrder: (st.batOrder && st.batOrder.length === 9) ? st.batOrder : BAT_SLOTS.slice(),
     totalSP: totalSP || 0,
-    tactic: rpTactic(st),
+    tactic: rpTactic(st),            /* 승리조 전술 — 선발 배율 */
+    chase: rpChaseTactic(st),        /* 추격조 전술 — 중계 배율에만 */
     bpcIdx: st.bpcIdx !== undefined ? st.bpcIdx : 4,
     /* 중계 등판 순서 (rpAppearance) — 없으면 자리 순서 */
     rpOrder: Array.isArray(st.rpOrder) ? st.rpOrder : null
@@ -2154,7 +2176,7 @@ function calcLineupTotal(pk, sd, o) {
   var spSc = spPl.map(function(pl, i) { return pl ? lineupPit(pl, SP_SLOTS[i], sd, o).total : -1e9; });
   var spRk = strRanks(spSc);
   SP_SLOTS.forEach(function(s, i) { if (spPl[i]) t += spSc[i] * spMult(o.tactic, spRk[i]); });
-  RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.tactic, o.rpOrder); });
+  RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.chase ? o.tactic + "/" + o.chase : o.tactic, o.rpOrder); });
   var cp = pk("CP"); if (cp) t += lineupPit(cp, "CP", sd, o).total * CP_MULT;
   return Math.round(t * 100) / 100;
 }
@@ -2290,4 +2312,4 @@ function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
 function __setSeed(a){ SEED_PLAYERS.length = 0; (a||[]).forEach(function(p){ SEED_PLAYERS.push(p); }); }
 function __setSkillData(d){ SKILL_DATA = d || DEFAULT_SKILLS; }
-export { dexAll, findCard, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, __setLiveWeights, __setGlobalPotm, __setSeed, __setSkillData, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, POTM_LIVE_STAT, POTM_OLSTAR, POTM_SPECIAL_STAT, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, hasPtSkill, ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME, skillCatOf, normPlayerSkills, normPlayerList, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpAppearance, rpOrderMove, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, SKILL_ROLE_FIX, SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleSkillAdj, launchAngleGain, zonePenalty, ORDER_SKILLS, skillTableName, orderAdjust, orderPl, getW, makeDeckWriter, toDeckFormat, deckLosesAllPlayers, canonJson, normDeck, deckSnap, classifyDeckSave, classifyKeySave, deckShrinkNote, pushAudit, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, detectTeamBuffs, KBO_LEAGUE, KBO_TEAMS, teamKey, sdSideOf, isSelTeam, sdLeagueOf, miTxt, statKey, entryStatKey, statDist, miRanked, matchOne, buildIndex, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, OLSTAR_SET_POINTS, NO_AWAKEN_CARDS, awakenScore, betterPot, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS, SD_YEAR_ROWS, SD_TIE_SIDE, optimizeSetDeck, LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST, LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS, LAB_PRESET, SHARE_GRADE, shareGrade, sharePot, shareEnh, shareSkillCmp, shareSkillPct, shareTrainScore, shareTrainPct, sqName, labCard, labSdState, LAB_STD_SD, LAB_STD_FIELDS, labStdCtx, labStdPl, labStdRaw, labStdScore, LAB_STD_HOME, labStdGet, labSeatOrder, labBestOrder, labLimits, labYears, labRun, lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT };
+export { dexAll, findCard, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, __setLiveWeights, __setGlobalPotm, __setSeed, __setSkillData, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, POTM_LIVE_STAT, POTM_OLSTAR, POTM_SPECIAL_STAT, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, hasPtSkill, ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME, skillCatOf, normPlayerSkills, normPlayerList, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpAppearance, rpOrderMove, rpTactic, rpChaseTactic, rpTacKey, rpTacNorm, rpTacLabel, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, SKILL_ROLE_FIX, SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, LIVE_SYN_TYPES, liveSynCount, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleSkillAdj, launchAngleGain, zonePenalty, ORDER_SKILLS, skillTableName, orderAdjust, orderPl, getW, makeDeckWriter, toDeckFormat, deckLosesAllPlayers, canonJson, normDeck, deckSnap, classifyDeckSave, classifyKeySave, deckShrinkNote, pushAudit, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, detectTeamBuffs, KBO_LEAGUE, KBO_TEAMS, teamKey, sdSideOf, isSelTeam, sdLeagueOf, miTxt, statKey, entryStatKey, statDist, miRanked, matchOne, buildIndex, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, OLSTAR_SET_POINTS, NO_AWAKEN_CARDS, awakenScore, betterPot, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS, SD_YEAR_ROWS, SD_TIE_SIDE, optimizeSetDeck, LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST, LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS, LAB_PRESET, SHARE_GRADE, shareGrade, sharePot, shareEnh, shareSkillCmp, shareSkillPct, shareTrainScore, shareTrainPct, sqName, labCard, labSdState, LAB_STD_SD, LAB_STD_FIELDS, labStdCtx, labStdPl, labStdRaw, labStdScore, LAB_STD_HOME, labStdGet, labSeatOrder, labBestOrder, labLimits, labYears, labRun, lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT };

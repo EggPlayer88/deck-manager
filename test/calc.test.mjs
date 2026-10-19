@@ -3,10 +3,11 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpAppearance, rpOrderMove, rpTactic, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpAppearance, rpOrderMove, rpTactic, rpChaseTactic, rpTacKey, rpTacNorm, rpTacLabel, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
   __setLiveWeights, __setGlobalPotm, __setSkillData, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
+  liveSynCount, LIVE_SYN_TYPES,
   launchAngleReq, launchAngleBonus, launchAngleSkillAdj, launchAngleGain, zonePenalty, getW, makeDeckWriter, cardSetScore, computeLineupSetDeck, detectTeamBuffs, normPlayerSkills,
   ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME,
   dexAll, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, normPlayerList, hasPtSkill, optimizeSetDeck, SD_TIE_SIDE, SD_YEAR_ROWS,
@@ -70,6 +71,23 @@ console.log('\n[이상한 스킬 이름] 표 칸 이름 · 역할 이름이어�
   eq('스킬 이름이 선발 인 투수도 점수가 나온다', threw, 0);
   __setSkillData(null);
   eq('표를 되돌리면 기본 표', getSkillScore('정밀타격', 5, '타자'), okBat);
+}
+
+console.log('\n[라이브 시너지] 라이브 · 국가대표 · 올스타 합쳐 7장 (2026-10-19 사용자 확인 — 올스타도 센다)');
+{
+  eq('세는 카드 종류 셋 (라이브 · 국가대표 · 올스타)', LIVE_SYN_TYPES.join(',') === '라이브,국가대표,올스타' ? 1 : 0, 1);
+  eq('라이브 3 · 국대 2 · 올스타 2 = 7', liveSynCount({ '라이브': 3, '국가대표': 2, '올스타': 2 }), 7);
+  eq('다른 종류는 안 센다', liveSynCount({ '골든글러브': 9, '임팩트': 4, '라이브': 1 }), 1);
+  eq('빈 값도 0', liveSynCount(null), 0);
+  const pl = { role: '타자', cardType: '골든글러브', name: 'ㅇ', power: 100, accuracy: 100, eye: 100, patience: 100 };
+  const sdOf = (c) => ({ teamName: '롯데', _synCounts: c });
+  const p7 = calcSDBonus(pl, 'DH', sdOf({ '라이브': 3, '국가대표': 2, '올스타': 2 }), 0).p;
+  const p6 = calcSDBonus(pl, 'DH', sdOf({ '라이브': 3, '국가대표': 2, '올스타': 1 }), 0).p;
+  eq('올스타를 넣어 7장이면 라이브 시너지 — 파워 +1', p7 - p6, 1);
+  const pOld = calcSDBonus(pl, 'DH', sdOf({ '라이브': 4, '국가대표': 3 }), 0).p;
+  eq('라이브 4 · 국대 3 은 예전처럼 켜진다', pOld - p6, 1);
+  const pOff = calcSDBonus(pl, 'DH', Object.assign(sdOf({ '라이브': 3, '국가대표': 2, '올스타': 2 }), { synLive: false }), 0).p;
+  eq('직접 끈 값은 그대로 따른다', p7 - pOff, 1);
 }
 
 console.log('\n[발사각] 2026-10-19 수치 — 필요파워 13~16도 162 · 17도 165 · 18도 168 · 1도마다 +3 / 스킬 보정 45점 +1 · 3점마다 +1 / 보너스 13~14도 +3 · 15~18도 +7 · 19도~ +5');
@@ -2863,6 +2881,91 @@ console.log('[셋업1 · 셋업2 — 승리조 3명 + 분업일 때 그 조에�
   eq('순서를 바꾸면 안내도 따라간다 — RP1 을 1번째로 올리면 수호신(셋업1) 은 승리조 변형을 안내', H('수호신(셋업1)', 'RP1', ['RP1', 'RP3', 'RP2']) === '수호신(승리조)' ? 1 : 0, 1);
   eq('분업이 아니면 수호신(셋업1) → 승리조 변형을 안내', skillSlotHint('수호신(셋업1)', slotGroupOf('RP2', 8, false, null), '중계') === '수호신(승리조)' ? 1 : 0, 1);
   eq('분업을 켜도 배율 · 전술 판정의 조(rpGroupOf)는 승리조 그대로', ['RP1', 'RP2', 'RP3'].every((s) => rpGroupOf(s, 8) === '승리조') ? 1 : 0, 1);
+}
+
+console.log('\n[중계 전술 나누기] 승리조(기본 · 적극 · 분업) · 추격조(기본 · 적극)를 따로 — 2026-10-19');
+{
+  const K = (sd) => rpTactic(sd) + '/' + rpChaseTactic(sd);
+  /* 옛 덱(rpActive 하나가 두 조에 함께)은 전과 같은 조합으로 읽는다 — 그래서 옛 덱 점수는 그대로다 */
+  eq('옛 덱: 아무것도 없으면 기본/기본', K({}) === '기본/기본' ? 1 : 0, 1);
+  eq('옛 덱: rpActive → 적극/적극', K({ rpActive: true }) === '적극/적극' ? 1 : 0, 1);
+  eq('옛 덱: 분업 → 분업/기본', K({ isWinSplit: true, bpcIdx: 6 }) === '분업/기본' ? 1 : 0, 1);
+  eq('옛 덱: 분업 + rpActive → 분업/기본 (전에도 추격조는 안 받았다)', K({ isWinSplit: true, rpActive: true, bpcIdx: 6 }) === '분업/기본' ? 1 : 0, 1);
+  eq('옛 덱: 2/4/0 + 분업 + rpActive → 적극/적극', K({ isWinSplit: true, rpActive: true, bpcIdx: 9 }) === '적극/적극' ? 1 : 0, 1);
+  /* 새 칸이 있으면 새 칸이 이긴다 */
+  eq('새 칸: 승리조 적극 + 추격조 기본', K({ rpWinActive: true, rpChaseActive: false }) === '적극/기본' ? 1 : 0, 1);
+  eq('새 칸: 옛 rpActive 가 남아 있어도 새 칸대로', K({ rpActive: true, rpWinActive: false, rpChaseActive: true }) === '기본/적극' ? 1 : 0, 1);
+  eq('새 칸: 분업 + 추격조 적극', K({ isWinSplit: true, bpcIdx: 7, rpChaseActive: true }) === '분업/적극' ? 1 : 0, 1);
+  eq('새 칸: 승리조 2명 편성에서는 분업이 안 걸린다', K({ isWinSplit: true, bpcIdx: 4, rpWinActive: false, rpChaseActive: true }) === '기본/적극' ? 1 : 0, 1);
+  eq('rpTacKey 는 두 조를 / 로', rpTacKey({ rpWinActive: true, rpChaseActive: false }) === '적극/기본' ? 1 : 0, 1);
+  eq('옛 이름 → 표 열쇠', [rpTacNorm('기본'), rpTacNorm('적극'), rpTacNorm('분업'), rpTacNorm('기본/적극'), rpTacNorm('')].join(',') === '기본/기본,적극/적극,분업/기본,기본/적극,기본/기본' ? 1 : 0, 1);
+  eq('화면 이름: 두 조가 같으면 한 단어', rpTacLabel({ rpActive: true }) === '적극' && rpTacLabel({}) === '기본' ? 1 : 0, 1);
+  eq('화면 이름: 다르면 두 조를 다', rpTacLabel({ rpWinActive: true, rpChaseActive: false }) === '승리조 적극 · 추격조 기본' ? 1 : 0, 1);
+  eq('화면 이름: 분업', rpTacLabel({ isWinSplit: true, bpcIdx: 6 }) === '분업' && rpTacLabel({ isWinSplit: true, bpcIdx: 6, rpChaseActive: true }) === '분업 · 추격조 적극' ? 1 : 0, 1);
+
+  /* 가중치 — 옛 이름은 같은 조합의 값과 같고, 모든 조합에서 중계 합 · 투수 합이 맞는다 */
+  const RPS6 = ['RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6'];
+  const sumK = (bi, k) => Math.round(RPS6.reduce((t, sl) => t + getRPWeight(bi, sl, k), 0) * 1000) / 1000;
+  let sameOld = 0, sums = 0, tot10 = 0, nonneg = 0, cnt = 0;
+  for (let bi = 0; bi < 11; bi++) {
+    const w3 = [6, 7, 8].indexOf(bi) >= 0;
+    if (RPS6.every((x) => getRPWeight(bi, x, '기본') === getRPWeight(bi, x, '기본/기본') && getRPWeight(bi, x, '적극') === getRPWeight(bi, x, '적극/적극')
+      && getRPWeight(bi, x, '분업') === getRPWeight(bi, x, w3 ? '분업/기본' : '기본/기본'))) sameOld++;
+    const combos = ['기본/기본', '적극/기본', '기본/적극', '적극/적극'].concat(w3 ? ['분업/기본', '분업/적극'] : []);
+    combos.forEach((k) => {
+      cnt++;
+      const win = k.split('/')[0], want = win === '분업' ? 2.87 : win === '적극' ? 2.54 : 2.2;
+      if (sumK(bi, k) === want) sums++;
+      const t = Math.round((sumSP(win) + sumK(bi, k) + 0.8) * 1000) / 1000;
+      if (t === (win === '분업' ? 10.001 : 10)) tot10++;
+      if (RPS6.every((x) => getRPWeight(bi, x, k) >= 0)) nonneg++;
+    });
+  }
+  eq('옛 이름(기본 · 적극 · 분업) = 같은 조합 값 (편성 11종)', sameOld, 11);
+  eq('중계 합 — 승리조 기본 2.20 · 적극 2.54 · 분업 2.87 (조합 ' + cnt + '개)', sums, cnt);
+  eq('투수 합 10 (분업은 10.001)', tot10, cnt);
+  eq('음수 가중치 없음', nonneg, cnt);
+  /* 엑셀 수정안 값 몇 칸 — 표를 엑셀에서 그대로 뽑았는지 */
+  eq('2/2/2 적극/기본 추격조 1번째(RP3) 0.570', getRPWeight(4, 'RP3', '적극/기본'), 0.57);
+  eq('2/2/2 기본/적극 추격조 1번째(RP3) 0.425', getRPWeight(4, 'RP3', '기본/적극'), 0.425);
+  eq('1/1/4 기본/적극 롱릴리프 1번째(RP3) 0.550', getRPWeight(0, 'RP3', '기본/적극'), 0.55);
+  eq('3/3/0 분업/적극 추격조 3번째(RP6) 0.110', getRPWeight(8, 'RP6', '분업/적극'), 0.11);
+  eq('3/3/0 적극/기본 추격조 2번째(RP5) 0.390', getRPWeight(8, 'RP5', '적극/기본'), 0.39);
+  eq('분업/적극 도 승리조는 0.45 · 0.60 · 0.75', ['RP1', 'RP2', 'RP3'].map((x) => getRPWeight(7, x, '분업/적극')).join(',') === '0.45,0.6,0.75' ? 1 : 0, 1);
+  eq('분업이 없는 편성의 분업/적극 → 기본/적극', getRPWeight(4, 'RP3', '분업/적극'), getRPWeight(4, 'RP3', '기본/적극'));
+  /* 추격조 적극: 승리조 칸은 그대로, 추격조 1번째 몫이 뒤로 넘어간다 */
+  eq('추격조 적극은 승리조 칸을 안 바꾼다 (2/2/2)', ['RP1', 'RP2'].every((x) => getRPWeight(4, x, '기본/적극') === getRPWeight(4, x, '기본/기본')) ? 1 : 0, 1);
+  eq('추격조 적극은 추격조 1번째 몫을 줄인다 (2/2/2)', getRPWeight(4, 'RP3', '기본/적극') < getRPWeight(4, 'RP3', '기본/기본') ? 1 : 0, 1);
+  /* 등판 순서를 바꾸면 새 조합 배율도 차례를 따라간다 — 2/2/2 에서 추격조 RP4 를 1번째로 */
+  eq('순서를 따른다: 2/2/2 기본/적극에서 RP4 가 추격조 1번째면 0.425', getRPWeight(4, 'RP4', '기본/적극', ['RP1', 'RP2', 'RP4', 'RP3']), 0.425);
+
+  /* 능력치 보너스 — 승리조 적극 +1 · 분업 +2 · 추격조 적극 +1. 롱릴리프 · 마무리 · 선발은 없음 */
+  const rp2 = { role: "투수", position: "중계", cardType: "시즌", stars: 5 };
+  const wOnly = { bpcIdx: 4, s95: "", s125: "", rpWinActive: true, rpChaseActive: false };
+  const cOnly = { bpcIdx: 4, s95: "", s125: "", rpWinActive: false, rpChaseActive: true };
+  eq('승리조 적극: 승리조 RP1 +1', calcSDBonus(rp2, "RP1", wOnly, 0).tac, 1);
+  eq('승리조 적극: 추격조 RP3 은 0', calcSDBonus(rp2, "RP3", wOnly, 0).tac, 0);
+  eq('추격조 적극: 승리조 RP1 은 0', calcSDBonus(rp2, "RP1", cOnly, 0).tac, 0);
+  eq('추격조 적극: 추격조 RP3 · RP4 +1', calcSDBonus(rp2, "RP3", cOnly, 0).tac + calcSDBonus(rp2, "RP4", cOnly, 0).tac, 2);
+  eq('추격조 적극: 롱릴리프 RP5 는 0', calcSDBonus(rp2, "RP5", cOnly, 0).tac, 0);
+  const splitChase = { bpcIdx: 6, s95: "", s125: "", isWinSplit: true, rpChaseActive: true };
+  eq('분업 + 추격조 적극: 승리조 +2', calcSDBonus(rp2, "RP2", splitChase, 0).tac, 2);
+  eq('분업 + 추격조 적극: 추격조(RP4) +1', calcSDBonus(rp2, "RP4", splitChase, 0).tac, 1);
+  eq('분업 + 추격조 적극: 롱릴리프(RP5) 0', calcSDBonus(rp2, "RP5", splitChase, 0).tac, 0);
+
+  /* 라인업 총점 — 새 칸으로 옛 전술을 똑같이 적으면 점수도 같다. 선발 배율은 승리조 전술만 따른다 */
+  const mkR = (n, o) => Object.assign({ name: n, role: '투수', position: '중계', cardType: '골든글러브', team: '기아',
+    year: '2024', hand: '우', stars: 5, change: 140 + n.length, stuff: 135, enhance: '9각성' }, o || {});
+  const mkS = (n) => Object.assign(mkR(n), { position: '선발', change: 150, stuff: 148 });
+  const pen = { SP1: mkS('선1'), SP2: mkS('선22'), RP1: mkR('가'), RP2: mkR('나나'), RP3: mkR('다다다'), RP4: mkR('라'), RP5: mkR('마마'), RP6: mkR('바바바') };
+  const pk = (sl) => pen[sl] || null;
+  const T = (sd) => calcLineupTotal(pk, sd, lineupOpts(sd, 0));
+  const base = { teamName: '기아', bpcIdx: 4 };
+  eq('총점: 옛 적극 = 새 칸 적극/적극', T(Object.assign({}, base, { rpActive: true })), T(Object.assign({}, base, { rpWinActive: true, rpChaseActive: true })), 1e-9);
+  eq('총점: 옛 분업 = 새 칸 분업/기본 (3/3/0)', T({ teamName: '기아', bpcIdx: 8, isWinSplit: true }), T({ teamName: '기아', bpcIdx: 8, isWinSplit: true, rpWinActive: false, rpChaseActive: false }), 1e-9);
+  eq('총점: 추격조 전술이 바뀌면 점수도 바뀐다', T(Object.assign({}, base, { rpChaseActive: true, rpWinActive: false })) !== T(base) ? 1 : 0, 1);
+  const o3 = lineupOpts({ bpcIdx: 4, rpWinActive: false, rpChaseActive: true }, 0);
+  eq('lineupOpts: 추격조만 적극이면 선발 배율은 기본', (o3.tactic === '기본' && o3.chase === '적극') ? 1 : 0, 1);
 }
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
