@@ -6,6 +6,10 @@ import ClubLoungePage from "./club-lounge.jsx";
 /* 개발자에게 커피 — 메뉴 구석의 작은 버튼과 선물코드 창 (coffee-gift.jsx) */
 import CoffeeModal, { CoffeeLink } from "./coffee-gift.jsx";
 import { autoPublish as clubAutoPublish, addComment as clubAddComment, loadAlerts as clubLoadAlerts } from "./club-api.js";
+/* 고객센터 — 화면은 feedback-board.jsx(사용설명서는 help-guide.jsx), 서버 일은 feedback-api.js */
+import FeedbackPage from "./feedback-board.jsx";
+import HelpGuide from "./help-guide.jsx";
+import { loadBoardAlerts } from "./feedback-api.js";
 
 /* Supabase: injected via window._SUPABASE from main.jsx (Vercel deployment).
    In artifact preview / standalone, these remain as stubs → localStorage-only mode. */
@@ -5805,6 +5809,9 @@ function PosTrainPage(p) {
    ================================================================ */
 var CONTACT_EMAIL = "lyj198823@gmail.com";
 
+/* 로그인 화면의 설명 창(PolicyModal)은 늘 어두운 색 — 그 안에 띄우는 사용설명서의 색 값 */
+var GUIDE_DARK_VARS = { "--bg": "#0d1117", "--side": "#0a0e14", "--card": "rgba(22,27,38,0.8)", "--inner": "rgba(255,255,255,0.03)", "--bd": "rgba(255,255,255,0.08)",
+  "--t1": "#e6edf3", "--t2": "#8b949e", "--td": "rgba(255,255,255,0.45)", "--acc": "#FFD54F", "--finp": "rgba(0,0,0,.18)", color: "#e6edf3" };
 function PolicyModal(p) {
   /* p: type("privacy"|"terms"|"guide"|"faq"|"about"), onClose */
   var mob = useMedia("(max-width:600px)");
@@ -5824,7 +5831,7 @@ function PolicyModal(p) {
   if (p.type === "privacy") {
     content = (
       <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
-        <p style={{ color: "#8b949e", fontSize: 12 }}>{"최종 업데이트: 2026년 4월 21일"}</p>
+        <p style={{ color: "#8b949e", fontSize: 12 }}>{"최종 업데이트: 2026년 10월 21일"}</p>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"1. 개요"}</h3>
         <p>{"'덱 매니저' (이하 '본 서비스')는 컴투스 프로야구 v26 게임 이용자들이 자신의 선수 라인업을 구성하고 전력을 계산할 수 있도록 돕는 개인 운영 서비스입니다. 본 방침은 이용자의 개인정보가 어떻게 수집되고 활용되는지를 투명하게 공개하기 위해 마련되었습니다."}</p>
@@ -5835,6 +5842,7 @@ function PolicyModal(p) {
           <li>{"Google 계정 로그인 시: 이메일 주소, 프로필 이름, 프로필 이미지 URL (Google OAuth를 통해 제공)"}</li>
           <li>{"게스트 로그인 시: 이용자가 직접 입력한 닉네임"}</li>
           <li>{"서비스 이용 데이터: 구성한 덱 정보, 선수 카드 정보, 강화 수치, 스킬 설정 등 게임과 관련된 데이터"}</li>
+          <li>{"고객센터 이용 시: 작성한 글의 닉네임 · 제목 · 내용 · 첨부 사진, 그리고 오류 제보의 '기기 정보 같이 보내기'를 켜 둔 경우 기기 정보(브라우저 · 운영체제 · 화면 크기 · 화면 모드 · 사이트 버전). 이 칸은 처음에 켜져 있으며 글쓰기 화면에서 끌 수 있습니다"}</li>
           <li>{"자동 수집: 브라우저 종류, 접속 시간, 쿠키 식별자 (일반적인 웹 로그)"}</li>
         </ul>
 
@@ -5845,6 +5853,7 @@ function PolicyModal(p) {
           <li>{"여러 기기 간 데이터 동기화"}</li>
           <li>{"서비스 품질 개선을 위한 통계적 분석"}</li>
           <li>{"부정 이용 방지 및 보안 관리"}</li>
+          <li>{"고객센터에 남긴 문의 · 오류 제보 · 건의의 확인과 답변"}</li>
         </ul>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"4. 제3자 서비스 사용"}</h3>
@@ -5867,8 +5876,9 @@ function PolicyModal(p) {
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"6. 데이터 보관 및 삭제"}</h3>
         <ul style={{ paddingLeft: 20 }}>
-          <li>{"이용자가 로그아웃하거나 계정을 삭제할 때까지 서버에 데이터가 보관됩니다."}</li>
-          <li>{"게스트 모드의 데이터는 이용자의 브라우저 저장소(localStorage)에만 저장되며, 운영자는 접근할 수 없습니다."}</li>
+          <li>{"이용자가 계정 삭제를 요청할 때까지 서버에 데이터가 보관됩니다. 로그아웃해도 덱 데이터는 지워지지 않으며, 다시 로그인하면 그대로 보입니다."}</li>
+          <li>{"게스트 모드로 입력한 선수 · 라인업은 서버에 저장되지 않으며, 새로고침하거나 창을 닫으면 사라집니다."}</li>
+          <li>{"고객센터에 쓴 글과 사진은 작성자가 지우거나 삭제를 요청할 때까지 보관됩니다. 비밀글은 작성자와 운영자만 볼 수 있으며, 운영자는 욕설 · 광고 · 개인정보가 담긴 글을 지울 수 있습니다."}</li>
           <li>{"이용자는 언제든 자신의 데이터 삭제를 요청할 수 있으며, 요청 후 7일 이내에 모든 개인 데이터가 영구 삭제됩니다."}</li>
         </ul>
 
@@ -5898,7 +5908,7 @@ function PolicyModal(p) {
   } else if (p.type === "terms") {
     content = (
       <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
-        <p style={{ color: "#8b949e", fontSize: 12 }}>{"최종 업데이트: 2026년 4월 21일"}</p>
+        <p style={{ color: "#8b949e", fontSize: 12 }}>{"최종 업데이트: 2026년 10월 21일"}</p>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제1조 (목적)"}</h3>
         <p>{"본 약관은 '덱 매니저' (이하 '서비스')의 이용 조건과 절차, 이용자와 운영자의 권리·의무 및 책임 사항을 규정함을 목적으로 합니다."}</p>
@@ -5912,7 +5922,7 @@ function PolicyModal(p) {
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제4조 (회원가입 및 계정)"}</h3>
         <ul style={{ paddingLeft: 20 }}>
           <li>{"이용자는 Google 계정을 통해 로그인하거나, 닉네임만 입력하여 게스트로 이용할 수 있습니다."}</li>
-          <li>{"Google 계정 이용자는 최대 5개 팀의 덱을 저장할 수 있으며, 게스트는 1개 팀의 덱만 저장할 수 있습니다."}</li>
+          <li>{"Google 계정 이용자는 덱을 최대 5개까지 저장할 수 있습니다. 게스트로 입력한 내용은 저장되지 않으며, 새로고침하거나 창을 닫으면 사라집니다."}</li>
           <li>{"이용자는 자신의 계정 정보를 제3자에게 양도하거나 공유할 수 없습니다."}</li>
         </ul>
 
@@ -5924,6 +5934,7 @@ function PolicyModal(p) {
           <li>{"타인의 개인정보를 무단으로 수집, 저장, 공개하는 행위"}</li>
           <li>{"저작권, 상표권 등 타인의 지적재산권을 침해하는 행위"}</li>
           <li>{"음란물, 폭력물, 기타 공공질서에 반하는 내용을 게시하는 행위"}</li>
+          <li>{"고객센터 · 클럽 라운지에 욕설 · 비방 · 광고 · 도배 글이나 타인의 개인정보를 올리는 행위 (운영자는 이런 글을 미리 알리지 않고 지울 수 있습니다)"}</li>
           <li>{"서비스를 상업적으로 무단 복제, 재배포하는 행위"}</li>
         </ul>
 
@@ -5956,70 +5967,13 @@ function PolicyModal(p) {
         </p>
       </div>
     );
-  } else if (p.type === "guide") {
+  } else if (p.type === "guide" || p.type === "faq") {
+    /* 사용 가이드 · 자주 묻는 질문 — 고객센터의 사용설명서를 그대로 보여 준다 (설명은 help-guide.jsx 한 곳에서만 고친다, 2026-10-20).
+       예전 글에는 게스트 저장 · 강화 단계 · 사진 올리기처럼 지금과 다른 설명이 남아 있었다.
+       이 창은 라이트 모드에서도 어두운 색이라, 설명서가 쓰는 색 값을 어두운 쪽으로 고정한다 */
     content = (
-      <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
-        <p style={{ color: "#8b949e" }}>{"덱 매니저를 처음 이용하시는 분을 위한 단계별 안내입니다. 아래 순서대로 진행하면 자신의 덱을 완성하고 전력을 분석할 수 있습니다."}</p>
-
-        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"1단계. 로그인 방법 선택"}</h3>
-        <p>{"상단의 'Google 계정으로 시작하기' 버튼을 눌러 로그인하면 최대 5개 팀을 클라우드에 저장할 수 있고, 휴대폰과 PC에서 동일한 데이터를 확인할 수 있습니다. 간단히 체험해 보고 싶다면 '게스트로 시작하기'를 선택해 닉네임만 입력하고 바로 사용할 수 있습니다."}</p>
-
-        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"2단계. 팀 선택"}</h3>
-        <p>{"로그인 직후 나타나는 팀 선택 창에서 원하는 KBO 구단(키움, 삼성, LG, 두산, KT, SSG, 롯데, 한화, NC, 기아)을 선택합니다. 여기서 고른 구단이 세트덱의 '선택 팀'과 드림/나눔 기준이 됩니다. 다른 구단 선수도 편성할 수 있지만, 선택 팀 효과는 이 구단 선수(골든글러브·FA로 쓴 선수 포함)만 받습니다. 구단은 덱 목록의 '구단 변경'으로 바꿀 수 있습니다."}</p>
-
-        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"3단계. 선수 추가"}</h3>
-        <p>{"'내 선수' 탭으로 이동하여 보유하고 있는 선수를 추가합니다. 선수 이름을 검색하면 DB에 등록된 기본 정보(포지션, 연도, 카드 종류 등)가 자동으로 불러와집니다. 이어서 강화 수치, 특능 수치, 훈련 수치, 스킬 레벨, 잠재력 등급 등 세부 정보를 입력하면 전력 계산에 반영됩니다."}</p>
-
-        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"4단계. 라인업 구성"}</h3>
-        <p>{"'라인업' 탭에서는 추가한 선수들을 1번 타자부터 9번 타자까지 순서대로 배치하고, 선발/중계/마무리 투수 로테이션을 지정할 수 있습니다. 각 슬롯을 탭하여 선수를 지정하면 해당 선수의 공격력, 수비력, 투수력이 자동으로 계산되어 표시됩니다."}</p>
-
-        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"5단계. 세트덱 보너스 확인"}</h3>
-        <p>{"라인업 화면 하단에는 선수 구성에 따라 활성화되는 세트덱 효과가 자동으로 표시됩니다. 예를 들어 특정 시즌 카드를 다수 포함하면 'OO년도 시즌' 세트 보너스가, 골든글러브 카드를 다수 포함하면 '골든글러브' 세트 보너스가 적용됩니다."}</p>
-
-        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"6단계. 전력 분석"}</h3>
-        <p>{"'데이터 센터' 탭에서는 완성된 덱의 총 전력, 타순별 기여도, 스킬 분포, 포지션 균형 등을 종합적으로 분석할 수 있습니다. 또한 다른 이용자들의 평균 전력과 비교한 백분위 순위도 확인할 수 있어, 자신의 덱이 어느 수준인지 객관적으로 파악할 수 있습니다."}</p>
-
-        <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"7단계. 여러 덱 관리 (Google 로그인)"}</h3>
-        <p>{"상단의 팀 이름을 누르면 덱 목록이 나타나며, '+' 버튼으로 새 덱을 추가할 수 있습니다. 예를 들어 시즌 카드 위주의 덱과 임팩트 카드 위주의 덱을 각각 만들어 비교하거나, 타이틀 매치용 덱과 일반 리그용 덱을 구분해 관리할 수 있습니다."}</p>
-      </div>
-    );
-  } else if (p.type === "faq") {
-    var faqs = [
-      { q: "덱 매니저는 무료로 이용할 수 있나요?",
-        a: "네, 모든 기능을 전액 무료로 이용할 수 있습니다. 서비스 운영 비용 충당을 위해 일부 페이지에 광고가 게재될 수 있으나, 광고 제거를 위한 유료 결제는 없습니다." },
-      { q: "컴투스(게임사)와 공식 제휴 관계인가요?",
-        a: "아닙니다. 본 서비스는 개인이 운영하는 팬 제작 도구이며, 컴투스와 어떤 공식 제휴 관계도 없습니다. 게임 내 데이터를 직접 가져오거나 자동 연동되지 않으며, 이용자가 직접 입력한 정보만을 관리합니다." },
-      { q: "게스트 모드와 Google 로그인의 차이가 무엇인가요?",
-        a: "게스트 모드는 닉네임만으로 바로 시작할 수 있지만 1개 팀만 관리할 수 있고, 데이터가 현재 사용 중인 브라우저에만 저장됩니다. 브라우저 데이터를 삭제하면 덱이 사라질 수 있습니다. 반면 Google 로그인은 최대 5개 팀을 클라우드에 저장하며, 여러 기기에서 동일한 데이터를 확인할 수 있습니다." },
-      { q: "내 선수 데이터는 다른 사람에게 공개되나요?",
-        a: "공개되지 않습니다. 로그인한 이용자의 개인 덱 데이터는 본인만 조회할 수 있으며, Supabase의 Row Level Security를 통해 타인의 접근이 원천적으로 차단됩니다. 데이터 센터에 표시되는 평균 비교 데이터는 모두 통계적으로 집계된 익명 수치이며, 개별 이용자를 식별할 수 없습니다." },
-      { q: "선수 사진은 어디서 가져오는 건가요?",
-        a: "관리자가 사전에 업로드한 선수 사진이 전역으로 공유되어 표시됩니다. 이용자가 직접 사진을 업로드할 수는 있지만, 이는 본인 덱에만 표시되며 DB의 기본 사진은 관리자 권한이 있는 계정만 수정할 수 있습니다." },
-      { q: "잠재력 점수는 어떤 기준으로 계산되나요?",
-        a: "잠재력은 C부터 SR+까지 12개 등급으로 나뉘며, 각 등급마다 기본 점수가 설정되어 있습니다. 풀스윙, 클러치, 장타억제, 침착 등 잠재력 종류에 따라 점수표가 다를 수 있으며, '스킬 관리' 페이지에서 관리자가 수치를 조정할 수 있습니다." },
-      { q: "강화 수치는 어디까지 입력할 수 있나요?",
-        a: "카드 종류에 따라 다릅니다. 시즌/라이브 카드는 최대 +10까지, 임팩트/시그니처/골든글러브 카드는 최대 +18까지 입력할 수 있습니다. 각 강화 단계별 스탯 증가량은 사이트에 내장된 ENHANCE 테이블에 따라 자동 계산됩니다." },
-      { q: "데이터를 실수로 삭제했는데 복구할 수 있나요?",
-        a: "죄송하지만 즉시 복구 기능은 제공하지 않습니다. Google 로그인 계정의 경우 Supabase 백업 정책에 따라 일부 복구가 가능할 수 있으니, 중요한 데이터를 삭제하신 경우 가급적 빨리 문의 이메일로 연락 주시기 바랍니다." },
-      { q: "PC와 스마트폰에서 모두 사용할 수 있나요?",
-        a: "네, 모든 화면이 반응형으로 제작되어 PC, 태블릿, 스마트폰 어느 환경에서도 원활하게 이용할 수 있습니다. Google 로그인을 하면 기기 간 데이터가 자동으로 동기화됩니다." },
-      { q: "광고가 너무 많이 나오거나 불편한 경우 어떻게 하나요?",
-        a: "Google 광고 설정 페이지(adssettings.google.com)에서 개인 맞춤 광고를 비활성화할 수 있습니다. 특정 광고가 부적절하다고 판단되면 광고 우측 상단의 정보 아이콘을 통해 Google에 직접 신고할 수 있습니다." },
-      { q: "버그를 발견했거나 기능을 건의하고 싶습니다.",
-        a: "페이지 하단에 명시된 운영자 이메일(" + CONTACT_EMAIL + ")로 연락해 주시면 확인 후 반영 여부를 검토하겠습니다. 스크린샷과 함께 어떤 환경(브라우저/OS)에서 발생했는지 알려주시면 빠른 해결에 도움이 됩니다." },
-      { q: "내 데이터를 완전히 삭제하고 싶습니다.",
-        a: "운영자 이메일로 탈퇴를 요청하시면 7일 이내에 해당 계정과 관련된 모든 데이터(덱, 선수 정보, 프로필 정보)가 영구 삭제됩니다. 삭제 후에는 복구가 불가능하니 신중히 결정해 주시기 바랍니다." }
-    ];
-    content = (
-      <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
-        {faqs.map(function(f, i) {
-          return (
-            <div key={i} style={{ marginBottom: 20, paddingBottom: 16, borderBottom: i < faqs.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
-              <p style={{ color: "#FFD54F", fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{"Q" + (i + 1) + ". " + f.q}</p>
-              <p style={{ margin: 0, color: "#c9d1d9" }}>{"A. " + f.a}</p>
-            </div>
-          );
-        })}
+      <div style={GUIDE_DARK_VARS}>
+        {p.type === "faq" ? <HelpGuide mobile={mob} bare={true} only={["faq"]} /> : <HelpGuide mobile={mob} />}
       </div>
     );
   } else if (p.type === "about") {
@@ -6029,7 +5983,7 @@ function PolicyModal(p) {
         <p>{"덱 매니저는 모바일 야구 게임 '컴투스 프로야구 v26'을 플레이하는 이용자들을 위한 라인업 구성 및 전력 분석 도구입니다. 게임 내에서 수십 장에서 수백 장의 선수 카드를 보유하게 되면, 어떤 카드를 1군에 편성해야 가장 높은 전력이 나오는지 판단하기가 쉽지 않습니다. 덱 매니저는 이 고민을 해결하기 위해 제작되었습니다."}</p>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"어떤 기능을 제공하나요?"}</h3>
-        <p>{"이용자가 자신의 보유 선수를 입력하면, 각 선수의 강화 수치, 특수능력 수치, 훈련 수치, 스킬 레벨, 잠재력 등급을 종합하여 공격력·수비력·투수력을 자동 계산합니다. 타순 배치에 따른 타격 기여도 가중치도 반영되므로, 단순히 스탯 합계만 보는 것보다 훨씬 정확한 전력 평가가 가능합니다. 또한 완성된 덱을 여러 벌 저장해 두고 상황에 맞게 교체해 가며 사용할 수 있습니다."}</p>
+        <p>{"이용자가 자신의 보유 선수를 입력하면, 각 선수의 강화 · 훈련 · 특훈 · 스킬 레벨 · 잠재력 등급을 종합하여 선수 점수와 덱 TOTAL SCORE 를 자동 계산합니다. 타순 배치에 따른 타격 기여도 가중치도 반영되므로, 단순히 스탯 합계만 보는 것보다 훨씬 정확한 전력 평가가 가능합니다. 또한 완성된 덱을 여러 벌 저장해 두고 상황에 맞게 교체해 가며 사용할 수 있습니다."}</p>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"왜 이 사이트를 만들었나요?"}</h3>
         <p>{"컴투스 프로야구 v26은 선수 카드의 종류(시즌, 라이브, 임팩트, 시그니처, 골든글러브, 국가대표 등)와 강화 수치, 스킬 조합이 매우 복잡합니다. 각 카드 종류마다 강화 상승폭이 다르고, 스킬에 따른 능력치 보정도 천차만별이라 게임 내 화면만으로는 덱 최적화가 어렵습니다. 이 사이트는 해당 게임을 오래 플레이해 온 팬이 팬 커뮤니티를 위해 직접 만든 비공식 보조 도구입니다."}</p>
@@ -6041,42 +5995,13 @@ function PolicyModal(p) {
         <p>{"프론트엔드는 React와 Vite로 제작되었으며, Vercel을 통해 호스팅됩니다. 이용자 데이터는 Supabase의 PostgreSQL 데이터베이스에 저장되며, 로그인 인증은 Google OAuth를 통해 처리됩니다. 모든 통신은 HTTPS로 암호화되어 안전하게 전송됩니다."}</p>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"앞으로의 계획은?"}</h3>
-        <p>{"현재는 라인업 구성, 전력 계산, 데이터 비교 등 핵심 기능에 집중하고 있습니다. 이용자 피드백을 바탕으로 스킬 조합 시뮬레이터, 덱 공유 기능, 포지션별 추천 선수 제안 등을 점진적으로 추가할 계획입니다. 기능 건의나 버그 제보는 언제든지 운영자 이메일로 보내주시기 바랍니다."}</p>
+        <p>{"라인업 구성과 전력 계산을 바탕으로 덱 연구소 · 데이터 센터 · 클럽 라운지 · 고객센터까지 넓혀 왔습니다. 이용자 의견을 바탕으로 계속 다듬어 갈 계획이며, 기능 건의나 오류 제보는 사이트 안 '고객센터'(구글 로그인)나 운영자 이메일로 보내 주세요."}</p>
       </div>
     );
   } else if (p.type === "glossary") {
-    var glossary = [
-      { t: "덱 (Deck)", d: "게임에 실제 출전하는 선발 9명(타자)과 투수진으로 구성된 1군 엔트리입니다. 본 사이트에서는 여러 벌의 덱을 저장해 두고 필요에 따라 전환해 사용할 수 있습니다." },
-      { t: "카드 종류", d: "시즌, 라이브, 임팩트, 시그니처, 골든글러브, 국가대표 등으로 구분됩니다. 상위 카드일수록 최대 강화 단계가 높고 능력치 상승폭도 큽니다. 각 카드는 시즌 연도와 선수명을 조합하여 식별됩니다." },
-      { t: "시즌 카드", d: "특정 연도의 실제 성적을 기반으로 한 기본 카드입니다. 최대 +10 강화가 가능하며, 능력치 상승폭이 가장 완만합니다." },
-      { t: "라이브 카드", d: "현재 시즌의 실시간 성적이 반영되는 카드로, 매주 혹은 매월 수치가 갱신됩니다. 시즌 카드보다 능력치 상승폭이 크지만, 성적 부진 시 수치가 하락할 수도 있습니다." },
-      { t: "임팩트 카드", d: "특별 이벤트나 명경기 장면을 모티브로 한 한정 카드입니다. 최대 +18까지 강화할 수 있으며, 고유한 스킬 조합을 갖추고 있습니다." },
-      { t: "시그니처 카드", d: "전설적인 선수나 특정 시즌의 명장면을 기념하여 발매되는 최상급 카드입니다. 능력치 상승폭이 임팩트 카드보다 큽니다." },
-      { t: "골든글러브 카드", d: "각 포지션별 최고의 수비수에게 부여되는 최상위 등급 카드입니다. 게임 내 최강급 카드로 분류됩니다." },
-      { t: "강화 (Enhancement)", d: "카드의 능력치를 상승시키는 시스템입니다. +0부터 시작하여 강화 재료와 비용을 투입해 단계별로 수치를 올릴 수 있습니다. 각 단계별 상승폭은 카드 종류에 따라 다릅니다." },
-      { t: "특수능력 (특능)", d: "카드마다 고유하게 부여되는 파워, 정확, 선구(타자)·변화, 구위(투수) 등의 세부 능력치입니다. 강화와는 별개로 개별적으로 투자할 수 있습니다." },
-      { t: "훈련 (Training)", d: "선수의 기본 능력치를 항구적으로 상승시키는 시스템입니다. 파워/정확/선구/체력/주루 등 타자 훈련과 변화/구위 등 투수 훈련으로 나뉩니다." },
-      { t: "스킬 (Skill)", d: "선수 카드에 탑재된 특수 능력입니다. 예를 들어 '홈런 타자', '선풍기', '피칭 머신' 등의 스킬이 있으며, 스킬 레벨을 올리면 효과가 강화됩니다. 각 카드에는 최대 3개의 스킬이 탑재됩니다." },
-      { t: "잠재력 (Potential)", d: "선수 카드의 숨겨진 능력치로, C부터 SR+까지 12개 등급으로 나뉩니다. 풀스윙/클러치(타자), 장타억제/침착(투수) 등 종류에 따라 효과가 다릅니다." },
-      { t: "세트덱", d: "특정 조건(같은 시즌 연도, 같은 카드 종류, 같은 구단 등)을 만족하는 선수를 일정 수 이상 편성하면 발동되는 보너스입니다. 팀 전체의 능력치가 상승하며, 여러 세트덱을 동시에 활성화할 수도 있습니다." },
-      { t: "포지션 훈련", d: "주 포지션 외의 다른 포지션에도 출전할 수 있도록 선수를 훈련시키는 시스템입니다. 라인업 구성의 유연성이 크게 증가합니다." },
-      { t: "FA (Free Agent)", d: "임팩트·시그니처 카드로 다른 구단 선수를 데려와 내 구단 선수처럼 쓰는 제도입니다. 세트덱의 선택 팀 효과를 받는 대신 능력치가 모두 3 깎이고 세트덱 점수가 줄며(시그니처 -1, 임팩트 -2), 특훈을 2회 더 할 수 있습니다. 내 선수 화면에서 다른 구단 선수에게만 FA 토글이 보입니다." },
-      { t: "와일드카드", d: "국가대표 카드로 다른 구단 선수를 데려와 내 구단 선수처럼 쓰는 제도로, FA와 같은 방식입니다. 선택 팀 효과를 받는 대신 능력치가 모두 3 깎이고 세트덱 점수가 8에서 7로 줄며, 특훈은 4회에서 6회로 늘어납니다. 내 선수 화면에서 다른 구단 국가대표에게만 와일드카드 토글이 보입니다." },
-      { t: "SP / RP / CP", d: "투수의 역할을 나타냅니다. SP(Starting Pitcher)는 선발, RP(Relief Pitcher)는 중계, CP(Closing Pitcher)는 마무리 투수를 의미합니다." }
-    ];
-    content = (
-      <div style={{ color: "#c9d1d9", lineHeight: 1.8, fontSize: 14 }}>
-        <p style={{ color: "#8b949e" }}>{"컴투스 프로야구 v26을 처음 접하거나 오랜만에 다시 시작하는 이용자를 위해, 본 사이트와 게임에서 자주 등장하는 용어를 정리했습니다."}</p>
-        {glossary.map(function(g, i) {
-          return (
-            <div key={i} style={{ marginTop: 16, padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderLeft: "3px solid #FFD54F", borderRadius: 6 }}>
-              <p style={{ color: "#FFD54F", fontWeight: 700, margin: "0 0 4px", fontSize: 14 }}>{g.t}</p>
-              <p style={{ margin: 0, fontSize: 13, color: "#c9d1d9" }}>{g.d}</p>
-            </div>
-          );
-        })}
-      </div>
-    );
+    /* 용어 사전 — 사용설명서의 용어 사전을 그대로 보여 준다 (2026-10-21).
+       예전 글에는 강화 +18 · 같은 시즌으로 켜지는 세트덱 · 다른 포지션 출전용 포지션 훈련 · 없는 스킬 이름처럼 지금과 다른 설명이 있었다 */
+    content = (<div style={GUIDE_DARK_VARS}><HelpGuide mobile={mob} bare={true} only={["words"]} /></div>);
   }
 
   return (
@@ -6122,13 +6047,13 @@ function LoginPage(p) {
 
   /* ── 기능 카드 데이터 ── */
   var features = [
-    { icon: "⚾", title: "라인업 구성", desc: "보유한 선수 카드를 1번 타자부터 9번 타자까지 드래그 앤 드롭으로 배치하고, 선발·중계·마무리 투수 로테이션을 자유롭게 편성할 수 있습니다. 포지션별 적합도와 타순별 기여도가 실시간으로 계산됩니다." },
-    { icon: "👥", title: "선수 관리", desc: "보유 중인 모든 선수 카드를 한 곳에서 관리합니다. 이름으로 검색하면 기본 정보가 자동으로 채워지고, 강화 수치·특능·스킬 레벨·잠재력 등급을 세부적으로 입력할 수 있습니다." },
-    { icon: "💪", title: "강화 계산", desc: "카드 종류(시즌·라이브·임팩트·시그니처·골든글러브)와 강화 단계에 따라 자동으로 능력치 상승분이 계산됩니다. +0부터 최대 +18까지 모든 단계의 수치가 내장되어 있어 정확한 전력 측정이 가능합니다." },
+    { icon: "⚾", title: "라인업 구성", desc: "보유한 선수 카드를 자리마다 배치하고 타순은 끌어서 바꿀 수 있으며, 선발 · 중계 · 마무리와 불펜 전술(승리조 · 추격조)을 자유롭게 편성할 수 있습니다. 타순 · 강함 순위에 따른 배율이 실시간으로 계산됩니다." },
+    { icon: "👥", title: "선수 관리", desc: "보유 중인 모든 선수 카드를 한 곳에서 관리합니다. 이름으로 검색하면 기본 정보가 자동으로 채워지고, 강화 · 훈련 · 특훈 · 스킬 레벨 · 잠재력 등급을 세부적으로 입력할 수 있습니다." },
+    { icon: "💪", title: "강화 계산", desc: "카드 종류(골든글러브 · 시그니처 · 임팩트 · 국가대표 · 라이브 · 올스타 · 시즌)와 강화 단계에 따라 자동으로 능력치 상승분이 계산됩니다. 5강부터 9각성까지 모든 단계의 수치가 내장되어 있어 정확한 전력 측정이 가능합니다." },
     { icon: "⭐", title: "잠재력 점수", desc: "C부터 SR+까지 12개 등급의 잠재력을 풀스윙·클러치·장타억제·침착 등 종류별로 구분하여 점수화합니다. 잠재력만으로도 카드 간 우열을 판단할 수 있습니다." },
-    { icon: "📊", title: "데이터 센터", desc: "완성된 덱의 총 전력, 타순별 기여도, 스킬 분포, 포지션 균형을 종합적으로 분석합니다. 다른 이용자 평균과의 비교 백분위도 확인할 수 있어 객관적인 수준 파악이 가능합니다." },
-    { icon: "🏟️", title: "세트덱 보너스", desc: "같은 시즌, 같은 카드 종류, 같은 구단 선수를 일정 수 이상 편성하면 자동으로 발동되는 세트덱 효과를 실시간으로 알려줍니다. 어떤 조합이 시너지를 내는지 한눈에 확인할 수 있습니다." },
-    { icon: "🔄", title: "다중 덱 관리", desc: "Google 로그인 시 최대 5개 팀의 덱을 클라우드에 저장할 수 있습니다. 시즌 카드 덱, 임팩트 덱, 타이틀 매치용 덱 등 상황별로 구분해 관리할 수 있습니다." },
+    { icon: "📊", title: "데이터 센터", desc: "라인업 선수마다 스킬 · 훈련 · 특훈이 상위 몇 %인지 보여 주고, 스킬 계산기 · 훈재분 계산기로 새로 뽑은 카드를 바로 견줘 볼 수 있어 객관적인 수준 파악이 가능합니다." },
+    { icon: "🏟️", title: "세트덱 보너스", desc: "카드마다 정해진 세트덱 포인트를 모아 구간마다 좌/우 효과를 고르고, 라이브 · 국가대표 · 올스타처럼 같은 종류 카드를 모으면 켜지는 시너지도 자동으로 셉니다. 어떤 조합이 가장 점수가 높은지 한눈에 확인할 수 있습니다." },
+    { icon: "🔄", title: "다중 덱 관리", desc: "Google 로그인 시 덱을 최대 5개까지 클라우드에 저장할 수 있습니다. 시즌 카드 덱, 임팩트 덱, 타이틀 매치용 덱 등 상황별로 구분해 관리할 수 있습니다." },
     { icon: "📱", title: "기기 간 동기화", desc: "반응형 디자인으로 PC·태블릿·스마트폰에서 모두 원활하게 작동하며, Google 로그인을 이용하면 모든 기기에서 동일한 데이터를 실시간으로 확인할 수 있습니다." }
   ];
 
@@ -6195,7 +6120,7 @@ function LoginPage(p) {
                 <button onClick={function() { setGuestOpen(true); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.25)", cursor: "pointer", fontSize: 14, padding: "8px 0", textDecoration: "underline", textUnderlineOffset: 3 }}>
                   {"게스트로 시작하기"}
                 </button>
-                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", marginTop: 4 }}>{"1개 팀만 관리 가능 · 브라우저에 데이터 저장"}</p>
+                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", marginTop: 4 }}>{"둘러보기용 · 넣은 내용은 저장되지 않아요"}</p>
               </div>
             ) : (
               <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 16, border: "1px solid rgba(255,255,255,0.06)" }}>
@@ -6209,7 +6134,7 @@ function LoginPage(p) {
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 10, padding: "8px 10px", background: "rgba(255,152,0,0.05)", borderRadius: 6, border: "1px solid rgba(255,152,0,0.1)" }}>
                   <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{"!"}</span>
-                  <p style={{ fontSize: 11, color: "rgba(255,152,0,0.5)", margin: 0, lineHeight: 1.5 }}>{"게스트 데이터는 이 브라우저에만 저장됩니다. 브라우저 데이터 삭제 시 초기화될 수 있으며, 1개 팀만 관리 가능합니다. Google 계정 연동 시 여러 팀을 영구 저장할 수 있습니다."}</p>
+                  <p style={{ fontSize: 11, color: "rgba(255,152,0,0.5)", margin: 0, lineHeight: 1.5 }}>{"게스트로 넣은 선수 · 라인업은 저장되지 않아요. 새로고침하거나 창을 닫으면 처음으로 돌아가요. 계속 쓰려면 구글 계정으로 시작해 주세요 (덱 5개까지 저장)."}</p>
                 </div>
               </div>
             )}
@@ -6243,11 +6168,11 @@ function LoginPage(p) {
             </div>
             <div style={{ padding: 24, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
               <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 0, marginBottom: 10, fontFamily: "var(--h)", letterSpacing: 1 }}>{"세트덱 시너지를 놓치지 마세요"}</h3>
-              <p style={{ fontSize: 14, lineHeight: 1.7, color: "#c9d1d9", margin: 0 }}>{"같은 시즌·같은 카드 종류·같은 구단 선수를 일정 수 이상 편성하면 활성화되는 세트덱 보너스. 덱 매니저는 라인업 변경 즉시 어떤 세트덱이 켜지고 꺼지는지 알려주어, 시너지를 극대화하는 조합을 찾을 수 있도록 돕습니다."}</p>
+              <p style={{ fontSize: 14, lineHeight: 1.7, color: "#c9d1d9", margin: 0 }}>{"셋포 구간마다 고르는 세트덱 효과와 카드 종류 시너지. 덱 매니저는 라인업을 바꾸는 즉시 총 셋포와 켜지는 시너지를 다시 계산하고, '⚡ 자동 최적화'로 점수가 가장 높은 좌/우 조합을 찾아 줍니다."}</p>
             </div>
             <div style={{ padding: 24, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
-              <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 0, marginBottom: 10, fontFamily: "var(--h)", letterSpacing: 1 }}>{"내 덱은 전체에서 어느 수준?"}</h3>
-              <p style={{ fontSize: 14, lineHeight: 1.7, color: "#c9d1d9", margin: 0 }}>{"데이터 센터에서는 다른 이용자들이 구성한 덱들과 익명으로 통계 비교가 가능합니다. 내 덱의 전력이 상위 몇 %에 해당하는지, 어떤 포지션이 부족한지를 백분위로 확인하며 구체적인 보강 방향을 잡을 수 있습니다."}</p>
+              <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 0, marginBottom: 10, fontFamily: "var(--h)", letterSpacing: 1 }}>{"내 선수는 얼마나 잘 뽑혔나?"}</h3>
+              <p style={{ fontSize: 14, lineHeight: 1.7, color: "#c9d1d9", margin: 0 }}>{"데이터 센터에서는 내 선수의 스킬 · 훈련 · 특훈이 얼마나 잘 뽑혔는지 상위 몇 %로 보여 줍니다. 덱 연구소에서는 도감 전체 카드로 덱을 짜 보고 잘 키웠을 때의 점수를 견줘 볼 수 있어, 구체적인 보강 방향을 잡을 수 있습니다."}</p>
             </div>
           </div>
         </div>
@@ -6286,8 +6211,8 @@ function LoginPage(p) {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {[
               { n: "01", t: "로그인 및 팀 선택", d: "상단 로그인 카드에서 Google 계정으로 로그인하거나 게스트 모드를 이용합니다. 로그인 후 나타나는 10개의 KBO 구단 중 하나를 선택해 첫 덱을 만듭니다. 이때 고른 구단이 세트덱의 '선택 팀'과 드림/나눔 기준이 되며, 나중에 덱 목록에서 바꿀 수 있습니다." },
-              { n: "02", t: "선수 입력 및 강화 수치 기록", d: "'내 선수' 탭에서 보유한 선수를 하나씩 추가합니다. 선수명을 검색하면 해당 카드의 기본 정보가 자동으로 불러와지며, 이어서 강화 단계(+0~+18), 특수능력 수치, 훈련 수치, 스킬과 스킬 레벨, 잠재력 등급을 입력하면 됩니다. 모든 데이터는 입력 즉시 자동 저장됩니다." },
-              { n: "03", t: "라인업 배치 및 전력 확인", d: "'라인업' 탭에서 추가한 선수들을 타순대로 배치하고 투수 로테이션을 지정합니다. 배치가 완료되면 총 전력 점수, 공격·수비·투수 세부 점수, 활성화된 세트덱 보너스가 화면에 표시됩니다. '데이터 센터'에서는 더 자세한 분석과 전체 이용자 대비 백분위를 확인할 수 있습니다." }
+              { n: "02", t: "선수 입력 및 강화 수치 기록", d: "'내 선수' 탭에서 보유한 선수를 하나씩 추가합니다. 선수명을 검색하면 해당 카드의 기본 정보가 자동으로 불러와지며, 이어서 강화 단계(5강~10강 · 1각성~9각성), 훈련 · 특훈 수치, 스킬과 스킬 레벨, 잠재력 등급을 입력하면 됩니다. 구글 계정으로 로그인하면 입력 즉시 자동 저장됩니다." },
+              { n: "03", t: "라인업 배치 및 전력 확인", d: "'라인업' 탭에서 추가한 선수들을 타순대로 배치하고 투수 로테이션을 지정합니다. 배치가 완료되면 TOTAL SCORE 와 선수별 점수, 세트덱 효과가 화면에 표시됩니다. '데이터 센터'에서는 내 선수의 스킬 · 훈련 · 특훈이 상위 몇 %인지 확인할 수 있습니다." }
             ].map(function(s, i) {
               return (
                 <div key={i} style={{ display: "flex", gap: mob ? 14 : 20, padding: mob ? 18 : 24, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
@@ -6342,7 +6267,7 @@ function LoginPage(p) {
             {[
               { q: "덱 매니저는 정말 무료인가요?", a: "네, 모든 핵심 기능을 영구적으로 무료로 이용할 수 있습니다. 운영 비용 충당을 위해 일부 광고가 게재되지만, 유료 플랜이나 결제는 없습니다." },
               { q: "게임 계정과 자동 연동되나요?", a: "아닙니다. 본 서비스는 컴투스의 공식 서비스가 아니므로, 게임 내 선수 정보를 자동으로 가져올 수 없습니다. 이용자가 직접 선수를 입력해야 하며, 그만큼 개인정보도 안전하게 보호됩니다." },
-              { q: "내가 구성한 덱을 다른 사람이 볼 수 있나요?", a: "아닙니다. 본인이 공개하지 않는 한 타인은 내 덱을 조회할 수 없습니다. 데이터 센터의 통계 비교 기능은 모든 이용자 데이터를 익명으로 집계한 것이며, 개별 이용자를 식별할 수 없도록 처리됩니다." },
+              { q: "내가 구성한 덱을 다른 사람이 볼 수 있나요?", a: "아닙니다. 본인이 공개하지 않는 한 타인은 내 덱을 조회할 수 없습니다. 클럽 라운지에서 직접 공개한 덱 요약만 같은 클럽원에게 보입니다." },
               { q: "모바일에서도 편하게 쓸 수 있나요?", a: "네, 본 사이트는 스마트폰·태블릿에 최적화된 반응형 디자인으로 제작되었습니다. 브라우저 주소창에 주소를 입력하는 것만으로 바로 이용할 수 있으며, 별도 앱 설치가 필요 없습니다." }
             ].map(function(f, i) {
               return (
@@ -6547,10 +6472,13 @@ function Nav(p){
   var tabs=[{id:"lineup",label:"라인업",icon:"📋"},{id:"myplayers",label:"내 선수",short:"선수",icon:"👥"},{id:"datacenter",label:"데이터센터",short:"데이터",icon:"📊"},{id:"lab",label:"덱 연구소",short:"연구소",icon:"🔬"},{id:"postrain",label:"포지션 특훈",short:"특훈",icon:"🏋️"},{id:"locker",label:"라커룸",short:"라커",icon:"🏠"},{id:"clublounge",label:"클럽라운지",short:"라운지",icon:"🎙️",beta:true}];
   /* KBO 구단주 — 클럽라운지 바로 아래. 다른 사이트로 나가므로 탭이 아니라 링크다 */
   if(showGame)tabs.push({id:"kbogame",label:"KBO 구단주",short:"구단주",icon:"⚾",beta:true,href:p.gameUrl});
+  /* 고객센터 — 맨 끝. 공지 · 업데이트 내역 · 사용설명서 · 건의 · 오류 제보. 게스트도 읽을 수 있다 (쓰기는 구글 로그인) */
+  tabs.push({id:"board",label:"고객센터",short:"고객센터",icon:"🎧"});
   /* 관리자 칸은 라커룸 앞에 — 메뉴 순서가 바뀌어도 자리를 찾아 넣는다 */
   if(p.isAdmin){var at=tabs.map(function(t){return t.id;}).indexOf("locker");tabs.splice(at<0?tabs.length:at,0,{id:"db",label:"선수도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
   /* 클럽라운지 빨간 점 — 클럽장에게는 가입 신청, 관리자에게는 인증 심사 · 신고가 기다릴 때 (App 의 clubAlerts) */
-  tabs.forEach(function(t){if(t.id==="clublounge"&&p.clubDot){t.dot=true;t.dotTitle=p.clubDotTitle||"확인할 것이 있어요";}});
+  tabs.forEach(function(t){if(t.id==="clublounge"&&p.clubDot){t.dot=true;t.dotTitle=p.clubDotTitle||"확인할 것이 있어요";}
+    if(t.id==="board"&&p.boardDot){t.dot=true;t.dotTitle=p.boardDotTitle||"확인할 것이 있어요";}});
   var anyDot=tabs.some(function(t){return t.dot;});
   var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck,onChangeTeam:p.onChangeTeam};
 
@@ -6566,7 +6494,7 @@ function Nav(p){
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px",paddingBottom:"calc(8px + env(safe-area-inset-bottom, 0px))"}}>
         {tabs.map(function(t){
           var st={flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44};
-          var inner=(<React.Fragment><span style={{fontSize:18,lineHeight:1,position:"relative"}}>{t.icon}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{position:"absolute",top:-3,right:-7,width:9,height:9,borderRadius:"50%",background:"#FF5A5A",boxShadow:"0 0 0 2px var(--side)"}}/>)}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1}}>{t.short||t.label}{t.beta&&(<span style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></React.Fragment>);
+          var inner=(<React.Fragment><span style={{fontSize:18,lineHeight:1,position:"relative"}}>{t.icon}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{position:"absolute",top:-3,right:-7,width:9,height:9,borderRadius:"50%",background:"#FF5A5A",boxShadow:"0 0 0 2px var(--side)"}}/>)}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1,letterSpacing:(t.short||t.label).length>=4?-0.6:0}}>{t.short||t.label}{t.beta&&(<span className="nav-beta" style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></React.Fragment>);
           if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} style={Object.assign({},st,{textDecoration:"none"})}>{inner}</a>);
           return(<button key={t.id} onClick={function(){p.setTab(t.id);}} title={t.label+(t.soon?" (준비중)":"")} style={st}>{inner}</button>);
         })}
@@ -11149,6 +11077,32 @@ export default function App(){
   useEffect(function(){ if(clubWatch)refreshClubAlerts(); },[tab]);
   var clubDotN=clubAlerts?(clubAlerts.join||0)+(clubAlerts.review||0):0;
   var clubDotTitle=clubAlerts?[clubAlerts.join?"가입 신청 "+clubAlerts.join+"명":"",clubAlerts.review?"인증 심사 · 신고 "+clubAlerts.review+"건":""].filter(Boolean).join(" · "):"";
+  /* 고객센터 빨간 점 — 운영자는 아직 '접수' 상태인 건의 · 오류, 글쓴이는 고객센터를 마지막으로 본 뒤 내 글에 달린 답변.
+     클럽 점과 같은 방식: 앱을 열 때 · 메뉴를 옮길 때(15초 안에는 다시 안 물음) · 운영자는 화면이 보일 때 3분마다 */
+  var _bal=useState(null);var boardAlerts=_bal[0];var setBoardAlerts=_bal[1];
+  var bAlertRef=React.useRef({seq:0,at:0});
+  var boardSeenKey="fb-seen-"+(userId||"");
+  var refreshBoardAlerts=React.useCallback(function(force){
+    if(!isGoogle)return;
+    var r=bAlertRef.current;
+    if(force!==true&&Date.now()-r.at<15000)return;
+    r.at=Date.now();var my=++r.seq;
+    var seenAt=0;try{seenAt=Number(localStorage.getItem(boardSeenKey)||0);}catch(e){}
+    loadBoardAlerts(isAdmin,seenAt).then(function(a){ if(my===bAlertRef.current.seq)setBoardAlerts(a); }).catch(function(){});
+  },[isGoogle,isAdmin,userId]);
+  useEffect(function(){ if(!isGoogle){bAlertRef.current.seq++;setBoardAlerts(null);return;} refreshBoardAlerts(true); },[isGoogle,isAdmin,userId]);
+  useEffect(function(){ refreshBoardAlerts(); },[tab]);
+  useEffect(function(){
+    if(!isAdmin||!isGoogle)return;
+    var seen=function(){ if(document.visibilityState==="visible")refreshBoardAlerts(); };
+    var iv=setInterval(seen,180000);
+    document.addEventListener("visibilitychange",seen);
+    return function(){clearInterval(iv);document.removeEventListener("visibilitychange",seen);};
+  },[isAdmin,isGoogle,refreshBoardAlerts]);
+  /* 게시판을 열면 '내 글에 답변' 점은 본 것으로 */
+  var markBoardSeen=function(){ try{localStorage.setItem(boardSeenKey,String(Date.now()));}catch(e){} refreshBoardAlerts(true); };
+  var boardDotN=boardAlerts?(boardAlerts.open||0)+(boardAlerts.answered||0):0;
+  var boardDotTitle=boardAlerts?[boardAlerts.open?"새 제보 · 건의 "+boardAlerts.open+"개":"",boardAlerts.answered?"내 글에 답변 "+boardAlerts.answered+"개":""].filter(Boolean).join(" · "):"";
   var clubTools={
     summaryNow:clubSummaryNow,
     labDeck:function(team,slots,name){ return new Promise(function(res,rej){ setTimeout(function(){ try{res(clubLabDeck(team,slots,name));}catch(e){rej(e);} },20); }); },
@@ -11440,7 +11394,7 @@ export default function App(){
     .light select{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23475569' d='M6 8L1 3h10z'/%3E%3C/svg%3E\");}\
     .light input,.light select,.light textarea{color:var(--t1);background:var(--card);border-color:var(--bd);}\
     .light input::placeholder{color:var(--td);}\
-    .lu-arrow{opacity:0;transition:opacity 0.15s;}.lu-row:hover .lu-arrow{opacity:1;}@media (hover:none){.lu-arrow{opacity:0.45;}}\
+    @media (max-width:340px){.nav-beta{display:none;}}.lu-arrow{opacity:0;transition:opacity 0.15s;}.lu-row:hover .lu-arrow{opacity:1;}@media (hover:none){.lu-arrow{opacity:0.45;}}\
     select{-webkit-appearance:none;appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;}\
     input[type=number]{-moz-appearance:textfield;}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}\
   "}</style>);
@@ -11515,6 +11469,8 @@ export default function App(){
   else if(tab==="clublounge")pg=(<ClubLoungePage mobile={mob} userId={userId} authType={isGoogle?"google":authType} isAdmin={isAdmin}
     decks={decks} curDeckId={curDeckId} labSaves={store.labSaves} tools={clubTools} onOpenLab={openInLab}
     draft={clubDraft} onDraftUsed={function(){setClubDraft(null);}} focusPostId={clubFocus} onFocusUsed={function(){setClubFocus(null);}} onAlerts={function(){refreshClubAlerts(true);}}/>);
+  else if(tab==="board")pg=(<FeedbackPage mobile={mob} isAdmin={isAdmin} authType={isGoogle?"google":authType} userId={userId}
+    onSeen={markBoardSeen} onAlerts={function(){refreshBoardAlerts(true);}}/>);
   else pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin}/>);
 
   /* 구단 없는 덱(예전 '내 덱')은 구단을 고를 때까지 선택 창을 띄운다 — 세트덱 선택 팀·드림/나눔이 덱 구단을 따른다 */
@@ -11522,7 +11478,7 @@ export default function App(){
 
   return(
     <div className={theme==="light"?"light":""} style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
-      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin} gameUrl={kboGameUrl(googleId)} clubDot={clubDotN>0} clubDotTitle={clubDotTitle}
+      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin} gameUrl={kboGameUrl(googleId)} clubDot={clubDotN>0} clubDotTitle={clubDotTitle} boardDot={boardDotN>0} boardDotTitle={boardDotTitle}
         decks={decks} curDeckId={curDeckId}
         onSwitchDeck={handleSwitchDeck}
         onAddDeck={function(){setShowTeamSelect("add");}}
