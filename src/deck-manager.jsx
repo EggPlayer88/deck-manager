@@ -54,13 +54,66 @@ var SEED_PLAYERS = [];
 var CUSTOM_PLAYERS = [];
 var CUSTOM_MAX = 5;
 function dexAll() { return CUSTOM_PLAYERS.length ? SEED_PLAYERS.concat(CUSTOM_PLAYERS) : SEED_PLAYERS; }
+/* 도감에서 지운 중복 카드의 옛 id → 남긴 카드 id.
+   덱 · 덱 연구소 · 클럽 덱에는 카드 id 만 저장되고 능력치는 도감에서 읽는다.
+   그래서 중복 카드를 지우면 옛 id 를 든 선수가 능력치 0 으로 보인다. 지울 때 여기에 적어 두면 같은 카드로 이어진다.
+   사용자 덱 자료는 건드리지 않는다 (2026-10-21 사용자 결정).
+   - 2026-10-21 임팩트 '중계' 33장 → '중간계투' (인게임 이름). 같은 카드가 이름만 달리 두 번 들어가 있었다 */
+var CARD_ID_ALIAS = {
+  "66df52ae-ffc6-4148-91b9-c8d03d0dd7e7": "cff2c73d-32fd-4700-ba45-d0dc571c9fbe", /* 기아 강태원 */
+  "1f74f024-19af-423f-a058-43946461cec7": "e63ff024-c98e-4dda-9e8e-6953a90d75ee", /* 기아 김정수S */
+  "2d43e96b-3953-49de-85b4-12699174a5ff": "14b567d8-87ba-4bb8-b190-ad76e8df8b7e", /* 기아 홍상삼 */
+  "f378cf72-ae33-46dd-a37c-27fb11efaef8": "be5c03fc-c2e6-4345-8207-66797741436e", /* 삼성 권오준 */
+  "86e20fd6-4435-4ddf-a78a-0dc187c53732": "74cf6ac7-565d-462a-a677-e16e0db44dde", /* 삼성 권혁 */
+  "6a5300f1-ae76-4088-967b-640fdf214066": "3c065ca6-3a30-4b43-ac5d-1548b96dd745", /* 삼성 박근홍 */
+  "a942c1ce-9017-450b-a1b8-061189cb8396": "433be034-b07d-4fd5-9c53-b94fda4f15a6", /* 삼성 심창민 */
+  "00961cb2-429a-4e90-a4e5-97a75a09d5b9": "23ca27ab-253c-474c-89a4-fd913cb4c2ce", /* LG 이동현S */
+  "44fb5973-9054-4f9d-91cc-7d97c64cef00": "b0e9ac64-7562-4628-8adf-35a2beac3a47", /* LG 이정용 */
+  "68ca67bc-8c10-4b4f-9ca5-e6cc5b960bac": "e8d954e6-f73d-4431-a341-82a93c0a2295", /* LG 함덕주 */
+  "5c0bf6fe-26f6-4999-becf-90f5b902cf51": "46cb51d1-595e-434d-bcc7-706d6f1b4644", /* 두산 구자운 */
+  "ff63583d-dbbe-4c75-b7a3-89683cb2d710": "7f9fee8e-5e1b-48f5-976f-c7da8092c1bb", /* 두산 김성배 */
+  "0f04b696-d239-48d7-91c8-f546e68bf8b6": "59614743-20f8-46cb-9dac-cc394b1808df", /* 두산 정재훈 */
+  "4967be43-fbd2-4617-8052-d43625bb3a12": "4c75ef47-c52a-4910-9b75-98b35c937c02", /* 두산 최일언 */
+  "b6712d3a-d7c3-46fb-b33c-3fac55a00f4c": "d1c53813-f137-41a6-881f-5a09ef32ccf6", /* KT 김재윤 */
+  "8a3b83e0-9d7c-424c-bdc0-8ad1f06b849e": "fdd952ab-e133-466a-a323-9fcc8d3208e1", /* KT 박시영 */
+  "a340b45a-ab4c-4a21-85ad-62ff6e6df727": "0128142c-813a-4221-9701-48613d21c011", /* KT 조무근 */
+  "b361e5fa-552d-4ff9-8155-0ae585fa21f4": "c2c7b13b-09b5-4480-ba3d-e03765fe3d79", /* SSG 고효준 */
+  "56495087-3c53-44d3-a978-3897faf5f80c": "f0b562ad-01e2-4763-8471-9395e58cb3aa", /* SSG 김태훈B */
+  "3fc50c58-dece-42b0-8d52-7ae244431e4f": "e331ceac-0c89-4779-a5a7-3ef5db0b4521", /* SSG 위재영 */
+  "4594162a-75ca-46fd-a6a0-79413d9dde88": "1d000c25-0ba0-4a4b-b2e1-bb291050cc28", /* 롯데 가득염 */
+  "e038e3d7-b146-412c-b3b2-1a1f6fb8a30e": "b3f3994e-4dad-45ea-b043-8e7ae58baeca", /* 롯데 강영식 */
+  "6646bf03-e41f-4ebf-be37-1e2132127c88": "029a5390-5a0a-433c-bc11-15fbb08fb162", /* 롯데 구승민 */
+  "068422bf-e501-45b6-9fc5-461b7abb5a6d": "6b57e6df-106c-4a29-bbb4-54cb81fd6802", /* 롯데 최준용 */
+  "79911442-f618-4b39-9457-2437023ab770": "ecfaa2e1-82e0-4d63-b85e-07503d1d13d7", /* 한화 강재민 */
+  "2e9ba44f-3941-4001-b8fd-c4c6051c74e2": "3badc082-b3f2-48ff-ae50-e38d526d57ff", /* 한화 박상원 */
+  "ad0b58e7-fd08-49fe-b370-031a2566012b": "50c16e18-4e6c-4e9b-96d0-7a5903368eec", /* 한화 안영명 */
+  "a44e8a14-25c7-4971-8a99-681b790b48c6": "58aee00e-2117-4a0e-9f74-35effb59be95", /* NC 류진욱 */
+  "f2c88e6e-c925-4f8e-9272-fcbda367ece4": "09ceae89-eb65-49f7-9082-a42934c2a6e3", /* NC 박진우 */
+  "b5eb75de-f006-42b6-b426-0ceee55b8181": "0cf5f80f-b7cc-4d00-b557-a5a14a5507e2", /* NC 배재환 */
+  "177481d2-0d57-4776-b56c-582e3e09427d": "46396191-63e6-43a5-9ae3-62efba192e7d", /* 키움 이현승 */
+  "9e3e9743-218f-419f-a218-1a2ad56892a2": "42df8798-575f-4ed2-8306-413b285bacd2", /* 키움 조상우 */
+  "eaf214d0-9c65-44a3-9092-ca5eb7b95f66": "ae601cec-4415-4b39-a307-b3d8ea42830a", /* 키움 한현희 */
+};
 /* 한 장을 id 로 찾을 때는 dexAll() 을 쓰지 않는다 — 선수마다 매 렌더 부르는 자리라
    그때마다 5,000 장짜리 배열을 새로 이어붙이면 느려진다. 직접 등록분(최대 5장)을 먼저 보고 도감을 본다 */
-function findCard(id) {
-  if (!id) return null;
+function findCardExact(id) {
   for (var i = 0; i < CUSTOM_PLAYERS.length; i++) if (CUSTOM_PLAYERS[i].id === id) return CUSTOM_PLAYERS[i];
   for (var j = 0; j < SEED_PLAYERS.length; j++) if (SEED_PLAYERS[j].id === id) return SEED_PLAYERS[j];
   return null;
+}
+function findCard(id) {
+  if (!id) return null;
+  return findCardExact(id) || (CARD_ID_ALIAS[id] ? findCardExact(CARD_ID_ALIAS[id]) : null);
+}
+/* 도감에 없는 옛 id 면 남긴 카드 id 를 준다. 아직 도감에 있으면 그대로 둔다 */
+function canonCardId(id) {
+  if (!id || !CARD_ID_ALIAS[id] || findCardExact(id)) return id;
+  return CARD_ID_ALIAS[id];
+}
+function canonSlotIds(slots) {
+  var out = {};
+  Object.keys(slots || {}).forEach(function (k) { out[k] = canonCardId(slots[k]); });
+  return out;
 }
 function setCustomPlayers(list) {
   CUSTOM_PLAYERS.length = 0;
@@ -7508,7 +7561,7 @@ function LabPage(p) {
   };
   var loadFrom = function (i) {
     var v = saves[i]; if (!v) return;
-    touch(function () { setTeam(teamKey(v.team) || team); setSlots(Object.assign({}, v.slots || {})); });
+    touch(function () { setTeam(teamKey(v.team) || team); setSlots(canonSlotIds(v.slots)); });
     setMsg("실험 " + (i + 1) + " 을 불러왔습니다.");
   };
   /* 클럽 라운지에서 넘어온 덱 — "연구소에서 열기"면 그대로 올리고, "수정 제안"이면 고친 뒤 댓글로 돌려보낸다.
@@ -7521,7 +7574,7 @@ function LabPage(p) {
     if (!inc || !inc.deck) return;
     var d = inc.deck, next = {}, miss = 0;
     LAB_SLOTS.forEach(function (sl) {
-      var id = d.slots && d.slots[sl];
+      var id = canonCardId(d.slots && d.slots[sl]);
       if (id && byId[id]) next[sl] = id; else if (d.view && d.view[sl]) miss++;
     });
     if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 클럽에서 가져온 덱을 올릴까요?\n(저장해 둔 실험 1~3 은 그대로입니다)")) {
@@ -7916,7 +7969,7 @@ function MyPlayersPage(p) {
     var m = {};
     for (var i = 0; i < players.length; i++) {
       var x = players[i];
-      if (x.dbId) m["#" + x.dbId] = 1;
+      if (x.dbId) { m["#" + x.dbId] = 1; m["#" + canonCardId(x.dbId)] = 1; }
       m[[x.name, x.cardType, x.year || "", x.impactType || "", x.liveType || ""].join("|")] = 1;
     }
     return m;
