@@ -868,7 +868,7 @@ eq('없는 이름은 그대로 0', getSkillScore('없는스킬입니다', 6, '�
 eq('정확히 있는 이름은 그대로', canonSkillName('정밀타격', '타자') === '정밀타격' ? 1 : 0, 1);
 
 
-console.log('\n[중계 전술] 적극 = 승리조·추격조 +1 / 분업 = 승리조만 +2 — 화면 능력치가 아니라 점수에만');
+console.log('\n[중계 전술] 구버전 값 — 적극 = 승리조·추격조 +1 / 분업 = 승리조만 +2 — 화면 능력치가 아니라 점수에만 (신버전 값은 끝의 v1.1 칸)');
 var rp = { role:"투수", position:"중계", cardType:"시즌", stars:5 };
 /* 전술 보너스는 calcSDBonus 가 tac 으로 따로 돌려준다. 화면에 보이는 능력치(c · s)는 전술을 켜도 그대로다
    (라인업의 능력치는 인게임 덱 화면 수치와 같아야 한다 — 2026-10-12 사용자 지정) */
@@ -3221,6 +3221,32 @@ __setScoreVer('v11');
   eqs('검사: 안정권이 숫자가 아니면', rankTierCheck([{ n: 'a', cut: 100, safe: 'x' }, { n: 'b', cut: 50, safe: 0 }]), 'a 안정권 점수가 이상해요');
   eqs('색: in30 금색 · in100 분홍 · in200 · in500 파랑 · in1000 초록 · in2000 · in3000 회색',
     ['in30', 'in100', 'in200', 'in500', 'in1000', 'in2000', 'in3000'].map((n) => rankTierColor({ n })).join(' '), '#D97706 #EC4899 #3B82F6 #3B82F6 #16A34A #64748B #64748B');
+}
+{
+  /* 중계 전술 능력치 — 2026년 10월 업데이트 (2026-10-22 사용자 지정): 승리조 분업 +3 · 승리조 적극 +1 · 추격조 적극 +2.
+     점수에만 들어가고 화면 능력치는 그대로. 구버전 점수는 예전 값(분업 +2 · 적극 +1 · 추격조 적극 +1) */
+  const base = { bpcIdx: 4, s95: '', s125: '' };
+  const win = Object.assign({}, base, { rpWinActive: true, rpChaseActive: false });
+  const chase = Object.assign({}, base, { rpWinActive: false, rpChaseActive: true });
+  const both = Object.assign({}, base, { rpWinActive: true, rpChaseActive: true });
+  const split = { bpcIdx: 6, s95: '', s125: '', isWinSplit: true, rpChaseActive: true };   // 3/1/2 · 분업 + 추격조 적극
+  eq('신버전 승리조 적극 +1', calcSDBonus(rp, 'RP1', win, 0).tac, 1);
+  eq('신버전 추격조 적극 +2', calcSDBonus(rp, 'RP3', chase, 0).tac, 2);
+  eq('승리조만 적극이면 추격조는 0', calcSDBonus(rp, 'RP3', win, 0).tac, 0);
+  eq('둘 다 적극: 승리조 +1 · 추격조 +2', calcSDBonus(rp, 'RP1', both, 0).tac * 10 + calcSDBonus(rp, 'RP3', both, 0).tac, 12);
+  eq('분업: 승리조 3명 모두 +3', ['RP1', 'RP2', 'RP3'].every((s) => calcSDBonus(rp, s, split, 0).tac === 3) ? 1 : 0, 1);
+  eq('분업 + 추격조 적극: 추격조 RP4 +2', calcSDBonus(rp, 'RP4', split, 0).tac, 2);
+  eq('롱릴리프 · 마무리 · 선발은 0', calcSDBonus(rp, 'RP5', both, 0).tac + calcSDBonus(cp, 'CP', both, 0).tac + calcSDBonus(sp, 'SP1', both, 0).tac, 0);
+  eq('화면 구위는 그대로 (점수에만)', calcSDBonus(rp, 'RP3', chase, 0).s - calcSDBonus(rp, 'RP3', base, 0).s, 0);
+  eq('화면 변화도 그대로', calcSDBonus(rp, 'RP1', split, 0).c - calcSDBonus(rp, 'RP1', { bpcIdx: 6, s95: '', s125: '' }, 0).c, 0);
+  eq('구버전은 예전 값 — 분업 +2', withScoreVer('v10', () => calcSDBonus(rp, 'RP1', split, 0).tac), 2);
+  eq('구버전은 예전 값 — 추격조 적극 +1', withScoreVer('v10', () => calcSDBonus(rp, 'RP3', chase, 0).tac), 1);
+  eq('구버전 승리조 적극 +1 그대로', withScoreVer('v10', () => calcSDBonus(rp, 'RP1', win, 0).tac), 1);
+  /* 종합점수: 모든 능력치 +N 과 같은 점수 — 불펜 가중치 합 2.40 (변 0.90 · 구 1.25 · 제 0.25) */
+  const pp = { role: '투수', position: '중계', cardType: '시즌', stars: 5, change: 100, stuff: 100, control: 100 };
+  eq('점수: 추격조 적극 +2 = 2 × 2.40 = 4.8', calcPit(pp, {}, { c: 0, s: 0, tac: 2 }).total - calcPit(pp, {}, { c: 0, s: 0, tac: 0 }).total, 4.8, 0.01);
+  eq('점수: 분업 +3 = 3 × 2.40 = 7.2', calcPit(pp, {}, { c: 0, s: 0, tac: 3 }).total - calcPit(pp, {}, { c: 0, s: 0, tac: 0 }).total, 7.2, 0.01);
+  eq('화면 변화 수치는 전술과 무관', calcPit(pp, {}, { c: 0, s: 0, tac: 3 }).change - calcPit(pp, {}, { c: 0, s: 0, tac: 0 }).change, 0);
 }
 __setScoreVer('v10');
 

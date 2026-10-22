@@ -1259,6 +1259,11 @@ function rpChaseTactic(sdState) {
   return on ? "적극" : "기본";
 }
 function rpTacKey(sdState) { return rpTactic(sdState) + "/" + rpChaseTactic(sdState); }
+var RP_TAC_STAT = { v11: { win: { "적극": 1, "분업": 3 }, chase: { "적극": 2 } }, v10: { win: { "적극": 1, "분업": 2 }, chase: { "적극": 1 } } };
+function rpTacStat(group, tac) {
+  var t = RP_TAC_STAT[SCORE_VER === "v10" ? "v10" : "v11"];
+  return (group === "승리조" ? t.win : t.chase)[tac] || 0;
+}
 function rpTacNorm(t) {
   if (!t) return "기본/기본";
   if (t.indexOf("/") >= 0) return t;
@@ -1957,8 +1962,9 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
 
   /* 중계 전술 능력치 보너스 — 인게임 덱 화면의 수치로는 안 보이지만 경기에서는 실제로 오른다.
      승리조 · 추격조 전술을 따로 고른다 (2026-10-19, rpTactic · rpChaseTactic).
-       승리조 적극 : 승리조 +1 / 승리조 분업 : 승리조 +2 (승리조가 3명일 때만)
-       추격조 적극 : 추격조 +1
+       승리조 적극 : 승리조 +1 / 승리조 분업 : 승리조 +3 (승리조가 3명일 때만)
+       추격조 적극 : 추격조 +2
+     — 2026년 10월 업데이트 값 (2026-10-22 사용자 지정, 예전엔 분업 +2 · 추격조 적극 +1). 구버전 점수는 예전 값 (RP_TAC_STAT)
      롱릴리프와 마무리는 어느 쪽에서도 받지 않는다.
      라인업에 보이는 능력치는 인게임 덱 화면의 수치와 같아야 하므로(스킬 · 전술로 오르는 것은 거기에 안 보인다)
      화면 능력치(c · s)에는 더하지 않고 따로 돌려준다(tac) — calcPit 이 종합점수에만 얹는다 (국대에이스 · 포수리드와 같은 식.
@@ -1966,8 +1972,8 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   var tacB = 0;
   if (!isBat) {
     var rpGrp = rpGroupOf(slot, sdState.bpcIdx);
-    if (rpGrp === "승리조") { var rpTac = rpTactic(sdState); tacB = rpTac === "분업" ? 2 : rpTac === "적극" ? 1 : 0; }
-    else if (rpGrp === "패전조") tacB = rpChaseTactic(sdState) === "적극" ? 1 : 0;
+    if (rpGrp === "승리조") tacB = rpTacStat("승리조", rpTactic(sdState));
+    else if (rpGrp === "패전조") tacB = rpTacStat("추격조", rpChaseTactic(sdState));
   }
 
   /* POTM 능력치 — 모든 능력치에 오른다 (potmEffect) */
@@ -2035,7 +2041,7 @@ function calcPit(pl,lu,sdB){
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mnP,pl.cardType,2,pt,ptsP),pt)
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mnP,pl.cardType,3,pt,ptsP),pt);
   var t=fC*w.c+fS*w.s+fCtl*w.ctl+ss;
-  /* 중계 전술(적극 +1 · 분업 +2): 인게임 덱 화면 수치에는 안 보이는 상승이라 화면 능력치(fC · fS)에는 넣지 않고
+  /* 중계 전술(RP_TAC_STAT — 승리조 적극 +1 · 분업 +3 · 추격조 적극 +2, 구버전은 1 · 2 · 1): 인게임 덱 화면 수치에는 안 보이는 상승이라 화면 능력치(fC · fS)에는 넣지 않고
      종합점수에만 반영한다 — 모든 능력치가 그만큼 오른 것과 같은 점수 (calcSDBonus 의 tac).
      제구도 같이 오른다 (2026-10-21 사용자 확인) — 합 가중치가 2.40 이라 v10 · v11 이 같은 값이다 */
   if(sb.tac) t+=sb.tac*(w.c+w.s+w.ctl);
@@ -2542,6 +2548,7 @@ function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setScoreVer(v){ SCORE_VER = v; }
 export { withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, skillTables, __setScoreVer, CATCH_LEAD_PIT, NAT_ACE_PIT, POS_TRAIN, ENHANCE, pitCatOf, pitDistRole, pitStatScore, sampleSkillScores, SKILL_DIST_CARDS, ctlMissing, applyV11, v11EditCopy, v11Saved, v11WeightsOk, V11_TABLE_VERSION, SKILLS_V11_CODE, PIT_W_V11_CODE };
 export { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankHexA, RANK_TRAIN_BAT, RANK_TRAIN_PIT, rankTrainMissing };
+export { RP_TAC_STAT, rpTacStat };
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
 function __setSeed(a){ SEED_PLAYERS.length = 0; (a||[]).forEach(function(p){ SEED_PLAYERS.push(p); }); }
 function __setSkillData(d){ SKILL_DATA = d || DEFAULT_SKILLS; }

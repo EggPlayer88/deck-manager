@@ -999,7 +999,7 @@ function calcPit(pl,lu,sdB){
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mnP,pl.cardType,2,pt,ptsP),pt)
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mnP,pl.cardType,3,pt,ptsP),pt);
   var t=fC*w.c+fS*w.s+fCtl*w.ctl+ss;
-  /* 중계 전술(적극 +1 · 분업 +2): 인게임 덱 화면 수치에는 안 보이는 상승이라 화면 능력치(fC · fS)에는 넣지 않고
+  /* 중계 전술(RP_TAC_STAT — 승리조 적극 +1 · 분업 +3 · 추격조 적극 +2, 구버전은 1 · 2 · 1): 인게임 덱 화면 수치에는 안 보이는 상승이라 화면 능력치(fC · fS)에는 넣지 않고
      종합점수에만 반영한다 — 모든 능력치가 그만큼 오른 것과 같은 점수 (calcSDBonus 의 tac).
      제구도 같이 오른다 (2026-10-21 사용자 확인) — 합 가중치가 2.40 이라 v10 · v11 이 같은 값이다 */
   if(sb.tac) t+=sb.tac*(w.c+w.s+w.ctl);
@@ -1400,8 +1400,9 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
 
   /* 중계 전술 능력치 보너스 — 인게임 덱 화면의 수치로는 안 보이지만 경기에서는 실제로 오른다.
      승리조 · 추격조 전술을 따로 고른다 (2026-10-19, rpTactic · rpChaseTactic).
-       승리조 적극 : 승리조 +1 / 승리조 분업 : 승리조 +2 (승리조가 3명일 때만)
-       추격조 적극 : 추격조 +1
+       승리조 적극 : 승리조 +1 / 승리조 분업 : 승리조 +3 (승리조가 3명일 때만)
+       추격조 적극 : 추격조 +2
+     — 2026년 10월 업데이트 값 (2026-10-22 사용자 지정, 예전엔 분업 +2 · 추격조 적극 +1). 구버전 점수는 예전 값 (RP_TAC_STAT)
      롱릴리프와 마무리는 어느 쪽에서도 받지 않는다.
      라인업에 보이는 능력치는 인게임 덱 화면의 수치와 같아야 하므로(스킬 · 전술로 오르는 것은 거기에 안 보인다)
      화면 능력치(c · s)에는 더하지 않고 따로 돌려준다(tac) — calcPit 이 종합점수에만 얹는다 (국대에이스 · 포수리드와 같은 식.
@@ -1409,8 +1410,8 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   var tacB = 0;
   if (!isBat) {
     var rpGrp = rpGroupOf(slot, sdState.bpcIdx);
-    if (rpGrp === "승리조") { var rpTac = rpTactic(sdState); tacB = rpTac === "분업" ? 2 : rpTac === "적극" ? 1 : 0; }
-    else if (rpGrp === "패전조") tacB = rpChaseTactic(sdState) === "적극" ? 1 : 0;
+    if (rpGrp === "승리조") tacB = rpTacStat("승리조", rpTactic(sdState));
+    else if (rpGrp === "패전조") tacB = rpTacStat("추격조", rpChaseTactic(sdState));
   }
 
   /* POTM 능력치 — 모든 능력치에 오른다 (potmEffect) */
@@ -3833,6 +3834,14 @@ function rpChaseTactic(sdState) {
 }
 /* 가중치 표(RP_WEIGHTS) 열쇠 "승리조/추격조" */
 function rpTacKey(sdState) { return rpTactic(sdState) + "/" + rpChaseTactic(sdState); }
+/* 중계 전술로 오르는 능력치 — 모든 능력치, 점수에만 들어간다 (calcSDBonus 의 tac → calcPit).
+   2026년 10월 업데이트 (2026-10-22 사용자 지정): 승리조 적극 +1 · 승리조 분업 +3 · 추격조 적극 +2.
+   구버전 점수(v10)는 업데이트 전 값(승리조 적극 +1 · 분업 +2 · 추격조 적극 +1) 그대로 — 같은 덱의 예전 계산이라서 */
+var RP_TAC_STAT = { v11: { win: { "적극": 1, "분업": 3 }, chase: { "적극": 2 } }, v10: { win: { "적극": 1, "분업": 2 }, chase: { "적극": 1 } } };
+function rpTacStat(group, tac) {
+  var t = RP_TAC_STAT[SCORE_VER === "v10" ? "v10" : "v11"];
+  return (group === "승리조" ? t.win : t.chase)[tac] || 0;
+}
 /* 옛 한 단어 이름(기본 · 적극 · 분업)도 표 열쇠로 — 적극은 두 조 모두, 분업은 추격조 기본이었다 */
 function rpTacNorm(t) {
   if (!t) return "기본/기본";
@@ -4060,10 +4069,10 @@ function BullpenLayout(p) {
         <TacPick label="승리조" color="#4CAF50" value={winTac} onPick={setWinTac} opts={[
           { v: "기본", t: "승리조 기본 — 선발을 길게 씁니다 (선발 배율 합 7.00)" },
           { v: "적극", t: "승리조 적극 — 승리조가 일찍 들어가고 일찍 내려갑니다. 승리조 능력치 +1 (인게임 덱 화면 수치에는 안 보여서 라인업 숫자는 그대로이고 점수에만 들어갑니다). 선발 배율 합이 7.00 에서 6.66 으로 줄고 그만큼 중계 몫이 커집니다" }
-        ].concat(cfg.w === 3 ? [{ v: "분업", t: "분업 — 승리조 3명의 능력치가 2씩 오르고, 그 조에서 2번째 · 3번째로 나오는 투수가 스킬의 셋업1 · 셋업2 가 됩니다 (1번째는 승리조 그대로). 능력치 상승은 점수에만 들어갑니다. 선발 배율 합이 7.00 에서 6.33 으로 줄고 그만큼 중계 몫이 커집니다" }] : [])} />
+        ].concat(cfg.w === 3 ? [{ v: "분업", t: "분업 — 승리조 3명의 능력치가 3씩 오르고, 그 조에서 2번째 · 3번째로 나오는 투수가 스킬의 셋업1 · 셋업2 가 됩니다 (1번째는 승리조 그대로). 능력치 상승은 점수에만 들어갑니다. 선발 배율 합이 7.00 에서 6.33 으로 줄고 그만큼 중계 몫이 커집니다" }] : [])} />
         <TacPick label="추격조" color="#FF7043" value={chaseTac} onPick={setChaseTac} opts={[
           { v: "기본", t: "추격조 기본" },
-          { v: "적극", t: "추격조 적극 — 추격조가 일찍 들어가고 일찍 내려갑니다. 추격조 능력치 +1 (점수에만 들어갑니다). 선발 배율은 그대로이고, 추격조 몫의 일부가 다음 차례로 넘어갑니다" }
+          { v: "적극", t: "추격조 적극 — 추격조가 일찍 들어가고 일찍 내려갑니다. 추격조 능력치 +2 (점수에만 들어갑니다). 선발 배율은 그대로이고, 추격조 몫의 일부가 다음 차례로 넘어갑니다" }
         ]} />
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
