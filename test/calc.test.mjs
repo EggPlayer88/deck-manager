@@ -3045,12 +3045,13 @@ __setScoreVer('v11');
   eq('분업 +2 = 2 x 2.40 (제구 포함)', tac(rp), 4.8, 1e-9);
   eq('구버전 분업 +2 도 4.80', withScoreVer('v10', () => tac(rp)), 4.8, 1e-9);
   const buff = (pl, lv) => calcPit(pl, {}, { c: 0, s: 0, ctl: 0, _sdState: { catchLead: lv } }).total - calcPit(pl, {}, null).total;
-  eq('포수리드 9렙(선발) = 변2 · 제2 · 구1', buff(sp, '9렙'), 2 * 1.0 + 2 * 0.25 + 1.15, 1e-9);
-  eq('포수리드 5렙(중계) = 변1 · 제1', buff(rp, '5렙'), 0.9 + 0.25, 1e-9);
-  eq('포수리드 10렙(중계) = 모두 2', buff(rp, '10렙'), 2 * 2.4, 1e-9);
+  /* 포수리드 팀버프는 v1.1 산정근거의 '아군 강화 0.9배' (2026-10-22) */
+  eq('포수리드 9렙(선발) = (변2 · 제2 · 구1) x 0.9', buff(sp, '9렙'), (2 * 1.0 + 2 * 0.25 + 1.15) * 0.9, 0.006); /* 투수 점수는 소수 둘째 자리로 반올림 */
+  eq('포수리드 5렙(중계) = (변1 · 제1) x 0.9', buff(rp, '5렙'), (0.9 + 0.25) * 0.9, 0.006); /* 투수 점수는 소수 둘째 자리로 반올림 */
+  eq('포수리드 10렙(중계) = 모두 2 x 0.9', buff(rp, '10렙'), 2 * 2.4 * 0.9, 0.006); /* 투수 점수는 소수 둘째 자리로 반올림 */
   eq('구버전 포수리드 9렙 = 변2 · 구1 (예전 그대로)', withScoreVer('v10', () => buff(sp, '9렙')), 2 * 1.05 + 1.35, 1e-9);
   const nat = (pl, lv) => calcPit(pl, {}, { c: 0, s: 0, ctl: 0, _sdState: { natPit: lv } }).total - calcPit(pl, {}, null).total;
-  eq('국대에이스 6렙(선발) = 변2 · 구2 (제구 없음)', nat(sp, '6렙'), 2 * 1.0 + 2 * 1.15, 1e-9);
+  eq('국대에이스 6렙(선발) = 변2 · 구2 (제구 없음, 0.9배 제외)', nat(sp, '6렙'), 2 * 1.0 + 2 * 1.15, 1e-9);
 
   /* 보너스 — 유니폼 · 주장 · 투수 주장 · 포지션 특훈(+재설정)의 제구 */
   const pz = { id: 'pz', role: '투수', position: '선발', cardType: '시즌', change: 100, stuff: 100, control: 100, stars: 5 };
@@ -3092,9 +3093,10 @@ __setScoreVer('v11');
   eq('기본 전술 선발 배율 합 7.0', spSum, 7.0, 1e-9);
   eq('기본 전술 불펜 배율 합 3.0 (중계 2.2 + 마무리 0.8)', bpSum, 3.0, 1e-9);
   const inc = (b, w) => b.c * w.c + b.s * w.s + b.ctl * w.ctl;
-  const want = [5, 6, 7, 8, 9, 10].map((lv) => { const b = CATCH_LEAD_PIT[lv + '렙']; return Math.round((lv + inc(b, PIT_W_V11['선발']) * spSum + inc(b, PIT_W_V11['중계']) * bpSum) * 100) / 100; });
-  eq('포수리드(버프포함) Lv5~10 = 스킬 + 증가 × 배율 (17.2 · 30 · 31 · 41.7 · 45.2 · 58)', JSON.stringify([5, 6, 7, 8, 9, 10].map((lv) => getSkillScore('포수리드', lv, '타자', true))) === JSON.stringify(want) ? 1 : 0, 1);
-  eq('그 값이 17.2 · 30 · 31 · 41.7 · 45.2 · 58', JSON.stringify(want) === JSON.stringify([17.2, 30, 31, 41.7, 45.2, 58]) ? 1 : 0, 1);
+  /* 2026-10-22 사용자 지정: 증가 점수 × 8.1 (= 9이닝 × 팀버프 0.9, 이닝은 선발 7 : 불펜 3) */
+  const want = [5, 6, 7, 8, 9, 10].map((lv) => { const b = CATCH_LEAD_PIT[lv + '렙']; return Math.round((lv + 9 * 0.9 * (0.7 * inc(b, PIT_W_V11['선발']) + 0.3 * inc(b, PIT_W_V11['중계']))) * 100) / 100; });
+  eq('포수리드(버프포함) Lv5~10 = 스킬 + 증가 × 8.1', JSON.stringify([5, 6, 7, 8, 9, 10].map((lv) => getSkillScore('포수리드', lv, '타자', true))) === JSON.stringify(want) ? 1 : 0, 1);
+  eq('그 값이 14.88 · 25.44 · 26.44 · 35.3 · 38.32 · 48.88', JSON.stringify(want) === JSON.stringify([14.88, 25.44, 26.44, 35.3, 38.32, 48.88]) ? 1 : 0, 1);
   eq('라인업(버프 뺀) 포수리드 Lv7 = 7 — 팀버프는 투수 쪽에서 따로 센다', getSkillScore('포수리드', 7, '타자'), 7);
   eq('구버전 버프포함 Lv7 26.44 그대로', withScoreVer('v10', () => getSkillScore('포수리드', 7, '타자', true)), 26.44);
   /* 옛 값도 같은 식이었다 — 옛 가중치(변 1.05 · 구 1.35) · 배율 합 8.1 로 Lv5~9 가 맞는다 */
