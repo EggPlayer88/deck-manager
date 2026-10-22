@@ -171,6 +171,32 @@ var SKILLS_V11 = {"타자":{"우타해결사(우타)":[21.32,24.9,29.72,34.54,39
 var MAJOR_V11 = JSON.parse(JSON.stringify(DEFAULT_MAJOR));
 ["우타해결사(우타)", "우타해결사(좌타)", "우타해결사(양타)", "클린업 트리오(타순O)", "클린업 트리오(타순X)"].forEach(function (n) { MAJOR_V11["타자"][n] = true; });
 SKILLS_V11._major = MAJOR_V11;
+function v11WeightsOk(w) {
+  return !!w && ["선발", "불펜"].every(function (k) {
+    var x = w[k];
+    return !!x && [x.c, x.s, x.ctl].every(function (v) { return typeof v === "number" && isFinite(v) && v >= 0 && v <= 5; });
+  });
+}
+function v11Saved(sk) {
+  var t = sk && sk.v11;
+  return !!(t && t["타자"] && t["선발"] && t["중계"] && t["마무리"] && (t._v || 0) >= V11_TABLE_VERSION) ? t : null;
+}
+function applyV11(sk) {
+  var t = v11Saved(sk);
+  SKILLS_V11 = t || SKILLS_V11_CODE;
+  if (!SKILLS_V11._major) SKILLS_V11._major = MAJOR_V11;
+  var w = t ? t.weights : null;
+  PIT_W_V11 = v11WeightsOk(w) ? { "선발": w["선발"], "중계": w["불펜"], "마무리": w["불펜"] } : PIT_W_V11_CODE;
+}
+function v11EditCopy(sk) {
+  var c = JSON.parse(JSON.stringify(v11Saved(sk) || SKILLS_V11_CODE));
+  c._v = V11_TABLE_VERSION;
+  if (!c._major) c._major = JSON.parse(JSON.stringify(MAJOR_V11));
+  if (!v11WeightsOk(c.weights)) c.weights = { "선발": Object.assign({}, PIT_W_V11_CODE["선발"]), "불펜": Object.assign({}, PIT_W_V11_CODE["중계"]) };
+  return c;
+}
+var V11_TABLE_VERSION = 1;
+var SKILLS_V11_CODE = SKILLS_V11;
 function skillTables() { return SCORE_VER === "v10" ? SKILL_DATA : SKILLS_V11; }
 var DEFAULT_WEIGHTS={p:1.0,a:0.85,e:0.4,n:0.15,c:1.05,s:1.35};
 var LIVE_WEIGHTS=null;
@@ -190,6 +216,7 @@ var PIT_W_V11 = {
   "중계":   { c: 0.90, s: 1.25, ctl: 0.25 },
   "마무리": { c: 0.90, s: 1.25, ctl: 0.25 }
 };
+var PIT_W_V11_CODE = PIT_W_V11;
 function getPW(cat) {
   if (SCORE_VER === "v10") { var w = getW(); return { c: w.c, s: w.s, ctl: 0 }; }
   return PIT_W_V11[cat] || PIT_W_V11["선발"];
@@ -2408,7 +2435,7 @@ function pushAudit(row, note) {
 }
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setScoreVer(v){ SCORE_VER = v; }
-export { withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, skillTables, __setScoreVer, CATCH_LEAD_PIT, NAT_ACE_PIT, POS_TRAIN, ENHANCE, pitCatOf, pitDistRole, pitStatScore, sampleSkillScores, SKILL_DIST_CARDS, ctlMissing };
+export { withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, skillTables, __setScoreVer, CATCH_LEAD_PIT, NAT_ACE_PIT, POS_TRAIN, ENHANCE, pitCatOf, pitDistRole, pitStatScore, sampleSkillScores, SKILL_DIST_CARDS, ctlMissing, applyV11, v11EditCopy, v11Saved, v11WeightsOk, V11_TABLE_VERSION, SKILLS_V11_CODE, PIT_W_V11_CODE };
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
 function __setSeed(a){ SEED_PLAYERS.length = 0; (a||[]).forEach(function(p){ SEED_PLAYERS.push(p); }); }
 function __setSkillData(d){ SKILL_DATA = d || DEFAULT_SKILLS; }

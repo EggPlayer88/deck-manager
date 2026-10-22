@@ -351,6 +351,8 @@ var PIT_W_V11 = {
   "중계":   { c: 0.90, s: 1.25, ctl: 0.25 },
   "마무리": { c: 0.90, s: 1.25, ctl: 0.25 }
 };
+/* 코드 기본값 — 관리자 저장본(applyV11)이 없거나 낡았을 때 돌아올 값 */
+var PIT_W_V11_CODE = PIT_W_V11;
 function getPW(cat) {
   if (SCORE_VER === "v10") { var w = getW(); return { c: w.c, s: w.s, ctl: 0 }; }
   return PIT_W_V11[cat] || PIT_W_V11["선발"];
@@ -500,6 +502,37 @@ var SKILLS_V11 = {"타자":{"우타해결사(우타)":[21.32,24.9,29.72,34.54,39
 var MAJOR_V11 = JSON.parse(JSON.stringify(DEFAULT_MAJOR));
 ["우타해결사(우타)", "우타해결사(좌타)", "우타해결사(양타)", "클린업 트리오(타순O)", "클린업 트리오(타순X)"].forEach(function (n) { MAJOR_V11["타자"][n] = true; });
 SKILLS_V11._major = MAJOR_V11;
+/* 관리자 '스킬 관리 › 신버전' 에서 고친 표 · 투수 가중치 (2026-10-22 사용자 요청).
+   DB(global_skills) 의 data.v11 에 { 타자 · 선발 · 중계 · 마무리, _major, weights: { 선발, 불펜 }, _v } 로 저장한다.
+   판(_v)이 코드의 V11_TABLE_VERSION 보다 낮으면 무시한다 — 코드 표를 새 판으로 올리면 옛 저장본이 새 표를 덮지 않게 (resolveSkills 와 같은 방식).
+   저장본이 없으면 코드 표(SKILLS_V11_CODE) · 코드 가중치(PIT_W_V11_CODE) 그대로다 */
+var V11_TABLE_VERSION = 1;
+var SKILLS_V11_CODE = SKILLS_V11;
+function v11WeightsOk(w) {
+  return !!w && ["선발", "불펜"].every(function (k) {
+    var x = w[k];
+    return !!x && [x.c, x.s, x.ctl].every(function (v) { return typeof v === "number" && isFinite(v) && v >= 0 && v <= 5; });
+  });
+}
+function v11Saved(sk) {
+  var t = sk && sk.v11;
+  return !!(t && t["타자"] && t["선발"] && t["중계"] && t["마무리"] && (t._v || 0) >= V11_TABLE_VERSION) ? t : null;
+}
+function applyV11(sk) {
+  var t = v11Saved(sk);
+  SKILLS_V11 = t || SKILLS_V11_CODE;
+  if (!SKILLS_V11._major) SKILLS_V11._major = MAJOR_V11;
+  var w = t ? t.weights : null;
+  PIT_W_V11 = v11WeightsOk(w) ? { "선발": w["선발"], "중계": w["불펜"], "마무리": w["불펜"] } : PIT_W_V11_CODE;
+}
+/* 관리자 화면이 고칠 사본 — 저장본이 없으면 코드 표에서 시작한다. 코드 표는 건드리지 않는다 */
+function v11EditCopy(sk) {
+  var c = JSON.parse(JSON.stringify(v11Saved(sk) || SKILLS_V11_CODE));
+  c._v = V11_TABLE_VERSION;
+  if (!c._major) c._major = JSON.parse(JSON.stringify(MAJOR_V11));
+  if (!v11WeightsOk(c.weights)) c.weights = { "선발": Object.assign({}, PIT_W_V11_CODE["선발"]), "불펜": Object.assign({}, PIT_W_V11_CODE["중계"]) };
+  return c;
+}
 /* 지금 점수 기준의 스킬표 — v10 은 관리자 저장본(SKILL_DATA), v11 은 위 표 */
 function skillTables() { return SCORE_VER === "v10" ? SKILL_DATA : SKILLS_V11; }
 async function sGet(k){try{var r=await window.storage.get(k);return r?JSON.parse(r.value):null;}catch(e){return null;}}
@@ -2078,7 +2111,7 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
           globalLoadedRef.current = true;
           var gsk=await loadGlobalSkills();
           var rsk=resolveSkills(gsk);
-          setSkills(rsk);SKILL_DATA=rsk;LIVE_WEIGHTS=rsk.weights||DEFAULT_WEIGHTS;
+          setSkills(rsk);SKILL_DATA=rsk;LIVE_WEIGHTS=rsk.weights||DEFAULT_WEIGHTS;applyV11(rsk);
           var gpl=await loadGlobalPlayers();
           if(gpl&&gpl.length>0){SEED_PLAYERS.length=0;gpl.forEach(function(p){SEED_PLAYERS.push(p);});}
           /* POTM 전역 명단 로드 - 모든 유저에게 동일 적용 */
@@ -2102,7 +2135,7 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
           var sk2=await sGet(SK.skills);
           /* 스킬표 버전이 낡았으면 선수 데이터는 두고 스킬표만 새로 받는다 */
           var rsk2=needReset?DEFAULT_SKILLS:resolveSkills(sk2);
-          setSkills(rsk2);SKILL_DATA=rsk2;LIVE_WEIGHTS=rsk2.weights||DEFAULT_WEIGHTS;
+          setSkills(rsk2);SKILL_DATA=rsk2;LIVE_WEIGHTS=rsk2.weights||DEFAULT_WEIGHTS;applyV11(rsk2);
           if(rsk2!==sk2){await sSet(SK.skills,rsk2);await sSet(SK.skillVersion,SKILL_DATA_VERSION);}
           /* POTM: 로컬 모드에서는 localStorage에 저장 */
           var lpotm=await sGet("global-potm-list");
@@ -2118,7 +2151,7 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
     return function(){ stale=true; };
   },[userId, curDeckId]);
 
-  SKILL_DATA=skills;if(skills.weights)LIVE_WEIGHTS=skills.weights;
+  SKILL_DATA=skills;if(skills.weights)LIVE_WEIGHTS=skills.weights;applyV11(skills);
 
   /* 선수·라인업·세트덱 저장은 나머지 칸도 저장기의 최신 값으로 채운 한 덩어리를 대기열에 올린다.
      셋 다 지금 덱을 읽어 온 뒤에만 받는다 (deckReady) — 부른 그 순간의 덱·내용을 붙잡아 그 덱 자리에 얹는다.
@@ -2156,7 +2189,7 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
   },[]);
 
   var saveSK=useCallback(async function(d){
-    setSkills(d);SKILL_DATA=d;
+    setSkills(d);SKILL_DATA=d;applyV11(d);
     if(supabase){await saveGlobalSkills(d);}
     else{await sSet(SK.skills,d);}
   },[]);
@@ -9053,6 +9086,9 @@ function MyPlayersPage(p) {
 function SkillManagePage(p) {
   var mob = p.mobile; var skills = p.skills; var saveSK = p.saveSkills;
   var cats = ["타자","선발","중계","마무리"];
+  /* 신버전(v1.1 — 지금 사이트 점수) · 구버전(라인업 '구버전' 점수) 을 바꿔 가며 본다 (2026-10-22 사용자 요청) */
+  var _ver = useState("v11"); var ver = _ver[0]; var setVer = _ver[1];
+  var isNew = ver === "v11";
   var _cat = useState("타자"); var cat = _cat[0]; var setCat = _cat[1];
   var _newName = useState(""); var newName = _newName[0]; var setNewName = _newName[1];
   var _newMajor = useState(false); var newMajor = _newMajor[0]; var setNewMajor = _newMajor[1];
@@ -9063,70 +9099,116 @@ function SkillManagePage(p) {
   var _impText = useState(""); var impText = _impText[0]; var setImpText = _impText[1];
 
   var w = Object.assign({}, DEFAULT_WEIGHTS, skills.weights || {});
+  /* 지금 보고 고치는 표 묶음 — 신버전은 관리자 저장본(skills.v11)이 있으면 그것, 없으면 코드 표(랭킹챌린지 v1.1)의 사본.
+     구버전은 예전처럼 skills 자체다 */
+  var T = isNew ? v11EditCopy(skills) : skills;
+  var hasSaved = !!v11Saved(skills);
+  var cloneT = function() { return JSON.parse(JSON.stringify(T)); };
+  var saveT = function(nt) {
+    if (!isNew) { saveSK(nt); return; }
+    var copy = JSON.parse(JSON.stringify(skills));
+    nt._v = V11_TABLE_VERSION; copy.v11 = nt;
+    saveSK(copy);
+  };
   var isBatCat = (cat === "타자");
   var statKeys = ["p","a","e","c","s"];
   var statVKeys = ["pV","aV","eV","cV","sV"];
   var statFKeys = ["pF","aF","eF","cF","sF"];
   var statLabels = ["파워","정확","선구","변화","구위"];
   var statColors = ["#EF5350","#42A5F5","#66BB6A","#AB47BC","#FF7043"];
-  var table = skills[cat] || {};
+  var table = T[cat] || {};
 
   var getScore = function(vals) {
     var e = vals[1]; if (!e) return 0;
     if (typeof e === "number") return e;
     return (e.pV||0)*(e.pF||0)*w.p + (e.aV||0)*(e.aF||0)*w.a + (e.eV||0)*(e.eF||0)*w.e + (e.cV||0)*(e.cF||0)*w.c + (e.sV||0)*(e.sF||0)*w.s;
   };
-  var names = Object.keys(table).sort(function(a,b) { return getScore(table[b]) - getScore(table[a]); });
+  var names = Object.keys(table).filter(function(n) { return Array.isArray(table[n]); }).sort(function(a,b) { return getScore(table[b]) - getScore(table[a]); });
 
+  /* 타자 가중치(파워 · 정확 · 선구 · 인내)는 신 · 구가 같이 쓴다. 변화 · 구위는 구버전에만 */
   var updWeight = function(key, val) {
     var copy = JSON.parse(JSON.stringify(skills));
     if (!copy.weights) copy.weights = {};
     copy.weights[key] = parseFloat(val) || 0;
     saveSK(copy);
   };
-  /* 260814 시트 기준 데이터는 레벨별 최종점수(숫자) 형식이다 */
+  /* 신버전 투수 가중치 — 선발 · 불펜(중계 · 마무리)의 변화 c · 구위 s · 제구 ctl */
+  var updPitW = function(grp, key, val) {
+    var nt = cloneT();
+    nt.weights[grp][key] = parseFloat(val) || 0;
+    saveT(nt);
+  };
+  /* 260814 시트 · v1.1 표는 레벨별 최종점수(숫자) 형식이다 */
   var isFlat = function(arr) { return !!arr && arr.some(function(e) { return typeof e === "number"; }); };
   var updScore = function(name, lvIdx, val) {
-    var copy = JSON.parse(JSON.stringify(skills));
-    var arr = copy[cat][name]; if (!arr) return;
+    var nt = cloneT();
+    var arr = nt[cat] && nt[cat][name]; if (!arr) return;
     arr[lvIdx] = parseFloat(val) || 0;
-    saveSK(copy);
+    saveT(nt);
   };
   var updComp = function(name, lvIdx, fieldKey, val) {
-    var copy = JSON.parse(JSON.stringify(skills));
-    var arr = copy[cat][name]; if (!arr) return;
+    var nt = cloneT();
+    var arr = nt[cat] && nt[cat][name]; if (!arr) return;
     var entry = arr[lvIdx];
     if (typeof entry === "number") { arr[lvIdx] = {pV:0,pF:1,aV:0,aF:1,eV:0,eF:1,cV:0,cF:1,sV:0,sF:1}; entry = arr[lvIdx]; }
     entry[fieldKey] = parseFloat(val) || 0;
-    saveSK(copy);
+    saveT(nt);
   };
   /* 메이저 여부는 등록할 때 한 번만 정한다.
      이미 있는 스킬이 메이저 <-> 비메이저 로 바뀌는 경우는 없어서,
      목록에서 실수로 눌러 분포가 틀어지는 쪽이 훨씬 위험하다. */
   var addSkill = function() {
-    if (!newName.trim() || table[newName.trim()]) return;
-    var copy = JSON.parse(JSON.stringify(skills));
-    var empty = {pV:0,pF:1,aV:0,aF:1,eV:0,eF:1,cV:0,cF:1,sV:0,sF:1};
-    copy[cat][newName.trim()] = [Object.assign({},empty),Object.assign({},empty),Object.assign({},empty),Object.assign({},empty),Object.assign({},empty),Object.assign({},empty)];
-    if (newMajor) {
-      if (!copy._major) copy._major = {};
-      if (!copy._major[cat]) copy._major[cat] = {};
-      copy._major[cat][newName.trim()] = true;
+    var nm = newName.trim();
+    if (!nm || table[nm]) return;
+    var nt = cloneT();
+    if (!nt[cat]) nt[cat] = {};
+    if (isNew) nt[cat][nm] = [0, 0, 0, 0, 0, 0];
+    else {
+      var empty = {pV:0,pF:1,aV:0,aF:1,eV:0,eF:1,cV:0,cF:1,sV:0,sF:1};
+      nt[cat][nm] = [Object.assign({},empty),Object.assign({},empty),Object.assign({},empty),Object.assign({},empty),Object.assign({},empty),Object.assign({},empty)];
     }
-    saveSK(copy); setNewName(""); setNewMajor(false);
+    if (newMajor) {
+      if (!nt._major) nt._major = {};
+      if (!nt._major[cat]) nt._major[cat] = {};
+      nt._major[cat][nm] = true;
+    }
+    saveT(nt); setNewName(""); setNewMajor(false);
   };
-  var delSkill = function(name) { var copy = JSON.parse(JSON.stringify(skills)); delete copy[cat][name]; saveSK(copy); };
+  /* 모든 이용자에게 바로 적용되는 동작이라 확인을 받는다 */
+  var delSkill = function(name) {
+    if (!window.confirm("'" + name + "' 스킬을 " + (isNew ? "신버전" : "구버전") + " " + cat + " 표에서 지웁니다. 모든 이용자에게 바로 적용돼요. 진행할까요?")) return;
+    var nt = cloneT(); delete nt[cat][name]; saveT(nt);
+  };
   /* 스킬표·가중치만 기본값으로. 잠재력 점수·주요스킬 표시는 남긴다.
      전체 유저에게 즉시 반영되는 동작이라 확인을 받는다. */
   var resetAll = function() {
-    if (!window.confirm("스킬 점수표와 능력치 가중치를 기본값으로 되돌립니다. 모든 이용자에게 즉시 적용됩니다. 진행할까요? (잠재력 점수와 주요스킬 표시는 유지됩니다)")) return;
+    if (isNew) {
+      if (!window.confirm("신버전 스킬표와 투수 가중치를 기본값(랭킹챌린지 스킬점수표 v1.1)으로 되돌립니다. 모든 이용자에게 즉시 적용됩니다. 진행할까요?")) return;
+      var c0 = JSON.parse(JSON.stringify(skills)); delete c0.v11; saveSK(c0);
+      return;
+    }
+    if (!window.confirm("구버전 스킬 점수표와 능력치 가중치를 기본값으로 되돌립니다. 모든 이용자에게 즉시 적용됩니다. 진행할까요? (잠재력 점수와 주요스킬 표시는 유지됩니다)")) return;
     saveSK(Object.assign({}, JSON.parse(JSON.stringify(skills)), JSON.parse(JSON.stringify(DEFAULT_SKILLS))));
   };
 
+  /* 신버전 CSV — 카테고리,스킬명,레벨,점수 + 가중치 줄 (타자 공통 넷 · 선발/불펜 변화 · 구위 · 제구) */
+  var V11_W_ROWS = [["선발","c","선발변화"],["선발","s","선발구위"],["선발","ctl","선발제구"],["불펜","c","불펜변화"],["불펜","s","불펜구위"],["불펜","ctl","불펜제구"]];
   var doExport = function() {
+    if (isNew) {
+      var rows1 = ["카테고리,스킬명,레벨,점수"];
+      cats.forEach(function(c) { var t = T[c] || {};
+        Object.keys(t).forEach(function(name) { var arr = t[name]; if (!Array.isArray(arr)) return;
+          [5,6,7,8,9,10].forEach(function(lv,li) { var e = arr[li]; rows1.push(c+","+name+","+lv+","+(typeof e === "number" ? e : 0)); });
+        });
+      });
+      rows1.push(""); rows1.push("가중치,파워,,,"+w.p); rows1.push("가중치,정확,,,"+w.a); rows1.push("가중치,선구,,,"+w.e); rows1.push("가중치,인내,,,"+(w.n||0));
+      V11_W_ROWS.forEach(function(r) { rows1.push("가중치,"+r[2]+",,,"+T.weights[r[0]][r[1]]); });
+      setCsvText(rows1.join("\n")); setShowCSV(true);
+      return;
+    }
     var rows = ["카테고리,스킬명,레벨,파워수치,파워빈도,정확수치,정확빈도,선구수치,선구빈도,변화수치,변화빈도,구위수치,구위빈도"];
     cats.forEach(function(c) { var t = skills[c] || {};
-      Object.keys(t).forEach(function(name) { var arr = t[name];
+      Object.keys(t).forEach(function(name) { var arr = t[name]; if (!Array.isArray(arr)) return;
         [5,6,7,8,9,10].forEach(function(lv,li) { var e = arr[li];
           /* 최종점수(숫자) 형식은 4열로 내보낸다 */
           if(typeof e==="number"){rows.push(c+","+name+","+lv+","+e);return;}
@@ -9139,6 +9221,26 @@ function SkillManagePage(p) {
   };
   var doImport = function() {
     if (!impText.trim()) return;
+    if (isNew) {
+      var copy1 = JSON.parse(JSON.stringify(skills)); var nt = cloneT();
+      var wMap1 = {"파워":"p","정확":"a","선구":"e","인내":"n"}; var pMap = {};
+      V11_W_ROWS.forEach(function(r) { pMap[r[2]] = r; });
+      impText.trim().split("\n").forEach(function(line) { var cols = line.split(",");
+        if (cols.length < 4 || cols[0] === "카테고리") return;
+        if (cols[0] === "가중치") {
+          if (wMap1[cols[1]]) { if (!copy1.weights) copy1.weights = {}; copy1.weights[wMap1[cols[1]]] = parseFloat(cols[4]) || 0; }
+          else if (pMap[cols[1]]) { nt.weights[pMap[cols[1]][0]][pMap[cols[1]][1]] = parseFloat(cols[4]) || 0; }
+          return;
+        }
+        var c = cols[0], nm = cols[1], li = (parseInt(cols[2], 10) || 0) - 5;
+        if (cats.indexOf(c) < 0 || !nm || li < 0 || li > 5) return;
+        if (!nt[c]) nt[c] = {};
+        if (!Array.isArray(nt[c][nm])) nt[c][nm] = [0, 0, 0, 0, 0, 0];
+        nt[c][nm][li] = parseFloat(cols[3]) || 0;
+      });
+      nt._v = V11_TABLE_VERSION; copy1.v11 = nt; saveSK(copy1); setImpMode(false); setImpText("");
+      return;
+    }
     var copy = JSON.parse(JSON.stringify(skills)); var ls = impText.trim().split("\n"); var curName = ""; var curCat = ""; var curArr = [];
     var flush = function() { if (curName && curCat && curArr.length === 6) { if (!copy[curCat]) copy[curCat] = {}; copy[curCat][curName] = curArr; } curArr = []; };
     ls.forEach(function(line) { var cols = line.split(","); if (cols.length < 3 || cols[0] === "카테고리") return;
@@ -9155,7 +9257,7 @@ function SkillManagePage(p) {
     var arr = table[name]; if (!arr) return null;
     if (isFlat(arr)) return (
       <div style={{ padding: "8px 12px", background: "rgba(255,213,79,0.02)", borderBottom: "1px solid var(--bd)" }}>
-        <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 6 }}>{"레벨별 최종 점수 (덱 보정 시트 기준)"}</div>
+        <div style={{ fontSize: 11, color: "var(--td)", marginBottom: 6 }}><b style={{ color: "var(--t1)", fontSize: 12 }}>{name}</b>{" · " + (isNew ? "레벨별 최종 점수 (랭킹챌린지 스킬점수표 v1.1)" : "레벨별 최종 점수 (덱 보정 시트 기준)")}</div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead><tr>{[5,6,7,8,9,10].map(function(lv) { return (<th key={lv} style={{ textAlign: "center", padding: "4px", color: {"10":"#FF4081","9":"#E040FB","8":"#FFD700","7":"#FF6B6B","6":"#4FC3F7","5":"#81C784"}[lv]||"#aaa" }}>{"Lv"+lv}</th>); })}</tr></thead>
           <tbody><tr>{[0,1,2,3,4,5].map(function(li) {
@@ -9163,7 +9265,7 @@ function SkillManagePage(p) {
             var v = arr[li]; var val = (typeof v === "number") ? v : 0;
             return (<td key={li} style={{ textAlign: "center", padding: "2px" }}>
               <input type="number" step="0.01" value={val} onChange={function(e){updScore(name,li,e.target.value);}}
-                style={{ width: 62, padding: "3px", textAlign: "center", background: "var(--inner)", border: "1px solid "+c+"44", borderRadius: 3, color: c, fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
+                style={{ width: mob ? 46 : 62, padding: "3px", textAlign: "center", background: "var(--inner)", border: "1px solid "+c+"44", borderRadius: 3, color: c, fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
             </td>);
           })}</tr></tbody>
         </table>
@@ -9199,42 +9301,82 @@ function SkillManagePage(p) {
     );
   };
 
+  /* 가중치 칸 하나 */
+  var wBox = function(key, label, color, value, onChange) {
+    return (<div key={key} style={{ textAlign: "center" }}><div style={{ fontSize: 12, color: color, fontWeight: 700, marginBottom: 2 }}>{label}</div>
+      <input type="number" step="0.001" value={value} onChange={function(e){onChange(e.target.value);}} style={{ width: 56, padding: "4px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+color+"44", borderRadius: 4, color: color, fontSize: 16, fontFamily: "var(--m)", fontWeight: 800, outline: "none" }} /></div>);
+  };
+  var BAT_W = [{k:"p",l:"파워",cl:"#EF5350"},{k:"a",l:"정확",cl:"#42A5F5"},{k:"e",l:"선구",cl:"#66BB6A"},{k:"n",l:"인내",cl:"#FFA726"}];
+  var PIT_W = [{k:"c",l:"변화",cl:"#AB47BC"},{k:"s",l:"구위",cl:"#FF7043"},{k:"ctl",l:"제구",cl:"#26A69A"}];
+  var wGroup = function(title, sub, boxes) {
+    return (<div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t2)", marginBottom: 4 }}>{title}{sub && (<span style={{ fontSize: 11, fontWeight: 500, color: "var(--td)", marginLeft: 6 }}>{sub}</span>)}</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{boxes}</div>
+    </div>);
+  };
+  var verBtn = function(v, label) {
+    var on = ver === v;
+    return (<button key={v} type="button" role="radio" aria-checked={on} onClick={function(){ if (!on) { setVer(v); setExpName(""); setShowCSV(false); setImpMode(false); setNewName(""); setNewMajor(false); } }}
+      style={{ padding: "6px 14px", minHeight: 32, fontSize: 13, fontWeight: on ? 800 : 600, border: "none", borderLeft: v === "v10" ? "1px solid var(--bd)" : "none",
+        background: on ? (v === "v11" ? "var(--acc)" : "#64748b") : "var(--inner)", color: on ? (v === "v11" ? "#1a1100" : "#fff") : "var(--t2)", cursor: on ? "default" : "pointer", whiteSpace: "nowrap" }}>{label}</button>);
+  };
+
   return (
     <div style={{ padding: mob ? 12 : 18, maxWidth: 960, paddingBottom: mob ? PAGE_BOTTOM : 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 6 }}>
-        <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: 0 }}>{"스킬 관리"}</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <h2 style={{ fontSize: mob ? 16 : 18, fontWeight: 900, fontFamily: "var(--h)", letterSpacing: 2, color: "var(--t1)", margin: 0 }}>{"스킬 관리"}</h2>
+          <div role="radiogroup" aria-label="점수 버전" style={{ display: "inline-flex", border: "1px solid var(--bd)", borderRadius: 7, overflow: "hidden" }}>
+            {verBtn("v11", "신버전 v1.1")}{verBtn("v10", "구버전")}
+          </div>
+        </div>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           <button onClick={doExport} style={{ padding: "5px 10px", fontSize: 12, background: "rgba(66,165,245,0.08)", border: "1px solid rgba(66,165,245,0.2)", borderRadius: 4, color: "#42A5F5", cursor: "pointer" }}>{"CSV 내보내기"}</button>
           <button onClick={function(){setImpMode(!impMode);}} style={{ padding: "5px 10px", fontSize: 12, background: "rgba(102,187,106,0.08)", border: "1px solid rgba(102,187,106,0.2)", borderRadius: 4, color: "#66BB6A", cursor: "pointer" }}>{impMode?"닫기":"CSV 가져오기"}</button>
           <button onClick={resetAll} style={{ padding: "5px 10px", fontSize: 12, background: "rgba(239,83,80,0.08)", border: "1px solid rgba(239,83,80,0.2)", borderRadius: 4, color: "#EF5350", cursor: "pointer" }}>{"기본값 복원"}</button>
         </div>
       </div>
-      {/* 2026-10-21 v1.1(제구 반영)부터 점수는 코드의 SKILLS_V11 표로 센다 — 이 화면의 표는 구버전(v10) 점수에만 쓰인다 */}
-      <div style={{ fontSize: 12, color: "var(--t2)", background: "rgba(38,166,154,0.08)", border: "1px solid rgba(38,166,154,0.3)", borderRadius: 6, padding: "8px 10px", marginBottom: 12, lineHeight: 1.6 }}>
-        {"이 표는 구버전 점수(라인업의 '구버전')에만 쓰여요. 새 점수는 '랭킹챌린지 스킬점수표 v1.1'(제구 반영)이 코드에 들어 있어서, 여기서 고쳐도 바뀌지 않아요."}
-      </div>
+      {/* 지금 보는 표가 어디에 쓰이는지 */}
+      {isNew ? (
+        <div style={{ fontSize: 12, color: "var(--t2)", background: "rgba(255,213,79,0.07)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 6, padding: "8px 10px", marginBottom: 12, lineHeight: 1.6 }}>
+          <b style={{ color: "var(--acc)" }}>{"신버전"}</b>{" — 랭킹챌린지 스킬점수표 v1.1 (제구 반영). 지금 사이트의 모든 점수(TOTAL · 데이터센터 · 덱 연구소)가 이 표와 가중치로 계산돼요. 고치면 모든 이용자에게 바로 적용돼요."}
+          <div style={{ marginTop: 3, color: "var(--td)" }}>{(hasSaved ? "· 지금 이 표는 관리자가 고친 저장본이에요 ('기본값 복원'을 누르면 v1.1 원본으로 돌아가요)." : "· 지금은 v1.1 원본 그대로예요.") + " 표나 투수 가중치를 크게 바꾸면 데이터센터 '상위 %' 분포는 다시 계산해야 맞아요."}</div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: "var(--t2)", background: "rgba(100,116,139,0.10)", border: "1px solid rgba(100,116,139,0.35)", borderRadius: 6, padding: "8px 10px", marginBottom: 12, lineHeight: 1.6 }}>
+          <b>{"구버전"}</b>{" — 제구 반영 전 점수표예요. 라인업 TOTAL 밑 '구버전' 점수에만 쓰여요. 변화 · 구위 가중치도 구버전에만 쓰이고, 파워 · 정확 · 선구 · 인내는 신버전과 같이 써요."}
+        </div>
+      )}
       {showCSV && (<div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: "var(--td)" }}>{"CSV (복사→엑셀)"}</span><button onClick={function(){setShowCSV(false);}} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer" }}>{"✕"}</button></div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: "var(--td)" }}>{"CSV (복사→엑셀) — " + (isNew ? "신버전" : "구버전")}</span><button onClick={function(){setShowCSV(false);}} style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer" }}>{"✕"}</button></div>
         <textarea value={csvText} readOnly rows={8} onClick={function(e){e.target.select();}} style={{ width: "100%", padding: 8, fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
       </div>)}
       {impMode && (<div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 12 }}>
-        <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 6 }}>{"CSV 붙여넣기 (카테고리,스킬명,레벨,능력치...)"}</div>
+        <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 6 }}>{isNew ? "CSV 붙여넣기 — 신버전 (카테고리,스킬명,레벨,점수 · 가중치 줄)" : "CSV 붙여넣기 — 구버전 (카테고리,스킬명,레벨,능력치...)"}</div>
         <textarea value={impText} onChange={function(e){setImpText(e.target.value);}} rows={6} style={{ width: "100%", padding: 8, fontSize: 12, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", fontFamily: "var(--m)", resize: "vertical", boxSizing: "border-box" }} />
         <button onClick={doImport} style={{ marginTop: 6, padding: "6px 16px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg,#66BB6A,#43A047)", border: "none", borderRadius: 6, color: "#fff", cursor: "pointer" }}>{"적용"}</button>
       </div>)}
       {/* Weights */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 6 }}>{"능력치 가중치 (사이트 전체 적용)"}</div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {[{k:"p",l:"파워",cl:"#EF5350"},{k:"a",l:"정확",cl:"#42A5F5"},{k:"e",l:"선구",cl:"#66BB6A"},{k:"n",l:"인내",cl:"#FFA726"},{k:"c",l:"변화",cl:"#AB47BC"},{k:"s",l:"구위",cl:"#FF7043"}].map(function(it){
-            return (<div key={it.k} style={{ textAlign: "center" }}><div style={{ fontSize: 12, color: it.cl, fontWeight: 700, marginBottom: 2 }}>{it.l}</div>
-              <input type="number" step="0.001" value={w[it.k]} onChange={function(e){updWeight(it.k,e.target.value);}} style={{ width: 56, padding: "4px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+it.cl+"44", borderRadius: 4, color: it.cl, fontSize: 16, fontFamily: "var(--m)", fontWeight: 800, outline: "none" }} /></div>);
-          })}
-        </div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{isNew ? "능력치 가중치 — 신버전" : "능력치 가중치 — 구버전"}</div>
+        {isNew ? (
+          <div style={{ display: "flex", gap: mob ? 12 : 22, flexWrap: "wrap" }}>
+            {wGroup("타자", "신 · 구 공통", BAT_W.map(function(it){ return wBox(it.k, it.l, it.cl, w[it.k] || 0, function(v){ updWeight(it.k, v); }); }))}
+            {[["선발","선발"],["불펜","불펜 (중계 · 마무리)"]].map(function(g){
+              var x = T.weights[g[0]]; var sum = Math.round(((x.c||0) + (x.s||0) + (x.ctl||0)) * 1000) / 1000;
+              return (<React.Fragment key={g[0]}>{wGroup(g[1], "합 " + sum.toFixed(2), PIT_W.map(function(it){ return wBox(g[0] + it.k, it.l, it.cl, x[it.k] || 0, function(v){ updPitW(g[0], it.k, v); }); }))}</React.Fragment>);
+            })}
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {BAT_W.concat([{k:"c",l:"변화",cl:"#AB47BC"},{k:"s",l:"구위",cl:"#FF7043"}]).map(function(it){ return wBox(it.k, it.l, it.cl, w[it.k], function(v){ updWeight(it.k, v); }); })}
+          </div>
+        )}
+        {isNew && (<div style={{ fontSize: 11, color: "var(--td)", marginTop: 8, lineHeight: 1.5 }}>{"투수 가중치 합을 2.40으로 두면 '모든 능력치 +1' 효과(시너지 · 전술 · 유니폼 등)의 값이 구버전과 같아요."}</div>)}
       </div>
       {/* Potential Scores - 종류별 */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{"잠재력 등급별 점수 (종류별)"}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{"잠재력 등급별 점수 (종류별)"}<span style={{ fontSize: 11, fontWeight: 500, color: "var(--td)", marginLeft: 6 }}>{"신 · 구 공통"}</span></div>
         {["풀스윙","클러치","장타억제","침착"].concat(POT_TYPES_AWK_ALL).map(function(potType) {
           var byType = skills.potScoresByType || DEFAULT_POT_SCORES_BY_TYPE;
           var typeScores = byType[potType] || DEFAULT_POT_SCORES_BY_TYPE[potType] || DEFAULT_POT_SCORES;
@@ -9266,31 +9408,32 @@ function SkillManagePage(p) {
       </div>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
-        {cats.map(function(c){ var a=c===cat; return (<button key={c} onClick={function(){setCat(c);setExpName("");}} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13, fontWeight: a?800:500, background: a?"var(--ta)":"var(--inner)", color: a?"var(--acc)":"var(--t2)", border: a?"1px solid var(--acc)":"1px solid var(--bd)", cursor: "pointer" }}>{c+" ("+Object.keys(skills[c]||{}).length+")"}</button>); })}
+        {cats.map(function(c){ var a=c===cat; var n0=Object.keys(T[c]||{}).filter(function(k){ return Array.isArray((T[c]||{})[k]); }).length; return (<button key={c} onClick={function(){setCat(c);setExpName("");}} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13, fontWeight: a?800:500, background: a?"var(--ta)":"var(--inner)", color: a?"var(--acc)":"var(--t2)", border: a?"1px solid var(--acc)":"1px solid var(--bd)", cursor: "pointer" }}>{c+" ("+n0+")"}</button>); })}
       </div>
       {/* Add */}
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        <input type="text" value={newName} onChange={function(e){setNewName(e.target.value);}} placeholder="새 스킬 이름" onKeyDown={function(e){if(e.key==="Enter")addSkill();}} style={{ flex: 1, padding: "7px 10px", fontSize: 13, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none" }} />
+        <input type="text" value={newName} onChange={function(e){setNewName(e.target.value);}} placeholder={(isNew ? "신버전" : "구버전") + " " + cat + " 표에 새 스킬"} onKeyDown={function(e){if(e.key==="Enter")addSkill();}} style={{ flex: 1, minWidth: 0, padding: "7px 10px", fontSize: 13, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none" }} />
         <button onClick={function(){setNewMajor(!newMajor);}} title="메이저 스킬로 등록합니다 (나중에 바꿀 수 없습니다)"
           style={{ padding: "7px 12px", fontSize: 13, fontWeight: newMajor?800:500, background: newMajor?"var(--ta)":"var(--inner)", border: "1px solid "+(newMajor?"var(--acc)":"var(--bd)"), borderRadius: 6, color: newMajor?"var(--acc)":"var(--t2)", cursor: "pointer", whiteSpace: "nowrap" }}>
           {"★ 메이저"}
         </button>
-        <button onClick={addSkill} style={{ padding: "7px 14px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6, color: "#1a1100", cursor: "pointer" }}>{"+ 추가"}</button>
+        <button onClick={addSkill} style={{ padding: "7px 14px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg,#FFD54F,#FF8F00)", border: "none", borderRadius: 6, color: "#1a1100", cursor: "pointer", whiteSpace: "nowrap" }}>{"+ 추가"}</button>
       </div>
       {/* List */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "24px minmax(100px,1fr) 48px 48px 48px 48px 48px 48px 28px", gap: 2, padding: "6px 10px", borderBottom: "1px solid var(--bd)", fontSize: 12, fontWeight: 700, color: "var(--td)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "18px minmax(70px,1fr) repeat(6,34px) 22px" : "24px minmax(100px,1fr) 48px 48px 48px 48px 48px 48px 28px", gap: 2, padding: "6px 10px", borderBottom: "1px solid var(--bd)", fontSize: 12, fontWeight: 700, color: "var(--td)" }}>
           <div style={{textAlign:"center",fontSize:11}}>{"★"}</div><div>{"스킬명 (Lv6순) ▼클릭편집"}</div><div style={{ textAlign: "center", color: "#81C784" }}>{"Lv5"}</div><div style={{ textAlign: "center", color: "#4FC3F7" }}>{"Lv6"}</div><div style={{ textAlign: "center", color: "#FF6B6B" }}>{"Lv7"}</div><div style={{ textAlign: "center", color: "#FFD700" }}>{"Lv8"}</div><div style={{ textAlign: "center", color: "#E040FB" }}>{"Lv9"}</div><div style={{ textAlign: "center", color: "#FF4081" }}>{"Lv10"}</div><div />
         </div>
         {names.length === 0 ? (<div style={{ padding: 20, textAlign: "center", color: "var(--td)", fontSize: 13 }}>{"없음"}</div>) :
         names.map(function(name, idx) { var vals = table[name]; var scores = calcSkillDisp(vals, cat); var isExp = (expName === name);
+          var maj = !!((T._major||{})[cat]||{})[name];
           return (<React.Fragment key={name}>
-            <div onClick={function(){setExpName(isExp?"":name);}} style={{ display: "grid", gridTemplateColumns: "24px minmax(100px,1fr) 48px 48px 48px 48px 48px 48px 28px", gap: 2, padding: "5px 10px", alignItems: "center", borderBottom: "1px solid var(--bd)", background: isExp?"var(--ta)":(idx%2===0?"var(--re)":"transparent"), cursor: "pointer" }}>
-              <span title={(((skills._major||{})[cat]||{})[name] ? "메이저 스킬" : "비메이저 스킬") + " — 등록할 때 정해지며 나중에 바꿀 수 없습니다"}
-                style={{ fontSize: 13, textAlign: "center", cursor: "default", opacity: (((skills._major||{})[cat]||{})[name] ? 1 : 0.25) }}>{"★"}</span>
-              <div style={{ fontSize: 13, fontWeight: 700, color: isExp?"var(--acc)":"var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(isExp?"▼ ":"▶ ")+name}{isNatOnlySkill(name, cat) && (<span title="국가대표 카드에만 붙는 스킬 (6레벨 상한)" style={{ fontSize: 10, fontWeight: 700, color: "#42A5F5", background: "rgba(66,165,245,0.12)", border: "1px solid rgba(66,165,245,0.3)", borderRadius: 3, padding: "0 4px", marginLeft: 5 }}>{"국대"}</span>)}</div>
-              {scores.map(function(sc,i){ var c=["#81C784","#4FC3F7","#FF6B6B","#FFD700","#E040FB","#FF4081"][i]; return (<div key={i} style={{ textAlign: "center", fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, color: c }}>{Math.round(sc*100)/100}</div>); })}
-              <button onClick={function(e){e.stopPropagation();delSkill(name);}} style={{ width: 22, height: 22, borderRadius: 3, background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)", color: "#EF5350", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>{"×"}</button>
+            <div onClick={function(){setExpName(isExp?"":name);}} style={{ display: "grid", gridTemplateColumns: mob ? "18px minmax(70px,1fr) repeat(6,34px) 22px" : "24px minmax(100px,1fr) 48px 48px 48px 48px 48px 48px 28px", gap: 2, padding: "5px 10px", alignItems: "center", borderBottom: "1px solid var(--bd)", background: isExp?"var(--ta)":(idx%2===0?"var(--re)":"transparent"), cursor: "pointer" }}>
+              <span title={(maj ? "메이저 스킬" : "비메이저 스킬") + " — 등록할 때 정해지며 나중에 바꿀 수 없습니다"}
+                style={{ fontSize: 13, textAlign: "center", cursor: "default", opacity: maj ? 1 : 0.25 }}>{"★"}</span>
+              <div style={{ fontSize: mob ? 12 : 13, fontWeight: 700, color: isExp?"var(--acc)":"var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={name}>{(isExp?"▼ ":"▶ ")+name}{isNatOnlySkill(name, cat) && (<span title="국가대표 카드에만 붙는 스킬 (6레벨 상한)" style={{ fontSize: 10, fontWeight: 700, color: "#42A5F5", background: "rgba(66,165,245,0.12)", border: "1px solid rgba(66,165,245,0.3)", borderRadius: 3, padding: "0 4px", marginLeft: 5 }}>{"국대"}</span>)}</div>
+              {scores.map(function(sc,i){ var c=["#81C784","#4FC3F7","#FF6B6B","#FFD700","#E040FB","#FF4081"][i]; return (<div key={i} style={{ textAlign: "center", fontSize: mob ? 11 : 13, fontFamily: "var(--m)", fontWeight: 700, color: c }}>{Math.round(sc*100)/100}</div>); })}
+              <button onClick={function(e){e.stopPropagation();delSkill(name);}} title="이 표에서 지우기" style={{ width: 22, height: 22, borderRadius: 3, background: "rgba(239,83,80,0.06)", border: "1px solid rgba(239,83,80,0.15)", color: "#EF5350", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>{"×"}</button>
             </div>
             {isExp && renderDetail(name)}
           </React.Fragment>);
@@ -9299,7 +9442,6 @@ function SkillManagePage(p) {
     </div>
   );
 }
-
 
 /* ================================================================
    DATA CENTER PAGE

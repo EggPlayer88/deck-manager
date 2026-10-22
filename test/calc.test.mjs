@@ -21,7 +21,7 @@ import {
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet } from './calc-extract.mjs';
-import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing } from './calc-extract.mjs';
+import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 
 /* 아래 시험들은 v1.1(제구 반영) 이전의 계산을 지킨다 — 구버전(v10) 기준으로 돈다.
    새 점수(v11) 시험은 이 파일 끝의 'v1.1 제구 반영' 칸에 있다 (2026-10-21) */
@@ -3113,6 +3113,29 @@ __setScoreVer('v11');
   eq('특훈 제구 0 은 따지지 않는다', ctlMissing(P({ trainCtl: 5, specControl: 0 })) ? 1 : 0, 0);
   eq('타자는 아님', ctlMissing({ role: '타자', trainC: 3, trainS: 3 }) ? 1 : 0, 0);
   eq('빈 자리는 아님', ctlMissing(null) ? 1 : 0, 0);
+}
+{
+  /* 스킬 관리 › 신버전 저장본 (2026-10-22) — DB data.v11 이 있으면 그 표 · 투수 가중치를 쓰고, 없으면 코드 표 */
+  const base = v11EditCopy({});
+  eq('저장본 없음 → 편집 사본은 코드 표에서 (소방수 Lv6 23.31)', base['마무리']['소방수'][1], 23.31);
+  eq('편집 사본에 판(_v) · 선발 · 불펜 가중치', base._v === V11_TABLE_VERSION && base.weights['선발'].ctl === 0.25 && base.weights['불펜'].s === 1.25 ? 1 : 0, 1);
+  base['마무리']['소방수'][1] = 30;
+  eq('편집 사본을 고쳐도 코드 표는 그대로', SKILLS_V11_CODE['마무리']['소방수'][1], 23.31);
+  applyV11({ v11: base });
+  eq('저장본 → 새 점수가 그 표를 쓴다', getSkillScore('소방수', 6, '마무리'), 30);
+  eq('구버전은 저장본과 상관없다', withScoreVer('v10', () => getSkillScore('소방수', 6, '마무리')), 25.31);
+  base.weights['선발'] = { c: 1.0, s: 1.1, ctl: 0.3 }; applyV11({ v11: base });
+  eq('저장본 투수 가중치 — 선발 제구 0.3', getPW('선발').ctl, 0.3);
+  eq('불펜 가중치는 중계 · 마무리에 같이', getPW('마무리').s === base.weights['불펜'].s && getPW('중계').c === base.weights['불펜'].c ? 1 : 0, 1);
+  eq('구버전 가중치는 저장본과 상관없다', withScoreVer('v10', () => getPW('선발').s), 1.35);
+  applyV11({ v11: Object.assign({}, base, { _v: 0 }) });
+  eq('판이 낮은 저장본은 무시 → 코드 표', getSkillScore('소방수', 6, '마무리'), 23.31);
+  eq('… 가중치도 코드 값', getPW('선발').ctl, 0.25);
+  applyV11({ v11: Object.assign({}, base, { weights: { '선발': { c: 'x' } } }) });
+  eq('가중치가 망가진 저장본 → 표는 쓰고 가중치는 코드 값', getSkillScore('소방수', 6, '마무리') === 30 && getPW('선발').ctl === 0.25 ? 1 : 0, 1);
+  applyV11({});
+  eq('저장본을 지우면(기본값 복원) 코드 표로', getSkillScore('소방수', 6, '마무리'), 23.31);
+  eq('… 가중치도 코드 값', getPW('선발').s, 1.15);
 }
 __setScoreVer('v10');
 
