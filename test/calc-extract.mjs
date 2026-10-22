@@ -403,8 +403,9 @@ function potmEffect(pl, sdState) {
   }
   var st = POTM_SPECIAL_STAT[ct];
   if (!st) return none;
-  if (!own && !pl.isFa && !pl.isWildcard) return none;
-  return { on: true, kind: "special", rel: own ? "own" : "flag", stat: st, setScore: base + 1, setDelta: 1, pot: "" };
+  /* 자팀만 — FA · 와일드카드로 데려온 타팀 선수는 원래 구단 기준이라 받지 않는다 (2026-10-22 사용자 정정) */
+  if (!own) return none;
+  return { on: true, kind: "special", rel: "own", stat: st, setScore: base + 1, setDelta: 1, pot: "" };
 }
 function getPotmBonus(pl, sdState) {
   return potmEffect(pl, sdState).stat || 0;
@@ -442,7 +443,7 @@ function getPotmInfo(pl, sdState) {
     rel: e.rel
   };
 }
-var POTM_REL_LABEL = { own: "자팀", league: "같은 군", other: "다른 군", flag: "FA·와일드카드" };
+var POTM_REL_LABEL = { own: "자팀", league: "같은 군", other: "다른 군" };
 function potmSummary(e, role) {
   if (!e || !e.on) return "";
   var head = e.kind === "live" ? "라이브 POTM" : e.kind === "olstar" ? "올스타 POTM (" + POTM_REL_LABEL[e.rel] + ")" : "스페셜 POTM";

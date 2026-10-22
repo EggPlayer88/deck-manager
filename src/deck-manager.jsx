@@ -3634,7 +3634,9 @@ var GLOBAL_POTM_LIST = [];
              평소 셋포는 자팀 8 · 같은 군 4 · 다른 군 2 (cardSetScore).
              세트덱 "선택 팀" 은 같은 군까지 (isSelTeam)
    각성 잠재력이 없는 카드는 라이브뿐이다 (NO_AWAKEN_CARDS)
-   · 스페셜(임팩트·시그니처·국가대표·골든글러브) — 자팀만, FA·와일드카드로 쓴 선수도 자팀.
+   · 스페셜(임팩트·시그니처·국가대표·골든글러브) — 자팀(카드의 원래 구단 = 덱 구단)만.
+             FA·와일드카드로 데려온 타팀 선수는 받지 않는다 — 셋포 · 세트덱에서는 선택 팀으로 치지만
+             스페셜 POTM 은 원래 구단 기준이다 (2026-10-22 사용자 정정, 9-18 ~ 10-22 에는 받게 했다).
              능력치 임팩트·시그·국대 +2, 골글 +1, 셋포 +1
    "능력치 +N" 은 모든 능력치다 (점수에 안 쓰는 능력치도 기록한다) */
 var POTM_LIVE_STAT = {"5": 8, "4": 14};   /* 1~3성은 18 */
@@ -3689,8 +3691,9 @@ function potmEffect(pl, sdState) {
   }
   var st = POTM_SPECIAL_STAT[ct];
   if (!st) return none;
-  if (!own && !pl.isFa && !pl.isWildcard) return none;
-  return { on: true, kind: "special", rel: own ? "own" : "flag", stat: st, setScore: base + 1, setDelta: 1, pot: "" };
+  /* 자팀만 — FA · 와일드카드로 데려온 타팀 선수는 원래 구단 기준이라 받지 않는다 (2026-10-22 사용자 정정) */
+  if (!own) return none;
+  return { on: true, kind: "special", rel: "own", stat: st, setScore: base + 1, setDelta: 1, pot: "" };
 }
 
 function getPotmBonus(pl, sdState) {
@@ -3739,7 +3742,7 @@ function getPotmInfo(pl, sdState) {
   };
 }
 /* POTM 효과를 한 줄로 — 배지 툴팁과 라커룸이 같이 쓴다. role 을 주면 올스타 SR+ 잠재력을 그 역할 것만 적는다 */
-var POTM_REL_LABEL = { own: "자팀", league: "같은 군", other: "다른 군", flag: "FA·와일드카드" };
+var POTM_REL_LABEL = { own: "자팀", league: "같은 군", other: "다른 군" };
 function potmSummary(e, role) {
   if (!e || !e.on) return "";
   var head = e.kind === "live" ? "라이브 POTM" : e.kind === "olstar" ? "올스타 POTM (" + POTM_REL_LABEL[e.rel] + ")" : "스페셜 POTM";
@@ -7247,7 +7250,7 @@ function LockerRoomPage(p) {
   })();
 
   /* 내 선수 중 POTM 효과가 있는 카드 — 명단(이름+원래 구단)과 맞고, 카드 종류와 덱 구단 관계로
-     효과가 정해진다 (potmEffect). 올스타는 다른 구단이어도, 스페셜은 FA·와일드카드면 받는다 */
+     효과가 정해진다 (potmEffect). 올스타는 다른 구단이어도 받고, 라이브 · 스페셜은 자팀만 (FA · 와일드카드로 데려온 선수는 못 받는다) */
   var potmMatched = [];
   (function() {
     var seenPl = {};

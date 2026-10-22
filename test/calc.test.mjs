@@ -754,7 +754,7 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   const opp = applyPotmPot(olP, on(olP));
   eq('올스타 투수 침착 SR+', opp.pot2 === 'SR+' && opp.potType2 === '침착' ? 1 : 0, 1);
 
-  /* 스페셜 — 자팀만, FA·와일드카드는 자팀 */
+  /* 스페셜 — 자팀만. FA·와일드카드로 데려온 타팀 선수는 원래 구단 기준이라 받지 않는다 (2026-10-22 사용자 정정) */
   eq('스페셜 임팩트 자팀 +2 · 셋포 +1', potmEffect(sp(), on(sp())).stat === 2 && potmEffect(sp(), on(sp())).setDelta === 1 ? 1 : 0, 1);
   eq('스페셜 골글 +1', potmEffect(sp({ cardType: '골든글러브' }), on(sp())).stat, 1);
   eq('스페셜 시그 +2', potmEffect(sp({ cardType: '시그니처' }), on(sp())).stat, 2);
@@ -765,9 +765,9 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('스페셜 타팀은 효과 없음', potmEffect(spO, on(spO)).on ? 1 : 0, 0);
   const spFa = sp({ team: '두산', isFa: true });
   const eFa = potmEffect(spFa, on(spFa));
-  eq('스페셜 타팀 FA 는 자팀 — +2 · 셋포 +1 (FA 감점 뒤)', eFa.on && eFa.stat === 2 && eFa.setScore === 6 && eFa.rel === 'flag' ? 1 : 0, 1);
+  eq('스페셜 타팀 FA 는 받지 않는다 (원래 구단 기준)', eFa.on ? 1 : 0, 0);
   const natWc = sp({ team: '두산', cardType: '국가대표', isWildcard: true });
-  eq('스페셜 타팀 와일드카드 국대 +2 · 셋포 8', potmEffect(natWc, on(natWc)).stat === 2 && potmEffect(natWc, on(natWc)).setScore === 8 ? 1 : 0, 1);
+  eq('스페셜 타팀 와일드카드 국대도 받지 않는다', potmEffect(natWc, on(natWc)).on ? 1 : 0, 0);
   const selfFa = sp({ isFa: true });
   eq('자팀 선수의 FA 표시는 무시 — 셋포 7 + 1 = 8', potmEffect(selfFa, on(selfFa)).setScore, 8);
   eq('시즌 카드는 스페셜 POTM 아님', potmEffect(sp({ cardType: '시즌' }), on(sp())).on ? 1 : 0, 0);
@@ -1792,10 +1792,10 @@ console.log('\n[세트덱 점수] FA 는 시그니처 -1, 임팩트 -2 — 총 �
   eq('라이브 추가 셋포는 더한다', total(deck({}), { liveSetPo: 5 }) - base, 5);
 
   /* FA 는 타팀 선수에게만 걸린다 (2026-09-18) — 자팀 선수에게 남은 FA 표시는 감점하지 않는다.
-     스페셜 POTM 은 FA·와일드카드 선수를 자팀으로 본다 (2026-09-18 사용자 확인) */
+     스페셜 POTM 은 원래 구단 기준이라 FA·와일드카드로 데려온 선수는 받지 않는다 (2026-10-22 사용자 정정, 예전엔 받았다) */
   __setGlobalPotm([{ name: '가', team: '키움' }, { name: '나', team: '두산' }, { name: '다', team: '두산' }]);
   eq('자팀 임팩트의 FA 표시는 무시 — 7 + POTM 1 = 8', total({ CP: { cardType: '임팩트', name: '가', team: '키움', isFa: true } }, { teamName: '키움' }), 8);
-  eq('타팀 임팩트 FA — 7 - 2 + POTM 1 = 6', total({ CP: { cardType: '임팩트', name: '나', team: '두산', isFa: true } }, { teamName: '키움' }), 6);
+  eq('타팀 임팩트 FA — 7 - 2 = 5 (스페셜 POTM 없음)', total({ CP: { cardType: '임팩트', name: '나', team: '두산', isFa: true } }, { teamName: '키움' }), 5);
   eq('타팀 임팩트(FA 아님) — POTM 효과 없이 7', total({ CP: { cardType: '임팩트', name: '다', team: '두산' } }, { teamName: '키움' }), 7);
   __setGlobalPotm([]);
 
