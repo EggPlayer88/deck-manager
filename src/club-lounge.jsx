@@ -212,10 +212,14 @@ function deckCounts(deck) {
   return c;
 }
 var CT_SHORT = { "골든글러브": "골글", "시그니처": "시그", "임팩트": "임팩", "국가대표": "국대", "올스타": "올스타", "라이브": "라이브", "시즌": "시즌" };
+/* 점수 기준 — 제구 반영 업데이트(v1.1) 뒤에 만든 덱 요약본에는 sv 가 실린다. 없으면 옛 기준으로 센 점수다 */
+var OLD_SCORE_TIP = "제구 반영 업데이트(2026년 10월) 전 기준으로 센 점수예요. 덱 주인이 사이트에서 그 덱을 다시 열면 새 점수로 바뀌어요.";
+function isOldScore(deck) { return !!deck && typeof deck === "object" && !deck.sv; }
 function deckScoreText(deck) {
   if (!deck) return "";
-  if (Array.isArray(deck.scores) && deck.scores.length) return { main: num(deck.scores[0]), sub: "0.1% 가정 · 5% " + num(deck.scores[1]) + " · 20% " + num(deck.scores[2]) };
-  if (deck.total) return { main: num(deck.total), sub: "TOTAL SCORE" + (deck.setPoint ? " · 세트덱 " + num(deck.setPoint, 0) : "") };
+  var old = isOldScore(deck) ? " · 구버전 기준" : "";
+  if (Array.isArray(deck.scores) && deck.scores.length) return { main: num(deck.scores[0]), sub: "0.1% 가정 · 5% " + num(deck.scores[1]) + " · 20% " + num(deck.scores[2]) + old };
+  if (deck.total) return { main: num(deck.total), sub: "TOTAL SCORE" + (deck.setPoint ? " · 세트덱 " + num(deck.setPoint, 0) : "") + old };
   return { main: "", sub: "" };
 }
 /* 붙인 덱 한 장 — 글·덱 현황·작성 창에서 같이 쓴다 */
@@ -1832,7 +1836,9 @@ function DeckStatus(p) {
           <Avatar name={m.nickname} team={txt(d.deck.team)} size={30} />
           <div style={{ flex: 1, minWidth: 0 }}><div><b>{m.nickname}</b>{m.role === "leader" && <Tag c="acc" style={{ marginLeft: 5 }}>{"클럽장"}</Tag>}</div>
             <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 2 }}>{txt(d.deck.team) + " · 세트덱 " + num(d.set_point, 0) + " · "}<span style={{ color: daysSince(d.saved_at) > 7 ? "#FFA726" : "inherit" }}>{ago(d.saved_at)}</span></div></div>
-          <div style={{ textAlign: "right" }}><div style={{ fontFamily: "var(--m)", fontWeight: 800, color: "var(--acc)" }}>{num(d.total)}</div><div style={{ fontSize: 11 }}>{wkCell(d)}</div></div>
+          <div style={{ textAlign: "right" }}><div style={{ fontFamily: "var(--m)", fontWeight: 800, color: "var(--acc)" }}>{num(d.total)}</div>
+            {isOldScore(d.deck) && <div title={OLD_SCORE_TIP} style={{ fontSize: 10.5, color: "var(--td)" }}>{"구버전"}</div>}
+            <div style={{ fontSize: 11 }}>{wkCell(d)}</div></div>
         </div>
         {on && <DeckBox deck={d.deck} mobile actions={<Btn sm ghost purple icon="flask" onClick={function () { lab(d); }}>{"연구소로"}</Btn>} />}
       </Card>);
@@ -1852,7 +1858,10 @@ function DeckStatus(p) {
               <td style={Object.assign({}, td, { color: "var(--t2)" })}>{txt(d.deck.team)}</td>
               <td style={Object.assign({}, td, { width: 220 })}><div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1, height: 6, borderRadius: 3, background: "var(--inner)", overflow: "hidden" }}><div style={{ width: w + "%", height: "100%", background: "var(--acc)" }} /></div>
-                <span style={{ fontFamily: "var(--m)", fontWeight: 800 }}>{num(d.total)}</span></div></td>
+                {/* '구버전'은 숫자 밑에 — 옆에 붙이면 그 줄만 막대가 짧아져 점수 비례가 어긋난다 */}
+                <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.15 }}>
+                  <span style={{ fontFamily: "var(--m)", fontWeight: 800 }}>{num(d.total)}</span>
+                  {isOldScore(d.deck) && <span title={OLD_SCORE_TIP} style={{ fontSize: 10.5, color: "var(--td)" }}>{"구버전"}</span>}</span></div></td>
               <td style={td}>{wkCell(d)}</td>
               <td style={Object.assign({}, td, { fontFamily: "var(--m)", color: "var(--t2)" })}>{d.set_point}</td>
               <td style={Object.assign({}, td, { fontFamily: "var(--m)", color: d.filled < 21 ? "#FFA726" : "var(--t2)" })}>{d.filled + "/21"}</td>

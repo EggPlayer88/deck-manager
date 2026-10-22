@@ -21,6 +21,11 @@ import {
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet } from './calc-extract.mjs';
+import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing } from './calc-extract.mjs';
+
+/* 아래 시험들은 v1.1(제구 반영) 이전의 계산을 지킨다 — 구버전(v10) 기준으로 돈다.
+   새 점수(v11) 시험은 이 파일 끝의 'v1.1 제구 반영' 칸에 있다 (2026-10-21) */
+__setScoreVer('v10');
 
 let pass = 0, fail = 0;
 const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
@@ -1267,14 +1272,16 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   eq('좌타 12가지 모두 좌타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '좌' && v.includes('좌타해결사(좌타)')).length, 12);
 
   bad = [];
+  /* v1.1(2026-10-21): 투수는 [변화, 구위, 제구] 세 칸 · 선발(pit) · 불펜(rp) 가중치 따로 */
+  const PW3 = { pit: [1.0, 1.15, 0.25], rp: [0.9, 1.25, 0.25] };
   for (const [key, v] of Object.entries(PEAK_TRAIN)) {
     const [role, ct] = key.split('_');
-    const sc = role === 'bat' ? v[0] * 1 + v[1] * 0.85 + v[2] * 0.4 + v[3] * 0.15 : v[0] * 1.05 + v[1] * 1.35;
+    const sc = role === 'bat' ? v[0] * 1 + v[1] * 0.85 + v[2] * 0.4 + v[3] * 0.15 : v[0] * PW3[role][0] + v[1] * PW3[role][1] + (v[2] || 0) * PW3[role][2];
     if (v.reduce((a, b) => a + b, 0) > TRAIN_POINTS[ct]) bad.push(key + ' 포인트 초과');
     const pct = getPercentile(TRD['train_' + key], Math.round(sc * 100) / 100);
     if (!(pct >= 0.1 && pct <= 0.5)) bad.push(key + ' 백분위 ' + pct);
   }
-  eq('훈련 12가지 — 포인트 안이고 상위 0.1~0.5% (' + (bad.join(' / ') || '문제 없음') + ')', bad.length + (Object.keys(PEAK_TRAIN).length === 12 ? 0 : 100), 0);
+  eq('훈련 18가지(투수 선발 · 불펜 · 제구) — 포인트 안이고 상위 0.1~0.5% (' + (bad.join(' / ') || '문제 없음') + ')', bad.length + (Object.keys(PEAK_TRAIN).length === 18 ? 0 : 100), 0);
 
   bad = [];
   for (const [key, v] of Object.entries(PEAK_SPEC)) {
@@ -1286,15 +1293,16 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
     if (v.some(x => x > 15)) bad.push(key + ' 15 초과');
     if (v[role === 'bat' ? 0 : 1] < b0) bad.push(key + ' 기본값 미만');
     if (v.reduce((a, b) => a + b, 0) - b0 > trials * perTrial) bad.push(key + ' 시행 초과');
-    const sc = role === 'bat' ? v[0] * 1 + v[1] * 0.85 + v[2] * 0.4 + v[3] * 0.15 : v[0] * 1.05 + v[1] * 1.35;
+    const sc = role === 'bat' ? v[0] * 1 + v[1] * 0.85 + v[2] * 0.4 + v[3] * 0.15 : v[0] * PW3[role][0] + v[1] * PW3[role][1] + (v[2] || 0) * PW3[role][2];
     const pct = getPercentile(TRD['spec_' + key], Math.round(sc * 100) / 100);
     if (!(pct >= 0.1 && pct <= 0.5)) bad.push(key + ' 백분위 ' + pct);
   }
-  eq('특훈 14가지(와일드카드 2 포함) — 15 이하·기본값 포함·상위 0.1~0.5% (' + (bad.join(' / ') || '문제 없음') + ')', bad.length + (Object.keys(PEAK_SPEC).length === 14 ? 0 : 100), 0);
+  eq('특훈 21가지(투수 선발 · 불펜 · 제구, 와일드카드 포함) — 15 이하·기본값 포함·상위 0.1~0.5% (' + (bad.join(' / ') || '문제 없음') + ')', bad.length + (Object.keys(PEAK_SPEC).length === 21 ? 0 : 100), 0);
   /* 앱 분포에도 와일드카드 특훈 키가 있다 */
   eq('앱 분포 — 와일드카드 특훈 타자·투수', Array.isArray(TRD['spec_bat_wc_국가대표']) && Array.isArray(TRD['spec_pit_wc_국가대표']) ? 1 : 0, 1);
   eq('앱 분포 — 국대 특훈 최솟값은 기본 +4 (파워 4)', TRD['spec_bat_국가대표'][0], 4);
-  eq('앱 분포 — 와일드카드 특훈 최솟값은 기본 +6 (구위 6 × 1.35)', TRD['spec_pit_wc_국가대표'][0], 8.1);
+  eq('앱 분포 — 와일드카드 특훈 최솟값은 기본 +6 (선발 구위 6 × 1.15)', TRD['spec_pit_wc_국가대표'][0], 6.9);
+  eq('앱 분포 — 와일드카드 특훈 최솟값은 기본 +6 (불펜 구위 6 × 1.25)', TRD['spec_rp_wc_국가대표'][0], 7.5);
 
   eq('잠재력 — 풀스윙·장타억제 SR+, 클러치·침착 A', PEAK_POT['풀스윙'] === 'SR+' && PEAK_POT['장타억제'] === 'SR+' && PEAK_POT['클러치'] === 'A' && PEAK_POT['침착'] === 'A' ? 1 : 0, 1);
   eq('각성 — 임팩트·올스타가 S, 나머지는 A', PEAK_AWK['임팩트'] === 'S' && PEAK_AWK['올스타'] === 'S' && Object.keys(PEAK_AWK).length === 2 ? 1 : 0, 1);
@@ -2584,10 +2592,11 @@ console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 �
       getSkillScore(r.v + '(타순O)', 6, '타자') >= getSkillScore(r.v + '(타순X)', 6, '타자') ? 1 : 0, 1);
   }
   /* 여섯 개를 다 챙겼는지 — 도감 타자 표에서 (타순O)/(타순배치) 가 있는 스킬은 모두 규칙이 있어야 한다 */
-  const ordered = Object.keys(DEFAULT_SKILLS['타자'])
-    .filter((k) => /\(타순O\)$|\(타순배치\)$/.test(k)).map(skillBaseName);
-  eq('타순을 타는 스킬은 여섯 개', ordered.length, 6);
-  eq('여섯 개 모두 규칙이 있다', ordered.every((b) => ORDER_SKILLS[b]) ? 1 : 0, 1);
+  /* v1.1(2026-10-21) 새 표에 클린업 트리오가 더해져 일곱 개 — 옛 표 · 새 표를 함께 본다 */
+  const ordered = [...new Set(Object.keys(DEFAULT_SKILLS['타자']).concat(Object.keys(SKILLS_V11['타자']))
+    .filter((k) => /\(타순O\)$|\(타순배치\)$/.test(k)).map(skillBaseName))];
+  eq('타순을 타는 스킬은 일곱 개 (클린업 트리오 포함)', ordered.length, 7);
+  eq('일곱 개 모두 규칙이 있다', ordered.every((b) => ORDER_SKILLS[b]) ? 1 : 0, 1);
   eq('규칙에만 있고 표에 없는 것은 없다',
     Object.keys(ORDER_SKILLS).every((b) => ordered.indexOf(b) >= 0) ? 1 : 0, 1);
   /* 수비안정성·리드오프가 한 선수에 같이 붙어도 1·2번에서 둘 다 켜진다 */
@@ -2967,6 +2976,145 @@ console.log('\n[중계 전술 나누기] 승리조(기본 · 적극 · 분업) �
   const o3 = lineupOpts({ bpcIdx: 4, rpWinActive: false, rpChaseActive: true }, 0);
   eq('lineupOpts: 추격조만 적극이면 선발 배율은 기본', (o3.tactic === '기본' && o3.chase === '적극') ? 1 : 0, 1);
 }
+
+/* ═══ v1.1 제구 반영 — 새 점수 (2026-10-21) ═══
+   위 시험들은 구버전(v10)으로 돌았다. 여기서는 새 기준(v11)을 보고, 같은 경우를 구버전으로 돌리면 예전 값이 나오는지도 함께 본다 */
+console.log('\n[v1.1 제구 반영 — 새 점수]');
+__setScoreVer('v11');
+{
+  /* 가중치 — 합 2.40 그대로, 제구 0.25 */
+  const ws = getPW('선발'), wr = getPW('중계'), wc = getPW('마무리');
+  eq('선발 가중치 합 2.40', ws.c + ws.s + ws.ctl, 2.4, 1e-9);
+  eq('불펜 가중치 합 2.40', wr.c + wr.s + wr.ctl, 2.4, 1e-9);
+  eq('선발 변화 1.00', ws.c, 1.0); eq('선발 구위 1.15', ws.s, 1.15); eq('선발 제구 0.25', ws.ctl, 0.25);
+  eq('중계 변화 0.90', wr.c, 0.9); eq('중계 구위 1.25', wr.s, 1.25);
+  eq('마무리 = 중계 가중치', (wc.c === wr.c && wc.s === wr.s && wc.ctl === wr.ctl) ? 1 : 0, 1);
+  eq('구버전 가중치는 그대로 (변화 1.05 · 구위 1.35 · 제구 0)', withScoreVer('v10', () => { const w = getPW('선발'); return w.c * 100 + w.s * 10 + w.ctl; }), 105 + 13.5, 1e-9);
+  eq('withScoreVer 뒤에는 새 기준으로 돌아온다', getPW('선발').ctl, 0.25);
+
+  /* 스킬표 */
+  eq('마무리 소방수 Lv6 23.31', getSkillScore('소방수', 6, '마무리'), 23.31);
+  eq('구버전 마무리 소방수 Lv6 25.31 (그대로)', withScoreVer('v10', () => getSkillScore('소방수', 6, '마무리')), 25.31);
+  eq('중계 마당쇠(불펜) Lv6 28.08', getSkillScore('마당쇠(불펜)', 6, '중계'), 28.08);
+  eq('전천후 Lv6 선발 15.05', getSkillScore('전천후', 6, '선발'), 15.05);
+  eq('전천후 Lv6 중계 17.05', getSkillScore('전천후', 6, '중계'), 17.05);
+  eq('전천후 Lv6 마무리 15.05', getSkillScore('전천후', 6, '마무리'), 15.05);
+  eq('타자 빅게임헌터 Lv8 25.6 (표 오타 27.60 바로잡음)', getSkillScore('빅게임헌터', 8, '타자'), 25.6);
+  eq('타자 패기(임팩) Lv6 9.6 (발동 50%)', getSkillScore('패기(임팩)', 6, '타자'), 9.6);
+  eq('타자 패기(임팩) Lv9 는 없음', getSkillScore('패기(임팩)', 9, '타자'), 0);
+  eq('새 스킬 우타해결사(우타) Lv6 24.9', getSkillScore('우타해결사(우타)', 6, '타자'), 24.9);
+  eq('새 스킬 클린업 트리오(타순O) Lv6 22.34', getSkillScore('클린업 트리오(타순O)', 6, '타자'), 22.34);
+  eq('띄어쓰기 없이 써도 찾는다 (클린업트리오(타순O))', getSkillScore('클린업트리오(타순O)', 6, '타자'), 22.34);
+  eq('중계 원투펀치(배치X) = 새 선발 값', getSkillScore('원투펀치(배치X)', 6, '중계'), getSkillScore('원투펀치(배치X)', 6, '선발'));
+  eq('불펜 좌승사자(좌투) Lv6 14.06 (계승)', getSkillScore('좌승사자(좌투)', 6, '중계'), 14.06);
+  eq('선발 좌승사자(좌투) Lv6 27.92', getSkillScore('좌승사자(좌투)', 6, '선발'), 27.92);
+  eq('포수리드 개인 점수 Lv6 6', getSkillScore('포수리드', 6, '타자'), 6);
+  eq('새 표가 구버전 표의 스킬 이름을 다 갖고 있다', ['타자', '선발', '중계', '마무리'].every((c) => Object.keys(DEFAULT_SKILLS[c])
+    .filter((k) => Array.isArray(DEFAULT_SKILLS[c][k])).every((k) => Array.isArray(SKILLS_V11[c][k]))) ? 1 : 0, 1);
+  eq('국대 전용 스킬 레벨 상한은 v11 에서도 6', maxSkillLv('황금세대', '타자'), 6);
+  eq('새 스킬 레벨 상한 10', maxSkillLv('우타해결사(우타)', '타자'), 10);
+
+  /* 강화 · 각성 제구 */
+  eq('제구 강화 = 정확 강화 (골글 10강)', getEnhVal('골든글러브', '제구', '10강'), getEnhVal('골든글러브', '정확', '10강'));
+  eq('골글 제구 1각성 25 (정확은 27)', getEnhVal('골든글러브', '제구', '1각성'), 25);
+  eq('골글 제구 2각성 27', getEnhVal('골든글러브', '제구', '2각성'), 27);
+  eq('골글 제구 9각성 31', getEnhVal('골든글러브', '제구', '9각성'), 31);
+  eq('시그 제구 5각성 27', getEnhVal('시그니처', '제구', '5각성'), 27);
+  eq('국대 제구 8각성 28', getEnhVal('국가대표', '제구', '8각성'), 28);
+  eq('임팩트 제구 9각성 17', getEnhVal('임팩트', '제구', '9각성'), 17);
+  eq('라이브 제구 9각성 = 10강 24 (각성 없음)', getEnhVal('라이브', '제구', '9각성'), 24);
+
+  /* 투수 점수 */
+  const sp = { role: '투수', position: '선발', cardType: '시즌', change: 100, stuff: 110, control: 90, hand: '우' };
+  const rp = Object.assign({}, sp, { position: '중계' });
+  eq('선발 = 변화 1.00 + 구위 1.15 + 제구 0.25', calcPit(sp, {}, null).total, 100 + 126.5 + 22.5, 1e-9);
+  eq('중계 = 변화 0.90 + 구위 1.25 + 제구 0.25', calcPit(rp, {}, null).total, 90 + 137.5 + 22.5, 1e-9);
+  eq('구버전 선발 = 변화 1.05 + 구위 1.35 (제구 없음)', withScoreVer('v10', () => calcPit(sp, {}, null).total), 105 + 148.5, 1e-9);
+  eq('제구 값을 돌려준다', calcPit(sp, {}, null).control, 90);
+  const lefty = Object.assign({}, sp, { hand: '좌' });
+  eq('좌완 가산 없음', calcPit(lefty, {}, null).total, calcPit(sp, {}, null).total, 1e-9);
+  eq('구버전은 좌완 +1 그대로', withScoreVer('v10', () => calcPit(lefty, {}, null).total - calcPit(sp, {}, null).total), 1, 1e-9);
+  const more = Object.assign({}, sp, { specControl: 4 });
+  eq('제구 훈련 6 · 특훈 4 → +2.5', calcPit(more, { trainCtl: 6 }, null).total - calcPit(sp, {}, null).total, 2.5, 1e-9);
+  eq('구버전은 제구 훈련 · 특훈을 안 센다', withScoreVer('v10', () => calcPit(more, { trainCtl: 6 }, null).total - calcPit(sp, {}, null).total), 0, 1e-9);
+  /* 전술 · 팀버프 */
+  const tac = (pl) => calcPit(pl, {}, { c: 0, s: 0, ctl: 0, tac: 2 }).total - calcPit(pl, {}, null).total;
+  eq('분업 +2 = 2 x 2.40 (제구 포함)', tac(rp), 4.8, 1e-9);
+  eq('구버전 분업 +2 도 4.80', withScoreVer('v10', () => tac(rp)), 4.8, 1e-9);
+  const buff = (pl, lv) => calcPit(pl, {}, { c: 0, s: 0, ctl: 0, _sdState: { catchLead: lv } }).total - calcPit(pl, {}, null).total;
+  eq('포수리드 9렙(선발) = 변2 · 제2 · 구1', buff(sp, '9렙'), 2 * 1.0 + 2 * 0.25 + 1.15, 1e-9);
+  eq('포수리드 5렙(중계) = 변1 · 제1', buff(rp, '5렙'), 0.9 + 0.25, 1e-9);
+  eq('포수리드 10렙(중계) = 모두 2', buff(rp, '10렙'), 2 * 2.4, 1e-9);
+  eq('구버전 포수리드 9렙 = 변2 · 구1 (예전 그대로)', withScoreVer('v10', () => buff(sp, '9렙')), 2 * 1.05 + 1.35, 1e-9);
+  const nat = (pl, lv) => calcPit(pl, {}, { c: 0, s: 0, ctl: 0, _sdState: { natPit: lv } }).total - calcPit(pl, {}, null).total;
+  eq('국대에이스 6렙(선발) = 변2 · 구2 (제구 없음)', nat(sp, '6렙'), 2 * 1.0 + 2 * 1.15, 1e-9);
+
+  /* 보너스 — 유니폼 · 주장 · 투수 주장 · 포지션 특훈(+재설정)의 제구 */
+  const pz = { id: 'pz', role: '투수', position: '선발', cardType: '시즌', change: 100, stuff: 100, control: 100, stars: 5 };
+  const ctlOf = (sd, slot) => calcSDBonus(pz, slot || 'SP3', Object.assign({ teamName: '기아' }, sd), 0).ctl;
+  eq('포지션 특훈 SP3 20레벨 제구 +7', ctlOf({ pt_SP3: { level: 20 } }), 7);
+  eq('레벨을 안 정하면 만렙(20)', ctlOf({}), 7);
+  eq('포지션 특훈 SP3 12레벨 제구 +3', ctlOf({ pt_SP3: { level: 12 } }), 3);
+  eq('재설정 제구(r2) +2', ctlOf({ pt_SP3: { level: 0, r2: 2 } }), 2);
+  eq('유니폼 제구 +1', ctlOf({ pt_SP3: { level: 0 }, uniCtl: 1 }), 1);
+  eq('투수 주장 제구 +3', ctlOf({ pt_SP3: { level: 0 }, capPitId: 'pz', capPitCtl: 3 }), 3);
+  eq('주장(투수일 때) 제구 +2', ctlOf({ pt_SP3: { level: 0 }, capBatId: 'pz', capBatCtl: 2 }), 2);
+  eq('다른 선수가 주장이면 안 오른다', ctlOf({ pt_SP3: { level: 0 }, capPitId: 'other', capPitCtl: 3 }), 0);
+  eq('CP 20레벨 제구 +6', ctlOf({}, 'CP'), 6);
+  eq('타자에게는 제구 칸이 없다', calcSDBonus({ id: 'bz', role: '타자', cardType: '시즌', power: 100 }, 'C', { teamName: '기아', uniCtl: 5 }, 0).ctl === undefined ? 1 : 0, 1);
+  eq('보너스 제구 7 → 선발 점수 +1.75', calcPit(pz, {}, { c: 0, s: 0, ctl: 7 }).total - calcPit(pz, {}, { c: 0, s: 0, ctl: 0 }).total, 1.75, 1e-9);
+  eq('포지션 특훈 0 → 20레벨이면 점수가 제구만큼(7 x 0.25)만 더 오른다 (변화 · 구위분 빼고)',
+    (calcPit(pz, {}, calcSDBonus(pz, 'SP3', { teamName: '기아', pt_SP3: { level: 20 } }, 0)).total
+      - calcPit(pz, {}, calcSDBonus(pz, 'SP3', { teamName: '기아', pt_SP3: { level: 0 } }, 0)).total)
+    - (6 * 1.0 + 7 * 1.15), 7 * 0.25, 1e-9);
+
+  /* 타순 — 클린업 트리오는 3 · 4 · 5번 */
+  const bt = (sk) => ({ role: '타자', skill1: sk, launchAngle: 20 });
+  let ok3 = 1;
+  for (let n = 1; n <= 9; n++) {
+    const on = n >= 3 && n <= 5;
+    const want = on ? '클린업 트리오(타순O)' : '클린업 트리오(타순X)';
+    const a = orderAdjust(bt(on ? '클린업 트리오(타순X)' : '클린업 트리오(타순O)'), n - 1);
+    if (!a || a.pl.skill1 !== want) ok3 = 0;
+  }
+  eq('클린업 트리오 — 3 · 4 · 5번만 타순O', ok3, 1);
+  eq('클린업 트리오 타순O 가 더 높다', getSkillScore('클린업 트리오(타순O)', 6, '타자') > getSkillScore('클린업 트리오(타순X)', 6, '타자') ? 1 : 0, 1);
+}
+{
+  /* 포수리드(버프포함) — 데이터센터 분포 · 스킬 계산기 · 공유 그림 색에만 쓰는 값 (TOTAL 은 팀버프를 투수에게 따로 얹는다).
+     2026-10-21 사용자 지정: 스킬 점수 + 레벨별 투수 점수 증가. 버프는 투수 열두 명 모두에게 붙으므로
+     TOTAL 의 투수 배율(기본 전술: 선발 합 7.0 · 중계 2.2 + 마무리 0.8 = 3.0)을 곱해 더한다 */
+  let spSum = 0; for (let i = 0; i < 5; i++) spSum += spMult('기본', i);
+  let bpSum = CP_MULT; for (const s of RP_SLOTS) bpSum += getRPWeight(4, s, '기본/기본');
+  eq('기본 전술 선발 배율 합 7.0', spSum, 7.0, 1e-9);
+  eq('기본 전술 불펜 배율 합 3.0 (중계 2.2 + 마무리 0.8)', bpSum, 3.0, 1e-9);
+  const inc = (b, w) => b.c * w.c + b.s * w.s + b.ctl * w.ctl;
+  const want = [5, 6, 7, 8, 9, 10].map((lv) => { const b = CATCH_LEAD_PIT[lv + '렙']; return Math.round((lv + inc(b, PIT_W_V11['선발']) * spSum + inc(b, PIT_W_V11['중계']) * bpSum) * 100) / 100; });
+  eq('포수리드(버프포함) Lv5~10 = 스킬 + 증가 × 배율 (17.2 · 30 · 31 · 41.7 · 45.2 · 58)', JSON.stringify([5, 6, 7, 8, 9, 10].map((lv) => getSkillScore('포수리드', lv, '타자', true))) === JSON.stringify(want) ? 1 : 0, 1);
+  eq('그 값이 17.2 · 30 · 31 · 41.7 · 45.2 · 58', JSON.stringify(want) === JSON.stringify([17.2, 30, 31, 41.7, 45.2, 58]) ? 1 : 0, 1);
+  eq('라인업(버프 뺀) 포수리드 Lv7 = 7 — 팀버프는 투수 쪽에서 따로 센다', getSkillScore('포수리드', 7, '타자'), 7);
+  eq('구버전 버프포함 Lv7 26.44 그대로', withScoreVer('v10', () => getSkillScore('포수리드', 7, '타자', true)), 26.44);
+  /* 옛 값도 같은 식이었다 — 옛 가중치(변 1.05 · 구 1.35) · 배율 합 8.1 로 Lv5~9 가 맞는다 */
+  const OLD_BUF = { 5: [1, 0], 6: [1, 1], 7: [1, 1], 8: [2, 1], 9: [2, 1] };
+  let oldOk = 1;
+  for (const lv of [5, 6, 7, 8, 9]) { const v = lv + (OLD_BUF[lv][0] * 1.05 + OLD_BUF[lv][1] * 1.35) * 8.1; if (Math.abs(v - withScoreVer('v10', () => getSkillScore('포수리드', lv, '타자', true))) > 0.02) oldOk = 0; }
+  eq('옛 버프포함 Lv5~9 = 스킬 + 옛 증가 × 8.1', oldOk, 1);
+
+  /* 클린업 트리오 — 메이저 (사용자 확인) */
+  eq('클린업 트리오(타순O) 메이저', MAJOR_V11['타자']['클린업 트리오(타순O)'] ? 1 : 0, 1);
+  eq('클린업 트리오(타순X) 메이저', MAJOR_V11['타자']['클린업 트리오(타순X)'] ? 1 : 0, 1);
+}
+{
+  /* 제구 미입력 표시 — 변화 · 구위 훈련은 있는데 제구 훈련이 0 인 투수만 (특훈은 0 이 흔해서 안 본다) */
+  const P = (o) => Object.assign({ role: '투수', trainC: 12, trainS: 20, trainCtl: 0, specControl: 0 }, o);
+  eq('제구 미입력 — 변 · 구만 넣은 투수', ctlMissing(P({})) ? 1 : 0, 1);
+  eq('제구 넣었으면 아님', ctlMissing(P({ trainCtl: 8 })) ? 1 : 0, 0);
+  eq('훈련을 하나도 안 넣었으면 아님 (제구만의 문제가 아니다)', ctlMissing(P({ trainC: 0, trainS: 0 })) ? 1 : 0, 0);
+  eq('특훈 제구 0 은 따지지 않는다', ctlMissing(P({ trainCtl: 5, specControl: 0 })) ? 1 : 0, 0);
+  eq('타자는 아님', ctlMissing({ role: '타자', trainC: 3, trainS: 3 }) ? 1 : 0, 0);
+  eq('빈 자리는 아님', ctlMissing(null) ? 1 : 0, 0);
+}
+__setScoreVer('v10');
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);
