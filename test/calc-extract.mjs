@@ -206,6 +206,106 @@ function v11RoleSkill(cat, name) {
   if (!nm || (V10_KEEP_BORROW[cat] && V10_KEEP_BORROW[cat][nm])) return null;
   return t[nm];
 }
+/* ═══ 랭킹챌린지 예상 구간 (2026-10-22) ═══
+   덱 TOTAL 로 '랭챌을 풀갱하면 몇 등쯤'인지 가늠하는 표. 커뮤니티가 구버전 점수로 정리한 구간표(표본이 적어 참고용, 사용자 제공)를
+   신버전 점수로 옮겼다 — 기준 점수 근처(±100) 저장 덱들의 '같은 덱 신버전 − 구버전' 중앙값만큼 (2026-10-22 저장 덱 2,338개).
+   신버전은 제구를 넣었을 때 값: 비어 있는 제구는 배포 뒤 실제로 넣은 투수 2,616명처럼 '훈련 = 변화 · 구위 평균 × 0.75,
+   특훈 = 변화 특훈 − 1' 로 채워 셌다 (투수 제구를 다 넣은 덱 197개에서 실제와 1점 안쪽). 같은 백분위로 맞춰도 10점 안쪽. 10점 단위.
+   in200 · in2000 은 원래 표에 없어 이웃 구간 사이를 이었다 (사용자 요청) — 등수의 로그로 잇기(in100 ↔ in300 · in1000 ↔ in3000)와
+   저장 덱 분포(이웃 커트 위 덱 수를 등수와 로그-로그로 이어 그만큼 위에 있는 점수)의 가운데 값. in200 은 두 방법이 10점 안쪽,
+   in2000 은 40 ~ 50점 차이 (구버전 커트 8273 / 8324 → 약 8300). 구버전 값을 같은 방법으로 신버전에 옮겼다.
+   관리자가 고친 표는 DB(global_skills) data.rankTiers = { _v, rows: [{ n, cut, safe }], at } — 검사를 통과할 때만 쓴다 */
+var RANK_TIER_VERSION = 1;
+var RANK_TIERS_CODE = [
+  { n: "in10", cut: 9240, safe: 0 },
+  { n: "in30", cut: 9140, safe: 9190 },
+  { n: "in50", cut: 9050, safe: 9090 },
+  { n: "in100", cut: 8900, safe: 8940 },
+  { n: "in200", cut: 8800, safe: 8850 },
+  { n: "in300", cut: 8750, safe: 8790 },
+  { n: "in500", cut: 8600, safe: 8650 },
+  { n: "in700", cut: 8570, safe: 8600 },
+  { n: "in1000", cut: 8480, safe: 8550 },
+  { n: "in2000", cut: 8260, safe: 8330 },
+  { n: "in3000", cut: 8090, safe: 8160 }
+];
+/* 구버전 점수 기준 원래 표 (같은 그림) — 구버전 점수와 견줄 때만. 범위로 적힌 칸은 가운데 값으로 판정하고 글자는 그대로 보여 준다.
+   in200 · in2000 은 그림에 없어 위처럼 이은 값 ('약') */
+var RANK_TIERS_V10 = [
+  { n: "in10", cut: 9300, safe: 0, cutTxt: "약 9300", safeTxt: "표본 부족" },
+  { n: "in30", cut: 9200, safe: 9250 },
+  { n: "in50", cut: 9100, safe: 9150 },
+  { n: "in100", cut: 8950, safe: 9000 },
+  { n: "in200", cut: 8858, safe: 8906, cutTxt: "약 8860", safeTxt: "약 8910" },
+  { n: "in300", cut: 8800, safe: 8840, safeTxt: "8830~8850" },
+  { n: "in500", cut: 8650, safe: 8700 },
+  { n: "in700", cut: 8615, safe: 8650, cutTxt: "8600~8630" },
+  { n: "in1000", cut: 8525, safe: 8600, cutTxt: "8500~8550" },
+  { n: "in2000", cut: 8298, safe: 8368, cutTxt: "약 8300", safeTxt: "약 8370" },
+  { n: "in3000", cut: 8125, safe: 8200, cutTxt: "8100~8150" }
+];
+/* 타자 점수(포특 · 스킬 포함)별 OPS 컷 — 같은 그림. 타자 점수는 이번 업데이트로 거의 안 바뀌어
+   (라인업 타자 21,042명: 신버전 − 구버전 중앙값 0 · 평균 −0.2) 신 · 구버전 같은 표로 쓴다 */
+var RANK_OPS = [
+  { n: "in100", o8: "445~450", o9: "460~465" },
+  { n: "in300", o8: "440~445", o9: "445~450" },
+  { n: "in500", o8: "435~440", o9: "445~450" },
+  { n: "in700", o8: "430~435", o9: "445~450" },
+  { n: "in1000", o8: "425~430", o9: "440~445" },
+  { n: "in3000", o8: "415~420", o9: "430~435" }
+];
+/* 표 검사 — 문제가 있으면 그 까닭(문장), 없으면 "". 커트는 위에서 아래로 줄고, 안정권은 0(없음)이거나 커트 이상 */
+function rankTierCheck(rows) {
+  if (!Array.isArray(rows) || rows.length < 2 || rows.length > 20) return "구간은 2 ~ 20개여야 해요";
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (!r || typeof r.n !== "string" || !r.n.trim()) return (i + 1) + "번째 구간 이름이 비었어요";
+    if (typeof r.cut !== "number" || !isFinite(r.cut) || r.cut <= 0) return r.n + " 커트 점수가 비었거나 0 이하예요";
+    var sf = r.safe || 0;
+    if (typeof sf !== "number" || !isFinite(sf) || sf < 0) return r.n + " 안정권 점수가 이상해요";
+    if (sf > 0 && sf < r.cut) return r.n + " 안정권(" + sf + ")이 커트(" + r.cut + ")보다 낮아요";
+    if (i > 0 && r.cut >= rows[i - 1].cut) return r.n + " 커트(" + r.cut + ")는 위 구간 " + rows[i - 1].n + " 커트(" + rows[i - 1].cut + ")보다 낮아야 해요";
+  }
+  return "";
+}
+/* 지금 쓰는 신버전 표 — 관리자가 저장한 표(버전이 맞고 검사를 통과할 때) 아니면 코드 표 */
+function rankTiersOf(sk) {
+  var t = sk && sk.rankTiers;
+  return (t && (t._v || 0) >= RANK_TIER_VERSION && !rankTierCheck(t.rows)) ? t.rows : RANK_TIERS_CODE;
+}
+/* 점수 → 예상 구간 (rows 는 커트 높은 순).
+   i: 커트를 넘은 가장 높은 구간 (-1 = 맨 아래 커트도 못 넘음) · safe: 그 구간 안정권인지 ·
+   safeAt: 안정권에 든 가장 높은 구간 (-1 = 없음) · next: 다음 목표 { label, gap } (맨 위 구간이면 null) */
+function rankTierOf(score, rows) {
+  var i = -1, safeAt = -1, k;
+  for (k = 0; k < rows.length; k++) { if (score >= rows[k].cut) { i = k; break; } }
+  for (k = 0; k < rows.length; k++) { if (rows[k].safe > 0 && score >= rows[k].safe) { safeAt = k; break; } }
+  var safe = i >= 0 && rows[i].safe > 0 && score >= rows[i].safe;
+  var next = null, last = rows[rows.length - 1];
+  if (i < 0) next = { label: last.n + " 커트", gap: last.cut - score };
+  else if (!safe && rows[i].safe > 0) next = { label: rows[i].n + " 안정권", gap: rows[i].safe - score };
+  else if (i > 0) next = { label: rows[i - 1].n + " 커트", gap: rows[i - 1].cut - score };
+  return { i: i, row: i >= 0 ? rows[i] : null, safe: safe, safeAt: safeAt, next: next };
+}
+/* 구간 색 — 이름의 등수로: 30 안 금색 · 100 안 분홍 · 500 안 파랑 · 1000 안 초록 · 그 밖 회색 (어두운 · 밝은 화면 모두 읽히는 중간 밝기) */
+function rankTierColor(row) {
+  var m = row && String(row.n).match(/\d+/); var v = m ? Number(m[0]) : 99999;
+  return v <= 30 ? "#D97706" : v <= 100 ? "#EC4899" : v <= 500 ? "#3B82F6" : v <= 1000 ? "#16A34A" : "#64748B";
+}
+function rankHexA(hex, a) {
+  var n = parseInt(String(hex).slice(1), 16);
+  return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+}
+/* 구간을 보여 줄 만큼 덱이 채워졌는지 — 훈련은 0일 수 없어 0 이면 안 넣은 것 (2026-10-22 사용자 지정: 인내가 빈 덱이 많다).
+   타자 파워 · 정확 · 선구 · 인내, 투수 변화 · 구위 · 제구가 모두 1 이상이어야 한다.
+   포특 · 라커룸 · 특훈은 0 이 정상일 수 있어 보지 않는다 (막으면 안 된다). 빈 칸 이름 목록을 돌려준다 (다 찼으면 []) */
+var RANK_TRAIN_BAT = [["trainP", "파워"], ["trainA", "정확"], ["trainE", "선구"], ["trainN", "인내"]];
+var RANK_TRAIN_PIT = [["trainC", "변화"], ["trainS", "구위"], ["trainCtl", "제구"]];
+function rankTrainMissing(pl) {
+  if (!pl) return [];
+  return (pl.role === "투수" ? RANK_TRAIN_PIT : RANK_TRAIN_BAT).filter(function (k) { return !((Number(pl[k[0]]) || 0) > 0); }).map(function (k) { return k[1]; });
+}
+/* ═══ 랭킹챌린지 예상 구간 끝 ═══ */
 var DEFAULT_WEIGHTS={p:1.0,a:0.85,e:0.4,n:0.15,c:1.05,s:1.35};
 var LIVE_WEIGHTS=null;
 var _wCache=null,_wCacheSrc=null;
@@ -2451,6 +2551,7 @@ function pushAudit(row, note) {
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setScoreVer(v){ SCORE_VER = v; }
 export { withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, skillTables, __setScoreVer, CATCH_LEAD_PIT, NAT_ACE_PIT, POS_TRAIN, ENHANCE, pitCatOf, pitDistRole, pitStatScore, sampleSkillScores, SKILL_DIST_CARDS, ctlMissing, applyV11, v11EditCopy, v11Saved, v11WeightsOk, V11_TABLE_VERSION, SKILLS_V11_CODE, PIT_W_V11_CODE };
+export { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_TIERS_V10, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankHexA, RANK_TRAIN_BAT, RANK_TRAIN_PIT, rankTrainMissing };
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
 function __setSeed(a){ SEED_PLAYERS.length = 0; (a||[]).forEach(function(p){ SEED_PLAYERS.push(p); }); }
 function __setSkillData(d){ SKILL_DATA = d || DEFAULT_SKILLS; }

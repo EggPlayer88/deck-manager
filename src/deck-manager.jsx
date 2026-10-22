@@ -554,6 +554,106 @@ function v11RoleSkill(cat, name) {
   if (!nm || (V10_KEEP_BORROW[cat] && V10_KEEP_BORROW[cat][nm])) return null;
   return t[nm];
 }
+/* ═══ 랭킹챌린지 예상 구간 (2026-10-22) ═══
+   덱 TOTAL 로 '랭챌을 풀갱하면 몇 등쯤'인지 가늠하는 표. 커뮤니티가 구버전 점수로 정리한 구간표(표본이 적어 참고용, 사용자 제공)를
+   신버전 점수로 옮겼다 — 기준 점수 근처(±100) 저장 덱들의 '같은 덱 신버전 − 구버전' 중앙값만큼 (2026-10-22 저장 덱 2,338개).
+   신버전은 제구를 넣었을 때 값: 비어 있는 제구는 배포 뒤 실제로 넣은 투수 2,616명처럼 '훈련 = 변화 · 구위 평균 × 0.75,
+   특훈 = 변화 특훈 − 1' 로 채워 셌다 (투수 제구를 다 넣은 덱 197개에서 실제와 1점 안쪽). 같은 백분위로 맞춰도 10점 안쪽. 10점 단위.
+   in200 · in2000 은 원래 표에 없어 이웃 구간 사이를 이었다 (사용자 요청) — 등수의 로그로 잇기(in100 ↔ in300 · in1000 ↔ in3000)와
+   저장 덱 분포(이웃 커트 위 덱 수를 등수와 로그-로그로 이어 그만큼 위에 있는 점수)의 가운데 값. in200 은 두 방법이 10점 안쪽,
+   in2000 은 40 ~ 50점 차이 (구버전 커트 8273 / 8324 → 약 8300). 구버전 값을 같은 방법으로 신버전에 옮겼다.
+   관리자가 고친 표는 DB(global_skills) data.rankTiers = { _v, rows: [{ n, cut, safe }], at } — 검사를 통과할 때만 쓴다 */
+var RANK_TIER_VERSION = 1;
+var RANK_TIERS_CODE = [
+  { n: "in10", cut: 9240, safe: 0 },
+  { n: "in30", cut: 9140, safe: 9190 },
+  { n: "in50", cut: 9050, safe: 9090 },
+  { n: "in100", cut: 8900, safe: 8940 },
+  { n: "in200", cut: 8800, safe: 8850 },
+  { n: "in300", cut: 8750, safe: 8790 },
+  { n: "in500", cut: 8600, safe: 8650 },
+  { n: "in700", cut: 8570, safe: 8600 },
+  { n: "in1000", cut: 8480, safe: 8550 },
+  { n: "in2000", cut: 8260, safe: 8330 },
+  { n: "in3000", cut: 8090, safe: 8160 }
+];
+/* 구버전 점수 기준 원래 표 (같은 그림) — 구버전 점수와 견줄 때만. 범위로 적힌 칸은 가운데 값으로 판정하고 글자는 그대로 보여 준다.
+   in200 · in2000 은 그림에 없어 위처럼 이은 값 ('약') */
+var RANK_TIERS_V10 = [
+  { n: "in10", cut: 9300, safe: 0, cutTxt: "약 9300", safeTxt: "표본 부족" },
+  { n: "in30", cut: 9200, safe: 9250 },
+  { n: "in50", cut: 9100, safe: 9150 },
+  { n: "in100", cut: 8950, safe: 9000 },
+  { n: "in200", cut: 8858, safe: 8906, cutTxt: "약 8860", safeTxt: "약 8910" },
+  { n: "in300", cut: 8800, safe: 8840, safeTxt: "8830~8850" },
+  { n: "in500", cut: 8650, safe: 8700 },
+  { n: "in700", cut: 8615, safe: 8650, cutTxt: "8600~8630" },
+  { n: "in1000", cut: 8525, safe: 8600, cutTxt: "8500~8550" },
+  { n: "in2000", cut: 8298, safe: 8368, cutTxt: "약 8300", safeTxt: "약 8370" },
+  { n: "in3000", cut: 8125, safe: 8200, cutTxt: "8100~8150" }
+];
+/* 타자 점수(포특 · 스킬 포함)별 OPS 컷 — 같은 그림. 타자 점수는 이번 업데이트로 거의 안 바뀌어
+   (라인업 타자 21,042명: 신버전 − 구버전 중앙값 0 · 평균 −0.2) 신 · 구버전 같은 표로 쓴다 */
+var RANK_OPS = [
+  { n: "in100", o8: "445~450", o9: "460~465" },
+  { n: "in300", o8: "440~445", o9: "445~450" },
+  { n: "in500", o8: "435~440", o9: "445~450" },
+  { n: "in700", o8: "430~435", o9: "445~450" },
+  { n: "in1000", o8: "425~430", o9: "440~445" },
+  { n: "in3000", o8: "415~420", o9: "430~435" }
+];
+/* 표 검사 — 문제가 있으면 그 까닭(문장), 없으면 "". 커트는 위에서 아래로 줄고, 안정권은 0(없음)이거나 커트 이상 */
+function rankTierCheck(rows) {
+  if (!Array.isArray(rows) || rows.length < 2 || rows.length > 20) return "구간은 2 ~ 20개여야 해요";
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (!r || typeof r.n !== "string" || !r.n.trim()) return (i + 1) + "번째 구간 이름이 비었어요";
+    if (typeof r.cut !== "number" || !isFinite(r.cut) || r.cut <= 0) return r.n + " 커트 점수가 비었거나 0 이하예요";
+    var sf = r.safe || 0;
+    if (typeof sf !== "number" || !isFinite(sf) || sf < 0) return r.n + " 안정권 점수가 이상해요";
+    if (sf > 0 && sf < r.cut) return r.n + " 안정권(" + sf + ")이 커트(" + r.cut + ")보다 낮아요";
+    if (i > 0 && r.cut >= rows[i - 1].cut) return r.n + " 커트(" + r.cut + ")는 위 구간 " + rows[i - 1].n + " 커트(" + rows[i - 1].cut + ")보다 낮아야 해요";
+  }
+  return "";
+}
+/* 지금 쓰는 신버전 표 — 관리자가 저장한 표(버전이 맞고 검사를 통과할 때) 아니면 코드 표 */
+function rankTiersOf(sk) {
+  var t = sk && sk.rankTiers;
+  return (t && (t._v || 0) >= RANK_TIER_VERSION && !rankTierCheck(t.rows)) ? t.rows : RANK_TIERS_CODE;
+}
+/* 점수 → 예상 구간 (rows 는 커트 높은 순).
+   i: 커트를 넘은 가장 높은 구간 (-1 = 맨 아래 커트도 못 넘음) · safe: 그 구간 안정권인지 ·
+   safeAt: 안정권에 든 가장 높은 구간 (-1 = 없음) · next: 다음 목표 { label, gap } (맨 위 구간이면 null) */
+function rankTierOf(score, rows) {
+  var i = -1, safeAt = -1, k;
+  for (k = 0; k < rows.length; k++) { if (score >= rows[k].cut) { i = k; break; } }
+  for (k = 0; k < rows.length; k++) { if (rows[k].safe > 0 && score >= rows[k].safe) { safeAt = k; break; } }
+  var safe = i >= 0 && rows[i].safe > 0 && score >= rows[i].safe;
+  var next = null, last = rows[rows.length - 1];
+  if (i < 0) next = { label: last.n + " 커트", gap: last.cut - score };
+  else if (!safe && rows[i].safe > 0) next = { label: rows[i].n + " 안정권", gap: rows[i].safe - score };
+  else if (i > 0) next = { label: rows[i - 1].n + " 커트", gap: rows[i - 1].cut - score };
+  return { i: i, row: i >= 0 ? rows[i] : null, safe: safe, safeAt: safeAt, next: next };
+}
+/* 구간 색 — 이름의 등수로: 30 안 금색 · 100 안 분홍 · 500 안 파랑 · 1000 안 초록 · 그 밖 회색 (어두운 · 밝은 화면 모두 읽히는 중간 밝기) */
+function rankTierColor(row) {
+  var m = row && String(row.n).match(/\d+/); var v = m ? Number(m[0]) : 99999;
+  return v <= 30 ? "#D97706" : v <= 100 ? "#EC4899" : v <= 500 ? "#3B82F6" : v <= 1000 ? "#16A34A" : "#64748B";
+}
+function rankHexA(hex, a) {
+  var n = parseInt(String(hex).slice(1), 16);
+  return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+}
+/* 구간을 보여 줄 만큼 덱이 채워졌는지 — 훈련은 0일 수 없어 0 이면 안 넣은 것 (2026-10-22 사용자 지정: 인내가 빈 덱이 많다).
+   타자 파워 · 정확 · 선구 · 인내, 투수 변화 · 구위 · 제구가 모두 1 이상이어야 한다.
+   포특 · 라커룸 · 특훈은 0 이 정상일 수 있어 보지 않는다 (막으면 안 된다). 빈 칸 이름 목록을 돌려준다 (다 찼으면 []) */
+var RANK_TRAIN_BAT = [["trainP", "파워"], ["trainA", "정확"], ["trainE", "선구"], ["trainN", "인내"]];
+var RANK_TRAIN_PIT = [["trainC", "변화"], ["trainS", "구위"], ["trainCtl", "제구"]];
+function rankTrainMissing(pl) {
+  if (!pl) return [];
+  return (pl.role === "투수" ? RANK_TRAIN_PIT : RANK_TRAIN_BAT).filter(function (k) { return !((Number(pl[k[0]]) || 0) > 0); }).map(function (k) { return k[1]; });
+}
+/* ═══ 랭킹챌린지 예상 구간 끝 ═══ */
 async function sGet(k){try{var r=await window.storage.get(k);return r?JSON.parse(r.value):null;}catch(e){return null;}}
 async function sSet(k,d){try{await window.storage.set(k,JSON.stringify(d));return true;}catch(e){return false;}}
 /* 게스트 id 는 uuid 가 아니라 서버가 받지 않는다 — 브라우저에만 담아야 한다 */
@@ -5017,6 +5117,230 @@ function SetDeckPanel(p) {
   );
 }
 
+/* 라인업 머리의 '랭챌 예상' 칸 — 이 TOTAL 이면 랭챌 풀갱 시 몇 등쯤인지. 누르면 구간표 (2026-10-22).
+   훈련이 빈 선수가 있으면(miss) 구간 대신 '훈련 미입력 N명' — 비어 있으면 TOTAL 이 낮게 나와 구간이 틀린다 */
+function RankTierTile(p) {
+  var mob = p.mobile, rows = p.rows, miss = p.miss || [];
+  var box = function (bg, bd, dashed) { return { display: "flex", flexDirection: "column", alignItems: mob ? "flex-end" : "center", justifyContent: "center", gap: 1, flexShrink: 0, marginLeft: mob ? "auto" : 0,
+    padding: mob ? "6px 10px" : "7px 12px", minWidth: mob ? 0 : 108, borderRadius: 10, cursor: "pointer", fontFamily: "inherit", background: bg, border: "1px " + (dashed ? "dashed " : "solid ") + bd }; };
+  var head = (<span style={{ fontSize: 10.5, color: "var(--td)", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{(p.peak ? "고점 · " : "") + "랭챌 예상 ›"}</span>);
+  if (miss.length) {
+    return (
+      <button onClick={p.onOpen} title={"라인업 선수 " + miss.length + "명의 훈련(타자 파 · 정 · 선 · 인 / 투수 변 · 구 · 제)이 비어 있어요. 훈련은 0일 수 없어서 다 넣어야 예상 구간이 보여요. 누르면 누가 비었는지 보여요"}
+        style={box("var(--inner)", rankHexA(CTL_MISS_COLOR, 0.55), true)}>
+        {head}
+        <span style={{ fontSize: mob ? 13 : 14, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", lineHeight: 1.35 }}>{"훈련 미입력 " + miss.length + "명"}</span>
+        <span style={{ fontSize: 10.5, color: "var(--t2)", whiteSpace: "nowrap" }}>{"다 넣으면 보여요"}</span>
+      </button>
+    );
+  }
+  var t = rankTierOf(p.score, rows), last = rows[rows.length - 1];
+  var col = t.row ? rankTierColor(t.row) : null;
+  return (
+    <button onClick={p.onOpen} title={"랭킹챌린지 예상 구간 — 이 TOTAL 이면 풀갱 시 대략 이 등수예요 (표본이 적어 참고용). 누르면 구간표가 열려요"}
+      style={box(col ? rankHexA(col, 0.10) : "var(--inner)", col ? rankHexA(col, 0.45) : "var(--bd)", false)}>
+      {head}
+      <span style={{ display: "flex", alignItems: "baseline", gap: 5, whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: mob ? 19 : 21, fontWeight: 900, fontFamily: "var(--h)", color: col || "var(--td)", letterSpacing: 0.3, lineHeight: 1.15 }}>{t.row ? t.row.n : last.n}</span>
+        <span style={{ fontSize: 11.5, fontWeight: 800, color: col || "var(--td)" }}>{t.row ? (t.safe ? "안정권" : "경쟁권") : "밖"}</span>
+      </span>
+      {t.next && (<span style={{ fontSize: 10.5, color: "var(--t2)", whiteSpace: "nowrap" }}>{t.next.label + "까지 +" + Math.ceil(t.next.gap)}</span>)}
+    </button>
+  );
+}
+
+/* 랭챌 예상 구간표 — 내 덱 자리 · 커트 경쟁선 / 안정권 · 구버전 표와 견주기 · 타자 OPS 참고 · 관리자 고치기.
+   훈련이 빈 선수가 있으면(miss) 내 덱 구간 대신 빈 선수 목록을 보여 준다 (표는 참고로 그대로, 내 덱 줄 강조 없음) */
+function RankTierModal(p) {
+  var mob = p.mobile;
+  var _ver = useState("new"); var ver = _ver[0]; var setVer = _ver[1];
+  var _ops = useState(false); var opsOpen = _ops[0]; var setOpsOpen = _ops[1];
+  var _ed = useState(null); var edit = _ed[0]; var setEdit = _ed[1];
+  var _msg = useState(""); var msg = _msg[0]; var setMsg = _msg[1];
+  var _busy = useState(false); var busy = _busy[0]; var setBusy = _busy[1];
+  var miss = p.miss || [], ready = !miss.length;
+  var canOld = ready && typeof p.oldScore === "number";
+  var isOld = ver === "old" && canOld;
+  var rows = isOld ? RANK_TIERS_V10 : p.rows;
+  var score = isOld ? p.oldScore : p.score;
+  var t = rankTierOf(score, rows), last = rows[rows.length - 1];
+  var col = ready && t.row ? rankTierColor(t.row) : null;
+  var savedT = p.skills && p.skills.rankTiers;
+  var saved = savedT && rankTiersOf(p.skills) === savedT.rows ? savedT : null;
+  var opsRow = ready && t.row ? t.row.n : "";
+  var grid = mob ? "60px 1fr 1fr 54px" : "70px 1fr 1fr 62px";
+  var num = { fontFamily: "var(--m)", fontVariantNumeric: "tabular-nums", textAlign: "right" };
+  var tabBtn = function (on) { return { flex: 1, padding: "6px 0", fontSize: 12.5, fontWeight: on ? 800 : 500, borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
+    border: "1px solid " + (on ? "var(--acc)" : "var(--bd)"), background: on ? "var(--ta)" : "transparent", color: on ? "var(--acc)" : "var(--td)" }; };
+  var smallBtn = function (strong) { return { padding: "5px 12px", fontSize: 12, fontWeight: 700, borderRadius: 7, cursor: busy ? "default" : "pointer", fontFamily: "inherit", opacity: busy ? 0.6 : 1,
+    border: "1px solid " + (strong ? "var(--acc)" : "var(--bd)"), background: strong ? "var(--ta)" : "transparent", color: strong ? "var(--acc)" : "var(--t2)" }; };
+  var inp = { width: "100%", boxSizing: "border-box", padding: "4px 6px", fontSize: 13, fontFamily: "var(--m)", textAlign: "right", borderRadius: 6, border: "1px solid var(--bd)", background: "var(--inner)", color: "var(--t1)" };
+  var day = function (iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ""; var z = function (v) { return (v < 10 ? "0" : "") + v; }; return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()); };
+  var startEdit = function () { setMsg(""); setEdit(p.rows.map(function (r) { return { n: r.n, cut: String(r.cut), safe: r.safe > 0 ? String(r.safe) : "" }; })); };
+  var setCell = function (k, key, v) { setEdit(edit.map(function (r, j) { if (j !== k) return r; var o = Object.assign({}, r); o[key] = v.replace(/[^0-9]/g, ""); return o; })); };
+  var save = async function () {
+    var nr = edit.map(function (r) { return { n: r.n, cut: r.cut === "" ? 0 : Number(r.cut), safe: r.safe === "" ? 0 : Number(r.safe) }; });
+    var bad = rankTierCheck(nr); if (bad) { setMsg(bad); return; }
+    setBusy(true); setMsg("");
+    try { await p.saveSkills(Object.assign({}, p.skills, { rankTiers: { _v: RANK_TIER_VERSION, rows: nr, at: new Date().toISOString() } })); setEdit(null); setMsg("저장했어요 — 모든 이용자에게 이 표가 보여요"); }
+    catch (e) { setMsg("저장하지 못했어요 — 잠시 뒤 다시 해 주세요"); }
+    setBusy(false);
+  };
+  var reset = async function () {
+    if (!window.confirm("관리자가 고친 표를 지우고 처음 표(2026-10-22 옮긴 값)로 돌릴까요?")) return;
+    var c = Object.assign({}, p.skills); delete c.rankTiers;
+    setBusy(true); setMsg("");
+    try { await p.saveSkills(c); setEdit(null); setMsg("처음 표로 돌렸어요"); }
+    catch (e) { setMsg("돌리지 못했어요 — 잠시 뒤 다시 해 주세요"); }
+    setBusy(false);
+  };
+  var head = (
+    <div style={{ display: "grid", gridTemplateColumns: grid, alignItems: "center", padding: "7px 12px", fontSize: 11.5, fontWeight: 700, color: "var(--td)", background: "var(--inner)" }}>
+      <span>{"구간"}</span><span style={{ textAlign: "right" }}>{"커트 경쟁선"}</span><span style={{ textAlign: "right" }}>{"안정권"}</span><span />
+    </div>
+  );
+  return (
+    <div onClick={p.onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 220, display: "flex", alignItems: "center", justifyContent: "center", padding: mob ? 12 : 16 }}>
+      <div onClick={function (e) { e.stopPropagation(); }} role="dialog" aria-label="랭챌 예상 구간"
+        style={{ background: "linear-gradient(var(--card),var(--card)),var(--bg)", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 440, width: "100%", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+        <div style={{ padding: "14px 18px 12px", borderBottom: "1px solid var(--bd)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"🏆 랭챌 예상 구간"}</div>
+              <div style={{ fontSize: 12, color: "var(--td)", marginTop: 3, lineHeight: 1.45 }}>{"랭킹챌린지를 풀갱하면 이 점수로 대략 몇 등인지예요 · 표본이 적어 참고용"}</div>
+            </div>
+            <button onClick={p.onClose} aria-label="닫기" style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18, padding: 2 }}>{"✕"}</button>
+          </div>
+          {canOld && !edit && (
+            <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+              <button onClick={function () { setVer("new"); }} style={tabBtn(!isOld)}>{"신버전 점수"}</button>
+              <button onClick={function () { setVer("old"); }} style={tabBtn(isOld)} title="같은 덱의 구버전 점수를 커뮤니티 원래 표(구버전 기준)에 대 봐요">{"구버전 점수"}</button>
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "12px 18px 16px" }}>
+          {ready ? (
+            /* 내 덱 */
+            <div style={{ padding: "11px 14px", borderRadius: 12, border: "1px solid " + (col ? rankHexA(col, 0.45) : "var(--bd)"), background: col ? rankHexA(col, 0.08) : "var(--inner)", marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: "var(--td)" }}>{"내 덱 " + (isOld ? "구버전 점수 " : p.peak ? "고점 TOTAL " : "TOTAL ")}<b style={{ fontFamily: "var(--m)", color: "var(--t1)", fontSize: 13 }}>{score.toFixed(1)}</b></div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 1, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 26, fontWeight: 900, fontFamily: "var(--h)", color: col || "var(--td)", letterSpacing: 0.3 }}>{t.row ? t.row.n : last.n}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: col || "var(--td)" }}>{t.row ? (t.safe ? "안정권" : "커트 경쟁권") : "밖"}</span>
+                {t.safeAt >= 0 && t.safeAt !== t.i && (<span style={{ fontSize: 12.5, color: "var(--t2)" }}>{"· " + rows[t.safeAt].n + " 안정권"}</span>)}
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 2 }}>
+                {t.next ? (<span>{"다음 목표 " + t.next.label + "까지 "}<b style={{ color: "var(--t1)", fontFamily: "var(--m)" }}>{"+" + Math.ceil(t.next.gap)}</b></span>) : "맨 위 구간이에요"}
+              </div>
+            </div>
+          ) : (
+            /* 훈련이 빈 선수 — 다 넣어야 내 덱 구간이 나온다 */
+            <div style={{ padding: "11px 14px", borderRadius: 12, border: "1px dashed " + rankHexA(CTL_MISS_COLOR, 0.6), background: rankHexA(CTL_MISS_COLOR, 0.06), marginBottom: 10 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 800, color: CTL_MISS_COLOR }}>{"훈련이 빈 선수 " + miss.length + "명"}</div>
+              <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, marginTop: 3 }}>{"훈련은 0일 수 없어서, 비어 있으면 TOTAL 이 실제보다 낮게 나와요. 다 넣으면 내 덱 예상 구간이 보여요. 포특 · 라커룸 · 특훈은 0 이어도 괜찮아요."}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", columnGap: 10, rowGap: 4, marginTop: 8, fontSize: 12.5, alignItems: "baseline" }}>
+                {miss.map(function (x) {
+                  return [
+                    <span key={x.slot + "-s"} style={{ fontFamily: "var(--m)", color: "var(--td)", fontSize: 11.5 }}>{x.slot}</span>,
+                    <span key={x.slot + "-n"} style={{ color: "var(--t1)", fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.name}</span>,
+                    <span key={x.slot + "-m"} style={{ color: CTL_MISS_COLOR, fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>{x.miss.join(" · ")}</span>
+                  ];
+                })}
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--td)", marginTop: 8 }}>{"지금 " + (p.peak ? "고점 " : "") + "TOTAL " + p.score.toFixed(1)}</div>
+            </div>
+          )}
+          {ready && p.peak && (<div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, marginBottom: 10 }}>{"🔍 고점판독 중이라 고점 TOTAL 로 봤어요. 지금 덱 그대로의 구간은 고점판독을 끄면 보여요."}</div>)}
+          {/* 구간표 — 고치기 중이면 칸마다 입력 */}
+          <div style={{ border: "1px solid var(--bd)", borderRadius: 10, overflow: "hidden" }}>
+            {head}
+            {!edit && rows.map(function (r, k) {
+              var here = ready && k === t.i, safeHere = ready && k === t.safeAt && k !== t.i, c = rankTierColor(r);
+              return (
+                <div key={r.n} style={{ display: "grid", gridTemplateColumns: grid, alignItems: "center", padding: "7px 12px", borderTop: "1px solid var(--bd)", fontSize: 13.5,
+                  background: here ? rankHexA(c, 0.13) : "transparent", boxShadow: here ? "inset 3px 0 0 " + c : "none" }}>
+                  <span style={{ fontWeight: 800, fontFamily: "var(--h)", color: c, letterSpacing: 0.3 }}>{r.n}</span>
+                  <span style={Object.assign({}, num, { color: "var(--t1)", fontWeight: here ? 800 : 500 })}>{r.cutTxt || r.cut}</span>
+                  <span style={Object.assign({}, num, { color: r.safe > 0 ? "var(--t1)" : "var(--td)", fontWeight: here && t.safe ? 800 : 500 })}>{r.safeTxt || (r.safe > 0 ? r.safe : "—")}</span>
+                  <span style={{ textAlign: "right", fontSize: 11, fontWeight: 800, color: here ? c : "var(--t2)", whiteSpace: "nowrap" }}>{here ? "◀ 내 덱" : safeHere ? "안정 ✓" : ""}</span>
+                </div>
+              );
+            })}
+            {!edit && ready && t.i < 0 && (
+              <div style={{ padding: "8px 12px", borderTop: "1px dashed var(--bd)", fontSize: 12.5, color: "var(--t2)", boxShadow: "inset 3px 0 0 var(--td)" }}>
+                {"◀ 내 덱 " + score.toFixed(1) + " — " + t.next.label + "까지 +" + Math.ceil(t.next.gap)}
+              </div>
+            )}
+            {edit && edit.map(function (r, k) {
+              return (
+                <div key={r.n} style={{ display: "grid", gridTemplateColumns: grid, gap: 6, alignItems: "center", padding: "5px 12px", borderTop: "1px solid var(--bd)" }}>
+                  <span style={{ fontWeight: 800, fontFamily: "var(--h)", color: rankTierColor(r), fontSize: 13.5 }}>{r.n}</span>
+                  <input value={r.cut} inputMode="numeric" aria-label={r.n + " 커트 경쟁선"} onChange={function (e) { setCell(k, "cut", e.target.value); }} style={inp} />
+                  <input value={r.safe} inputMode="numeric" placeholder="없음" aria-label={r.n + " 안정권"} onChange={function (e) { setCell(k, "safe", e.target.value); }} style={inp} />
+                  <span />
+                </div>
+              );
+            })}
+          </div>
+          {/* 타자 OPS 참고 */}
+          {!edit && (
+            <div style={{ marginTop: 10 }}>
+              <button onClick={function () { setOpsOpen(!opsOpen); }} aria-expanded={opsOpen}
+                style={{ background: "none", border: "none", padding: "4px 0", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--t2)", fontFamily: "inherit" }}>
+                {(opsOpen ? "▾ " : "▸ ") + "타자 점수별 OPS 컷 (참고)"}
+              </button>
+              {opsOpen && (
+                <div style={{ marginTop: 4 }}>
+                  <div style={{ border: "1px solid var(--bd)", borderRadius: 10, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: grid, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, color: "var(--td)", background: "var(--inner)" }}>
+                      <span>{"구간"}</span><span style={{ textAlign: "right" }}>{"OPS 0.8"}</span><span style={{ textAlign: "right" }}>{"OPS 0.9"}</span><span />
+                    </div>
+                    {RANK_OPS.map(function (o) {
+                      var here = o.n === opsRow, c = rankTierColor(o);
+                      return (
+                        <div key={o.n} style={{ display: "grid", gridTemplateColumns: grid, alignItems: "center", padding: "6px 12px", borderTop: "1px solid var(--bd)", fontSize: 13,
+                          background: here ? rankHexA(c, 0.13) : "transparent", boxShadow: here ? "inset 3px 0 0 " + c : "none" }}>
+                          <span style={{ fontWeight: 800, fontFamily: "var(--h)", color: c }}>{o.n}</span>
+                          <span style={Object.assign({}, num, { color: "var(--t1)" })}>{o.o8}</span>
+                          <span style={Object.assign({}, num, { color: "var(--t1)" })}>{o.o9}</span>
+                          <span />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.55, marginTop: 6 }}>
+                    {"그 구간 덱에서 타자가 OPS 0.8 · 0.9 를 치려면 필요한 타자 점수(포특 · 스킬까지 넣은 선수 점수)예요. 선수 유형 · 타순 · 스킬에 따라 차이가 커요. 이번 업데이트로 타자 점수는 거의 그대로라 신 · 구버전 같은 표예요."}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {/* 설명 */}
+          <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6, marginTop: 10 }}>
+            <div>{"· 커트 경쟁선은 그 등수 안에 들까 말까 한 점수, 안정권은 넉넉히 드는 점수예요."}</div>
+            <div>{isOld ? "· 커뮤니티에서 구버전 점수로 정리한 원래 표예요. 범위로 적힌 칸은 가운데 값으로 판정해요."
+              : "· 커뮤니티에서 구버전 점수로 정리한 표를 신버전 점수로 옮겼어요. 같은 덱이면 신버전이 35 ~ 60점 낮게 나와서 커트도 그만큼 내렸어요 (저장 덱 2,338개 · 투수 제구를 다 넣은 덱 197개로 확인)."}</div>
+            <div>{"· in200 · in2000 은 원래 표에 없어 이웃 구간 사이를 이어 정했어요" + (isOld ? " ('약')." : ".")}</div>
+            <div>{"· 실제 등수는 시즌 · 플레이 · 운에 따라 달라요. in10 은 표본이 적어 커트만 적었어요."}</div>
+            {!isOld && saved && (<div>{"· 관리자가 " + day(saved.at) + " 에 고친 표예요."}</div>)}
+          </div>
+          {/* 관리자 — 신버전 표 고치기 (모든 이용자에게 바로 적용) */}
+          {p.isAdmin && !isOld && typeof p.saveSkills === "function" && (
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px dashed var(--bd)", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--acc)", marginRight: 2 }}>{"👑 관리자"}</span>
+              {!edit && (<button disabled={busy} onClick={startEdit} style={smallBtn(true)}>{"표 고치기"}</button>)}
+              {!edit && saved && (<button disabled={busy} onClick={reset} style={smallBtn(false)} title="관리자가 고친 표를 지우고 처음 표(2026-10-22 옮긴 값)로">{"처음 표로"}</button>)}
+              {edit && (<button disabled={busy} onClick={save} style={smallBtn(true)}>{busy ? "저장 중…" : "저장"}</button>)}
+              {edit && (<button disabled={busy} onClick={function () { setEdit(null); setMsg(""); }} style={smallBtn(false)}>{"취소"}</button>)}
+              {edit && (<span style={{ fontSize: 11, color: "var(--td)", flexBasis: "100%" }}>{"커트는 위에서 아래로 낮아지게, 안정권은 비우면 '없음'이에요. 저장하면 모든 이용자에게 바로 보여요."}</span>)}
+            </div>
+          )}
+          {msg && (<div role="status" style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: /못했|낮아|비었|이상|여야/.test(msg) ? "#EF5350" : "#4ade80" }}>{msg}</div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LineupPage(p) {
   var mob = p.mobile;
   var players = p.players;
@@ -5027,6 +5351,7 @@ function LineupPage(p) {
   var _picker = useState(null); var pickerSlot = _picker[0]; var setPickerSlot = _picker[1];
   /* 고점판독기 — 켜면 라인업 선수 전원을 고점 값으로 바꿔 보여 준다. 저장된 값은 그대로다 */
   var _peak = useState(false); var peakOn = _peak[0]; var setPeakOn = _peak[1];
+  var _rankOpen = useState(false); var rankOpen = _rankOpen[0]; var setRankOpen = _rankOpen[1];
   /* KBO 구단주 홍보 배너 — 메뉴 링크와 같은 조건(구글 로그인)·같은 주소. 게스트는 게임에 못 들어가 뺀다.
      숨김 여부는 첫 그림부터 정해 두어 화면이 뒤늦게 밀리지 않게 한다 */
   var _promo = useState(function () { return !kboPromoHidden(); }); var promoOpen = _promo[0]; var setPromoOpen = _promo[1];
@@ -5281,6 +5606,17 @@ function LineupPage(p) {
   var oldTotal = peakOn ? null : withScoreVer("v10", function () { return calcTotalWith(pick, sdCalc); });
   /* 제구 미입력 투수 수 — 실제 선수 기준 (고점판독 중에는 고점 사본이라 띄우지 않는다) */
   var ctlMissN = peakOn ? 0 : SP_SLOTS.concat(RP_SLOTS).concat(["CP"]).filter(function (s) { return ctlMissing(realPick(s)); }).length;
+  /* 랭챌 예상 구간 — 라인업 21명이 다 차고, 모두 훈련(타자 파 · 정 · 선 · 인 / 투수 변 · 구 · 제)이 들어가 있을 때만 구간을 보여 준다.
+     훈련은 0일 수 없어 0 이면 안 넣은 것 — 비어 있으면 TOTAL 이 낮게 나와 구간이 틀린다 (2026-10-22 사용자 지정: 인내가 빈 덱이 많다).
+     포특 · 라커룸 · 특훈은 0 이 정상일 수 있어 보지 않는다. 훈련은 실제 덱 그대로(realPick)로 본다 — 고점판독 사본은 훈련을 채워 넣는다.
+     빈 자리가 있으면 칸을 숨기고, 훈련이 빈 선수가 있으면 '훈련 미입력 N명'. 고점판독 중에는 고점 TOTAL 로.
+     표는 관리자가 고친 것(DB) 아니면 코드 표 (rankTiersOf) */
+  var rankRows = rankTiersOf(p.skills || SKILL_DATA);
+  var lineupSlots = BAT_SLOTS.concat(SP_SLOTS, RP_SLOTS, ["CP"]);
+  var lineupFull = lineupSlots.every(function (s) { return !!pick(s); });
+  var rankMiss = lineupFull ? lineupSlots.map(function (s) { var pl = realPick(s); return { slot: s, name: pl ? pl.name : "", miss: rankTrainMissing(pl) }; })
+    .filter(function (x) { return x.miss.length > 0; }) : [];
+  var rankTile = lineupFull ? (<RankTierTile mobile={mob} rows={rankRows} score={totalScore} peak={peakOn} miss={rankMiss} onOpen={function () { setRankOpen(true); }} />) : null;
   /* 현실 총점은 내 덱 그대로의 선수와 버프로 */
   var realTotal = peakOn ? calcTotalWith(realPick, sdState) : totalScore;
   /* 불펜 상자는 등판 차례대로 (조마다 이어 붙인 순서라 상자가 조별로 잘라 쓴다) */
@@ -5669,11 +6005,12 @@ function LineupPage(p) {
             style={{ margin: "2px 0 0", fontSize: 12, color: "var(--td)" }}>{"가중치: 파 " + wNow.p + " / 정 " + wNow.a + " / 선 " + wNow.e + " / 인 " + wNow.n
               + " · 선발 변 " + wSp.c + " / 구 " + wSp.s + " / 제 " + wSp.ctl + " · 불펜 변 " + wRp.c + " / 구 " + wRp.s + " / 제 " + wRp.ctl}</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: mob ? 10 : 16, width: mob ? "100%" : undefined }}>
           {!mob && shareBtn}
           {!mob && peakBtn}
+          {!mob && rankTile}
           <div style={{ textAlign: mob ? "left" : "right" }}>
-            <div style={{ fontSize: 11, color: "var(--td)", letterSpacing: 1 }}>{peakOn ? "TOTAL SCORE · 고점" : "TOTAL SCORE"}</div>
+            <div style={{ fontSize: 11, color: "var(--td)", letterSpacing: 1, whiteSpace: "nowrap" }}>{peakOn ? "TOTAL SCORE · 고점" : "TOTAL SCORE"}</div>
             <GS val={totalScore.toFixed(1)} size={mob ? 28 : 36} grad="linear-gradient(135deg,#FFD54F,#FF8F00,#F44336)" />
             {oldTotal !== null && (<div title={"구버전 점수 — 같은 덱을 제구 반영 업데이트(2026년 10월) 전 계산으로 센 점수예요. 비교할 수 있게 당분간 같이 보여 드려요."}
               style={{ fontSize: 12, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, cursor: "help" }}>{"구버전 " + oldTotal.toFixed(1)}</div>)}
@@ -5681,8 +6018,11 @@ function LineupPage(p) {
               style={{ fontSize: 12, color: CTL_MISS_COLOR, fontWeight: 700, marginTop: 2, cursor: "help" }}>{"제구 미입력 " + ctlMissN + "명"}</div>)}
             {peakOn && (<div style={{ fontSize: 12, color: "var(--td)", fontFamily: "var(--m)" }}>{"현실 " + realTotal.toFixed(1) + " "}<span style={{ color: "#4ade80", fontWeight: 700 }}>{(totalScore >= realTotal ? "+" : "") + (totalScore - realTotal).toFixed(1)}</span></div>)}
           </div>
+          {mob && rankTile}
         </div>
       </div>
+      {rankOpen && lineupFull && (<RankTierModal mobile={mob} rows={rankRows} score={totalScore} oldScore={oldTotal} peak={peakOn} miss={rankMiss}
+        skills={p.skills} saveSkills={p.saveSkills} isAdmin={p.isAdmin} onClose={function () { setRankOpen(false); }} />)}
       {peakOn && (
         <div style={{ margin: "-4px 0 14px", padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(255,213,79,0.35)", background: "linear-gradient(135deg,rgba(255,213,79,0.10),rgba(255,143,0,0.04))", fontSize: 13, color: "var(--t2)", lineHeight: 1.5 }}>
           <b style={{ color: "var(--acc)" }}>{"🔍 고점판독 중"}</b>
@@ -11812,7 +12152,7 @@ export default function App(){
   if(store.loading||!curDeckId)return(<div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
 
   var pg=null;
-  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId} authType={authType} gameUrl={kboGameUrl(googleId)}/>);
+  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId} authType={authType} gameUrl={kboGameUrl(googleId)} isAdmin={isAdmin} saveSkills={store.saveSkills}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} customDex={store.customDex} saveCustomDex={store.saveCustomDex} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
   else if(tab==="lab")pg=(<LabPage mobile={mob} teamName={curDeckObj&&curDeckObj.teamName} skills={store.skills} labSaves={store.labSaves} saveLab={store.saveLab}
     incoming={labIncoming} onIncomingDone={function(){setLabIncoming(null);}} onShareToClub={isGoogle?shareToClub:null} onSuggest={sendSuggestion}/>);

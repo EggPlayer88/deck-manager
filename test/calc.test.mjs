@@ -22,6 +22,7 @@ import {
 } from './calc-extract.mjs';
 import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
+import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_TIERS_V10, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
 
 /* 아래 시험들은 v1.1(제구 반영) 이전의 계산을 지킨다 — 구버전(v10) 기준으로 돈다.
    새 점수(v11) 시험은 이 파일 끝의 'v1.1 제구 반영' 칸에 있다 (2026-10-21) */
@@ -3157,6 +3158,75 @@ __setScoreVer('v11');
   eq('옛 표에 있던 스킬은 구버전 그대로 (소방수 Lv6 25.31)', v10('소방수', 6, '마무리'), 25.31);
   eq('구버전 레벨 상한도 같은 규칙 (클린업 트리오(타순O) 최고 Lv10)', withScoreVer('v10', () => maxSkillLv('클린업 트리오(타순O)', '타자')), 10);
   eq('새 점수는 그대로 (우타해결사(우타) Lv7 29.72)', getSkillScore('우타해결사(우타)', 7, '타자'), 29.72);
+}
+{
+  /* 랭챌 예상 구간 (2026-10-22) — 구버전 기준 커뮤니티 표를 신버전 점수로 옮긴 표와 판정 */
+  /* 글자 비교 — eq 는 숫자만 견준다 */
+  const eqs = (label, got, want) => { if (got === want) { pass++; console.log(`  ok   ${label}  = ${got}`); } else { fail++; console.log(`  FAIL ${label}  got ${got}, want ${want}`); } };
+  const R = RANK_TIERS_CODE;
+  eqs('코드 표는 검사를 통과한다', rankTierCheck(R), '');
+  eqs('구버전 원래 표도 검사를 통과한다', rankTierCheck(RANK_TIERS_V10), '');
+  eq('두 표의 구간 이름이 같다', R.map((r) => r.n).join(',') === RANK_TIERS_V10.map((r) => r.n).join(',') ? 1 : 0, 1);
+  eq('신버전 커트는 구버전보다 25 ~ 65점 낮다 (같은 덱이면 신버전이 낮게 나온 만큼)', R.every((r, k) => { const d = RANK_TIERS_V10[k].cut - r.cut; return d >= 25 && d <= 65; }) ? 1 : 0, 1);
+  eq('OPS 표의 구간은 모두 구간표에 있다', RANK_OPS.every((o) => R.some((r) => r.n === o.n)) ? 1 : 0, 1);
+  eqs('구간 11개 (in200 · in2000 더함)', R.map((r) => r.n).join(' '), 'in10 in30 in50 in100 in200 in300 in500 in700 in1000 in2000 in3000');
+  let x = rankTierOf(8831.7, R);
+  eqs('8831.7 → in200 경쟁권 (8800 ~ 8850)', (x.row && x.row.n) + '/' + x.safe, 'in200/false');
+  eqs('… in300 안정권', R[x.safeAt].n, 'in300');
+  eqs('… 다음 목표 in200 안정권', x.next.label, 'in200 안정권');
+  eq('… 18.3점 남음', x.next.gap, 18.3, 0.01);
+  x = rankTierOf(8860, R);
+  eqs('8860 → in200 안정권 · 다음 in100 커트 +40', x.row.n + '/' + x.safe + '/' + x.next.label + ' ' + x.next.gap, 'in200/true/in100 커트 40');
+  x = rankTierOf(8300, R);
+  eqs('8300 → in2000 경쟁권 (8260 ~ 8330) · in3000 안정권', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n, 'in2000/false/in3000');
+  eqs('… 다음 목표 in2000 안정권 +30', x.next.label + ' ' + x.next.gap, 'in2000 안정권 30');
+  eqs('8400 → in2000 안정권 · 다음 in1000 커트 +80', (() => { const y = rankTierOf(8400, R); return y.row.n + '/' + y.safe + '/' + y.next.label + ' ' + y.next.gap; })(), 'in2000/true/in1000 커트 80');
+  x = rankTierOf(8760, R);
+  eqs('8760 → in300 경쟁권', (x.row && x.row.n) + '/' + x.safe, 'in300/false');
+  eqs('… 안정권은 in500 까지', R[x.safeAt].n, 'in500');
+  eqs('… 다음 목표 in300 안정권 +30', x.next.label + ' ' + x.next.gap, 'in300 안정권 30');
+  eqs('커트와 같은 점수는 그 구간에 든다 (8750 → in300)', rankTierOf(8750, R).row.n, 'in300');
+  eqs('8749.9 → in500 안정권', (() => { const y = rankTierOf(8749.9, R); return y.row.n + '/' + y.safe; })(), 'in500/true');
+  x = rankTierOf(8620, R);
+  eqs('8620 → in500 경쟁권 · in700 안정권', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n, 'in500/false/in700');
+  x = rankTierOf(9300, R);
+  eqs('9300 → in10 (안정권 칸 없음 → 경쟁권)', x.row.n + '/' + x.safe, 'in10/false');
+  eq('… 맨 위라 다음 목표 없음', x.next, null);
+  x = rankTierOf(8000, R);
+  eq('8000 → 맨 아래 커트도 못 넘음', x.i, -1);
+  eqs('… in3000 커트까지 90', x.next.label + ' ' + x.next.gap, 'in3000 커트 90');
+  eq('… 안정권도 없음', x.safeAt, -1);
+  /* 구버전 표 — 범위 칸은 가운데 값으로 판정 */
+  eqs('구버전 8918 → in200 안정권 (구버전 표 · 약 8910 이상)', (() => { const y = rankTierOf(8918.2, RANK_TIERS_V10); return y.row.n + '/' + y.safe; })(), 'in200/true');
+  eqs('구버전 8850 → in300 안정권 (구버전 in200 커트 약 8860 아래)', (() => { const y = rankTierOf(8850, RANK_TIERS_V10); return y.row.n + '/' + y.safe; })(), 'in300/true');
+  /* 훈련이 다 들어갔는지 — 훈련은 0일 수 없다. 포특 · 라커룸 · 특훈 0 은 막지 않는다 (2026-10-22 사용자 지정) */
+  const bat = { role: '타자', trainP: 22, trainA: 20, trainE: 18, trainN: 15, specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, posTrain: 0, locker: 0 };
+  const pit = { role: '투수', trainC: 12, trainS: 20, trainCtl: 8, specChange: 0, specStuff: 0, specControl: 0 };
+  eqs('타자 훈련이 다 있으면 빈 칸 없음 (특훈 · 포특 · 라커룸 0 이어도)', rankTrainMissing(bat).join(','), '');
+  eqs('타자 인내 0 → 인내', rankTrainMissing(Object.assign({}, bat, { trainN: 0 })).join(','), '인내');
+  eqs('타자 인내 칸이 아예 없으면(옛 저장본) → 인내', rankTrainMissing(Object.assign({}, bat, { trainN: undefined })).join(','), '인내');
+  eqs('타자 훈련 전부 0 → 넷 다', rankTrainMissing({ role: '타자' }).join(','), '파워,정확,선구,인내');
+  eqs('투수 훈련이 다 있으면 빈 칸 없음 (특훈 0 이어도)', rankTrainMissing(pit).join(','), '');
+  eqs('투수 제구 0 → 제구', rankTrainMissing(Object.assign({}, pit, { trainCtl: 0 })).join(','), '제구');
+  eqs('투수 변화 · 구위 0 → 변화 · 구위', rankTrainMissing(Object.assign({}, pit, { trainC: 0, trainS: 0 })).join(','), '변화,구위');
+  eqs('글자로 든 값도 숫자로 본다 ("7")', rankTrainMissing(Object.assign({}, pit, { trainCtl: '7' })).join(','), '');
+  eqs('선수가 없으면 빈 목록', rankTrainMissing(null).join(','), '');
+  /* 관리자가 고친 표 */
+  const mine = R.map((r) => Object.assign({}, r, { cut: r.cut + 10, safe: r.safe ? r.safe + 10 : 0 }));
+  eq('저장본 없음 → 코드 표', rankTiersOf({}) === R ? 1 : 0, 1);
+  eq('스킬 데이터가 없어도 코드 표', rankTiersOf(null) === R ? 1 : 0, 1);
+  eq('온전한 저장본 → 그 표', rankTiersOf({ rankTiers: { _v: RANK_TIER_VERSION, rows: mine } }) === mine ? 1 : 0, 1);
+  eq('판이 낮은 저장본 → 코드 표', rankTiersOf({ rankTiers: { _v: 0, rows: mine } }) === R ? 1 : 0, 1);
+  const bad = mine.map((r) => Object.assign({}, r)); bad[3].cut = 9999;
+  eq('커트 순서가 꼬인 저장본 → 코드 표', rankTiersOf({ rankTiers: { _v: RANK_TIER_VERSION, rows: bad } }) === R ? 1 : 0, 1);
+  eqs('검사: 안정권이 커트보다 낮으면', rankTierCheck([{ n: 'a', cut: 100, safe: 90 }, { n: 'b', cut: 50, safe: 0 }]), 'a 안정권(90)이 커트(100)보다 낮아요');
+  eqs('검사: 아래 구간 커트가 더 높으면', rankTierCheck([{ n: 'a', cut: 100, safe: 0 }, { n: 'b', cut: 150, safe: 0 }]), 'b 커트(150)는 위 구간 a 커트(100)보다 낮아야 해요');
+  eqs('검사: 커트가 비면', rankTierCheck([{ n: 'a', cut: 0, safe: 0 }, { n: 'b', cut: 50, safe: 0 }]), 'a 커트 점수가 비었거나 0 이하예요');
+  eqs('검사: 이름이 비면', rankTierCheck([{ n: ' ', cut: 100, safe: 0 }, { n: 'b', cut: 50, safe: 0 }]), '1번째 구간 이름이 비었어요');
+  eqs('검사: 구간이 하나뿐이면', rankTierCheck([{ n: 'a', cut: 100, safe: 0 }]), '구간은 2 ~ 20개여야 해요');
+  eqs('검사: 안정권이 숫자가 아니면', rankTierCheck([{ n: 'a', cut: 100, safe: 'x' }, { n: 'b', cut: 50, safe: 0 }]), 'a 안정권 점수가 이상해요');
+  eqs('색: in30 금색 · in100 분홍 · in200 · in500 파랑 · in1000 초록 · in2000 · in3000 회색',
+    ['in30', 'in100', 'in200', 'in500', 'in1000', 'in2000', 'in3000'].map((n) => rankTierColor({ n })).join(' '), '#D97706 #EC4899 #3B82F6 #3B82F6 #16A34A #64748B #64748B');
 }
 __setScoreVer('v10');
 
