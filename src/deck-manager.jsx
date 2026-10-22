@@ -563,34 +563,24 @@ function v11RoleSkill(cat, name) {
    저장 덱 분포(이웃 커트 위 덱 수를 등수와 로그-로그로 이어 그만큼 위에 있는 점수)의 가운데 값. in200 은 두 방법이 10점 안쪽,
    in2000 은 40 ~ 50점 차이 (구버전 커트 8273 / 8324 → 약 8300). 구버전 값을 같은 방법으로 신버전에 옮겼다.
    관리자가 고친 표는 DB(global_skills) data.rankTiers = { _v, rows: [{ n, cut, safe }], at } — 검사를 통과할 때만 쓴다 */
+/* 2026-10-22 3차 (사용자 지정) — 실제 등수보다 높게 나온다는 이용자 반응에 맞춰 신버전 기준 in200 커트를 8900 으로 정하고,
+   모든 구간을 같은 폭(+100, 처음 옮긴 값에서)으로 올렸다 — 구간 사이 간격(표의 모양)은 그대로.
+   사이트 자료도 +100 에서 고르다: 계정마다 가장 센 덱(라인업 21명, 빈 제구는 위 가정으로 채움)으로 '컷 위 계정 수 ÷ 등수'가
+   in50 ~ in3000 에서 0.26 ~ 0.36 (in10 1.0 · in30 0.40 은 아직 높다, data/rank_tier_users.mjs · 계정 2,113개).
+   구버전 점수 기준 표와 전환 단추는 뺐다 (사용자 지정 — 신버전 점수로만 본다) */
 var RANK_TIER_VERSION = 1;
 var RANK_TIERS_CODE = [
-  { n: "in10", cut: 9240, safe: 0 },
-  { n: "in30", cut: 9140, safe: 9190 },
-  { n: "in50", cut: 9050, safe: 9090 },
-  { n: "in100", cut: 8900, safe: 8940 },
-  { n: "in200", cut: 8800, safe: 8850 },
-  { n: "in300", cut: 8750, safe: 8790 },
-  { n: "in500", cut: 8600, safe: 8650 },
-  { n: "in700", cut: 8570, safe: 8600 },
-  { n: "in1000", cut: 8480, safe: 8550 },
-  { n: "in2000", cut: 8260, safe: 8330 },
-  { n: "in3000", cut: 8090, safe: 8160 }
-];
-/* 구버전 점수 기준 원래 표 (같은 그림) — 구버전 점수와 견줄 때만. 범위로 적힌 칸은 가운데 값으로 판정하고 글자는 그대로 보여 준다.
-   in200 · in2000 은 그림에 없어 위처럼 이은 값 ('약') */
-var RANK_TIERS_V10 = [
-  { n: "in10", cut: 9300, safe: 0, cutTxt: "약 9300", safeTxt: "표본 부족" },
-  { n: "in30", cut: 9200, safe: 9250 },
-  { n: "in50", cut: 9100, safe: 9150 },
-  { n: "in100", cut: 8950, safe: 9000 },
-  { n: "in200", cut: 8858, safe: 8906, cutTxt: "약 8860", safeTxt: "약 8910" },
-  { n: "in300", cut: 8800, safe: 8840, safeTxt: "8830~8850" },
-  { n: "in500", cut: 8650, safe: 8700 },
-  { n: "in700", cut: 8615, safe: 8650, cutTxt: "8600~8630" },
-  { n: "in1000", cut: 8525, safe: 8600, cutTxt: "8500~8550" },
-  { n: "in2000", cut: 8298, safe: 8368, cutTxt: "약 8300", safeTxt: "약 8370" },
-  { n: "in3000", cut: 8125, safe: 8200, cutTxt: "8100~8150" }
+  { n: "in10", cut: 9340, safe: 0 },
+  { n: "in30", cut: 9240, safe: 9290 },
+  { n: "in50", cut: 9150, safe: 9190 },
+  { n: "in100", cut: 9000, safe: 9040 },
+  { n: "in200", cut: 8900, safe: 8950 },
+  { n: "in300", cut: 8850, safe: 8890 },
+  { n: "in500", cut: 8700, safe: 8750 },
+  { n: "in700", cut: 8670, safe: 8700 },
+  { n: "in1000", cut: 8580, safe: 8650 },
+  { n: "in2000", cut: 8360, safe: 8430 },
+  { n: "in3000", cut: 8190, safe: 8260 }
 ];
 /* 타자 점수(포특 · 스킬 포함)별 OPS 컷 — 같은 그림. 타자 점수는 이번 업데이트로 거의 안 바뀌어
    (라인업 타자 21,042명: 신버전 − 구버전 중앙값 0 · 평균 −0.2) 신 · 구버전 같은 표로 쓴다 */
@@ -5149,20 +5139,16 @@ function RankTierTile(p) {
   );
 }
 
-/* 랭챌 예상 구간표 — 내 덱 자리 · 커트 경쟁선 / 안정권 · 구버전 표와 견주기 · 타자 OPS 참고 · 관리자 고치기.
+/* 랭챌 예상 구간표 — 내 덱 자리 · 커트 경쟁선 / 안정권 · 타자 OPS 참고 · 관리자 고치기. 신버전 점수로만 본다 (구버전 표는 10-22 뺐다).
    훈련이 빈 선수가 있으면(miss) 내 덱 구간 대신 빈 선수 목록을 보여 준다 (표는 참고로 그대로, 내 덱 줄 강조 없음) */
 function RankTierModal(p) {
   var mob = p.mobile;
-  var _ver = useState("new"); var ver = _ver[0]; var setVer = _ver[1];
   var _ops = useState(false); var opsOpen = _ops[0]; var setOpsOpen = _ops[1];
   var _ed = useState(null); var edit = _ed[0]; var setEdit = _ed[1];
   var _msg = useState(""); var msg = _msg[0]; var setMsg = _msg[1];
   var _busy = useState(false); var busy = _busy[0]; var setBusy = _busy[1];
   var miss = p.miss || [], ready = !miss.length;
-  var canOld = ready && typeof p.oldScore === "number";
-  var isOld = ver === "old" && canOld;
-  var rows = isOld ? RANK_TIERS_V10 : p.rows;
-  var score = isOld ? p.oldScore : p.score;
+  var rows = p.rows, score = p.score;
   var t = rankTierOf(score, rows), last = rows[rows.length - 1];
   var col = ready && t.row ? rankTierColor(t.row) : null;
   var savedT = p.skills && p.skills.rankTiers;
@@ -5170,8 +5156,6 @@ function RankTierModal(p) {
   var opsRow = ready && t.row ? t.row.n : "";
   var grid = mob ? "60px 1fr 1fr 54px" : "70px 1fr 1fr 62px";
   var num = { fontFamily: "var(--m)", fontVariantNumeric: "tabular-nums", textAlign: "right" };
-  var tabBtn = function (on) { return { flex: 1, padding: "6px 0", fontSize: 12.5, fontWeight: on ? 800 : 500, borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
-    border: "1px solid " + (on ? "var(--acc)" : "var(--bd)"), background: on ? "var(--ta)" : "transparent", color: on ? "var(--acc)" : "var(--td)" }; };
   var smallBtn = function (strong) { return { padding: "5px 12px", fontSize: 12, fontWeight: 700, borderRadius: 7, cursor: busy ? "default" : "pointer", fontFamily: "inherit", opacity: busy ? 0.6 : 1,
     border: "1px solid " + (strong ? "var(--acc)" : "var(--bd)"), background: strong ? "var(--ta)" : "transparent", color: strong ? "var(--acc)" : "var(--t2)" }; };
   var inp = { width: "100%", boxSizing: "border-box", padding: "4px 6px", fontSize: 13, fontFamily: "var(--m)", textAlign: "right", borderRadius: 6, border: "1px solid var(--bd)", background: "var(--inner)", color: "var(--t1)" };
@@ -5211,18 +5195,12 @@ function RankTierModal(p) {
             </div>
             <button onClick={p.onClose} aria-label="닫기" style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18, padding: 2 }}>{"✕"}</button>
           </div>
-          {canOld && !edit && (
-            <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-              <button onClick={function () { setVer("new"); }} style={tabBtn(!isOld)}>{"신버전 점수"}</button>
-              <button onClick={function () { setVer("old"); }} style={tabBtn(isOld)} title="같은 덱의 구버전 점수를 커뮤니티 원래 표(구버전 기준)에 대 봐요">{"구버전 점수"}</button>
-            </div>
-          )}
         </div>
         <div style={{ padding: "12px 18px 16px" }}>
           {ready ? (
             /* 내 덱 */
             <div style={{ padding: "11px 14px", borderRadius: 12, border: "1px solid " + (col ? rankHexA(col, 0.45) : "var(--bd)"), background: col ? rankHexA(col, 0.08) : "var(--inner)", marginBottom: 10 }}>
-              <div style={{ fontSize: 12, color: "var(--td)" }}>{"내 덱 " + (isOld ? "구버전 점수 " : p.peak ? "고점 TOTAL " : "TOTAL ")}<b style={{ fontFamily: "var(--m)", color: "var(--t1)", fontSize: 13 }}>{score.toFixed(1)}</b></div>
+              <div style={{ fontSize: 12, color: "var(--td)" }}>{"내 덱 " + (p.peak ? "고점 TOTAL " : "TOTAL ")}<b style={{ fontFamily: "var(--m)", color: "var(--t1)", fontSize: 13 }}>{score.toFixed(1)}</b></div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 1, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 26, fontWeight: 900, fontFamily: "var(--h)", color: col || "var(--td)", letterSpacing: 0.3 }}>{t.row ? t.row.n : last.n}</span>
                 <span style={{ fontSize: 15, fontWeight: 800, color: col || "var(--td)" }}>{t.row ? (t.safe ? "안정권" : "커트 경쟁권") : "밖"}</span>
@@ -5317,14 +5295,13 @@ function RankTierModal(p) {
           {/* 설명 */}
           <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6, marginTop: 10 }}>
             <div>{"· 커트 경쟁선은 그 등수 안에 들까 말까 한 점수, 안정권은 넉넉히 드는 점수예요."}</div>
-            <div>{isOld ? "· 커뮤니티에서 구버전 점수로 정리한 원래 표예요. 범위로 적힌 칸은 가운데 값으로 판정해요."
-              : "· 커뮤니티에서 구버전 점수로 정리한 표를 신버전 점수로 옮겼어요. 같은 덱이면 신버전이 35 ~ 60점 낮게 나와서 커트도 그만큼 내렸어요 (저장 덱 2,338개 · 투수 제구를 다 넣은 덱 197개로 확인)."}</div>
-            <div>{"· in200 · in2000 은 원래 표에 없어 이웃 구간 사이를 이어 정했어요" + (isOld ? " ('약')." : ".")}</div>
+            <div>{"· 신버전 점수 기준이에요. 커뮤니티 표를 옮겨 만든 뒤, 실제 등수보다 높게 나온다는 반응에 맞춰 모든 구간을 100점씩 올렸어요 (in200 커트 8900)."}</div>
+            <div>{"· in200 · in2000 은 원래 표에 없어 이웃 구간 사이를 이어 정했어요."}</div>
             <div>{"· 실제 등수는 시즌 · 플레이 · 운에 따라 달라요. in10 은 표본이 적어 커트만 적었어요."}</div>
-            {!isOld && saved && (<div>{"· 관리자가 " + day(saved.at) + " 에 고친 표예요."}</div>)}
+            {saved && (<div>{"· 관리자가 " + day(saved.at) + " 에 고친 표예요."}</div>)}
           </div>
           {/* 관리자 — 신버전 표 고치기 (모든 이용자에게 바로 적용) */}
-          {p.isAdmin && !isOld && typeof p.saveSkills === "function" && (
+          {p.isAdmin && typeof p.saveSkills === "function" && (
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px dashed var(--bd)", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ fontSize: 11, color: "var(--acc)", marginRight: 2 }}>{"👑 관리자"}</span>
               {!edit && (<button disabled={busy} onClick={startEdit} style={smallBtn(true)}>{"표 고치기"}</button>)}
@@ -6021,7 +5998,7 @@ function LineupPage(p) {
           {mob && rankTile}
         </div>
       </div>
-      {rankOpen && lineupFull && (<RankTierModal mobile={mob} rows={rankRows} score={totalScore} oldScore={oldTotal} peak={peakOn} miss={rankMiss}
+      {rankOpen && lineupFull && (<RankTierModal mobile={mob} rows={rankRows} score={totalScore} peak={peakOn} miss={rankMiss}
         skills={p.skills} saveSkills={p.saveSkills} isAdmin={p.isAdmin} onClose={function () { setRankOpen(false); }} />)}
       {peakOn && (
         <div style={{ margin: "-4px 0 14px", padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(255,213,79,0.35)", background: "linear-gradient(135deg,rgba(255,213,79,0.10),rgba(255,143,0,0.04))", fontSize: 13, color: "var(--t2)", lineHeight: 1.5 }}>
