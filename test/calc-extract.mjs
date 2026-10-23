@@ -2417,6 +2417,330 @@ function calcLineupTotal(pk, sd, o) {
   var cp = pk("CP"); if (cp) t += lineupPit(cp, "CP", sd, o).total * CP_MULT;
   return Math.round(t * 100) / 100;
 }
+/* ═══ 최고 점수 타순 (2026-10-22) ═══
+   라인업 타자 아홉의 타순만 바꿔 TOTAL 이 가장 높은 배치를 찾는다 — 베스트 라인업(아래)이 타자 자리를 정한 뒤 이걸로 타순을 고른다.
+   점수에 들어가는 것을 그대로 센다: 타순을 타는 스킬(ORDER_SKILLS · 발사각) · 세트덱의 타순 구간(calcSDBonus 의 order) ·
+   타순 배율(BAT_MULT) × 강함 순위 배율(STR_MULT, 점수가 같으면 앞 타순이 위 — strRanks 와 같다).
+   ① 타자 점수는 그 선수 자신의 타순에만 달려 있어서(lineupBat 은 batOrder 에서 제 자리만 본다) 선수 9 × 타순 9 = 81번만 센다 (batOrderRow).
+   ② 모든 선수의 점수가 같은 타순끼리 한 묶음 — 지금 규칙으로는 1 · 2번 / 3 ~ 5번 / 6 ~ 9번 (타순 스킬 · 세트덱 타순 구간의 경계).
+      묶음은 점수표에서 그때그때 찾는다 (규칙이 바뀌어도 맞는다 — 묶음이 잘게 갈리면 9! 전수와 같아진다).
+   ③ 묶음마다 누구를 넣을지 모두 본다 (보통 9! / (2! 3! 4!) = 1,260 가지). 묶음 안에서는 선수 점수가 타순과 무관하므로
+      센 선수를 배율 높은 타순에 두는 것이 최고다 (재배열 부등식 — 강함 순위 배율도 점수 순이라 같은 쪽으로 곱해진다).
+   9! 가지를 하나하나 센 답과 같다 (시험 · data/best_order_verify.mjs). 지금 타순이 이미 최고면 그대로,
+   아니면 같은 배율 타순끼리는 지금 자리에 있던 선수를 그대로 둬서 덜 바뀌게 한다. */
+/* 같은 점수일 때 덜 바뀌는 쪽을 고르는 아주 작은 덤 — 점수의 가장 작은 눈금(타자 1e-6 · 투수 1e-5)보다 훨씬 작다 */
+var BL_EPS = 1e-8;
+/* 타자 한 명이 1 ~ 9번 타순에 설 때의 점수 (lineupBat — 다른 타순은 빈 칸으로 둔다) */
+function batOrderRow(pl, s, sd, o) {
+  var n = o.batOrder.length, row = [];
+  for (var k = 0; k < n; k++) {
+    if (!pl) { row.push(0); continue; }
+    var at = []; for (var j = 0; j < n; j++) at.push(j === k ? s : "_" + j);
+    row.push(lineupBat(pl, s, sd, Object.assign({}, o, { batOrder: at })).total);
+  }
+  return row;
+}
+/* 타순 고르기의 알맹이. S[i][k] — i 번째 타자가 k 번째 타순에 설 때 점수. cur[i] — 지금 타순(같은 점수면 지킨다).
+   반환 { total: 타자 몫 합(배율 곱한 값), pos: [i 번째 타자의 타순] } */
+function bestOrderCore(S, cur) {
+  var n = S.length, i, k, c;
+  if (!n) return { total: 0, pos: [] };
+  var BM = [], SM = [];
+  for (k = 0; k < n; k++) { BM.push(batMult(k)); SM.push(strMult(k)); }
+  /* ② 타순 묶음 — 모든 선수의 점수가 같은 타순끼리. 묶음 안 타순은 배율 높은 순(같으면 앞 타순) */
+  var cls = [];
+  for (k = 0; k < n; k++) {
+    var found = -1;
+    for (c = 0; c < cls.length && found < 0; c++) {
+      var same = true;
+      for (i = 0; i < n && same; i++) if (S[i][k] !== S[i][cls[c][0]]) same = false;
+      if (same) found = c;
+    }
+    if (found < 0) { found = cls.length; cls.push([]); }
+    cls[found].push(k);
+  }
+  cls.forEach(function (ks) { ks.sort(function (x, y) { return (BM[y] - BM[x]) || (x - y); }); });
+  var v = new Array(n);
+  var totalOf = function () {
+    var t = 0;
+    for (var kk = 0; kk < n; kk++) {
+      var vk = v[kk], r = 0;
+      for (var j = 0; j < n; j++) { var vj = v[j]; if (vj > vk || (vj === vk && j < kk)) r++; }
+      t += vk * BM[kk] * SM[r];
+    }
+    return t;
+  };
+  /* ③ 묶음에 누구를 넣을지 모두 본다. 묶음 안은 점수 높은 선수부터 배율 높은 타순에 */
+  var memb = cls.map(function () { return []; }), pos = new Array(n), best = -Infinity, bestPos = null;
+  var leaf = function () {
+    for (var cc = 0; cc < cls.length; cc++) {
+      var ps = memb[cc].slice(), k0 = cls[cc][0];
+      ps.sort(function (x, y) { return (S[y][k0] - S[x][k0]) || (x - y); });
+      for (var qq = 0; qq < ps.length; qq++) { var kk = cls[cc][qq]; pos[ps[qq]] = kk; v[kk] = S[ps[qq]][kk]; }
+    }
+    var t = totalOf();
+    if (t > best + 1e-9) { best = t; bestPos = pos.slice(); }
+  };
+  var rec = function (ii) {
+    if (ii === n) { leaf(); return; }
+    for (var cc = 0; cc < cls.length; cc++) {
+      if (memb[cc].length >= cls[cc].length) continue;
+      memb[cc].push(ii); rec(ii + 1); memb[cc].pop();
+    }
+  };
+  rec(0);
+  var tot = function (p) { for (var ii = 0; ii < n; ii++) v[p[ii]] = S[ii][p[ii]]; return totalOf(); };
+  /* 지금 타순이 이미 최고면 그대로 — 같은 점수의 다른 배치로 괜히 바꾸지 않는다 */
+  var okCur = !!cur && cur.length === n && cur.every(function (x, ii) { return x >= 0 && x < n && cur.indexOf(x) === ii; });
+  if (okCur && tot(cur) >= best - 1e-9) return { total: tot(cur), pos: cur.slice() };
+  /* 같은 묶음 · 같은 배율 타순끼리는 지금 그 타순에 있던 선수를 그대로 둔다 (점수는 같고 덜 바뀐다) */
+  var keep = bestPos.slice();
+  if (okCur) {
+    cls.forEach(function (ks) {
+      var groups = {};
+      ks.forEach(function (kk) { (groups[BM[kk]] = groups[BM[kk]] || []).push(kk); });
+      Object.keys(groups).forEach(function (g) {
+        var ksG = groups[g];
+        var who = []; for (var ii = 0; ii < n; ii++) if (ksG.indexOf(keep[ii]) >= 0) who.push(ii);
+        var free = ksG.slice(), rest = [];
+        who.forEach(function (ii) { var at = free.indexOf(cur[ii]); if (at >= 0) { keep[ii] = cur[ii]; free.splice(at, 1); } else rest.push(ii); });
+        rest.forEach(function (ii, x) { keep[ii] = free[x]; });
+      });
+    });
+  }
+  var fin = tot(keep) >= best - 1e-9 ? keep : bestPos;
+  return { total: tot(fin), pos: fin.slice() };
+}
+/* 타순만 — 반환: { order: 새 batOrder, moved: 지금과 다른 타순 수 } */
+function bestBatOrder(pk, sd, o) {
+  var slots = o.batOrder.slice(), n = slots.length, i;
+  var S = slots.map(function (s) { return batOrderRow(pk(s), s, sd, o); });
+  var r = bestOrderCore(S, slots.map(function (_, j) { return j; }));
+  var order = new Array(n); for (i = 0; i < n; i++) order[r.pos[i]] = slots[i];
+  var moved = 0; for (i = 0; i < n; i++) if (order[i] !== slots[i]) moved++;
+  return { order: order, moved: moved };
+}
+/* ═══ 최고 점수 타순 끝 ═══ */
+/* ═══ 베스트 라인업 (2026-10-23) ═══
+   라인업 화면 '⚡ 베스트 라인업' (사용자 요청 2026-10-22 · 범위는 2026-10-23 사용자 지정).
+   지금 주전 타자 9명과 '내 선수'에 넣어 둔 타자(라인업 · 후보 칸 밖) 중에서 TOTAL 이 가장 높은 타선을 꾸린다.
+   후보 6칸은 고려하지 않는다 — 보통 안 쓰는 선수(셋포 · 시너지 채우기)가 들어 있다 (사용자 지정). 후보 칸은 건드리지 않는다.
+   바꾸는 것: 누가 수비 자리 · 지명타자로 나가나 (수비 자리는 그 포지션 선수만 — 선수 고르기 창과 같은 규칙, 지금 그 자리 선수도 된다.
+   지명은 아무 타자) + 타순(bestOrderCore). 주전에서 빠지는 선수는 라인업에서만 빠진다 ('내 선수'에는 그대로 있다).
+   자리마다 다른 포지션 특훈(능력치 · 스킬 보너스) · 외야(지명 포함) 세트덱 구간은 선수가 선 자리 기준으로 그대로 센다.
+   셋포 · 시너지는 지금 값 그대로라고 보고 센다 (사용자 전제 '셋포 고정' — 후보로 맞춘다). 실제 셋포가 달라지면 미리 보기에서 알리고,
+   시너지는 후보로 얼마든지 맞출 수 있어 보지 않되 임팩트 · 시그니처가 후보로 되살릴 수 없을 만큼 줄 때만 알린다 (사용자 지정 2026-10-23).
+   골든글러브는 라인업 21칸에서 다섯 장, 자팀 골글이 있으면 여섯 장까지만 세운다 — 넘으면 역시너지 (사용자 지정 2026-10-23, 덱 연구소와 같은 규칙).
+   팀버프: 포수리드는 포수 자리 선수가 정하므로 포수 후보마다 지금 투수진 점수를 그 버프로 다시 세어 더한다.
+   국대에이스(타자)는 주전 · 후보에 든 선수 중 가장 높은 레벨이라, 레벨마다(없음 · 5렙 · 6렙) 따로 풀고 가장 높은 것을 고른다.
+   투수(자리 · 편성 · 전술 · 등판 순서)는 건드리지 않는다 — 중계 가중치를 손본 뒤에 다시 본다 (사용자 지정 2026-10-23).
+   마지막에 새 배치를 calcLineupTotal 로 다시 세어 확인한다. */
+var BL_BN = ["BN1", "BN2", "BN3", "BN4", "BN5", "BN6"];
+var BL_SLOTS27 = BAT_SLOTS.concat(SP_SLOTS, RP_SLOTS, ["CP"], BL_BN);
+/* 타자 쪽 최고 — 누가 수비 자리 · 지명타자로 나가나 + 타순. 가지치기 탐색:
+   자리를 하나씩 채우며, '아직 안 채운 자리마다 남은 후보 중 가장 좋은 점수'(겹쳐도 되게 넉넉히)와 이미 채운 선수의 가장 좋은 타순 점수를
+   큰 배율 곱부터 짝지은 값(실제 최고보다 낮을 수 없다)이 지금까지 찾은 최고보다 높을 때만 더 들어간다. 다 채우면 타순을 고른다.
+   pool: [{ id, pl, cur: 지금 자리(C … DH, 내 선수면 ""), sub: 수비 포지션, lim: 주전으로 설 수 있는 횟수, nm: 선수 이름, nlim: 그 이름이 주전에 설 수 있는 수 }].
+   같은 선수(이름이 같은 다른 카드)는 주전에 함께 서지 못한다 — 게임 규칙 (지금 이미 그렇게 둔 덱은 그 수까지).
+   extra(i) — 포수 자리에 pool[i](없으면 -1)가 설 때 더할 점수 (포수리드로 달라지는 투수 쪽 점수).
+   need { ok(at), partial(at) } — 다 채운 배정이 지켜야 할 조건(골든글러브 장수 · 국대에이스 레벨)과, 채우는 도중에 이미 틀린지 보는 넉넉한 검사.
+   반환 { total(extra 포함), bat, at: [BAT_SLOTS[j] 의 pool 번호 | -1], order } */
+function bestBatting(pool, sd, o, curOrder, extra, need) {
+  var EPS = BL_EPS, n = BAT_SLOTS.length, rows = {}, mxs = {}, j, z;
+  var rowOf = function (i, s) { var key = i + "|" + s; return rows[key] || (rows[key] = batOrderRow(pool[i].pl, s, sd, o)); };
+  var mxOf = function (i, s) { var key = i + "|" + s; if (mxs[key] === undefined) { var r = rowOf(i, s), m = r[0]; for (var k = 1; k < r.length; k++) if (r[k] > m) m = r[k]; mxs[key] = m; } return mxs[key]; };
+  var zero = []; for (z = 0; z < n; z++) zero.push(0);
+  var cand = BAT_SLOTS.map(function (s) {
+    var out = []; pool.forEach(function (x, i) { if (s === "DH" || x.sub === s || x.cur === s) out.push(i); });
+    out.sort(function (a, b) { return (mxOf(b, s) - mxOf(a, s)) || ((pool[b].cur === s ? 1 : 0) - (pool[a].cur === s ? 1 : 0)) || (a - b); });
+    return out;
+  });
+  var cIdx = BAT_SLOTS.indexOf("C"), dIdx = BAT_SLOTS.indexOf("DH");
+  /* 채우는 차례 — 포수 먼저(포수리드), 후보가 적은 수비 자리부터, 지명은 마지막 */
+  var seq = [cIdx].concat(BAT_SLOTS.map(function (_, jj) { return jj; }).filter(function (jj) { return jj !== cIdx && jj !== dIdx; })
+    .sort(function (a, b) { return cand[a].length - cand[b].length; })).concat([dIdx]);
+  var bms = BAT_MULT.slice(0, n).sort(function (x, y) { return y - x; }), sms = STR_MULT.slice(0, n).sort(function (x, y) { return y - x; });
+  var PROD = bms.map(function (x, r) { return x * (sms[r] !== undefined ? sms[r] : 0); });
+  var curK = BAT_SLOTS.map(function (s) { return curOrder.indexOf(s); });
+  var at = []; for (j = 0; j < n; j++) at.push(undefined);
+  var used = {}, starts = {}, nstarts = {}, best = null;
+  var allowed = function (i) { var x = pool[i]; return !used[i] && (starts[x.id] || 0) < (x.lim || 1) && !(x.nm && (nstarts[x.nm] || 0) >= (x.nlim || 1)); };
+  var take = function (i, jj) { var x = pool[i]; used[i] = 1; starts[x.id] = (starts[x.id] || 0) + 1; if (x.nm) nstarts[x.nm] = (nstarts[x.nm] || 0) + 1; at[jj] = i; };
+  var drop = function (i, jj) { var x = pool[i]; used[i] = 0; starts[x.id]--; if (x.nm) nstarts[x.nm]--; at[jj] = undefined; };
+  var bound = function (exVal) {
+    var vals = [], st = 0;
+    for (var jj = 0; jj < n; jj++) {
+      var i = at[jj], s = BAT_SLOTS[jj];
+      if (i !== undefined) { if (i >= 0) { vals.push(mxOf(i, s)); if (pool[i].cur === s) st++; } else vals.push(0); continue; }
+      var m = 0; for (var q = 0; q < cand[jj].length; q++) { if (allowed(cand[jj][q])) { m = mxOf(cand[jj][q], s); break; } }
+      vals.push(m); st++;
+    }
+    vals.sort(function (x, y) { return y - x; });
+    var u = 0; for (var r = 0; r < n; r++) u += vals[r] * PROD[r];
+    return u + exVal + st * EPS;
+  };
+  var leaf = function (exVal) {
+    if (need && !need.ok(at)) return;
+    var S = BAT_SLOTS.map(function (s, jj) { return at[jj] >= 0 ? rowOf(at[jj], s) : zero; });
+    var r2 = bestOrderCore(S, curK), st = 0;
+    for (var jj = 0; jj < n; jj++) if (at[jj] >= 0 && pool[at[jj]].cur === BAT_SLOTS[jj]) st++;
+    var v = r2.total + exVal + st * EPS;
+    if (!best || v > best.v + 1e-12) best = { v: v, total: r2.total + exVal, bat: r2.total, A: at.slice(), pos: r2.pos };
+  };
+  var dfs = function (d, exVal) {
+    if (d === n) { leaf(exVal); return; }
+    var jj = seq[d], s = BAT_SLOTS[jj], tried = {}, any = false;
+    for (var q = 0; q < cand[jj].length; q++) {
+      var i = cand[jj][q];
+      if (!allowed(i) || tried[pool[i].id]) continue;   /* 같은 카드가 여러 칸이면 한 자리에는 하나만 넣어 본다 */
+      tried[pool[i].id] = 1; any = true;
+      take(i, jj);
+      var ex2 = jj === cIdx ? (extra ? extra(i) : 0) : exVal;
+      if ((!need || !need.partial || need.partial(at)) && (!best || bound(ex2) > best.v + 1e-12)) dfs(d + 1, ex2);
+      drop(i, jj);
+    }
+    if (!any) {
+      at[jj] = -1;
+      var ex3 = jj === cIdx ? (extra ? extra(-1) : 0) : exVal;
+      if (!best || bound(ex3) > best.v + 1e-12) dfs(d + 1, ex3);
+      at[jj] = undefined;
+    }
+  };
+  dfs(0, 0);
+  if (!best) return null;
+  var order = new Array(n); for (j = 0; j < n; j++) order[best.pos[j]] = BAT_SLOTS[j];
+  return { total: best.total, bat: best.bat, at: best.A, order: order };
+}
+/* 시너지가 켜지는지 (calcSDBonus 와 같은 기준 — 덱 설정에 직접 정한 값이 있으면 그것) */
+function blSynOn(sd, counts) {
+  var c = counts || {};
+  return { "라이브": sd.synLive !== undefined ? !!sd.synLive : liveSynCount(c) >= 7,
+    "임팩트": sd.synImpact !== undefined ? !!sd.synImpact : (c["임팩트"] || 0) >= 5,
+    "시그니처": sd.synSig !== undefined ? !!sd.synSig : (c["시그니처"] || 0) >= 5 };
+}
+/* 베스트 라인업 계획 — 저장은 화면이 한다.
+   players: 덱 선수(저장 모양 — '내 선수' 전체), lm: 라인업 칸, sdState: 덱 설정(팀 이름 포함).
+   반환 { ok, why?, before: 지금 TOTAL, after: 바꾼 뒤 TOTAL(셋포 · 시너지 지금 값), afterSP: 실제 셋포로 센 TOTAL(시너지는 지금 값),
+          sp: { now, after } 실제 셋포, syn: 시너지를 후보로 다 되살릴 수 없을 때만 { info: [{ k, have, need, avail }], lost: [k], joint, after },
+          gg: { now, after, max } 골든글러브 유효 장수(자팀 골글 한 장 덤), lm: 새 라인업 칸(전체), sd: { batOrder },
+          ins: '내 선수'에서 주전으로 올라오는 id, outs: 라인업에서 빠지는 id, same: 바뀌는 것 없음, from · to: { order } } */
+function bestLineup(players, lm, sdState) {
+  lm = lm || {};
+  var byId = {}, ids = [];
+  (players || []).forEach(function (x) { if (x && x.id && !byId[x.id]) { byId[x.id] = x; ids.push(x.id); } });
+  var cnt = function (slots, id) { var n0 = 0; slots.forEach(function (s) { if (lm[s] === id) n0++; }); return n0; };
+  var base = Object.assign({}, sdState || {});
+  var M = {};
+  var mp = function (id) { if (!id || !byId[id]) return null; if (!(id in M)) M[id] = deckPl(mergePl(byId[id]), base); return M[id]; };
+  /* opt { sp: 그 셋포로, syn: 그 시너지 장수로 } — 주지 않은 것은 실제 값. 팀버프(포수리드 · 국대에이스)는 늘 새 배치 그대로 */
+  var evalWith = function (lmX, sdFields, opt) {
+    var sdX = Object.assign({}, base, sdFields || {});
+    var pk = function (s) { return mp(lmX[s]); };
+    var spX = computeLineupSetDeck(pk, sdX), synX = sdX._synCounts;
+    if (opt && opt.syn) sdX._synCounts = opt.syn;
+    return { total: calcLineupTotal(pk, sdX, lineupOpts(sdX, opt && opt.sp !== undefined ? opt.sp : spX)), sp: spX, syn: synX, sd: sdX };
+  };
+  var now = evalWith(lm, null, null);
+  var sd0 = now.sd, totalSP = now.sp, keep = { sp: now.sp, syn: now.syn }, o = lineupOpts(sd0, totalSP);
+  var L21 = BAT_SLOTS.concat(SP_SLOTS, RP_SLOTS, ["CP"]);
+  /* 후보 — 지금 주전 타자 9칸(칸마다) + '내 선수'에만 있는 타자. 후보 6칸 · 투수 칸 선수는 빼고 */
+  var inSlot = {}; BL_SLOTS27.forEach(function (s) { if (lm[s]) inSlot[lm[s]] = 1; });
+  var nmOf = function (pl) { return pl ? canonPlayerName(pl.name, pl.team) : ""; };
+  var isGG = function (pl) { return !!pl && pl.cardType === "골든글러브"; };
+  var ggOwnOf = function (pl) { return isGG(pl) && !isOtherTeam(pl, sd0.teamName); };
+  var nStart = {}; BAT_SLOTS.forEach(function (s) { var pl = mp(lm[s]); if (pl && pl.role === "타자") { var k = nmOf(pl); nStart[k] = (nStart[k] || 0) + 1; } });
+  var pool = [];
+  var add = function (id, pl, cur) {
+    var nm = nmOf(pl);
+    pool.push({ id: id, pl: pl, cur: cur, sub: pl.subPosition || "", lim: cur ? Math.max(1, cnt(BAT_SLOTS, id)) : 1, nm: nm, nlim: Math.max(1, nStart[nm] || 0),
+      gg: isGG(pl), ggOwn: ggOwnOf(pl) });
+  };
+  BAT_SLOTS.forEach(function (s) { var pl = mp(lm[s]); if (pl && pl.role === "타자") add(lm[s], pl, s); });
+  ids.forEach(function (id) { if (inSlot[id]) return; var pl = mp(id); if (pl && pl.role === "타자") add(id, pl, ""); });
+  var curOrder = o.batOrder.slice(), cIdx = BAT_SLOTS.indexOf("C");
+  /* 골든글러브 — 라인업 21칸에서 다섯 장까지, 자팀 골글을 쓰면 한 장 덤 (자팀 포함 여섯 장) — 넘으면 역시너지 (labLimits 와 같은 규칙, 사용자 지정 2026-10-23).
+     투수 칸은 그대로라 타자 쪽으로만 바뀐다. 지금 이미 넘긴 덱은 그 장수까지만 */
+  var ggEffOf = function (n, own) { return n - (own > 0 ? LAB_GG_OWN_BONUS : 0); };
+  var ggP = 0, ggPOwn = 0;
+  SP_SLOTS.concat(RP_SLOTS, ["CP"]).forEach(function (s) { var pl = mp(lm[s]); if (isGG(pl)) { ggP++; if (ggOwnOf(pl)) ggPOwn++; } });
+  var ggCount = function (lmX) { var n = 0, own = 0; L21.forEach(function (s) { var pl = mp(lmX[s]); if (isGG(pl)) { n++; if (ggOwnOf(pl)) own++; } }); return ggEffOf(n, own); };
+  var ggNow = ggCount(lm), ggMax = Math.max(LAB_GG_BASE, ggNow);
+  var ggOk = function (A) { var n = ggP, own = ggPOwn; A.forEach(function (i) { if (i >= 0 && pool[i].gg) { n++; if (pool[i].ggOwn) own++; } }); return ggEffOf(n, own) <= ggMax; };
+  var ggPart = function (A) { var n = ggP; A.forEach(function (i) { if (i !== undefined && i >= 0 && pool[i].gg) n++; }); return n - LAB_GG_OWN_BONUS <= ggMax; };
+  /* 투수 쪽은 그대로 — 포수리드 버프로 달라지는 점수만 센다 */
+  var pitSlots = SP_SLOTS.concat(RP_SLOTS, ["CP"]);
+  var pitOnly = function (s) { return pitSlots.indexOf(s) >= 0 ? mp(lm[s]) : null; };
+  /* 국대에이스(타자) — 후보 칸 선수가 주는 레벨(F)은 그대로, 주전으로 고른 선수로 더 높일 수 있다. 레벨마다 풀어 가장 높은 것을 고른다 */
+  var natLv = function (pl, slot) { var lv = detectTeamBuffs([slot], function () { return pl; }, sd0).natBat; return lv === "없음" ? 0 : parseInt(lv, 10) || 0; };
+  var F = 0; BL_BN.forEach(function (s) { var pl = mp(lm[s]); if (pl && pl.role === "타자") F = Math.max(F, natLv(pl, s)); });
+  var levels = [F];
+  if (!sd0.natBat) pool.forEach(function (x) { [x.sub || "DH", "DH", x.cur || "DH"].forEach(function (s) { var lv = natLv(x.pl, s); if (lv > F && levels.indexOf(lv) < 0) levels.push(lv); }); });
+  var plan = null;
+  levels.forEach(function (L) {
+    var sdL = Object.assign({}, sd0, { _autoNatBat: L ? L + "렙" : "없음" });
+    var catchOf = function (i) { if (sdL.catchLead) return sdL.catchLead; if (i < 0) return "없음"; return detectTeamBuffs(["C"], function () { return pool[i].pl; }, sdL).catchLead; };
+    var pitMemo = {};
+    var pitFor = function (lv) { if (pitMemo[lv] === undefined) pitMemo[lv] = calcLineupTotal(pitOnly, Object.assign({}, sdL, { _autoCatch: lv }), o); return pitMemo[lv]; };
+    var natReq = (L > F && !sd0.natBat) ? function (A) { return A.some(function (i, jj) { return i >= 0 && natLv(pool[i].pl, BAT_SLOTS[jj]) >= L; }); } : null;
+    var need = { ok: function (A) { return ggOk(A) && (!natReq || natReq(A)); }, partial: ggPart };
+    var bat = bestBatting(pool, sdL, o, curOrder, function (i) { return pitFor(catchOf(i)); }, need);
+    if (!bat) return;
+    var nlm = Object.assign({}, lm);
+    BAT_SLOTS.forEach(function (s, jj) { var i = bat.at[jj]; if (i >= 0) nlm[s] = pool[i].id; else if (lm[s] && mp(lm[s]) && mp(lm[s]).role === "타자") nlm[s] = null; });
+    var sdNew = { batOrder: bat.order };
+    var ex = evalWith(nlm, sdNew, keep);
+    var cand = { lm: nlm, sd: sdNew, after: ex.total, order: bat.order };
+    if (!plan || cand.after > plan.after + 1e-9) plan = cand;
+  });
+  if (!plan) return { ok: false, why: "none" };
+  /* 새 배치가 지금보다 낮게 나오면 지금 그대로 (지금 배치도 후보 안에 있어 생기면 안 되는 일) */
+  var nowKeep = evalWith(lm, null, keep).total;
+  if (plan.after < nowKeep - 1e-9) plan = { lm: Object.assign({}, lm), sd: {}, after: nowKeep, order: curOrder };
+  var same = BAT_SLOTS.every(function (s) { return (lm[s] || null) === (plan.lm[s] || null); }) && curOrder.join() === plan.order.join();
+  /* 셋포 — 실제 셋포로 센 점수 (시너지는 지금 값 — 시너지는 후보로 맞추는 것으로 본다) */
+  var spEval = evalWith(plan.lm, plan.sd, { syn: now.syn });
+  /* 시너지 — 후보로 맞출 수 있으면 신경 쓰지 않는다 (사용자 지정 2026-10-23). 지금 켜져 있는 임팩트 · 시그니처가
+     바꾼 라인업 21칸 + 후보 6칸(남는 같은 종류 타자)으로 다섯 장이 안 되면 알린다 — 그때 되살릴 수 있는 만큼만 되살린 TOTAL 과 함께 */
+  var syn = null;
+  if (!same) {
+    var on0 = blSynOn(sd0, now.syn);
+    var in21 = {}; L21.forEach(function (s) { if (plan.lm[s]) in21[plan.lm[s]] = 1; });
+    var info = [["임팩트", "synImpact"], ["시그니처", "synSig"]].filter(function (x) { return sd0[x[1]] === undefined && on0[x[0]]; }).map(function (x) {
+      var have = 0; L21.forEach(function (s) { var pl = mp(plan.lm[s]); if (pl && pl.cardType === x[0]) have++; });
+      var avail = 0; ids.forEach(function (id) { if (in21[id]) return; var pl = mp(id); if (pl && pl.role === "타자" && pl.cardType === x[0]) avail++; });
+      return { k: x[0], key: x[1], have: have, need: Math.max(0, 5 - have), avail: avail };
+    });
+    var fits = function (sub) { var tot = 0; for (var q = 0; q < sub.length; q++) { if (sub[q].need > sub[q].avail) return false; tot += sub[q].need; } return tot <= BL_BN.length; };
+    if (info.length && !fits(info)) {
+      var subs = [[]].concat(info.map(function (x) { return [x]; })); if (info.length > 1) subs.push(info);
+      var bestSub = [], bestT = -Infinity;
+      subs.forEach(function (sub) {
+        if (!fits(sub)) return;
+        var flags = {}; info.forEach(function (x) { flags[x.key] = sub.indexOf(x) >= 0; });
+        var t = evalWith(plan.lm, Object.assign({}, plan.sd, flags), keep).total;
+        if (t > bestT) { bestT = t; bestSub = sub; }
+      });
+      syn = { info: info, lost: info.filter(function (x) { return bestSub.indexOf(x) < 0; }).map(function (x) { return x.k; }),
+        joint: info.every(function (x) { return fits([x]); }), after: bestT };
+    }
+  }
+  var st0 = {}, st1 = {}; BAT_SLOTS.forEach(function (s) { if (lm[s]) st0[lm[s]] = 1; if (plan.lm[s]) st1[plan.lm[s]] = 1; });
+  var ins = Object.keys(st1).filter(function (id) { return !st0[id]; }), outs = Object.keys(st0).filter(function (id) { return !st1[id]; });
+  return { ok: true, before: now.total, after: plan.after, afterSP: spEval.total, sp: { now: totalSP, after: spEval.sp }, syn: syn,
+    gg: { now: ggNow, after: ggCount(plan.lm), max: ggMax },
+    lm: plan.lm, sd: plan.sd, ins: ins, outs: outs, same: same, from: { order: curOrder }, to: { order: plan.order } };
+}
+/* 오른 점수 — 화면에 보이는 두 TOTAL(소수 한 자리)의 차이. 각각 반올림한 뒤 빼야 '8241.2 → 8514.8 · +273.6' 처럼 맞아 보인다 */
+function blGain(after, before) { return Number((Number(after.toFixed(1)) - Number(before.toFixed(1))).toFixed(1)); }
+/* 적용 · 되돌리기 — 바꾸는 덱 설정 칸. 되돌리기(sdState.bestUndo)는 지금 상태가 적용한 그 상태일 때만 쓴다 (서명 to 가 같을 때) */
+var BL_SD_KEYS = ["batOrder"];
+function blHash(str) { var h = 5381; for (var i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36) + ":" + str.length; }
+/* 주전 타자 9칸 · 타순을 한 줄로 (후보 칸은 셋포를 맞추느라 바꿀 수 있어 넣지 않는다) */
+function bestLineupSig(lm, sd) {
+  var o = lineupOpts(sd || {}, 0);
+  return blHash(BAT_SLOTS.map(function (s) { return (lm && lm[s]) || ""; }).join(",") + "|" + o.batOrder.join(","));
+}
+/* ═══ 베스트 라인업 끝 ═══ */
 function makeDeckWriter(waitMs) {
   var latest = {};
   var seen = {};
@@ -2550,6 +2874,9 @@ function __setScoreVer(v){ SCORE_VER = v; }
 export { withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, skillTables, __setScoreVer, CATCH_LEAD_PIT, NAT_ACE_PIT, POS_TRAIN, ENHANCE, pitCatOf, pitDistRole, pitStatScore, sampleSkillScores, SKILL_DIST_CARDS, ctlMissing, applyV11, v11EditCopy, v11Saved, v11WeightsOk, V11_TABLE_VERSION, SKILLS_V11_CODE, PIT_W_V11_CODE };
 export { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankHexA, RANK_TRAIN_BAT, RANK_TRAIN_PIT, rankTrainMissing };
 export { RP_TAC_STAT, rpTacStat };
+export { bestBatOrder };
+export { BL_EPS, batOrderRow, bestOrderCore };
+export { BL_BN, BL_SLOTS27, bestBatting, blSynOn, bestLineup, BL_SD_KEYS, blHash, bestLineupSig, blGain };
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
 function __setSeed(a){ SEED_PLAYERS.length = 0; (a||[]).forEach(function(p){ SEED_PLAYERS.push(p); }); }
 function __setSkillData(d){ SKILL_DATA = d || DEFAULT_SKILLS; }

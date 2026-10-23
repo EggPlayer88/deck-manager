@@ -23,6 +23,7 @@ import {
 import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
+import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
 
 /* 아래 시험들은 v1.1(제구 반영) 이전의 계산을 지킨다 — 구버전(v10) 기준으로 돈다.
    새 점수(v11) 시험은 이 파일 끝의 'v1.1 제구 반영' 칸에 있다 (2026-10-21) */
@@ -3247,6 +3248,240 @@ __setScoreVer('v11');
   eq('점수: 추격조 적극 +2 = 2 × 2.40 = 4.8', calcPit(pp, {}, { c: 0, s: 0, tac: 2 }).total - calcPit(pp, {}, { c: 0, s: 0, tac: 0 }).total, 4.8, 0.01);
   eq('점수: 분업 +3 = 3 × 2.40 = 7.2', calcPit(pp, {}, { c: 0, s: 0, tac: 3 }).total - calcPit(pp, {}, { c: 0, s: 0, tac: 0 }).total, 7.2, 0.01);
   eq('화면 변화 수치는 전술과 무관', calcPit(pp, {}, { c: 0, s: 0, tac: 3 }).change - calcPit(pp, {}, { c: 0, s: 0, tac: 0 }).change, 0);
+}
+{
+  /* 최고 점수 타순 (2026-10-22 사용자 요청) — 타순만 바꿔 TOTAL 이 가장 높은 배치. 9! 를 다 본다 */
+  const mk = (n, o) => Object.assign({ name: n, role: '타자', cardType: '골든글러브', team: '기아', year: '2024',
+    hand: '우', stars: 5, power: 150, accuracy: 140, eye: 130, patience: 120, enhance: '9각성' }, o || {});
+  const sd = { teamName: '기아', bpcIdx: 4 };
+  const SL = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+  const mkDeck = (extra) => { const P = {}; SL.forEach((s, i) => { P[s] = mk('abcdefghi'[i], Object.assign({ power: 100 + 10 * i }, (extra || {})[s] || {})); }); return P; };
+  const run = (P, order) => {
+    const pk = (s) => P[s] || null;
+    const o = lineupOpts(Object.assign({}, sd, order ? { batOrder: order } : {}), 0);
+    const tot = (ord) => calcLineupTotal(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: ord }), 0));
+    return { pk, o, tot };
+  };
+  const P1 = mkDeck();
+  const R1 = run(P1);
+  const t0 = Date.now(); const r1 = bestBatOrder(R1.pk, sd, R1.o); const ms = Date.now() - t0;
+  const best1 = R1.tot(r1.order);
+  eq('최고 타순은 지금보다 낮지 않다', best1 >= R1.tot(R1.o.batOrder) ? 1 : 0, 1);
+  eq('새 타순은 아홉 자리를 한 번씩', r1.order.slice().sort().join() === SL.slice().sort().join() ? 1 : 0, 1);
+  /* 무작위 3,000 가지 타순 중 더 높은 것이 없다 (씨앗 고정) */
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const shuffled = () => { const a = SL.slice(); for (let j = a.length - 1; j > 0; j--) { const k = Math.floor(rnd() * (j + 1)); const x = a[j]; a[j] = a[k]; a[k] = x; } return a; };
+  let beat = 0; for (let i = 0; i < 3000; i++) if (R1.tot(shuffled()) > best1 + 1e-6) beat++;
+  eq('무작위 3,000 가지 중 더 높은 타순 없음', beat, 0);
+  /* 두 자리를 맞바꾼 36 가지 모두보다 높거나 같다 */
+  const swapBeats = (R, order, bestT) => { let b = 0; for (let i = 0; i < 9; i++) for (let j = i + 1; j < 9; j++) { const a = order.slice(); const x = a[i]; a[i] = a[j]; a[j] = x; if (R.tot(a) > bestT + 1e-6) b++; } return b; };
+  eq('두 자리 맞바꾸기 36 가지보다 높거나 같다', swapBeats(R1, r1.order, best1), 0);
+  /* 스킬 · 타순 구간이 없으면 센 타자를 큰 배율에 — 3 · 4번이 가장 센 둘(i · h), 8 · 9번이 가장 약한 둘(a · b) */
+  eq('가장 센 둘이 3 · 4번', ['h', 'i'].indexOf(P1[r1.order[2]].name) >= 0 && ['h', 'i'].indexOf(P1[r1.order[3]].name) >= 0 ? 1 : 0, 1);
+  eq('가장 약한 둘이 8 · 9번', ['a', 'b'].indexOf(P1[r1.order[7]].name) >= 0 && ['a', 'b'].indexOf(P1[r1.order[8]].name) >= 0 ? 1 : 0, 1);
+  eq('이미 최고 타순이면 그대로 (바뀐 곳 0)', bestBatOrder(R1.pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: r1.order }), 0)).moved, 0);
+  eq('계산 시간 0.5초 안', ms < 500 ? 1 : 0, 1);
+  /* 타순을 타는 스킬 — 가장 약한 a 에게 핵타선(3 · 4 · 5번에서만 타순O 값)을 주면, 그 값까지 넣어 센 배치가 최고여야 한다 */
+  const P2 = mkDeck({ C: { skill1: '핵타선(타순X)', s1Lv: 10, sLvManual: true } });
+  const R2 = run(P2);
+  const r2 = bestBatOrder(R2.pk, sd, R2.o); const best2 = R2.tot(r2.order);
+  eq('타순 스킬 덱도 맞바꾸기 36 가지보다 높거나 같다', swapBeats(R2, r2.order, best2), 0);
+  let beat2 = 0; for (let i = 0; i < 2000; i++) if (R2.tot(shuffled()) > best2 + 1e-6) beat2++;
+  eq('타순 스킬 덱 — 무작위 2,000 가지 중 더 높은 것 없음', beat2, 0);
+  const at = r2.order.indexOf('C');
+  const hot = lineupBat(P2.C, 'C', sd, lineupOpts(Object.assign({}, sd, { batOrder: r2.order }), 0)).total;
+  const cold = lineupBat(P2.C, 'C', sd, lineupOpts(Object.assign({}, sd, { batOrder: SL }), 0)).total;
+  eq('핵타선 타자는 3 ~ 5번에서 점수가 다르다 (타순O 값)', at >= 2 && at <= 4 ? (hot !== cold ? 1 : 0) : 1, 1);
+  /* 9! 전수와 맞대기 — 점수표(81칸)로 362,880 가지를 다 세어 최고 TOTAL 이 같은지 (타순 스킬 · 세트덱 타순 구간이 섞인 덱 셋) */
+  const brute = (pk, sdx, o) => {
+    const slots = o.batOrder.slice(), n = 9;
+    const S = slots.map((s) => { const pl = pk(s); return slots.map((_, k) => pl ? lineupBat(pl, s, sdx, Object.assign({}, o, { batOrder: slots.map((x, j) => (j === k ? s : '_' + j)) })).total : 0); });
+    const BMv = slots.map((_, k) => batMult(k)), SMv = slots.map((_, r) => strMult(r));
+    const perm = [], used = [], v = []; let best = -Infinity;
+    const rec = (k) => { if (k === n) { let t = 0; for (let a = 0; a < n; a++) { let r = 0; for (let j = 0; j < n; j++) if (v[j] > v[a] || (v[j] === v[a] && j < a)) r++; t += v[a] * BMv[a] * SMv[r]; } if (t > best) best = t; return; }
+      for (let i = 0; i < n; i++) { if (used[i]) continue; used[i] = 1; perm[k] = i; v[k] = S[i][k]; rec(k + 1); used[i] = 0; } };
+    rec(0); return best;
+  };
+  const batPart = (pk, sdx, order, sp) => { const o2 = lineupOpts(Object.assign({}, sdx, { batOrder: order }), sp || 0); const sc = order.map((s) => pk(s) ? lineupBat(pk(s), s, sdx, o2).total : 0); const rk = strRanks(sc); let t = 0; sc.forEach((x, i) => { t += x * batMult(i) * strMult(rk[i]); }); return t; };
+  const sdOrd = Object.assign({}, sd, { s120: 'L', s140: 'L', s145: 'L', s115: 'L', liveSetPo: 0 });   /* 타순 구간이 있는 세트덱 */
+  [[P1, sd], [P2, sd], [mkDeck({ C: { skill1: '컨택트히터(타순X)', s1Lv: 8, sLvManual: true }, '1B': { skill1: '공포의하위타선(타순X)', s1Lv: 9, sLvManual: true }, DH: { skill2: '클린업 트리오(타순X)', s2Lv: 9, sLvManual: true } }), sdOrd]].forEach(([P, sdx], idx) => {
+    const pk = (s) => P[s] || null; const o = lineupOpts(sdx, 160);
+    const r = bestBatOrder(pk, sdx, o);
+    eq('9! 전수와 같은 최고점 (덱 ' + (idx + 1) + ', 셋포 160)', batPart(pk, sdx, r.order, 160), brute(pk, sdx, o), 0.001);
+  });
+  /* 빈 자리가 있어도 돈다 — 빈 자리는 0 점 */
+  const P3 = mkDeck(); delete P3.SS; delete P3.DH;
+  const R3 = run(P3);
+  const r3 = bestBatOrder(R3.pk, sd, R3.o);
+  eq('빈 자리 둘 — 최고 타순도 지금보다 낮지 않다', R3.tot(r3.order) >= R3.tot(R3.o.batOrder) ? 1 : 0, 1);
+}
+{
+  /* 베스트 라인업 (2026-10-23 사용자 요청 · 범위 사용자 지정) — 지금 주전과 '내 선수' 타자 중에서 수비 · 지명타자 · 타순.
+     후보 6칸 · 투수 그대로, 셋포 · 시너지는 지금 값으로. 골든글러브는 5장(자팀 있으면 6장)까지, 시너지는 후보로 못 되살릴 때만 알림 */
+  const eqs = (label, got, want) => { if (got === want) { pass++; console.log(`  ok   ${label}  = ${got}`); } else { fail++; console.log(`  FAIL ${label}  got ${got}, want ${want}`); } };
+  /* ① 타순 알맹이 — 같은 점수면 지금 타순을 지킨다 */
+  const flat = []; for (let i = 0; i < 9; i++) flat.push([100, 100, 100, 100, 100, 100, 100, 100, 100]);
+  const keepCur = [3, 1, 4, 0, 8, 2, 7, 5, 6];
+  eqs('점수가 모두 같으면 지금 타순 그대로', bestOrderCore(flat, keepCur).pos.join(), keepCur.join());
+  /* ② 덱 — 주전 9 · 후보 3 · 투수 12 + '내 선수'에만 있는 타자 (모두 자팀 골글이라 골글 한도는 지금 장수까지) */
+  const bat = (id, sub, o) => Object.assign({ id, name: id, role: '타자', cardType: '골든글러브', team: '기아', year: '2024', hand: '우', stars: 5,
+    power: 140, accuracy: 130, eye: 120, patience: 110, enhance: '9각성', subPosition: sub, trainP: 20, trainA: 20, trainE: 20, trainN: 15 }, o || {});
+  const pit = (id, pos, o) => Object.assign({ id, name: id, role: '투수', cardType: '골든글러브', team: '기아', year: '2024', hand: '우', stars: 5,
+    change: 120, stuff: 120, control: 110, enhance: '9각성', position: pos, subPosition: '', trainC: 20, trainS: 20, trainCtl: 15 }, o || {});
+  const SL = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'], BATS = SL.concat(['DH']);
+  const PITS = ['SP1', 'SP2', 'SP3', 'SP4', 'SP5', 'RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6', 'CP'], BN = ['BN1', 'BN2', 'BN3', 'BN4', 'BN5', 'BN6'];
+  const L21 = BATS.concat(PITS);
+  const deck = (o) => {
+    o = o || {};
+    const P = [], lm = {};
+    SL.forEach((s, i) => { const x = bat('b' + s, s, Object.assign({ power: 120 + 6 * i, accuracy: 125 + 3 * i }, (o.bat || {})[s] || {})); P.push(x); lm[s] = x.id; });
+    { const x = bat('bDH', 'LF', Object.assign({ power: 118, accuracy: 120 }, (o.bat || {}).DH || {})); P.push(x); lm.DH = x.id; }
+    { const x = bat('bnLF', 'LF', { power: 190, accuracy: 175 }); P.push(x); lm.BN1 = x.id; }   /* 후보 칸의 센 타자 — 고려하지 않는다 */
+    { const x = bat('bnC', 'C', { power: 110, accuracy: 112 }); P.push(x); lm.BN2 = x.id; }
+    { const x = bat('bnSS', 'SS', { power: 100, accuracy: 100 }); P.push(x); lm.BN3 = x.id; }
+    PITS.forEach((s, i) => { const x = pit('p' + s, s === 'CP' ? '마무리' : s[0] === 'S' ? '선발' : '중계', Object.assign({ change: 115 + 2 * i, stuff: 118 + i }, o.pit || {})); P.push(x); lm[s] = x.id; });
+    P.push(bat('mLF', 'LF', { power: 175, accuracy: 160, skill1: '클린업 트리오(타순X)', s1Lv: 10, sLvManual: true }));   /* '내 선수' — 주전으로 와야 할 타자 */
+    P.push(bat('m2B', '2B', { power: 100, accuracy: 100 }));                                                              /* '내 선수' — 약한 타자 */
+    return { P, lm };
+  };
+  const sdB = { teamName: '기아', bpcIdx: 4, liveSetPo: 0 };
+  /* mode — 'keep': 셋포 · 시너지 모두 지금 값(keepFrom 라인업), 'sp': 실제 셋포 + 지금 시너지, 없으면 모두 실제 */
+  const exact = (P, lm, sdx, keepFrom, mode) => {
+    const byId = {}; P.forEach((x) => { byId[x.id] = x; });
+    const M = {}; const pk = (s) => { const id = lm[s]; if (!id || !byId[id]) return null; if (!(id in M)) M[id] = deckPl(mergePl(byId[id]), sdx); return M[id]; };
+    const s2 = Object.assign({}, sdx); const sp = computeLineupSetDeck(pk, s2);
+    let spUse = sp;
+    if (keepFrom && mode) { const k = Object.assign({}, sdx); const pk0 = (s) => { const id = keepFrom[s]; return id && byId[id] ? deckPl(mergePl(byId[id]), sdx) : null; }; const sp0 = computeLineupSetDeck(pk0, k); s2._synCounts = k._synCounts; if (mode === 'keep') spUse = sp0; }
+    return { tot: calcLineupTotal(pk, s2, lineupOpts(s2, spUse)), sp };
+  };
+  const applyPlan = (lm, sd0, r) => { const lm2 = Object.assign({}, lm); BATS.forEach((s) => { lm2[s] = r.lm[s] || null; }); return { lm: lm2, sd: Object.assign({}, sd0, r.sd) }; };
+  const D = deck();
+  const t0 = Date.now(); const r = bestLineup(D.P, D.lm, sdB); const ms = Date.now() - t0;
+  eq('베스트 라인업 — 계획이 나온다', r.ok ? 1 : 0, 1);
+  const A = applyPlan(D.lm, sdB, r);
+  eq('적용한 모습을 다시 세면 계획 점수와 같다 (셋포 · 시너지 지금 값)', exact(D.P, A.lm, A.sd, D.lm, 'keep').tot, r.after, 0.001);
+  eq('실제 셋포(시너지는 지금 값)로 세면 afterSP 와 같다', exact(D.P, A.lm, A.sd, D.lm, 'sp').tot, r.afterSP, 0.001);
+  eq('지금 점수(before)는 지금 덱 그대로', r.before, exact(D.P, D.lm, sdB, null, null).tot, 0.001);
+  eq('지금보다 낮지 않다', r.after >= r.before - 1e-9 ? 1 : 0, 1);
+  eq("'내 선수'의 센 타자가 주전으로", BATS.some((s) => A.lm[s] === 'mLF') ? 1 : 0, 1);
+  eq('후보 칸 선수는 고려하지 않는다 (후보의 센 타자는 그대로 후보)', BATS.some((s) => A.lm[s] === 'bnLF') ? 0 : 1, 1);
+  eq('후보 6칸 · 투수 칸은 그대로', BN.concat(PITS).every((s) => (r.lm[s] || null) === (D.lm[s] || null)) ? 1 : 0, 1);
+  eqs("주전으로 올라온 선수 목록", r.ins.join(), 'mLF');
+  eq('빠지는 선수는 한 명', r.outs.length, 1);
+  eqs('덱 설정은 타순만 바꾼다', Object.keys(r.sd).join(), 'batOrder');
+  eq('같은 카드 종류끼리 바꾸면 셋포 그대로', r.sp.after, r.sp.now);
+  eq('시너지는 고려하지 않는다 — 되살릴 걱정이 없으면 알림 없음', r.syn === null ? 1 : 0, 1);
+  eq('계산 시간 2초 안', ms < 2000 ? 1 : 0, 1);
+  /* ③ 가지치기 없이 모든 배정(수비 자리 규칙 · 지명 아무나)을 다 세어 — 배정마다 타순은 bestBatOrder — 최고점이 같다 */
+  {
+    const byId = {}; D.P.forEach((x) => { byId[x.id] = x; });
+    const free = D.P.filter((x) => x.role === '타자' && !Object.values(D.lm).includes(x.id)).map((x) => x.id);
+    const pool = BATS.map((s) => D.lm[s]).concat(free);
+    let best = -Infinity, nA = 0;
+    const rec = (k, used, at) => {
+      if (k === BATS.length) {
+        nA++;
+        const lm2 = Object.assign({}, D.lm, at);
+        const M = {}; const pk = (s) => { const id = lm2[s]; return id && byId[id] ? (M[id] = M[id] || deckPl(mergePl(byId[id]), sdB)) : null; };
+        const s2 = Object.assign({}, sdB); computeLineupSetDeck(pk, s2);
+        const k0 = Object.assign({}, sdB); const sp0 = computeLineupSetDeck((s) => (D.lm[s] && byId[D.lm[s]] ? deckPl(mergePl(byId[D.lm[s]]), sdB) : null), k0); s2._synCounts = k0._synCounts;
+        const ord = bestBatOrder(pk, s2, lineupOpts(s2, sp0)).order;
+        const tot = calcLineupTotal(pk, s2, lineupOpts(Object.assign({}, s2, { batOrder: ord }), sp0)); if (tot > best) best = tot; return;
+      }
+      const s = BATS[k];
+      pool.forEach((id) => { if (used.has(id)) return; if (s !== 'DH' && byId[id].subPosition !== s && D.lm[s] !== id) return; used.add(id); at[s] = id; rec(k + 1, used, at); used.delete(id); delete at[s]; });
+    };
+    rec(0, new Set(), {});
+    eq('전수(배정 ' + nA + '가지 × 타순)와 같은 최고점', best, r.after, 0.001);
+  }
+  /* ④ 이미 최고면 같다고 알려 준다 · 되돌리기 서명 */
+  const r2 = bestLineup(D.P, A.lm, A.sd);
+  eq('적용한 뒤 다시 누르면 이미 최고', r2.same ? 1 : 0, 1);
+  const sig1 = bestLineupSig(A.lm, A.sd);
+  eqs('서명 — 같은 상태면 같다', bestLineupSig(Object.assign({}, A.lm), Object.assign({}, A.sd)), sig1);
+  eq('서명 — 타순을 바꾸면 달라진다', bestLineupSig(A.lm, Object.assign({}, A.sd, { batOrder: A.sd.batOrder.slice().reverse() })) !== sig1 ? 1 : 0, 1);
+  eq('서명 — 주전을 바꾸면 달라진다', bestLineupSig(Object.assign({}, A.lm, { DH: 'm2B' }), A.sd) !== sig1 ? 1 : 0, 1);
+  eq('서명 — 후보 칸을 바꿔도 그대로 (셋포 맞추기)', bestLineupSig(Object.assign({}, A.lm, { BN3: null, BN4: 'bDH' }), A.sd) === sig1 ? 1 : 0, 1);
+  eqs('되돌릴 덱 설정 칸', BL_SD_KEYS.join(), 'batOrder');
+  eq('오른 점수는 보이는 두 TOTAL 의 차이 (8514.75 − 8241.24 → 8514.8 − 8241.2 = 273.6)', blGain(8514.75, 8241.24), 273.6, 1e-9);
+  /* ⑤ 포수리드 — 투수 팀버프가 커서 조금 약한 타자라도 포수리드 포수('내 선수')가 선다 */
+  {
+    const E = deck(); E.P.push(bat('mC', 'C', { power: 128, accuracy: 125, skill1: '포수리드', s1Lv: 10, sLvManual: true }));
+    const rr = bestLineup(E.P, E.lm, sdB);
+    eqs("포수리드 10렙 '내 선수' 포수가 포수로", rr.lm.C, 'mC');
+    const A2 = applyPlan(E.lm, sdB, rr);
+    eq('포수리드 덱 — 다시 세어도 같은 점수', exact(E.P, A2.lm, A2.sd, E.lm, 'keep').tot, rr.after, 0.001);
+  }
+  /* ⑥ 국대에이스(타자) — 주전 국대에이스 타자를 빼면 팀버프가 사라지는 것까지 센다 / '내 선수'의 국대에이스 타자를 넣어 버프를 얻는다 */
+  {
+    const E = deck();
+    Object.assign(E.P.find((x) => x.id === 'b1B'), { cardType: '국가대표', skill2: '국대에이스', s2Lv: 6, sLvManual: true });   /* 주전 1루 — 6렙 버프 */
+    E.P.push(bat('m1B', '1B', { power: 134, accuracy: 133 }));   /* 조금 더 센 1루 — 버프가 없다 */
+    const rr = bestLineup(E.P, E.lm, sdB);
+    eqs('버프 주는 1루수를 지킨다 (조금 센 1루수보다 팀버프가 크다)', BATS.some((s) => rr.lm[s] === 'b1B') ? 'b1B' : 'gone', 'b1B');
+    const A3 = applyPlan(E.lm, sdB, rr);
+    eq('국대에이스 덱 — 다시 세어도 같은 점수', exact(E.P, A3.lm, A3.sd, E.lm, 'keep').tot, rr.after, 0.001);
+    const F = deck(); F.P.push(bat('mNat', '3B', { cardType: '국가대표', power: 128, accuracy: 128, skill2: '국대에이스', s2Lv: 6, sLvManual: true }));
+    const rf = bestLineup(F.P, F.lm, sdB);
+    eq("'내 선수' 국대에이스 타자를 넣어 버프를 얻는다", BATS.some((s) => rf.lm[s] === 'mNat') ? 1 : 0, 1);
+    const A4 = applyPlan(F.lm, sdB, rf);
+    eq('국대에이스 넣은 덱 — 다시 세어도 같은 점수', exact(F.P, A4.lm, A4.sd, F.lm, 'keep').tot, rf.after, 0.001);
+  }
+  /* ⑦ 같은 선수(다른 카드)는 주전에 같이 서지 않는다 · 카드 종류가 바뀌면 실제 셋포가 달라진다 */
+  {
+    const E = deck();
+    E.P.push(Object.assign({}, E.P.find((x) => x.id === 'mLF'), { id: 'mLF2', name: 'mLF', subPosition: 'CF', power: 170, accuracy: 158 }));
+    const rr = bestLineup(E.P, E.lm, sdB);
+    eq('같은 선수 두 카드는 함께 주전이 아니다', BATS.map((s) => rr.lm[s]).filter((id) => id === 'mLF' || id === 'mLF2').length <= 1 ? 1 : 0, 1);
+    const G = deck(); Object.assign(G.P.find((x) => x.id === 'mLF'), { cardType: '시즌' });
+    const rg = bestLineup(G.P, G.lm, sdB);
+    eq('시즌 카드가 골글 자리에 들어오면 실제 셋포가 달라진다', BATS.some((s) => rg.lm[s] === 'mLF') ? (rg.sp.after !== rg.sp.now ? 1 : 0) : 1, 1);
+    eq('셋포가 달라져도 계획 점수는 지금 셋포로 센 값', exact(G.P, applyPlan(G.lm, sdB, rg).lm, Object.assign({}, sdB, rg.sd), G.lm, 'keep').tot, rg.after, 0.001);
+  }
+  /* ⑧ 골든글러브 — 라인업 21칸에서 다섯 장, 자팀 골글이 있으면 여섯 장까지 (넘으면 역시너지) */
+  {
+    const ggCount = (P, lm) => { const byId = {}; P.forEach((x) => { byId[x.id] = x; }); let n = 0, own = 0;
+      L21.forEach((s) => { const x = byId[lm[s]]; if (x && x.cardType === '골든글러브') { n++; if (x.team === '기아') own++; } }); return { n, own }; };
+    /* 주전은 시그니처, 투수는 임팩트 · 골글 타팀 넷이 주전 — '내 선수'에 센 타팀 골글 둘 → 다섯 장까지만 */
+    const mk = (ownGG) => {
+      const E = deck({ pit: { cardType: '임팩트' } });
+      E.P.forEach((x) => { if (x.role === '타자' && x.id[0] === 'b') x.cardType = '시그니처'; });
+      ['b1B', 'b2B', 'b3B', 'bSS'].forEach((id) => { Object.assign(E.P.find((x) => x.id === id), { cardType: '골든글러브', team: '삼성' }); });
+      if (ownGG) Object.assign(E.P.find((x) => x.id === 'bC'), { cardType: '골든글러브', team: '기아' });
+      E.P.find((x) => x.id === 'mLF').team = '삼성';
+      E.P.find((x) => x.id === 'm2B').cardType = '시그니처';   /* '내 선수'에 자팀 골글이 없게 (있으면 그 선수를 넣어 여섯 장을 여는 게 맞는 답이다) */
+      E.P.push(bat('mCF', 'CF', { team: '삼성', power: 178, accuracy: 166 }), bat('mRF', 'RF', { team: '삼성', power: 176, accuracy: 168 }));
+      return E;
+    };
+    const E = mk(false);
+    const rr = bestLineup(E.P, E.lm, sdB);
+    const c1 = ggCount(E.P, rr.lm);
+    eq('자팀 골글이 없으면 골글은 다섯 장까지 (타팀 골글 넷 + 하나만 더)', c1.n, 5);
+    eq('골글 장수를 계획이 알려 준다 (유효 다섯 장 · 한도 다섯 장)', rr.gg.after * 10 + rr.gg.max, 55);
+    const E2 = mk(true);
+    const r6 = bestLineup(E2.P, E2.lm, sdB);
+    const c2 = ggCount(E2.P, r6.lm);
+    eq('자팀 골글이 있으면 여섯 장까지 (자팀 포함 일곱 장은 안 된다)', c2.n, 6);
+    eq('여섯 장 — 자팀 골글은 그대로 주전', c2.own >= 1 ? 1 : 0, 1);
+    eq('골글 한도 덱 — 다시 세어도 같은 점수', exact(E2.P, applyPlan(E2.lm, sdB, r6).lm, Object.assign({}, sdB, r6.sd), E2.lm, 'keep').tot, r6.after, 0.001);
+    /* 지금 이미 한도를 넘긴 덱은 그 장수까지만 (늘리지 않는다) */
+    const r7 = bestLineup(D.P, D.lm, sdB);
+    eq('이미 넘긴 덱(모두 자팀 골글)은 지금 장수를 넘지 않는다', r7.gg.after <= r7.gg.now ? 1 : 0, 1);
+  }
+  /* ⑨ 시너지 — 후보 여섯 칸으로도 되살릴 수 없을 만큼 임팩트 · 시그니처가 줄면 알린다 */
+  {
+    /* 주전 시그니처 다섯 · 임팩트 넷 + 임팩트 투수 하나 → 두 시너지 켜짐. '내 선수'에 아주 센 국가대표 타자 아홉 */
+    const E = deck({ pit: { cardType: '골든글러브' } });
+    const order = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+    order.forEach((s, i) => { const x = E.P.find((y) => y.id === E.lm[s]); x.cardType = i < 5 ? '시그니처' : '임팩트'; });
+    E.P.find((x) => x.id === 'pSP1').cardType = '임팩트';
+    order.forEach((s) => { E.P.push(bat('n' + s, s === 'DH' ? 'LF' : s, { cardType: '국가대표', team: '기아', power: 200, accuracy: 190 })); });
+    const rr = bestLineup(E.P, E.lm, sdB);
+    eq('주전 아홉이 모두 국가대표로 바뀐다', BATS.every((s) => String(rr.lm[s]).charAt(0) === 'n') ? 1 : 0, 1);
+    eq('시그 다섯 + 임팩트 넷을 후보 여섯 칸으로 다 되살릴 수 없다 — 알림', rr.syn ? 1 : 0, 1);
+    eq('알림 — 하나씩은 되살릴 수 있고 함께는 안 된다 (후보 칸이 모자람)', rr.syn && rr.syn.joint ? 1 : 0, 1);
+    eq('되살릴 수 있는 만큼 되살린 TOTAL 은 계획 점수보다 높지 않다', rr.syn && rr.syn.after <= rr.after + 1e-9 ? 1 : 0, 1);
+  }
 }
 __setScoreVer('v10');
 
