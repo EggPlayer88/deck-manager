@@ -532,8 +532,8 @@ eq('우투에 좌승사자(좌투) 안 뜬다', variantAllowed('좌승사자(좌
 eq('5툴플레이어는 267274 만', variantAllowed('5툴플레이어(267274)', cB('우')) ? 1 : 0, 1);
 eq('5툴플레이어 275299 는 제외', variantAllowed('5툴플레이어(275299)', cB('우')) ? 1 : 0, 0);
 eq('철완은 134139 만', variantAllowed('철완(134139)', cP('우')) ? 1 : 0, 1);
-eq('선봉장은 타순배치+주루2구간', variantAllowed('선봉장(타순배치,주루130~141)', cB('우')) ? 1 : 0, 1);
-eq('선봉장 미배치는 제외', variantAllowed('선봉장(타순배치X,주루142+)', cB('우')) ? 1 : 0, 0);
+eq('선봉장은 타순O+주루2구간', variantAllowed('선봉장(타순O,주루130~141)', cB('우')) ? 1 : 0, 1);
+eq('선봉장 미배치는 제외', variantAllowed('선봉장(타순X,주루142+)', cB('우')) ? 1 : 0, 0);
 eq('핵타선은 타순O', variantAllowed('핵타선(타순O)', cB('우')) ? 1 : 0, 1);
 eq('원투펀치는 배치O', variantAllowed('원투펀치(배치O)', cP('우')) ? 1 : 0, 1);
 eq('도전정신은 5성', variantAllowed('도전정신(5성)', cB('우')) ? 1 : 0, 1);
@@ -583,7 +583,7 @@ eq('셋업2 에 수호신(승리조)', skillSlotHint('수호신(승리조)', '�
 eq('불펜에 마당쇠(선발)', skillSlotHint('마당쇠(선발)', '패전조', '중계') === '마당쇠(불펜)' ? 1 : 0, 1);
 eq('조건 괄호는 자리가 아니다', skillSlotHint('철완(134139)', '승리조', '중계') === '' ? 1 : 0, 1);
 eq('괄호 없는 스킬도 통과', skillSlotHint('파이어볼', '승리조', '중계') === '' ? 1 : 0, 1);
-eq('타자는 검사하지 않는다', skillSlotHint('컨택트히터(타순배치)', '타자', '타자') === '' ? 1 : 0, 1);
+eq('타자는 검사하지 않는다', skillSlotHint('컨택트히터(타순O)', '타자', '타자') === '' ? 1 : 0, 1);
 
 console.log('\n[배치 자리별 변형] 포지션마다 대표 자리 하나로 고정한다');
 var vc = function(cat){ return { hand:"우", cardType:"골든글러브", cat:cat }; };
@@ -612,7 +612,7 @@ eq('철완 구간은 역할이 아니다', skillRoleOf('철완(134139)') === nul
 eq('좌투는 역할이 아니다', skillRoleOf('좌승사자(좌투)') === null ? 1 : 0, 1);
 eq('4성도 역할이 아니다', skillRoleOf('도전정신(4성)') === null ? 1 : 0, 1);
 eq('카드종류 접두는 떼고 본다', skillRoleOf('패기(임팩불펜)').join(',').indexOf('중계') >= 0 ? 1 : 0, 1);
-eq('타자 괄호는 역할 취급 안 함', skillAllowedAt('컨택트히터(타순배치)', '타자', false) ? 1 : 0, 1);
+eq('타자 괄호는 역할 취급 안 함', skillAllowedAt('컨택트히터(타순O)', '타자', false) ? 1 : 0, 1);
 
 console.log('\n[메이저 분류] 확정본');
 eq('타자 메이저 76개', Object.keys(DEFAULT_MAJOR['타자']).length, 76);
@@ -2498,9 +2498,9 @@ console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 �
     power: 150, accuracy: 140, eye: 130, patience: 120, launchAngle: 20 }, o);
 
   /* ── 컨택트히터: 1·2번에서 타순O + 발사각 -3 ── */
-  const c5 = bat({ skill1: '컨택트히터(타순배치)' });
+  const c5 = bat({ skill1: '컨택트히터(타순O)' });
   const a0 = orderAdjust(c5, 0);
-  eq('컨택 1번 — 타순배치 그대로, 발사각 20 → 17', a0 && a0.pl.skill1 === '컨택트히터(타순배치)' && a0.la === 17 ? 1 : 0, 1);
+  eq('컨택 1번 — 타순O 그대로, 발사각 20 → 17', a0 && a0.pl.skill1 === '컨택트히터(타순O)' && a0.la === 17 ? 1 : 0, 1);
   eq('컨택 2번도 같다', orderAdjust(c5, 1).la, 17);
   const a4 = orderAdjust(c5, 4);
   eq('컨택 5번 — 타순X 로 바뀐다', a4.pl.skill1 === '컨택트히터(타순X)' ? 1 : 0, 1);
@@ -2508,24 +2508,24 @@ console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 �
   const cX = bat({ skill1: '컨택트히터(타순X)' });
   eq('컨택 5번에 타순X 면 바꿀 게 없다', orderAdjust(cX, 4) === null ? 1 : 0, 1);
   const cX0 = orderAdjust(cX, 0);
-  eq('컨택 1번에 타순X 면 타순배치로 올라간다', cX0.pl.skill1 === '컨택트히터(타순배치)' ? 1 : 0, 1);
+  eq('컨택 1번에 타순X 면 타순O 로 올라간다', cX0.pl.skill1 === '컨택트히터(타순O)' ? 1 : 0, 1);
   eq('그때 발사각도 같이 내려간다', cX0.la, 17);
 
-  /* ── 옛 이름(타순O)은 같은 스킬 — 바뀐 것으로 띄우지 않는다 (2026-10-19 사용자 지적) ── */
-  eq('옛 이름 컨택트히터(타순O) 의 표 이름은 타순배치', skillTableName('컨택트히터(타순O)', '타자') === '컨택트히터(타순배치)' ? 1 : 0, 1);
+  /* ── 옛 이름(타순배치)은 같은 스킬 — 바뀐 것으로 띄우지 않는다 (2026-10-19 사용자 지적 · 2026-10-23 표 이름을 타순O 로 통일) ── */
+  eq('옛 이름 컨택트히터(타순배치) 의 표 이름은 타순O', skillTableName('컨택트히터(타순배치)', '타자') === '컨택트히터(타순O)' ? 1 : 0, 1);
   eq('표에 있는 이름은 그대로', skillTableName('핵타선(타순O)', '타자') === '핵타선(타순O)' ? 1 : 0, 1);
-  eq('옛 이름도 점수는 같다', getSkillScore('컨택트히터(타순O)', 6, '타자'), getSkillScore('컨택트히터(타순배치)', 6, '타자'));
-  const cO = bat({ skill1: '컨택트히터(타순O)' });
+  eq('옛 이름도 점수는 같다', getSkillScore('컨택트히터(타순배치)', 6, '타자'), getSkillScore('컨택트히터(타순O)', 6, '타자'));
+  const cO = bat({ skill1: '컨택트히터(타순배치)' });
   const o0 = orderAdjust(cO, 0);
   eq('컨택 1번에 옛 이름 — 화면에 이름 바뀜을 띄우지 않는다', o0 && o0.swaps.length === 0 ? 1 : 0, 1);
-  eq('계산용 이름은 표 이름(타순배치)으로 맞춘다', o0.pl.skill1 === '컨택트히터(타순배치)' ? 1 : 0, 1);
+  eq('계산용 이름은 표 이름(타순O)으로 맞춘다', o0.pl.skill1 === '컨택트히터(타순O)' ? 1 : 0, 1);
   eq('발사각은 그대로 20 → 17', o0.la, 17);
   const o4 = orderAdjust(cO, 4);
   eq('컨택 5번에 옛 이름 — 타순X 로 바뀌는 것은 띄운다', o4.swaps.length === 1 && o4.swaps[0].to === '컨택트히터(타순X)' ? 1 : 0, 1);
-  eq('진짜로 바뀌면(타순X → 타순배치) 띄운다', orderAdjust(cX, 0).swaps.length, 1);
-  const cO0 = bat({ skill1: '컨택트히터(타순O)', launchAngle: 0 });
+  eq('진짜로 바뀌면(타순X → 타순O) 띄운다', orderAdjust(cX, 0).swaps.length, 1);
+  const cO0 = bat({ skill1: '컨택트히터(타순배치)', launchAngle: 0 });
   const oz = orderAdjust(cO0, 0);
-  eq('발사각 정보가 없어도 계산용 이름은 맞춘다 (띄울 것은 없음)', oz && oz.pl.skill1 === '컨택트히터(타순배치)' && oz.swaps.length === 0 && oz.laDelta === 0 ? 1 : 0, 1);
+  eq('발사각 정보가 없어도 계산용 이름은 맞춘다 (띄울 것은 없음)', oz && oz.pl.skill1 === '컨택트히터(타순O)' && oz.swaps.length === 0 && oz.laDelta === 0 ? 1 : 0, 1);
 
   /* ── 핵타선: 3·4·5번에서 타순O + 발사각 +3 ── */
   const h = bat({ skill2: '핵타선(타순X)' });
@@ -2539,7 +2539,7 @@ console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 �
   /* ── 둘 다 달고 있어도 겹치지 않는다 (자리가 안 겹친다) ── */
   const both = bat({ skill1: '컨택트히터(타순X)', skill2: '핵타선(타순X)' });
   const b0 = orderAdjust(both, 0);
-  eq('1번 — 컨택만 켜진다', b0.pl.skill1 === '컨택트히터(타순배치)' && b0.pl.skill2 === '핵타선(타순X)' && b0.la === 17 ? 1 : 0, 1);
+  eq('1번 — 컨택만 켜진다', b0.pl.skill1 === '컨택트히터(타순O)' && b0.pl.skill2 === '핵타선(타순X)' && b0.la === 17 ? 1 : 0, 1);
   const b3 = orderAdjust(both, 3);
   eq('4번 — 핵타선만 켜진다', b3.pl.skill1 === '컨택트히터(타순X)' && b3.pl.skill2 === '핵타선(타순O)' && b3.la === 23 ? 1 : 0, 1);
   const b8 = orderAdjust(both, 8);
@@ -2593,12 +2593,12 @@ console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 �
     eq(base + ' — 타순O 가 타순X 보다 점수가 높거나 같다',
       getSkillScore(r.v + '(타순O)', 6, '타자') >= getSkillScore(r.v + '(타순X)', 6, '타자') ? 1 : 0, 1);
   }
-  /* 여섯 개를 다 챙겼는지 — 도감 타자 표에서 (타순O)/(타순배치) 가 있는 스킬은 모두 규칙이 있어야 한다 */
-  /* v1.1(2026-10-21) 새 표에 클린업 트리오가 더해져 일곱 개 — 옛 표 · 새 표를 함께 본다 */
+  /* 다 챙겼는지 — 도감 타자 표에서 (타순O ...) 변형이 있는 스킬은 모두 규칙이 있어야 한다
+     v1.1(2026-10-21) 새 표에 클린업 트리오, 2026-10-23 선봉장(타순O,주루…)이 더해져 여덟 개 — 옛 표 · 새 표를 함께 본다 */
   const ordered = [...new Set(Object.keys(DEFAULT_SKILLS['타자']).concat(Object.keys(SKILLS_V11['타자']))
-    .filter((k) => /\(타순O\)$|\(타순배치\)$/.test(k)).map(skillBaseName))];
-  eq('타순을 타는 스킬은 일곱 개 (클린업 트리오 포함)', ordered.length, 7);
-  eq('일곱 개 모두 규칙이 있다', ordered.every((b) => ORDER_SKILLS[b]) ? 1 : 0, 1);
+    .filter((k) => /\(타순O[,)]/.test(k)).map(skillBaseName))];
+  eq('타순을 타는 스킬은 여덟 개 (클린업 트리오 · 선봉장 포함)', ordered.length, 8);
+  eq('여덟 개 모두 규칙이 있다', ordered.every((b) => ORDER_SKILLS[b]) ? 1 : 0, 1);
   eq('규칙에만 있고 표에 없는 것은 없다',
     Object.keys(ORDER_SKILLS).every((b) => ordered.indexOf(b) >= 0) ? 1 : 0, 1);
   /* 수비안정성·리드오프가 한 선수에 같이 붙어도 1·2번에서 둘 다 켜진다 */
@@ -2607,6 +2607,50 @@ console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 �
   eq('1번 — 수비안정성·리드오프 둘 다 켜진다',
     t0.pl.skill1 === '수비안정성(타순O)' && t0.pl.skill2 === '리드오프(타순O)' ? 1 : 0, 1);
   eq('그래도 발사각은 그대로', t0.la, 20);
+
+  /* ── 선봉장 (2026-10-23 사용자 지정) — 1 · 2번이면 타순O, 아니면 타순X. 주루 구간은 이름 그대로, 발사각은 안 바뀐다 ── */
+  eq('선봉장은 1·2번', ORDER_SKILLS['선봉장'].at.join(',') === '0,1' ? 1 : 0, 1);
+  eq('선봉장은 발사각을 안 건드린다', ORDER_SKILLS['선봉장'].la, 0);
+  {
+    let good = 1;
+    for (const tier of ['142+', '130~141', '129이하']) for (let n = 1; n <= 9; n++) {
+      const on = n <= 2, want = '선봉장(' + (on ? '타순O' : '타순X') + ',주루' + tier + ')';
+      const a = orderAdjust(bat({ skill1: '선봉장(' + (on ? '타순X' : '타순O') + ',주루' + tier + ')' }), n - 1);
+      if (!a || a.pl.skill1 !== want || a.la !== 20) good = 0;
+      if (orderAdjust(bat({ skill1: want }), n - 1) !== null) good = 0;
+    }
+    eq('선봉장 — 주루 세 구간 × 1~9번 모두 맞게 갈리고 구간은 그대로', good, 1);
+    const s0 = orderAdjust(bat({ skill1: '선봉장(타순배치,주루129이하)' }), 0);
+    eq('옛 이름 선봉장(타순배치,…) 1번 — 새 이름 타순O 로, 바뀐 것으로 띄우지 않는다', s0 && s0.pl.skill1 === '선봉장(타순O,주루129이하)' && s0.swaps.length === 0 ? 1 : 0, 1);
+    const s4 = orderAdjust(bat({ skill1: '선봉장(타순배치,주루129이하)' }), 4);
+    eq('옛 이름 선봉장(타순배치,…) 5번 — 타순X 로 바뀌는 것은 띄운다', s4 && s4.pl.skill1 === '선봉장(타순X,주루129이하)' && s4.swaps.length === 1 ? 1 : 0, 1);
+    const so = orderAdjust(bat({ skill1: '선봉장(타순O)' }), 0);
+    eq('더 옛 이름 선봉장(타순O) — 주루 142+ 로 이어진다', so && so.pl.skill1 === '선봉장(타순O,주루142+)' && so.swaps.length === 0 ? 1 : 0, 1);
+    eq('주루 구간을 모르는 이름은 손대지 않는다', orderAdjust(bat({ skill1: '선봉장' }), 4) === null ? 1 : 0, 1);
+    const sb = bat({ skill1: '선봉장(타순X,주루142+)', s1Lv: 6, sLvManual: true, power: 160, accuracy: 150 });
+    const sdS = { teamName: '기아', liveSetPo: 0 };
+    const at = (k) => lineupBat(sb, 'C', sdS, lineupOpts(Object.assign({}, sdS, { batOrder: ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'].map((s, j) => (j === k ? 'C' : (s === 'C' ? 'DH' : s))) }), 0)).total;
+    eq('선봉장 1번과 5번 점수 차이 = 타순O 와 타순X 값 차이 (발사각 변화 없음)', Math.round((at(0) - at(4)) * 100) / 100,
+      Math.round((getSkillScore('선봉장(타순O,주루142+)', 6, '타자') - getSkillScore('선봉장(타순X,주루142+)', 6, '타자')) * 100) / 100, 0.011);
+  }
+  /* ── 이름 통일 (2026-10-23) — 표에는 새 이름만, 옛 이름은 같은 값으로 이어진다 ── */
+  {
+    const OLD = { '선봉장(타순배치,주루142+)': '선봉장(타순O,주루142+)', '선봉장(타순배치,주루130~141)': '선봉장(타순O,주루130~141)', '선봉장(타순배치,주루129이하)': '선봉장(타순O,주루129이하)',
+      '선봉장(타순배치X,주루142+)': '선봉장(타순X,주루142+)', '선봉장(타순배치X,주루130~141)': '선봉장(타순X,주루130~141)', '선봉장(타순배치X,주루129이하)': '선봉장(타순X,주루129이하)',
+      '컨택트히터(타순배치)': '컨택트히터(타순O)' };
+    eq('신 · 구 표에 타순배치 이름이 남지 않는다', Object.keys(SKILLS_V11['타자']).concat(Object.keys(DEFAULT_SKILLS['타자'])).some((k) => k.indexOf('타순배치') >= 0) ? 0 : 1, 1);
+    let same = 1;
+    for (const o of Object.keys(OLD)) for (const lv of [5, 7, 10]) {
+      for (const ver of ['v10', 'v11']) withScoreVer(ver, () => { if (getSkillScore(o, lv, '타자') !== getSkillScore(OLD[o], lv, '타자') || !(getSkillScore(OLD[o], lv, '타자') > 0)) same = 0; });
+    }
+    eq('옛 이름도 점수가 같다 (신 · 구버전, 레벨 5 · 7 · 10)', same, 1);
+    eq('옛 이름도 최대 레벨이 같다', Object.keys(OLD).every((o) => maxSkillLv(o, '타자') === maxSkillLv(OLD[o], '타자') && maxSkillLv(o, '타자') > 0) ? 1 : 0, 1);
+    const np = normPlayerSkills({ role: '타자', cardType: '골든글러브', skill1: '선봉장(타순배치,주루142+)', s1Lv: 8, skill2: '컨택트히터(타순배치)', s2Lv: 7, skill3: '리그톱플레이어', s3Lv: 6, sLvManual: true });
+    eq('선수 이름 정리 — 옛 이름을 새 이름으로 (다른 옛 이름은 그대로)', np.skill1 === '선봉장(타순O,주루142+)' && np.skill2 === '컨택트히터(타순O)' && np.skill3 === '리그톱플레이어' && np.s1Lv === 8 ? 1 : 0, 1);
+    eq('포특 보너스 — 옛 이름으로 넣어 둔 것도 같은 스킬', ptSkillCount(['선봉장(타순배치,주루142+)'], '선봉장(타순O,주루142+)') + ptSkillCount(['컨택트히터(타순배치)'], '컨택트히터(타순O)'), 2);
+    eq('포특 보너스 — 다른 옛 이름 맞추기는 그대로 (국대에이스 ≠ 국대에이스(버프X))', ptSkillCount(['국대에이스'], '국대에이스(버프X)'), 0);
+    eq('포특 보너스 — 옛 이름 보너스로도 레벨이 오른다', effSkillLv('선봉장(타순O,주루142+)', 8, true, '골든글러브', 1, '타자', ['선봉장(타순배치,주루142+)']), 9);
+  }
 
   /* ── 라인업 점수까지 실제로 타는지 (lineupBat 한 군데만 고쳤으니 여기서 확인한다) ── */
   const sdO = { teamName: '기아', bpcIdx: 4 };
@@ -2625,10 +2669,10 @@ console.log('\n[타순 보정] 컨택트히터 1·2번 / 핵타선 3·4·5번 �
   eq('컨택 1번 — 발사각 17 로 셈', Math.round(launchAngleReq(17) * 100) / 100, at1.laReq);
   eq('컨택 5번 — 발사각 20 으로 셈', Math.round(launchAngleReq(20) * 100) / 100, at5.laReq);
   eq('타순만 바꿔도 총점이 달라진다', at1.total !== at5.total ? 1 : 0, 1);
-  /* 스킬 점수도 같이 바뀐다 — 1번은 타순배치(높은 값), 5번은 타순X */
+  /* 스킬 점수도 같이 바뀐다 — 1번은 타순O(높은 값), 5번은 타순X */
   eq('1번 쪽 스킬 점수가 더 높다', at1.skillScore > at5.skillScore ? 1 : 0, 1);
   eq('그 차이는 표의 차이와 같다', Math.round((at1.skillScore - at5.skillScore) * 100) / 100,
-    Math.round((getSkillScore('컨택트히터(타순배치)', 6, '타자') - getSkillScore('컨택트히터(타순X)', 6, '타자')) * 100) / 100, 0.011);
+    Math.round((getSkillScore('컨택트히터(타순O)', 6, '타자') - getSkillScore('컨택트히터(타순X)', 6, '타자')) * 100) / 100, 0.011);
   /* 되돌아오는지 — 5번에 뒀다가 다시 1번에 두면 처음 값과 같다 */
   eq('다시 1번에 두면 처음 값으로 돌아온다', lineupBat(cPl, 'C', sdO, oAt1).total, at1.total);
   eq('원본 선수는 그대로', cPl.skill1 === '컨택트히터(타순X)' && cPl.launchAngle === 20 ? 1 : 0, 1);
