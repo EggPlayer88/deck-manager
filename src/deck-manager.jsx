@@ -636,12 +636,20 @@ function rankHexA(hex, a) {
 }
 /* 구간을 보여 줄 만큼 덱이 채워졌는지 — 훈련은 0일 수 없어 0 이면 안 넣은 것 (2026-10-22 사용자 지정: 인내가 빈 덱이 많다).
    타자 파워 · 정확 · 선구 · 인내, 투수 변화 · 구위 · 제구가 모두 1 이상이어야 한다.
-   포특 · 라커룸 · 특훈은 0 이 정상일 수 있어 보지 않는다 (막으면 안 된다). 빈 칸 이름 목록을 돌려준다 (다 찼으면 []) */
+   포특 · 라커룸 · 특훈은 0 이 정상일 수 있어 보지 않는다 (막으면 안 된다). 빈 칸 이름 목록을 돌려준다 (다 찼으면 []).
+   예외 — 불펜(중계 RP1~6 · 마무리 CP)의 국가대표 카드는 훈련을 일부러 안 찍는 경우가 많다 (2026-10-23 사용자 지정).
+   셋(변화 · 구위 · 제구)이 모두 0 이면 '안 찍음'으로 보고 막지 않는다. 일부만 0 이면(거의 다 새로 생긴 제구만 빈 경우) 예전처럼 빈 칸으로 센다.
+   10-23 저장 덱: 불펜 국대 훈련 전부 0 은 451장(대부분 롱릴), 일부만 0 은 1,012장 중 1,005장이 제구만 빔. slot 은 라인업 자리 (없으면 예외 없음) */
 var RANK_TRAIN_BAT = [["trainP", "파워"], ["trainA", "정확"], ["trainE", "선구"], ["trainN", "인내"]];
 var RANK_TRAIN_PIT = [["trainC", "변화"], ["trainS", "구위"], ["trainCtl", "제구"]];
-function rankTrainMissing(pl) {
+var RANK_TRAIN_FREE_SLOTS = { RP1: 1, RP2: 1, RP3: 1, RP4: 1, RP5: 1, RP6: 1, CP: 1 };
+function rankTrainFree(pl, slot) { return !!pl && pl.role === "투수" && pl.cardType === "국가대표" && !!RANK_TRAIN_FREE_SLOTS[slot]; }
+function rankTrainMissing(pl, slot) {
   if (!pl) return [];
-  return (pl.role === "투수" ? RANK_TRAIN_PIT : RANK_TRAIN_BAT).filter(function (k) { return !((Number(pl[k[0]]) || 0) > 0); }).map(function (k) { return k[1]; });
+  var keys = pl.role === "투수" ? RANK_TRAIN_PIT : RANK_TRAIN_BAT;
+  var miss = keys.filter(function (k) { return !((Number(pl[k[0]]) || 0) > 0); }).map(function (k) { return k[1]; });
+  if (miss.length === keys.length && rankTrainFree(pl, slot)) return [];
+  return miss;
 }
 /* ═══ 랭킹챌린지 예상 구간 끝 ═══ */
 async function sGet(k){try{var r=await window.storage.get(k);return r?JSON.parse(r.value):null;}catch(e){return null;}}
@@ -5477,7 +5485,7 @@ function RankTierTile(p) {
   var head = (<span style={{ fontSize: 10.5, color: "var(--td)", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{(p.peak ? "고점 · " : "") + "랭챌 예상 ›"}</span>);
   if (miss.length) {
     return (
-      <button onClick={p.onOpen} title={"라인업 선수 " + miss.length + "명의 훈련(타자 파 · 정 · 선 · 인 / 투수 변 · 구 · 제)이 비어 있어요. 훈련은 0일 수 없어서 다 넣어야 예상 구간이 보여요. 누르면 누가 비었는지 보여요"}
+      <button onClick={p.onOpen} title={"라인업 선수 " + miss.length + "명의 훈련(타자 파 · 정 · 선 · 인 / 투수 변 · 구 · 제)이 비어 있어요. 훈련은 0일 수 없어서 다 넣어야 예상 구간이 보여요 (불펜 국가대표는 훈련을 안 찍었으면 셋 다 0 이어도 괜찮아요). 누르면 누가 비었는지 보여요"}
         style={box("var(--inner)", rankHexA(CTL_MISS_COLOR, 0.55), true)}>
         {head}
         <span style={{ fontSize: mob ? 13 : 14, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", lineHeight: 1.35 }}>{"훈련 미입력 " + miss.length + "명"}</span>
@@ -5575,7 +5583,7 @@ function RankTierModal(p) {
             /* 훈련이 빈 선수 — 다 넣어야 내 덱 구간이 나온다 */
             <div style={{ padding: "11px 14px", borderRadius: 12, border: "1px dashed " + rankHexA(CTL_MISS_COLOR, 0.6), background: rankHexA(CTL_MISS_COLOR, 0.06), marginBottom: 10 }}>
               <div style={{ fontSize: 14.5, fontWeight: 800, color: CTL_MISS_COLOR }}>{"훈련이 빈 선수 " + miss.length + "명"}</div>
-              <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, marginTop: 3 }}>{"훈련은 0일 수 없어서, 비어 있으면 TOTAL 이 실제보다 낮게 나와요. 다 넣으면 내 덱 예상 구간이 보여요. 포특 · 라커룸 · 특훈은 0 이어도 괜찮아요."}</div>
+              <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, marginTop: 3 }}>{"훈련은 0일 수 없어서, 비어 있으면 TOTAL 이 실제보다 낮게 나와요. 다 넣으면 내 덱 예상 구간이 보여요. 포특 · 라커룸 · 특훈은 0 이어도 괜찮아요. 불펜(중계 · 마무리) 국가대표는 훈련을 안 찍었으면(셋 다 0) 괜찮아요."}</div>
               <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", columnGap: 10, rowGap: 4, marginTop: 8, fontSize: 12.5, alignItems: "baseline" }}>
                 {miss.map(function (x) {
                   return [
@@ -6127,13 +6135,14 @@ function LineupPage(p) {
   var ctlMissN = peakOn ? 0 : SP_SLOTS.concat(RP_SLOTS).concat(["CP"]).filter(function (s) { return ctlMissing(realPick(s)); }).length;
   /* 랭챌 예상 구간 — 라인업 21명이 다 차고, 모두 훈련(타자 파 · 정 · 선 · 인 / 투수 변 · 구 · 제)이 들어가 있을 때만 구간을 보여 준다.
      훈련은 0일 수 없어 0 이면 안 넣은 것 — 비어 있으면 TOTAL 이 낮게 나와 구간이 틀린다 (2026-10-22 사용자 지정: 인내가 빈 덱이 많다).
-     포특 · 라커룸 · 특훈은 0 이 정상일 수 있어 보지 않는다. 훈련은 실제 덱 그대로(realPick)로 본다 — 고점판독 사본은 훈련을 채워 넣는다.
+     포특 · 라커룸 · 특훈은 0 이 정상일 수 있어 보지 않는다. 불펜 국가대표는 훈련 셋이 모두 0 이면 '안 찍음'으로 통과 (rankTrainMissing 에 자리를 넘긴다, 10-23).
+     훈련은 실제 덱 그대로(realPick)로 본다 — 고점판독 사본은 훈련을 채워 넣는다.
      빈 자리가 있으면 칸을 숨기고, 훈련이 빈 선수가 있으면 '훈련 미입력 N명'. 고점판독 중에는 고점 TOTAL 로.
      표는 관리자가 고친 것(DB) 아니면 코드 표 (rankTiersOf) */
   var rankRows = rankTiersOf(p.skills || SKILL_DATA);
   var lineupSlots = BAT_SLOTS.concat(SP_SLOTS, RP_SLOTS, ["CP"]);
   var lineupFull = lineupSlots.every(function (s) { return !!pick(s); });
-  var rankMiss = lineupFull ? lineupSlots.map(function (s) { var pl = realPick(s); return { slot: s, name: pl ? pl.name : "", miss: rankTrainMissing(pl) }; })
+  var rankMiss = lineupFull ? lineupSlots.map(function (s) { var pl = realPick(s); return { slot: s, name: pl ? pl.name : "", miss: rankTrainMissing(pl, s) }; })
     .filter(function (x) { return x.miss.length > 0; }) : [];
   var rankTile = lineupFull ? (<RankTierTile mobile={mob} rows={rankRows} score={totalScore} peak={peakOn} miss={rankMiss} onOpen={function () { setRankOpen(true); }} />) : null;
   /* 현실 총점은 내 덱 그대로의 선수와 버프로 */
@@ -8418,26 +8427,34 @@ function dexSearch(index, slot, q, cardType, team, opt) {
 /* ── 덱 연구소 화면 ───────────────────────────────────────────
    보유 카드와 상관없이 도감 전체로 라인업을 짜 보고, 능력치 가정 세 티어의
    점수를 한눈에 견준다. 규칙(골글 장수·FA·불펜 3/3/0·자동 타순)은 labRun 이 쥔다 */
-/* ── 팀별 추천덱 ─────────────────────────────────────────────
-   in100(전체 순위 1~100위) 집계에서 팀마다 가장 높은 순위 유저의 덱을 그대로 담았다.
-   실제로 쓰는 덱이라 골든글러브 장수·FA 장수 같은 제한도 이미 맞춰져 있다.
-   자리값은 도감(global_players) 카드 id 다.
-   NC 투수만 원본이 유저별 표가 아니라 세 명 집계 글이다. 많이 쓰는 순으로,
-   제한(FA 2장 · 골글/올스타 역시너지)을 지키는 선에서 골라 채웠다.
-   (2026-09-23 사용자 제공 자료 — 자세한 것은 docs/IN100_DECKS.md) */
+/* ── 팀별 추천덱 (2026-10-26 — 사용자와 팀별로 정한 멤버) ─────────────────
+   10-24 판(상위 유저 사용률 가산)에서 출발해, 팀마다 자리별 대안 카드를 연구소 세 티어(상위 0.1% · 5% · 20%)로 견주며 사용자가 고른 덱.
+   (연구소로 다시 짜면 올스타가 많이 들어가 점수가 더 오르지만, 사용자 결정으로 이 멤버를 그대로 쓴다 — 10-26)
+     · 사용자 지정: 기아 마무리 한기주(여름사나이) · 삼성 지명 구자욱(라이브 POTM)
+       · LG 유격 강정호(골글14) · 마무리 고우석(시그22) · 좌익 김현수B(골글18) · 1루 박병호(골글18) · 지명 오스틴(올스타26)
+       · 두산 선발 폰세 · 안우진 · 미란다(골글21) · 잭로그(시그25) · 곽빈(빅게임헌터), 마무리 진필중(빅게임헌터)
+       · SSG 좌익 김재환(골글18) · 선발 봉중근(빅게임헌터) · 우익 추신수(빅게임헌터)
+       · 롯데 선발 최동원(빅게임헌터) · 중계 김강현(여름사나이) · 2루 · 마무리 그대로 · 레이예스S 는 후보 · NC 중견 박건우B(빅게임헌터)
+     · 라이브 V1 은 라인업에 안 쓴다 · 2025 올스타는 안 쓴다 (상위권에서 안 쓰는 카드 — 상위 덱 300개 중 6번)
+     · 불펜(중계 · 마무리)에 국대 투수 1장 이상 — 국대에이스(투수) 버프. 연구소 점수는 국대에이스(타 · 투)를 늘 받는 것으로 센다
+     · 후보 6장(bench) = 국대 타자 1장(국대에이스 셔틀 — 2026 라이브 · POTM 이 아닌 약한 자팀 국대)
+       + 셋포 8 이상 2026 라이브 5장(모자라면 시그니처, 그달 POTM 포함) → 셋포 200 · 임팩 5 · 시그 5 · 라이브류 7
+       KT 는 라이브류 6, NC 는 임팩 4 · 라이브류 5 — 사용자가 이대로 배포하기로 함 (10-26)
+   sp = 후보까지 셋포(그달 POTM 포함), tiers = 10-26 연구소 세 티어 점수(고점 v1.1 · 불펜 1옵 마당쇠 기준, 참고). 자리값 · 후보는 도감(global_players) 카드 id.
+   계산 · 기록: data/lab_preset_1023/v15_앞서정한멤버/, 그림 data/mockups/lab_redesign_1023/추천덱_화면_1026_v12_앞서정한멤버/ */
 var LAB_PRESET = {
-  "기아": { rank: 6, sp: 200, slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"a01932f7-3b93-4c29-b716-82bd7cd65f0b","SS":"0e72c754-17e7-486d-bbab-59207559e489","LF":"5500ea27-97d1-4a61-bb41-b033ef42f8d9","CF":"5346c4d2-7027-406b-bb69-51286d8f22d8","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"fa863930-4096-43b4-a563-3f18e9cd77a0","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"36a57b19-3dcb-443a-a3b3-5c0042ce8a35","SP3":"82bf7102-30bc-42b0-a176-1477cfd058e3","SP4":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP5":"8e6e3c01-13df-4eca-be27-9b543055e1cc","RP1":"07558eac-cd6c-4712-b74a-1dbb74e2cb0e","RP2":"c91eed98-ba29-4e07-a71a-90925df65a95","RP3":"3f98e1f6-ce40-4ce6-9f91-78e1b71f9f97","RP4":"eb2522fd-e8ac-4ae8-b403-2fa53908db77","RP5":"712bf7d1-60a2-4b59-87f8-64c6440ec567","RP6":"795e573f-ae9b-4f53-a040-c2a57a569adc","CP":"12c77fe4-ab8f-411a-b6f8-92420247dab2"} },
-  "삼성": { rank: 2, sp: 201, slots: {"C":"9f6f1dc3-e597-40b0-9b10-39097a700b24","1B":"fa863930-4096-43b4-a563-3f18e9cd77a0","2B":"3a1bb72e-306f-49fd-a3af-f66dd0838ab6","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"d23c098e-a341-4486-bd14-a7d200af8a83","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"1bd8418a-dadc-47e9-954b-5bcbaf1cb0c7","SP1":"5c35e6bf-6445-476b-a554-d8a116079d83","SP2":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP3":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP4":"ea0e46f5-e7c4-4b2c-b88b-af2b06ee0839","SP5":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","RP1":"05d94f7d-265e-4117-b832-c56a6a122de1","RP2":"093ed078-200c-4de3-9b3e-bcaf34b79170","RP3":"b73ea725-f9f8-4b0a-8815-ddff7e717233","RP4":"577173a4-463c-40ba-9b63-bd7e45837ec2","RP5":"7a9c2500-4764-4b6b-87a6-ffe1a8257d36","RP6":"e48fdd84-e545-4efe-b5cd-1fc52c4d896c","CP":"52bd6c83-9b8b-4d2b-bf43-1b3efe09b79b"} },
-  "LG": { rank: 11, sp: 203, slots: {"C":"3682c099-a197-402c-b90c-959dd1ae286b","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"47ff80b9-baa3-4ced-b0d4-4bac5ef7c454","SS":"b581578c-2f52-436c-a1c0-e55ae50930a5","LF":"6019663f-851b-42ea-ad5b-7b587f140baa","CF":"5573bae9-ff6c-46bd-a70e-09ecfc4ab319","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"8b5c84db-74d9-45de-a84e-1e5388803933","SP1":"d568ab92-9c2d-4391-bce1-317d8c069a05","SP2":"9434541d-9e4f-4d25-9ac4-8122d212c1e3","SP3":"efdc82af-46cf-4a9e-bf8b-656de3bcfb70","SP4":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP5":"32b6ed5d-9cea-4834-b999-7f167883bb1f","RP1":"0bbcd119-ddd7-43df-aa73-d2ab5597fa1d","RP2":"8ece1a63-bcde-477d-83e4-b8a258e40db3","RP3":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP4":"b60a17f1-ea9a-4607-b53a-6e0cfebf39e5","RP5":"25d08682-91c4-4574-80b3-28e2897c63ad","RP6":"845f1555-107d-495a-9eab-45aef547804e","CP":"412d262b-2450-415e-9128-99c8abbfba21"} },
-  "두산": { rank: 16, sp: 203, slots: {"C":"8f0f6055-fb9f-43aa-903a-224d80e6fd90","1B":"a6ba02f6-6684-4991-88f6-750c448ec65c","2B":"5995ccdf-bd53-4c7a-9413-a318b314fe1e","3B":"c455b3b0-a2e1-41c7-9ccf-6ab6b2e470db","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"3e1a7913-bb2a-469d-a791-8d878991a6e3","CF":"f443bf93-695a-4586-895d-ef313ec129b5","RF":"57297274-314e-4a8a-ab08-3d8971753c49","DH":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP3":"07ac79b1-8e8a-4512-bd6f-93fed4344c43","SP4":"adc2e8d1-e4d0-4796-919b-be2c8f0e9627","SP5":"d26045f6-719d-4f49-8507-bf9b43d2cd01","RP1":"dfe97346-c462-43b8-9e3f-17c1acaa5ecb","RP2":"88de73cd-34f6-4916-bf4b-f89a1771e290","RP3":"b129a62c-1cba-4fc3-8fba-2cce915a30ce","RP4":"da75148f-05d1-42a4-8c36-999c571dfd9d","RP5":"a6944596-b105-4d82-af06-d8761eb4c300","RP6":"2af7516f-c114-47d2-ac45-43dab00993cb","CP":"7952d20a-4a13-4a4b-8cb2-ee2d7e5b6a66"} },
-  "KT": { rank: 31, sp: 200, slots: {"C":"e69a8818-706e-44ad-bb4b-e94c6338520c","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"78cd6fb9-1495-45de-9ae1-0ade204d45a2","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"bce438b2-8911-4e5e-ba3d-e4afc4c9b648","CF":"a832c89f-1100-4148-aff4-b3ba84981326","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"a546f9d7-d00f-4d79-b3a9-c372994b50e8","SP1":"37290fa3-f6e7-4622-b474-58708285abaa","SP2":"7ff33218-dcaa-47ab-a73b-ff9cc31af5b3","SP3":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP4":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP5":"32b6ed5d-9cea-4834-b999-7f167883bb1f","RP1":"b12bdd44-d741-49c1-8b1e-7eff7d85a9ac","RP2":"388f2b64-c2b1-4475-92eb-92f543b7febc","RP3":"db709146-925c-4f95-a4e4-352371df2475","RP4":"5b8ebc17-cbc3-4c19-94f8-da9cff9fa438","RP5":"cb299a70-dbb2-4b41-bae8-f776f1fa4c3e","RP6":"02fdf484-c21f-4053-a25a-a95b5a848668","CP":"3633b792-63c1-4feb-935b-b8ff18aee028"} },
-  "SSG": { rank: 5, sp: 201, slots: {"C":"47e7b3de-9966-4e55-8ba1-9bc0443780d2","1B":"326f17bc-e359-4aea-a6a9-ff69e7ddd741","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"7757453a-d217-473f-81d0-d261b7458c29","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"61ef6b87-f198-423b-bcc3-a0ada09b14d0","RF":"111e19ca-0f15-4821-94f5-c37992d286dc","DH":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SP1":"57575fce-be46-42ae-92c1-72662cfec961","SP2":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP3":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP4":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP5":"80ca71bb-b9cf-4141-b2cc-47fdf2a522dc","RP1":"67cd3fb1-3c83-4ab9-9833-074788603e09","RP2":"edf9d4b1-5164-4111-a466-206d4815cbeb","RP3":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP4":"35f1503c-be5d-4e44-ac67-3aa1612bfc8d","RP5":"3fb01b7a-7b01-4c0e-8568-d54824e1e950","RP6":"0000268b-ff4e-43ce-98a7-ce271fb2038d","CP":"db759674-7e03-4461-99ea-1900d57fd3ef"} },
-  "롯데": { rank: 1, sp: 200, slots: {"C":"0a7e4cc7-3c76-495c-b557-ee89cf1e24d9","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"5568baff-0d4f-4f5f-84d7-e56fb5f6f82a","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"5500ea27-97d1-4a61-bb41-b033ef42f8d9","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"e393424e-d3f0-44ce-9ebc-113c7be356e2","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP3":"eba7ff7d-f4e7-463e-b92f-3007b1f781b4","SP4":"b20ea873-f851-41df-af87-9bf93727f137","SP5":"52c0cdca-355a-4448-b01d-de48e4ffcebe","RP1":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP2":"f1dd3177-35e7-40ba-9e2e-55a304161940","RP3":"f1270c04-cd46-402d-b508-c6ed50abb3e0","RP4":"19a2c2c0-198a-4c56-92f1-6438dc0b1e11","RP5":"09d32244-b8c5-43fb-bd99-648c3d0b2e59","RP6":"1d421d55-7299-4c3e-a7ac-b16efe27019d","CP":"ae2ea113-6edf-433b-a8a6-85afd30b001e"} },
-  "한화": { rank: 4, sp: 200, slots: {"C":"28f4e88a-488b-46cc-a250-87df5373e245","1B":"6ee4b051-fce4-4c3e-86a2-4352e24ea246","2B":"2e783b65-d6e1-486a-8e57-3078ae31502e","3B":"7757453a-d217-473f-81d0-d261b7458c29","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"966cdff3-d332-4fe1-b09d-a13bebe23829","CF":"f443bf93-695a-4586-895d-ef313ec129b5","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"5f86691a-6463-4a65-86a9-5bec6b27ad11","SP1":"07ac79b1-8e8a-4512-bd6f-93fed4344c43","SP2":"c97f66e7-323b-43c6-ba0b-0b02fb0afe66","SP3":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP4":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP5":"d9d8e233-907e-4955-ad0e-34d743037259","RP1":"e542200f-1f0c-413a-818a-28b28e98bd72","RP2":"3e2c7c0a-809d-41e3-b98f-024c3f8983e3","RP3":"4140e10d-f1c4-41be-ad3f-77854ad48c23","RP4":"08ea7467-c981-4881-a24a-867c35b50579","RP5":"94cc50a4-c85b-45cf-9b10-cf295020825b","RP6":"86045978-6150-4dcd-8800-daca0340583b","CP":"7450050b-ea25-4632-902e-96ffded3ccba"} },
-  "NC": { rank: 23, sp: 200, slots: {"C":"20d27998-983f-4d2b-9932-ccc3a70ded06","1B":"1fb099b7-b04b-40a3-a856-dccd305ade03","2B":"5d6f7dc5-2465-4cd2-a7fa-20c625576296","3B":"47ff80b9-baa3-4ced-b0d4-4bac5ef7c454","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"4619f98c-2ca8-42eb-8402-97bdf657459d","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"bdb0c462-e915-4961-9795-2bd1ec0b2004","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"0ec33cc9-7989-4966-8fe2-3b40d6d74078","SP3":"7c0e4204-813a-4657-993f-bf88ea8ea618","SP4":"60fd0770-617a-43c4-ac04-20b216053905","SP5":"2c713ea0-df6a-4af7-aa70-abca74a2a524","RP1":"eb5f97b3-3b8e-4a15-a62a-03c70c48331b","RP2":"e7a3aa1e-c651-4fda-af6d-cde0b665e5fa","RP3":"3e45cb71-e612-4b6b-92e5-94a21e15c82e","RP4":"9c3f992e-02f3-4038-8677-f8db1ed581ee","RP5":"64fbc86e-9b41-4f3e-920d-1a10d33e22a5","RP6":"adc0e9fc-d195-414b-a6a1-1eb42c5081b8","CP":"52bd6c83-9b8b-4d2b-bf43-1b3efe09b79b"} },
-  "키움": { rank: 27, sp: 200, slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"95b63c08-2366-40c1-9ea7-4317f27c0096","2B":"94fba2a8-505e-44f6-a4d0-da9c6456814e","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"ffcf846b-de6b-434b-92eb-63faa8db6253","LF":"bce438b2-8911-4e5e-ba3d-e4afc4c9b648","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"eaeffeb0-b0eb-43bb-8f3d-4f378b77d63e","SP1":"7a6eb77b-ed50-4046-868c-a34026be8600","SP2":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP3":"5aed71ed-0ff9-4764-ab14-42e284d2060e","SP4":"57575fce-be46-42ae-92c1-72662cfec961","SP5":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","RP1":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP2":"95114e49-4ad4-495f-9563-9c11a3aae93c","RP3":"7a6ef7aa-616c-4055-8eb4-5311e1b782bb","RP4":"6a1d2632-7790-4134-9cab-d6162bbc806b","RP5":"63f4ff6c-4e70-45d2-9bbe-fd648e48be34","RP6":"0e21098b-c90c-4cdf-b906-3f2e5ef2a58d","CP":"6a5f0cc0-2d53-4324-bf87-851d53b8c73f"} }
+  "기아": { sp: 200, tiers: [9030.0, 8554.1, 8310.8], slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"47ff80b9-baa3-4ced-b0d4-4bac5ef7c454","SS":"5aedc44b-d18d-481b-8ce0-7a2e4e7c11ee","LF":"5500ea27-97d1-4a61-bb41-b033ef42f8d9","CF":"5346c4d2-7027-406b-bb69-51286d8f22d8","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"11863070-72f0-4601-bb40-7045ab14954a","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"82bf7102-30bc-42b0-a176-1477cfd058e3","SP3":"36a57b19-3dcb-443a-a3b3-5c0042ce8a35","SP4":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP5":"ad1f6e34-e5c0-4feb-aaf0-e3b2b1c6be54","CP":"12c77fe4-ab8f-411a-b6f8-92420247dab2","RP1":"c91eed98-ba29-4e07-a71a-90925df65a95","RP2":"07558eac-cd6c-4712-b74a-1dbb74e2cb0e","RP3":"aa306669-5e62-4f06-b8c0-193df94af651","RP4":"eb2522fd-e8ac-4ae8-b403-2fa53908db77","RP5":"795e573f-ae9b-4f53-a040-c2a57a569adc","RP6":"712bf7d1-60a2-4b59-87f8-64c6440ec567"}, bench: ["ece24342-ac11-41ca-a6a3-77fad56eb889","bfe54c4e-c57e-4ed6-9263-6190fcb51ce6","c672c11b-12e8-49a6-81d1-cdbb09de8c65","20b93f1f-b718-4541-be66-36e6a5143036","cf18d56b-25f7-4cbd-928d-1a840e9e6251","916b690d-50e5-42c7-9f5c-7dcaef1833cc"] },
+  "삼성": { sp: 202, tiers: [9075.3, 8593.6, 8357.9], slots: {"C":"9f6f1dc3-e597-40b0-9b10-39097a700b24","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"3a1bb72e-306f-49fd-a3af-f66dd0838ab6","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"2b9e5ec7-a99c-41e8-9ea9-91975ada727c","DH":"3df30d37-b93c-4817-8310-7f85fdef6980","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"ea0e46f5-e7c4-4b2c-b88b-af2b06ee0839","SP3":"5c35e6bf-6445-476b-a554-d8a116079d83","SP4":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP5":"2c713ea0-df6a-4af7-aa70-abca74a2a524","CP":"52bd6c83-9b8b-4d2b-bf43-1b3efe09b79b","RP1":"3710d0c3-dc8d-40bf-bd04-c880da246a0f","RP2":"577173a4-463c-40ba-9b63-bd7e45837ec2","RP3":"093ed078-200c-4de3-9b3e-bcaf34b79170","RP4":"b73ea725-f9f8-4b0a-8815-ddff7e717233","RP5":"05d94f7d-265e-4117-b832-c56a6a122de1","RP6":"20d69008-67c6-4262-b8e2-b9c4f2299eac"}, bench: ["649c496c-d891-4907-84f5-3fcfec00eec4","28dba9b4-61bd-4e75-b9f1-ccc6a69ff240","7cc64110-5c02-4845-a0ec-9ca50a9ee38d","8c6e224f-b97d-46ee-aed8-852d3d5124a2","3b1f35ea-54bc-4205-958e-31e7db7e82a3","d47d8603-e190-4ffb-a218-52a58558d3ad"] },
+  "LG": { sp: 200, tiers: [9060.1, 8580.5, 8342.0], slots: {"C":"3682c099-a197-402c-b90c-959dd1ae286b","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"6019663f-851b-42ea-ad5b-7b587f140baa","CF":"5573bae9-ff6c-46bd-a70e-09ecfc4ab319","RF":"9a1ccc29-c6b5-43e1-bcb9-500f4aeaf767","DH":"8b5c84db-74d9-45de-a84e-1e5388803933","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"d568ab92-9c2d-4391-bce1-317d8c069a05","SP3":"676077b3-ef6b-4724-b066-d0c3389594dd","SP4":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP5":"32b6ed5d-9cea-4834-b999-7f167883bb1f","CP":"412d262b-2450-415e-9128-99c8abbfba21","RP1":"8ece1a63-bcde-477d-83e4-b8a258e40db3","RP2":"b60a17f1-ea9a-4607-b53a-6e0cfebf39e5","RP3":"25d08682-91c4-4574-80b3-28e2897c63ad","RP4":"1d832a89-eca2-4016-8449-dac8c1d01fe2","RP5":"3767dea3-f902-440c-8b93-c0ff03d9ccc2","RP6":"845f1555-107d-495a-9eab-45aef547804e"}, bench: ["98e047a7-ad9e-4a62-8c63-8b2148426394","6911b890-d129-42e0-beb1-3adf77f030b4","bf080f8d-db96-44ac-b763-094b16b33e53","4a2296cc-61d5-4a21-8658-2244f023464e","a976a9d5-328a-41d7-9622-264bde880a3d","dee8ec10-751c-4256-bed9-2ea073c8d907"] },
+  "두산": { sp: 201, tiers: [9050.9, 8571.5, 8320.3], slots: {"C":"9cb2accc-77c9-4d4c-b061-65b78a164535","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"1c9e6727-b48a-4b59-ac65-f0ed746f2c66","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"9788ec06-e74a-4ece-8319-66d24187f23b","CF":"f443bf93-695a-4586-895d-ef313ec129b5","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"ecf5c8d6-1246-41f3-8898-b3db42322065","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP3":"13c2c302-5bfd-44fb-a95a-0a67bda2f562","SP4":"6381fa14-1eae-42c4-b06a-7e190c0f386f","SP5":"07ac79b1-8e8a-4512-bd6f-93fed4344c43","CP":"7952d20a-4a13-4a4b-8cb2-ee2d7e5b6a66","RP1":"f02610aa-aeba-4f7e-84e2-12a49bc37901","RP2":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP3":"3606c625-2dc3-474c-8085-610d42db7cf9","RP4":"88de73cd-34f6-4916-bf4b-f89a1771e290","RP5":"da75148f-05d1-42a4-8c36-999c571dfd9d","RP6":"95ff8746-6701-4b11-9e7d-c483777beb09"}, bench: ["1324022a-fb7b-44aa-8fc1-9111ec89dc0b","52d8b263-3c65-4c47-8c64-386a96021851","aec7ef67-21b7-446e-a2e2-5a9abdb32a77","daad011f-04cd-4cf5-86ba-c06e82041191","d5459f1b-31ec-495d-99e3-ce93f7e8c8ca","39233eab-b687-4782-ace7-41e7169f9709"] },
+  "KT": { sp: 200, tiers: [9035.1, 8560.2, 8319.1], slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"78a0a39a-2e94-4883-b481-b0e9ca450dd2","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"9ce9e064-ab38-4c6c-ba47-5b75d8c7fd1c","CF":"61ef6b87-f198-423b-bcc3-a0ada09b14d0","RF":"efb3c170-7f86-4fd7-bab6-7b5d3fee94fc","DH":"97eb2c83-fde2-45c1-835d-ad39e4f469f9","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"37290fa3-f6e7-4622-b474-58708285abaa","SP3":"7ff33218-dcaa-47ab-a73b-ff9cc31af5b3","SP4":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP5":"2c713ea0-df6a-4af7-aa70-abca74a2a524","CP":"3633b792-63c1-4feb-935b-b8ff18aee028","RP1":"388f2b64-c2b1-4475-92eb-92f543b7febc","RP2":"b12bdd44-d741-49c1-8b1e-7eff7d85a9ac","RP3":"5b8ebc17-cbc3-4c19-94f8-da9cff9fa438","RP4":"cf683d06-889a-4cfe-94c3-ea6278269b51","RP5":"feb8616a-4996-4955-9d85-e69f264dadb4","RP6":"02fdf484-c21f-4053-a25a-a95b5a848668"}, bench: ["94a231a5-b4b8-405d-bf7f-d2c43a221161","7c697d42-3415-4fea-821a-b660b1a8df13","9475b1f5-6779-41f0-a835-9aed71108cfd","8e997bc3-64b5-464f-ace1-cd7e98134022","9decf003-5e14-49fd-95e3-3a6b021ca4af","794d066e-8585-4073-bb0e-231cc8f358ee"] },
+  "SSG": { sp: 201, tiers: [9031.2, 8562.4, 8326.0], slots: {"C":"47e7b3de-9966-4e55-8ba1-9bc0443780d2","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"7757453a-d217-473f-81d0-d261b7458c29","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"bce438b2-8911-4e5e-ba3d-e4afc4c9b648","CF":"87027384-3681-4911-a61a-f5cbbff206fa","RF":"1693575d-3fbe-4374-9282-8a70d5dc932f","DH":"326f17bc-e359-4aea-a6a9-ff69e7ddd741","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"57575fce-be46-42ae-92c1-72662cfec961","SP3":"676077b3-ef6b-4724-b066-d0c3389594dd","SP4":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP5":"32b6ed5d-9cea-4834-b999-7f167883bb1f","CP":"db759674-7e03-4461-99ea-1900d57fd3ef","RP1":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP2":"35f1503c-be5d-4e44-ac67-3aa1612bfc8d","RP3":"67cd3fb1-3c83-4ab9-9833-074788603e09","RP4":"edf9d4b1-5164-4111-a466-206d4815cbeb","RP5":"0000268b-ff4e-43ce-98a7-ce271fb2038d","RP6":"6cda3e8f-29ef-46c6-81aa-67e35c24a14c"}, bench: ["961f9269-abb3-4217-a9f1-084462bdd405","8d0cabf2-0c5f-437b-b44f-5158e41b840f","77890c12-ac3f-4db0-9b74-4fe1040518e0","9d49ad11-e07f-46c8-991b-b597316a12ac","596c7f7a-f6d2-4fe3-a2ba-e5bbb48c7237","ade93893-b223-4786-a9a5-d2b6650a7377"] },
+  "롯데": { sp: 200, tiers: [9048.3, 8571.5, 8332.9], slots: {"C":"04df2d79-c0c7-4fb9-8d44-baf7bafefc1d","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"303ed18a-1ed0-45fb-83cf-c9d10007b4f4","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"5500ea27-97d1-4a61-bb41-b033ef42f8d9","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"e393424e-d3f0-44ce-9ebc-113c7be356e2","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP3":"eba7ff7d-f4e7-463e-b92f-3007b1f781b4","SP4":"af0e8555-ff14-434b-8f94-74ed3ceb5d30","SP5":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","CP":"ae2ea113-6edf-433b-a8a6-85afd30b001e","RP1":"f1270c04-cd46-402d-b508-c6ed50abb3e0","RP2":"f1dd3177-35e7-40ba-9e2e-55a304161940","RP3":"19a2c2c0-198a-4c56-92f1-6438dc0b1e11","RP4":"bb3cd84e-1ef9-4d7e-b646-33e7b3175028","RP5":"ca6924a3-0f70-4072-9951-7112a2b958bc","RP6":"265ec1e2-deeb-4ddd-8d89-0d6bf832e55c"}, bench: ["c85ed538-9e9a-4a70-86e8-0b6f736ef137","3b9eb19e-6c32-4550-9682-857978d57835","4a8e01de-5f89-442b-b076-e046b021d19f","f55bd561-2377-4ab5-9d56-ee9e4ac570a3","a888b61c-7ea6-4165-85f5-4c408b101d0b","9b79670a-f406-434c-8adb-70eecfe46dbb"] },
+  "한화": { sp: 202, tiers: [9036.6, 8544.6, 8299.9], slots: {"C":"8cfdb9b9-9f32-4585-9293-d18f5b04bb30","1B":"6ee4b051-fce4-4c3e-86a2-4352e24ea246","2B":"2e783b65-d6e1-486a-8e57-3078ae31502e","3B":"7757453a-d217-473f-81d0-d261b7458c29","SS":"fe687900-f4a4-4a8b-a5ee-d415e807e14d","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"f443bf93-695a-4586-895d-ef313ec129b5","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"966cdff3-d332-4fe1-b09d-a13bebe23829","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"d2ad72c0-0813-42f6-ba32-cc7f577e069f","SP3":"07ac79b1-8e8a-4512-bd6f-93fed4344c43","SP4":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP5":"7a184ed6-e77d-4e1f-87e6-6b4ad42e82d2","CP":"7450050b-ea25-4632-902e-96ffded3ccba","RP1":"e542200f-1f0c-413a-818a-28b28e98bd72","RP2":"e40648bc-5ac7-4bf9-b39e-a0611a524dc8","RP3":"3e2c7c0a-809d-41e3-b98f-024c3f8983e3","RP4":"4140e10d-f1c4-41be-ad3f-77854ad48c23","RP5":"94cc50a4-c85b-45cf-9b10-cf295020825b","RP6":"86045978-6150-4dcd-8800-daca0340583b"}, bench: ["3e46eff2-768b-41af-8ff3-0e9612c9af4c","8ab45029-ca7e-4290-ac8b-8a5ad2287f84","0c879355-ee93-4b7c-ade8-d256b1152021","d4154656-58ed-4038-a1a8-4b14e08288c6","b7dc35ca-2970-4610-9f50-e1051e2ceea9","3de7c150-1fb4-4600-9bc6-98c0b5c45b58"] },
+  "NC": { sp: 202, tiers: [9034.9, 8556.3, 8313.5], slots: {"C":"20d27998-983f-4d2b-9932-ccc3a70ded06","1B":"1fb099b7-b04b-40a3-a856-dccd305ade03","2B":"5d6f7dc5-2465-4cd2-a7fa-20c625576296","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"b581578c-2f52-436c-a1c0-e55ae50930a5","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"4619f98c-2ca8-42eb-8402-97bdf657459d","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"bdb0c462-e915-4961-9795-2bd1ec0b2004","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"7c0e4204-813a-4657-993f-bf88ea8ea618","SP3":"62e273f1-b533-4e2d-9d8b-5352e48972d7","SP4":"0ec33cc9-7989-4966-8fe2-3b40d6d74078","SP5":"32b6ed5d-9cea-4834-b999-7f167883bb1f","CP":"06a1c5c0-4f21-4816-96c0-d22892ca16dc","RP1":"e7a3aa1e-c651-4fda-af6d-cde0b665e5fa","RP2":"adc0e9fc-d195-414b-a6a1-1eb42c5081b8","RP3":"eb5f97b3-3b8e-4a15-a62a-03c70c48331b","RP4":"fcb292ca-85df-49ad-bf1f-d5895f206727","RP5":"6b1747dd-6c39-49e5-b928-af399f0db64b","RP6":"64fbc86e-9b41-4f3e-920d-1a10d33e22a5"}, bench: ["8907bc36-e238-4d2a-a36c-0aed2c5ede86","8ac787f3-0446-45ec-a832-86eecaddad85","c64e7602-3af6-43fb-b191-03df748a68c0","abaff01d-b571-4a89-99d1-be1da621022a","80f67465-4b8c-46d0-bb55-c2e8cdfd0d69","aa2a2ec2-44a5-469c-a2fe-8841493ff466"] },
+  "키움": { sp: 201, tiers: [9043.8, 8570.2, 8308.0], slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"8389280c-9535-4af5-8b5a-60667a1a2bb7","2B":"94fba2a8-505e-44f6-a4d0-da9c6456814e","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"0834489c-48e5-48fa-8432-644c4d19f09f","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"07ccb7fb-5dfc-43e6-9360-b236c87da413","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"5aed71ed-0ff9-4764-ab14-42e284d2060e","SP3":"7a6eb77b-ed50-4046-868c-a34026be8600","SP4":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP5":"2c713ea0-df6a-4af7-aa70-abca74a2a524","CP":"334b7a3c-e67f-45b3-8f30-909b6faea1ee","RP1":"d70ec371-f790-475e-a933-499b00297bc8","RP2":"fe7d0874-a94c-452a-a05e-8b409bdb5f08","RP3":"6a1d2632-7790-4134-9cab-d6162bbc806b","RP4":"821982ad-6bb3-4991-8a96-c7c8e02bc449","RP5":"7a6ef7aa-616c-4055-8eb4-5311e1b782bb","RP6":"63f4ff6c-4e70-45d2-9bbe-fd648e48be34"}, bench: ["a5e2ff48-1444-4a3a-b258-2a237d4620ff","d1c1d38b-2ee7-43c3-b1e4-7bfc6e62d13f","ec233f41-e768-4ea6-b1d4-d27a630cc540","3b30f3ee-588d-457e-be37-a9605fb2ee60","11702537-9341-43a9-aa76-66a13385de9c","20be33eb-105a-4a0f-b6c4-bd602b482230"] }
 };
-var LAB_PRESET_NOTE = "in100 상위 100위 집계에서 그 팀 1등 덱을 그대로 가져옵니다";
+var LAB_PRESET_NOTE = "팀마다 자리별 대안 카드를 세 티어(상위 0.1% · 5% · 20%)로 견주며 고른 덱 (10-26 기준, 불펜 국대 · 후보 국대에이스 포함)";
 
 var LAB_MAX_SAVES = 3;
 var LAB_TIER_COLOR = { 0.1: "#FFD54F", 5: "#7FD4FF", 20: "#A5D6A7" };
@@ -8450,6 +8467,19 @@ function labFitsBatSlot(sp, slot) {
 }
 function labPitKind(slot) { return slot === "CP" ? "마무리" : slot.charAt(0) === "S" ? "선발" : "중계"; }
 
+/* 내 덱(라인업) → 연구소 자리값. 내 선수는 도감 카드 id(dbId)를 들고 있다 — 옛 id 는 남긴 카드로 바꾼다(canonCardId).
+   도감에 없는 카드(지워진 카드 등)는 빼고 센다. 후보(BN) 칸은 연구소에 없어 넣지 않는다 (2026-10-26 '내 덱 불러오기') */
+function labDeckSlots(players, lm) {
+  var byPid = {}; (players || []).forEach(function (x) { if (x && x.id) byPid[x.id] = x; });
+  var slots = {}, used = {}, miss = 0, any = 0;
+  LAB_SLOTS.forEach(function (sl) {
+    var pl = byPid[(lm || {})[sl]]; if (!pl) return;
+    any++;
+    var r = pl.dbId ? findCard(canonCardId(pl.dbId)) : null;
+    if (r && !used[r.id]) { slots[sl] = r.id; used[r.id] = 1; } else miss++;
+  });
+  return { slots: slots, miss: miss, any: any };
+}
 function LabPage(p) {
   var mob = p.mobile;
   var _sharing = useState(false); var sharing = _sharing[0]; var setSharing = _sharing[1];
@@ -8563,15 +8593,24 @@ function LabPage(p) {
     (p.saveLab || function () {})(list.slice(0, LAB_MAX_SAVES));
     setMsg("실험 " + (i + 1) + " 에 저장했습니다.");
   };
-  /* 추천덱 — 그 팀 1등 덱을 그대로 올린다. 지금 짜 둔 것은 덮어쓴다 */
+  /* 추천덱 — 그 팀 추천덱을 올린다 (LAB_PRESET). 지금 짜 둔 것은 덮어쓴다 */
   var preset = LAB_PRESET[team];
   var loadPreset = function () {
     if (!preset) { setMsg("이 구단은 아직 추천덱이 없습니다."); return; }
     if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 " + team + " 추천덱을 불러옵니다. 계속할까요?")) return;
     touch(function () { setSlots(Object.assign({}, preset.slots)); });
     var n = Object.keys(preset.slots).length;
-    setMsg(team + " " + preset.rank + "위 덱을 불러왔습니다 (" + n + "자리"
-      + (n < LAB_SLOTS.length ? " — 원본에 투수가 없어 타자만 들어옵니다" : "") + ")");
+    setMsg(team + " 추천덱을 불러왔습니다 (" + n + "자리)");
+  };
+  /* 내 덱 불러오기 — 지금 고른 내 덱의 라인업(21자리)을 도감 카드로 올린다. 덱 구단으로 바꾸고, 지금 짜 둔 것은 덮어쓴다.
+     내 강화 · 스킬 · 훈련 값은 안 가져온다 — 연구소는 늘 같은 가정(상위 0.1% · 5% · 20%)으로 센다 (2026-10-26 사용자 요청) */
+  var loadMine = function () {
+    var d = labDeckSlots(p.players, p.lineupMap);
+    if (!d.any) { setMsg("내 덱 라인업이 비어 있습니다. 라인업 화면에서 선수를 먼저 넣어 주세요."); return; }
+    if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 내 덱을 불러옵니다. 계속할까요?\n(저장해 둔 실험 1~3 은 그대로입니다)")) return;
+    var tm = teamKey(p.teamName);
+    touch(function () { if (tm && KBO_TEAMS.indexOf(tm) >= 0) setTeam(tm); setSlots(d.slots); });
+    setMsg("내 덱을 불러왔습니다 (" + Object.keys(d.slots).length + "자리)" + (d.miss ? " — 도감 카드로 못 옮긴 " + d.miss + "장은 빠졌습니다" : ""));
   };
   var loadFrom = function (i) {
     var v = saves[i]; if (!v) return;
@@ -8683,7 +8722,7 @@ function LabPage(p) {
     <div style={{ padding: mob ? 10 : 16, maxWidth: 1180, margin: "0 auto", paddingBottom: mob ? PAGE_BOTTOM : 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
         <span style={{ fontSize: mob ? 17 : 20, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"🔬 덱 연구소"}</span>
-        <span style={{ fontSize: 11, color: "var(--td)" }}>{"도감 전체로 짜 보는 실험실 — 내 카드와 상관없습니다"}</span>
+        <span style={{ fontSize: 11, color: "var(--td)" }}>{"도감 카드로 짜 보는 실험실 — 고쳐도 내 실제 덱은 바뀌지 않습니다"}</span>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
@@ -8693,11 +8732,17 @@ function LabPage(p) {
           {KBO_TEAMS.map(function (t) { return (<option key={t} value={t}>{t}</option>); })}
         </select>
         <button onClick={loadPreset} disabled={!preset}
-          title={preset ? (LAB_PRESET_NOTE + " (" + team + " " + preset.rank + "위)") : "이 구단은 아직 추천덱이 없습니다"}
+          title={preset ? "추천덱 불러오기 — " + LAB_PRESET_NOTE : "이 구단은 아직 추천덱이 없습니다"}
           style={{ padding: "5px 10px", fontSize: 12, fontWeight: 800, background: "var(--card)",
             border: "1px solid rgba(255,213,79,0.45)", borderRadius: 6,
             color: preset ? "var(--acc)" : "var(--td)", cursor: preset ? "pointer" : "default", whiteSpace: "nowrap" }}>
           {"\u2B50 추천덱"}
+        </button>
+        <button onClick={loadMine}
+          title="내 덱 불러오기 — 지금 고른 내 덱의 라인업(21자리)을 도감 카드로 올립니다. 내 강화 · 스킬 · 훈련 값이 아니라 연구소 가정으로 셉니다. 실제 덱은 바뀌지 않아요"
+          style={{ padding: "5px 10px", fontSize: 12, fontWeight: 800, background: "var(--card)",
+            border: "1px solid var(--bd)", borderRadius: 6, color: "var(--t1)", cursor: "pointer", whiteSpace: "nowrap" }}>
+          {"\uD83D\uDCE5 내 덱"}
         </button>
         <span style={{ fontSize: 11, color: "var(--td)" }}>{filled + "/" + LAB_SLOTS.length + "자리"}</span>
         {limitChip("골글", limits.gg, limits.ggMax,
@@ -11203,100 +11248,102 @@ var PREBUILT_SKILL_DIST = {"타자|골든글러브|우|-":[0,4.22,5.2,5.93,6.72,
 
 /* ═══ 고점판독기 ═══
    라인업 선수 전원을 "아주 잘 뽑힌 카드" 로 가정해 보여 준다.
-   분포는 스킬·훈련·특훈 분포와 같은 모델을 확률 그대로 전수 계산했다 (2026-09-16, data/peak_skills.mjs · peak_train.mjs · peak_block.py).
+   분포는 스킬·훈련·특훈 분포와 같은 모델을 확률 그대로 전수 계산했다 (2026-09-16 처음, 2026-10-25 v1.1 · 상위 0.1% 로 다시 — data/peak_v11_1025/).
    스킬표·가중치·훈련 포인트를 바꾸면 다시 뽑아야 한다.
 
-   스킬: "포지션|카드|손|포수" -> [1옵션, 2옵션, 3옵션] (레벨은 SKILL_DIST_LV). 전부 메이저다.
-     기준 — 골글 우타 정밀타격·대표타자·베스트포지션 (사용자 지정, 상위 0.0436%). 나머지는 이 확률의 2배 안에서 맞췄다.
-     마무리 — 카드·손잡이와 관계없이 마당쇠·소방수·위닝샷 (사용자 지정).
-     1옵션 — 포수 포수리드 / 임팩트·올스타 타자 정밀타격·우투 선발 저니맨·좌투 선발 좌승사자·불펜 마당쇠 (사용자 지정) /
-       그 밖의 카드는 손잡이·보직 대표 스킬. 좌타는 좌타해결사, 양타는 스위치히터가 반드시 들어가고,
-       포수는 2옵션에 손잡이 대표 스킬을 둔다 (우타 포수는 정밀타격 없이도 찾아 봤다).
-     남는 칸은 사람들이 선호하는 스킬 먼저 — 타자 대표타자·베스트포지션·정밀타격 (다음 저니맨·홈어드밴티지),
-       투수 저니맨·홈어드밴티지. 확률이 비슷한 조합 중 선호 스킬이 많은 것, 같으면 기준에 가까운 것.
-     넣지 않은 스킬 — 앱이 조건을 가정하는 스킬(원투펀치·철완·5툴·선봉장·타순 스킬·도전정신), 불펜 자리별로 갈리는 스킬
-       (긴급투입·승리의함성·수호신 등), 대타스페셜·약속의 8회, 국대에이스, 0점대 메이저, 라이브·국가대표의 패기(시그/올스타…).
-     주석의 상위 % 는 임팩트·올스타면 2·3옵션 기준이다. */
+   스킬: "포지션|카드|손|포수" -> [1옵션, 2옵션, 3옵션] (레벨은 SKILL_DIST_LV). 전부 메이저다. 2026-10-25 사용자 지정 규칙:
+     목표 — 상위 0.1%. 레벨 · 메이저 확률 · v1.1 스킬표로 분포를 정확히 계산해 0.071~0.141%(0.1% 의 √2 배) 안에서 고르고,
+       그 안에서는 선호 스킬이 많은 조합, 같으면 0.1% 에 가까운 조합 (그 안에 없으면 가장 가까운 조합 — 포수 칸 몇 개).
+     1옵션 — 우타 우타해결사(우타) · 좌타 좌타해결사(좌타) · 양타 스위치히터(양타)(= 양타해결사) /
+       선발 우투 저니맨 · 좌투 좌승사자(좌투) / 불펜(중계 · 마무리)은 손잡이 상관없이 마당쇠(불펜) (9월 규칙과 같다).
+       포수 칸(고점판독기 전용 — 연구소는 포수도 일반 타자 표)은 포수리드 + 손잡이 스킬.
+     임팩트 · 올스타 — 1옵션은 골라 고정할 수 있다(스킬 계산기와 같은 규칙). 위 1옵션으로 고정하고,
+       2 · 3옵션은 그 두 칸의 분포(일반스킬변경권, 메이저 7%)에서 0.1% 로 고른다.
+     남는 칸은 사람들이 선호하는 스킬 먼저 — 타자 대표타자 · 베스트포지션 · 정밀타격 (다음 저니맨 · 홈어드밴티지),
+       투수 저니맨 · 홈어드밴티지.
+     넣지 않은 스킬 — 앱이 조건을 가정하는 스킬(원투펀치 · 철완 · 5툴 · 선봉장 · 타순 스킬 · 도전정신), 불펜 자리별로 갈리는 스킬
+       (긴급투입 · 승리의함성 · 수호신 등), 대타스페셜 · 약속의 8회, 국대에이스, 3점 아래 메이저, 라이브 · 국가대표의 패기.
+     주석의 점수 · 상위 % 는 임팩트 · 올스타면 2 · 3옵션 기준이다. */
 var PEAK_SKILLS = {
-  "타자|골든글러브|우|-":["정밀타격","대표타자","베스트포지션"],  /* 53.39점 · 상위 0.0436% · 기준의 1배 */
-  "타자|골든글러브|우|포수":["포수리드","대표타자","베스트포지션"],  /* 54.24점 · 상위 0.0779% · 기준의 1.79배 */
-  "타자|골든글러브|좌|-":["좌타해결사(좌타)","베스트포지션","저니맨"],  /* 54.14점 · 상위 0.0542% · 기준의 1.24배 */
-  "타자|골든글러브|좌|포수":["포수리드","좌타해결사(좌타)","베스트포지션"],  /* 59.66점 · 상위 0.0246% · 기준의 0.56배 */
-  "타자|골든글러브|양|-":["스위치히터(양타)","베스트포지션","저니맨"],  /* 57.57점 · 상위 0.0349% · 기준의 0.8배 */
-  "타자|골든글러브|양|포수":["포수리드","스위치히터(양타)","노림수"],  /* 60.09점 · 상위 0.0343% · 기준의 0.79배 */
-  "타자|라이브|우|-":["정밀타격","대표타자","베스트포지션"],  /* 64.48점 · 상위 0.0268% · 기준의 0.62배 */
-  "타자|라이브|우|포수":["포수리드","대표타자","베스트포지션"],  /* 62.44점 · 상위 0.0663% · 기준의 1.52배 */
-  "타자|라이브|좌|-":["좌타해결사(좌타)","베스트포지션","저니맨"],  /* 65.43점 · 상위 0.0298% · 기준의 0.68배 */
-  "타자|라이브|좌|포수":["포수리드","좌타해결사(좌타)","베스트포지션"],  /* 67.31점 · 상위 0.0278% · 기준의 0.64배 */
-  "타자|라이브|양|-":["스위치히터(양타)","대표타자","베스트포지션"],  /* 66.2점 · 상위 0.0478% · 기준의 1.1배 */
-  "타자|라이브|양|포수":["포수리드","스위치히터(양타)","홈어드밴티지"],  /* 70.64점 · 상위 0.0232% · 기준의 0.53배 */
-  "타자|올스타|우|-":["정밀타격","베스트포지션","저니맨"],  /* 41.36점 · 상위 0.0293% · 기준의 0.67배 */
-  "타자|올스타|우|포수":["포수리드","베스트포지션","저니맨"],  /* 41.36점 · 상위 0.037% · 기준의 0.85배 */
-  "타자|올스타|좌|-":["정밀타격","좌타해결사(좌타)","베스트포지션"],  /* 40.87점 · 상위 0.0412% · 기준의 0.95배 */
-  "타자|올스타|좌|포수":["포수리드","좌타해결사(좌타)","베스트포지션"],  /* 40.87점 · 상위 0.0507% · 기준의 1.16배 */
-  "타자|올스타|양|-":["정밀타격","스위치히터(양타)","홈어드밴티지"],  /* 44.2점 · 상위 0.0281% · 기준의 0.64배 */
-  "타자|올스타|양|포수":["포수리드","스위치히터(양타)","홈어드밴티지"],  /* 44.2점 · 상위 0.0336% · 기준의 0.77배 */
-  "타자|시그니처|우|-":["정밀타격","대표타자","베스트포지션"],  /* 48.59점 · 상위 0.0561% · 기준의 1.29배 */
-  "타자|시그니처|우|포수":["포수리드","대표타자","베스트포지션"],  /* 49.44점 · 상위 0.065% · 기준의 1.49배 */
-  "타자|시그니처|좌|-":["좌타해결사(좌타)","정밀타격","베스트포지션"],  /* 52.52점 · 상위 0.0235% · 기준의 0.54배 */
-  "타자|시그니처|좌|포수":["포수리드","좌타해결사(좌타)","난세의영웅"],  /* 52.22점 · 상위 0.035% · 기준의 0.8배 */
-  "타자|시그니처|양|-":["스위치히터(양타)","베스트포지션","저니맨"],  /* 50.53점 · 상위 0.0731% · 기준의 1.68배 */
-  "타자|시그니처|양|포수":["포수리드","스위치히터(양타)","어퍼스윙"],  /* 51.54점 · 상위 0.0659% · 기준의 1.51배 */
-  "타자|국가대표|우|-":["정밀타격","대표타자","저니맨"],  /* 54.27점 · 상위 0.0246% · 기준의 0.57배 */
-  "타자|국가대표|우|포수":["포수리드","대표타자","저니맨"],  /* 55.12점 · 상위 0.0227% · 기준의 0.52배 */
-  "타자|국가대표|좌|-":["좌타해결사(좌타)","정밀타격","베스트포지션"],  /* 52.52점 · 상위 0.0556% · 기준의 1.28배 */
-  "타자|국가대표|좌|포수":["포수리드","좌타해결사(좌타)","베스트포지션"],  /* 54.62점 · 상위 0.0355% · 기준의 0.82배 */
-  "타자|국가대표|양|-":["스위치히터(양타)","정밀타격","베스트포지션"],  /* 55.95점 · 상위 0.0282% · 기준의 0.65배 */
-  "타자|국가대표|양|포수":["포수리드","스위치히터(양타)","베스트포지션"],  /* 56.94점 · 상위 0.0246% · 기준의 0.56배 */
-  "타자|임팩트|우|-":["정밀타격","대표타자","저니맨"],  /* 29.68점 · 상위 0.043% · 기준의 0.99배 */
-  "타자|임팩트|우|포수":["포수리드","정밀타격","베스트포지션"],  /* 30.3점 · 상위 0.0353% · 기준의 0.81배 */
-  "타자|임팩트|좌|-":["정밀타격","좌타해결사(좌타)","베스트포지션"],  /* 29.18점 · 상위 0.0586% · 기준의 1.34배 */
-  "타자|임팩트|좌|포수":["포수리드","좌타해결사(좌타)","베스트포지션"],  /* 29.18점 · 상위 0.0586% · 기준의 1.35배 */
-  "타자|임팩트|양|-":["정밀타격","스위치히터(양타)","베스트포지션"],  /* 31.5점 · 상위 0.04% · 기준의 0.92배 */
-  "타자|임팩트|양|포수":["포수리드","스위치히터(양타)","베스트포지션"],  /* 31.5점 · 상위 0.041% · 기준의 0.94배 */
-  "선발|골든글러브|우|-":["저니맨","홈어드밴티지","필승카드"],  /* 53.3점 · 상위 0.0474% · 기준의 1.09배 */
-  "선발|골든글러브|좌|-":["좌승사자(좌투)","홈어드밴티지","가을사나이"],  /* 58.07점 · 상위 0.044% · 기준의 1.01배 */
-  "선발|라이브|우|-":["저니맨","홈어드밴티지","구속제어"],  /* 63.34점 · 상위 0.0343% · 기준의 0.79배 */
-  "선발|라이브|좌|-":["좌승사자(좌투)","홈어드밴티지","가을사나이"],  /* 70.22점 · 상위 0.041% · 기준의 0.94배 */
-  "선발|올스타|우|-":["저니맨","홈어드밴티지","빅게임헌터"],  /* 40.65점 · 상위 0.0403% · 기준의 0.93배 */
-  "선발|올스타|좌|-":["좌승사자(좌투)","저니맨","비FA계약"],  /* 44.14점 · 상위 0.0607% · 기준의 1.39배 */
-  "선발|시그니처|우|-":["저니맨","홈어드밴티지","오버페이스(선발)"],  /* 47.04점 · 상위 0.0654% · 기준의 1.5배 */
-  "선발|시그니처|좌|-":["좌승사자(좌투)","홈어드밴티지","에이스"],  /* 51.92점 · 상위 0.0412% · 기준의 0.95배 */
-  "선발|국가대표|우|-":["저니맨","홈어드밴티지","위기탈출"],  /* 52.41점 · 상위 0.0458% · 기준의 1.05배 */
-  "선발|국가대표|좌|-":["좌승사자(좌투)","저니맨","홈어드밴티지"],  /* 55.99점 · 상위 0.0296% · 기준의 0.68배 */
-  "선발|임팩트|우|-":["저니맨","홈어드밴티지","파이어볼"],  /* 29점 · 상위 0.0456% · 기준의 1.05배 */
-  "선발|임팩트|좌|-":["좌승사자(좌투)","저니맨","오버페이스(선발)"],  /* 30.6점 · 상위 0.0443% · 기준의 1.02배 */
-  "중계|골든글러브|우|-":["마당쇠(불펜)","홈어드밴티지","비FA계약"],  /* 60.53점 · 상위 0.0436% · 기준의 1배 */
-  "중계|골든글러브|좌|-":["마당쇠(불펜)","홈어드밴티지","비FA계약"],  /* 60.53점 · 상위 0.0436% · 기준의 1배 */
-  "중계|라이브|우|-":["마당쇠(불펜)","홈어드밴티지","워크에식(중계)"],  /* 70.46점 · 상위 0.0424% · 기준의 0.97배 */
-  "중계|라이브|좌|-":["마당쇠(불펜)","홈어드밴티지","워크에식(중계)"],  /* 70.46점 · 상위 0.0424% · 기준의 0.97배 */
-  "중계|올스타|우|-":["마당쇠(불펜)","저니맨","비FA계약"],  /* 44.14점 · 상위 0.0449% · 기준의 1.03배 */
-  "중계|올스타|좌|-":["마당쇠(불펜)","저니맨","비FA계약"],  /* 44.14점 · 상위 0.0449% · 기준의 1.03배 */
-  "중계|시그니처|우|-":["마당쇠(불펜)","홈어드밴티지","패기(시그/올스타불펜)"],  /* 54.94점 · 상위 0.0413% · 기준의 0.95배 */
-  "중계|시그니처|좌|-":["마당쇠(불펜)","홈어드밴티지","패기(시그/올스타불펜)"],  /* 54.94점 · 상위 0.0413% · 기준의 0.95배 */
-  "중계|국가대표|우|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0374% · 기준의 0.86배 */
-  "중계|국가대표|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 57.4점 · 상위 0.0374% · 기준의 0.86배 */
-  "중계|임팩트|우|-":["마당쇠(불펜)","저니맨","패기(임팩불펜)"],  /* 32.87점 · 상위 0.0441% · 기준의 1.01배 */
-  "중계|임팩트|좌|-":["마당쇠(불펜)","저니맨","패기(임팩불펜)"],  /* 32.87점 · 상위 0.0441% · 기준의 1.01배 */
-  "마무리|골든글러브|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 61.71점 · 상위 0.0457% · 기준의 1.05배 */
-  "마무리|골든글러브|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 61.71점 · 상위 0.0457% · 기준의 1.05배 */
-  "마무리|라이브|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 73.73점 · 상위 0.0399% · 기준의 0.91배 */
-  "마무리|라이브|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 73.73점 · 상위 0.0426% · 기준의 0.98배 */
-  "마무리|올스타|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 39.53점 · 상위 0.2091% · 기준의 4.8배 */
-  "마무리|올스타|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 39.53점 · 상위 0.2361% · 기준의 5.42배 */
-  "마무리|시그니처|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.037% · 기준의 0.85배 */
-  "마무리|시그니처|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.037% · 기준의 0.85배 */
-  "마무리|국가대표|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.0585% · 기준의 1.34배 */
-  "마무리|국가대표|좌|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 56.58점 · 상위 0.0585% · 기준의 1.34배 */
-  "마무리|임팩트|우|-":["마당쇠(불펜)","소방수","위닝샷"],  /* 27.25점 · 상위 0.3285% · 기준의 7.54배 */
-  "마무리|임팩트|좌|-":["마당쇠(불펜)","소방수","위닝샷"]  /* 27.25점 · 상위 0.3285% · 기준의 7.54배 */
+  "타자|골든글러브|우|-":["우타해결사(우타)","대표타자","베스트포지션"],  /* 53.70점 · 상위 0.098% */
+  "타자|골든글러브|우|포수":["포수리드","우타해결사(우타)","어퍼스윙"],  /* 55.24점 · 상위 0.097% */
+  "타자|골든글러브|좌|-":["좌타해결사(좌타)","베스트포지션","저니맨"],  /* 52.72점 · 상위 0.099% */
+  "타자|골든글러브|좌|포수":["포수리드","좌타해결사(좌타)","히든카드"],  /* 53.21점 · 상위 0.15% */
+  "타자|골든글러브|양|-":["스위치히터(양타)","대표타자","베스트포지션"],  /* 53.56점 · 상위 0.129% */
+  "타자|골든글러브|양|포수":["포수리드","스위치히터(양타)","히든카드"],  /* 55.75점 · 상위 0.107% */
+  "타자|라이브|우|-":["우타해결사(우타)","대표타자","홈어드밴티지"],  /* 62.92점 · 상위 0.114% */
+  "타자|라이브|우|포수":["포수리드","우타해결사(우타)","짜릿한손맛"],  /* 66.01점 · 상위 0.069% */
+  "타자|라이브|좌|-":["좌타해결사(좌타)","베스트포지션","오버페이스"],  /* 61.63점 · 상위 0.106% */
+  "타자|라이브|좌|포수":["포수리드","좌타해결사(좌타)","홈어드밴티지"],  /* 64.51점 · 상위 0.072% */
+  "타자|라이브|양|-":["스위치히터(양타)","대표타자","베스트포지션"],  /* 65.01점 · 상위 0.08% */
+  "타자|라이브|양|포수":["포수리드","스위치히터(양타)","짜릿한손맛"],  /* 65.30점 · 상위 0.092% */
+  "타자|올스타|우|-":["우타해결사(우타)","베스트포지션","오버페이스"],  /* 2·3옵 37.56점 · 상위 0.108% */
+  "타자|올스타|우|포수":["포수리드","우타해결사(우타)","짜릿한손맛"],  /* 2·3옵 39.57점 · 상위 0.077% */
+  "타자|올스타|좌|-":["좌타해결사(좌타)","대표타자","배팅머신"],  /* 2·3옵 37.20점 · 상위 0.092% */
+  "타자|올스타|좌|포수":["포수리드","좌타해결사(좌타)","홈어드밴티지"],  /* 2·3옵 38.07점 · 상위 0.09% */
+  "타자|올스타|양|-":["스위치히터(양타)","베스트포지션","저니맨"],  /* 2·3옵 39.47점 · 상위 0.078% */
+  "타자|올스타|양|포수":["포수리드","스위치히터(양타)","짜릿한손맛"],  /* 2·3옵 38.86점 · 상위 0.094% */
+  "타자|시그니처|우|-":["우타해결사(우타)","대표타자","베스트포지션"],  /* 48.90점 · 상위 0.112% */
+  "타자|시그니처|우|포수":["포수리드","우타해결사(우타)","패기(시그/올스타)"],  /* 50.12점 · 상위 0.095% */
+  "타자|시그니처|좌|-":["좌타해결사(좌타)","대표타자","대도"],  /* 47.94점 · 상위 0.118% */
+  "타자|시그니처|좌|포수":["포수리드","좌타해결사(좌타)","어퍼스윙"],  /* 49.22점 · 상위 0.105% */
+  "타자|시그니처|양|-":["스위치히터(양타)","대표타자","베스트포지션"],  /* 48.76점 · 상위 0.138% */
+  "타자|시그니처|양|포수":["포수리드","스위치히터(양타)","클러치히터"],  /* 50.60점 · 상위 0.094% */
+  "타자|국가대표|우|-":["우타해결사(우타)","대표타자","대도"],  /* 50.62점 · 상위 0.108% */
+  "타자|국가대표|우|포수":["포수리드","우타해결사(우타)","어퍼스윙"],  /* 50.96점 · 상위 0.114% */
+  "타자|국가대표|좌|-":["좌타해결사(좌타)","대표타자","저니맨"],  /* 50.96점 · 상위 0.089% */
+  "타자|국가대표|좌|포수":["포수리드","좌타해결사(좌타)","난세의영웅"],  /* 52.22점 · 상위 0.073% */
+  "타자|국가대표|양|-":["스위치히터(양타)","베스트포지션","황금세대"],  /* 51.40점 · 상위 0.105% */
+  "타자|국가대표|양|포수":["포수리드","스위치히터(양타)","어퍼스윙"],  /* 50.80점 · 상위 0.138% */
+  "타자|임팩트|우|-":["우타해결사(우타)","대표타자","저니맨"],  /* 2·3옵 28.74점 · 상위 0.074% */
+  "타자|임팩트|우|포수":["포수리드","우타해결사(우타)","난세의영웅"],  /* 2·3옵 28.52점 · 상위 0.077% */
+  "타자|임팩트|좌|-":["좌타해결사(좌타)","대표타자","저니맨"],  /* 2·3옵 28.74점 · 상위 0.071% */
+  "타자|임팩트|좌|포수":["포수리드","좌타해결사(좌타)","노림수"],  /* 2·3옵 27.58점 · 상위 0.093% */
+  "타자|임팩트|양|-":["스위치히터(양타)","대표타자","저니맨"],  /* 2·3옵 28.74점 · 상위 0.083% */
+  "타자|임팩트|양|포수":["포수리드","스위치히터(양타)","난세의영웅"],  /* 2·3옵 28.36점 · 상위 0.091% */
+  "선발|골든글러브|우|-":["저니맨","홈어드밴티지","필승카드"],  /* 50.30점 · 상위 0.094% */
+  "선발|골든글러브|좌|-":["좌승사자(좌투)","홈어드밴티지","난세의영웅(선발)"],  /* 54.26점 · 상위 0.1% */
+  "선발|라이브|우|-":["저니맨","홈어드밴티지","리그탑플레이어"],  /* 57.44점 · 상위 0.132% */
+  "선발|라이브|좌|-":["좌승사자(좌투)","홈어드밴티지","난세의영웅(선발)"],  /* 65.20점 · 상위 0.103% */
+  "선발|올스타|우|-":["저니맨","홈어드밴티지","구속제어"],  /* 2·3옵 36.65점 · 상위 0.084% */
+  "선발|올스타|좌|-":["좌승사자(좌투)","저니맨","가을사나이"],  /* 2·3옵 41.39점 · 상위 0.094% */
+  "선발|시그니처|우|-":["저니맨","홈어드밴티지","오버페이스(선발)"],  /* 44.56점 · 상위 0.121% */
+  "선발|시그니처|좌|-":["좌승사자(좌투)","홈어드밴티지","슬로우스타트(선발)"],  /* 48.78점 · 상위 0.1% */
+  "선발|국가대표|우|-":["저니맨","홈어드밴티지","빅게임헌터"],  /* 48.76점 · 상위 0.1% */
+  "선발|국가대표|좌|-":["좌승사자(좌투)","홈어드밴티지","부동심"],  /* 51.06점 · 상위 0.1% */
+  "선발|임팩트|우|-":["저니맨","홈어드밴티지","패기(임팩선발)"],  /* 2·3옵 26.71점 · 상위 0.092% */
+  "선발|임팩트|좌|-":["좌승사자(좌투)","저니맨","워크에식(선발)"],  /* 2·3옵 28.42점 · 상위 0.099% */
+  "중계|골든글러브|우|-":["마당쇠(불펜)","홈어드밴티지","비FA계약"],  /* 56.03점 · 상위 0.094% */
+  "중계|골든글러브|좌|-":["마당쇠(불펜)","홈어드밴티지","비FA계약"],  /* 56.03점 · 상위 0.099% */
+  "중계|라이브|우|-":["마당쇠(불펜)","홈어드밴티지","비FA계약"],  /* 64.95점 · 상위 0.102% */
+  "중계|라이브|좌|-":["마당쇠(불펜)","홈어드밴티지","비FA계약"],  /* 64.95점 · 상위 0.106% */
+  "중계|올스타|우|-":["마당쇠(불펜)","저니맨","에이스"],  /* 2·3옵 39.99점 · 상위 0.101% */
+  "중계|올스타|좌|-":["마당쇠(불펜)","저니맨","비FA계약"],  /* 2·3옵 40.39점 · 상위 0.095% */
+  "중계|시그니처|우|-":["마당쇠(불펜)","홈어드밴티지","에이스"],  /* 50.83점 · 상위 0.1% */
+  "중계|시그니처|좌|-":["마당쇠(불펜)","홈어드밴티지","에이스"],  /* 50.83점 · 상위 0.1% */
+  "중계|국가대표|우|-":["마당쇠(불펜)","저니맨","베스트포지션"],  /* 52.50점 · 상위 0.099% */
+  "중계|국가대표|좌|-":["마당쇠(불펜)","저니맨","베스트포지션"],  /* 52.50점 · 상위 0.1% */
+  "중계|임팩트|우|-":["마당쇠(불펜)","저니맨","전천후"],  /* 2·3옵 29.47점 · 상위 0.102% */
+  "중계|임팩트|좌|-":["마당쇠(불펜)","저니맨","전천후"],  /* 2·3옵 29.47점 · 상위 0.102% */
+  "마무리|골든글러브|우|-":["마당쇠(불펜)","홈어드밴티지","전천후"],  /* 56.03점 · 상위 0.1% */
+  "마무리|골든글러브|좌|-":["마당쇠(불펜)","홈어드밴티지","전천후"],  /* 56.03점 · 상위 0.103% */
+  "마무리|라이브|우|-":["마당쇠(불펜)","저니맨","난세의영웅(불펜)"],  /* 66.07점 · 상위 0.103% */
+  "마무리|라이브|좌|-":["마당쇠(불펜)","저니맨","난세의영웅(불펜)"],  /* 66.07점 · 상위 0.103% */
+  "마무리|올스타|우|-":["마당쇠(불펜)","저니맨","전천후"],  /* 2·3옵 40.39점 · 상위 0.102% */
+  "마무리|올스타|좌|-":["마당쇠(불펜)","저니맨","전천후"],  /* 2·3옵 40.39점 · 상위 0.102% */
+  "마무리|시그니처|우|-":["마당쇠(불펜)","저니맨","승부사"],  /* 51.36점 · 상위 0.094% */
+  "마무리|시그니처|좌|-":["마당쇠(불펜)","저니맨","승부사"],  /* 51.36점 · 상위 0.095% */
+  "마무리|국가대표|우|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 53.65점 · 상위 0.073% */
+  "마무리|국가대표|좌|-":["마당쇠(불펜)","저니맨","홈어드밴티지"],  /* 53.65점 · 상위 0.073% */
+  "마무리|임팩트|우|-":["마당쇠(불펜)","저니맨","리그탑플레이어"],  /* 2·3옵 29.22점 · 상위 0.105% */
+  "마무리|임팩트|좌|-":["마당쇠(불펜)","저니맨","리그탑플레이어"]  /* 2·3옵 29.22점 · 상위 0.105% */
 };
-/* 훈련: 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위, 제구] — 투수는 선발(pit) · 불펜(rp) 따로 (v1.1, node data/peak_train_v11.mjs) */
-var PEAK_TRAIN = {"bat_골든글러브":[20,18,12,10],"bat_시그니처":[22,17,12,9],"bat_라이브":[20,18,12,10],"bat_올스타":[23,21,15,12],"bat_국가대표":[19,15,11,8],"bat_임팩트":[16,13,9,6],"pit_골든글러브":[17,21,12],"pit_시그니처":[20,20,10],"pit_라이브":[17,21,12],"pit_올스타":[21,24,12],"pit_국가대표":[17,18,8],"pit_임팩트":[13,16,9],"rp_골든글러브":[17,21,12],"rp_시그니처":[17,22,12],"rp_라이브":[17,21,12],"rp_올스타":[19,25,14],"rp_국가대표":[14,20,10],"rp_임팩트":[12,17,8]};
-/* 특훈 (기본 보너스 = 특훈 횟수 포함 — 골글·시그·임팩트 +3, 국대 +4, FA +5, 와일드카드 +6): 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위].
-   특훈이 없는 카드는 내 값 그대로. 국대·와일드카드는 2026-09-18 정확 계산으로 다시 뽑았다.
-   투수는 v1.1(2026-10-21)에 [변화, 구위, 제구] 세 칸 · 선발(pit) · 불펜(rp) 따로 다시 뽑았다 (data/peak_train_v11.mjs) */
-var PEAK_SPEC = {"bat_골든글러브":[7,2,1,0],"bat_시그니처":[7,2,1,0],"bat_fa_시그니처":[9,5,1,1],"bat_임팩트":[6,2,0,0],"bat_fa_임팩트":[8,4,1,0],"bat_국가대표":[8,3,2,0],"bat_wc_국가대표":[11,5,1,1],"pit_골든글러브":[3,6,1],"pit_시그니처":[3,6,1],"pit_fa_시그니처":[5,9,1],"pit_임팩트":[2,6,0],"pit_fa_임팩트":[3,9,0],"pit_국가대표":[3,8,2],"pit_wc_국가대표":[5,11,1],"rp_골든글러브":[2,7,0],"rp_시그니처":[2,7,0],"rp_fa_시그니처":[2,11,1],"rp_임팩트":[2,6,0],"rp_fa_임팩트":[3,9,0],"rp_국가대표":[2,9,1],"rp_wc_국가대표":[5,11,1]};
+/* 훈련: 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위, 제구] — 투수는 선발(pit) · 불펜(rp) 따로.
+   상위 0.1% 점수(정확 계산)에서 가장 흔한 배분 (2026-10-25 다시 뽑음 — 그 전 값은 0.1~0.2% 사이에서 가장 흔한 배분이라 실제로는 0.2% 언저리였다) */
+var PEAK_TRAIN = {"bat_골든글러브":[20,18,14,9],"bat_시그니처":[22,18,11,10],"bat_라이브":[20,18,14,9],"bat_올스타":[25,21,12,12],"bat_국가대표":[18,17,11,7],"bat_임팩트":[18,12,7,7],"pit_골든글러브":[17,22,11],"pit_시그니처":[21,20,9],"pit_라이브":[17,22,11],"pit_올스타":[23,23,12],"pit_국가대표":[19,17,8],"pit_임팩트":[12,18,7],"rp_골든글러브":[16,23,9],"rp_시그니처":[19,22,8],"rp_라이브":[16,23,9],"rp_올스타":[19,26,13],"rp_국가대표":[14,21,8],"rp_임팩트":[10,19,8]};
+/* 특훈 (기본 보너스 = 특훈 횟수 포함 — 골글·시그·임팩트 +3, 국대 +4, FA +5, 와일드카드 +6): 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위, 제구].
+   특훈이 없는 카드는 내 값 그대로. 훈련과 같이 상위 0.1% 점수에서 가장 흔한 배분, 칸마다 15 까지 (2026-10-25) */
+var PEAK_SPEC = {"bat_골든글러브":[7,2,1,1],"bat_시그니처":[7,2,1,1],"bat_fa_시그니처":[10,4,1,1],"bat_임팩트":[7,1,0,0],"bat_fa_임팩트":[9,3,1,0],"bat_국가대표":[7,5,1,0],"bat_wc_국가대표":[11,5,2,1],"pit_골든글러브":[3,6,2],"pit_시그니처":[3,6,2],"pit_fa_시그니처":[3,11,0],"pit_임팩트":[1,7,0],"pit_fa_임팩트":[2,10,0],"pit_국가대표":[4,8,0],"pit_wc_국가대표":[2,14,0],"rp_골든글러브":[1,8,0],"rp_시그니처":[1,8,0],"rp_fa_시그니처":[4,10,1],"rp_임팩트":[5,4,0],"rp_fa_임팩트":[3,9,1],"rp_국가대표":[1,10,1],"rp_wc_국가대표":[4,12,1]};
 /* 잠재력: 종류별 등급 (사용자 지정). 각성 잠재력은 임팩트·올스타가 S, 나머지 카드는 A (라이브만 각성 없음) */
 var PEAK_POT = {"풀스윙":"SR+","장타억제":"SR+","클러치":"A","침착":"A"};
 var PEAK_AWK = {"임팩트":"S", "올스타":"S"};
@@ -11429,6 +11476,10 @@ function labPl(pl, slot, top) {
   var sct = ct === "시즌" ? "시그니처" : ct;
   var hand = isBat ? (pl.hand === "좌" || pl.hand === "양" ? pl.hand : "우") : (pl.hand === "좌" ? "좌" : "우");
   var sv = distValueAt(PREBUILT_SKILL_DIST[skillDistKey(cat, sct, hand, false)], top);
+  /* 임팩트 · 올스타 분포는 1옵션을 뺀 2 · 3옵션 합이다 — 1옵션(고점 사본의 1옵션) 점수를 더해야 세 칸 점수가 된다.
+     빠져 있어 5% · 20% 에서 임팩트 · 올스타가 카드마다 20~30점씩 낮게 나왔다 (2026-10-25 바로잡음) */
+  if (sv !== null && SHARE_FIXED_FIRST[sct] && pk.skill1)
+    sv += getSkillScore(pk.skill1, effSkillLv(pk.skill1, pk.s1Lv, isLvManual(pk), ct, 1, cat), cat, true);
   if (sv !== null) out.labSkillScore = Math.round(sv * 100) / 100;
   /* 훈련 재분배 */
   var trK = "train_" + (isBat ? "bat" : pitDistRole(pl)) + "_" + ct;
@@ -12675,7 +12726,7 @@ export default function App(){
   var pg=null;
   if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId} authType={authType} gameUrl={kboGameUrl(googleId)} isAdmin={isAdmin} saveSkills={store.saveSkills}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} customDex={store.customDex} saveCustomDex={store.saveCustomDex} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
-  else if(tab==="lab")pg=(<LabPage mobile={mob} teamName={curDeckObj&&curDeckObj.teamName} skills={store.skills} labSaves={store.labSaves} saveLab={store.saveLab}
+  else if(tab==="lab")pg=(<LabPage mobile={mob} teamName={curDeckObj&&curDeckObj.teamName} players={store.players} lineupMap={store.lineupMap} skills={store.skills} labSaves={store.labSaves} saveLab={store.saveLab}
     incoming={labIncoming} onIncomingDone={function(){setLabIncoming(null);}} onShareToClub={isGoogle?shareToClub:null} onSuggest={sendSuggestion}/>);
   else if(tab==="postrain")pg=(<PosTrainPage mobile={mob} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills}/>);
   else if(tab==="locker")pg=(<LockerRoomPage mobile={mob} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} skills={store.skills} saveSkills={store.saveSkills} potmList={store.potmList} setPotmList={store.savePotmList} isAdmin={isAdmin}/>);

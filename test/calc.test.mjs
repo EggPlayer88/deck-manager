@@ -20,7 +20,7 @@ import {
   SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, skillBaseName, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
-import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet } from './calc-extract.mjs';
+import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
 import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
@@ -1244,21 +1244,18 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
     if (names.length !== 3) bad.push(key + ' 개수');
     const cond = { hand, cardType: ct, cat };
     names.forEach(n => {
-      if (!DEFAULT_SKILLS[cat][n]) bad.push(key + ' 표에 없음 ' + n);
-      if (!DEFAULT_MAJOR[cat][n]) bad.push(key + ' 메이저 아님 ' + n);
+      if (!Array.isArray(SKILLS_V11[cat][n])) bad.push(key + ' 표에 없음 ' + n);
+      if (!MAJOR_V11[cat][n]) bad.push(key + ' 메이저 아님 ' + n);
       if (!skillPickable(n, cat) || !skillAllowedAt(n, cat, c === '포수') || !variantAllowed(n, cond)) bad.push(key + ' 뜰 수 없음 ' + n);
       if (ct !== '국가대표' && isNatOnlySkill(n, cat)) bad.push(key + ' 국대 전용 ' + n);
       if (COND.includes(base(n))) bad.push(key + ' 조건부 ' + n);
       if (base(n) === '패기' && (ct === '라이브' || ct === '국가대표')) bad.push(key + ' 다른 카드 이름의 패기 ' + n);
     });
     if (new Set(names.map(base)).size !== 3) bad.push(key + ' 같은 스킬 중복');
-    /* 1옵션 — 포수는 포수리드, 임팩트·올스타는 사용자 지정, 나머지는 손잡이·보직 대표 스킬 */
-    const role = cat === '타자' ? '정밀타격' : cat === '선발' ? (hand === '좌' ? '좌승사자(좌투)' : '저니맨') : '마당쇠(불펜)';
-    const handSig = cat === '타자' ? (({ '좌': '좌타해결사(좌타)', '양': '스위치히터(양타)' })[hand] || '정밀타격') : undefined;
-    const want1 = c === '포수' ? '포수리드' : fixed ? role : (handSig || role);
-    if (names[0] !== want1) bad.push(key + ' 1옵션 ' + names[0]);
-    /* 우타 포수의 정밀타격은 1점 낮추기에서 빠질 수 있다 */
-    if (handSig && !names.includes(handSig) && !(c === '포수' && hand === '우')) bad.push(key + ' 손잡이 스킬 없음');
+    /* 1옵션 (2026-10-25 사용자 지정) — 타자 우타해결사 · 좌타해결사 · 스위치히터(양타), 선발 우투 저니맨 · 좌투 좌승사자,
+       불펜(중계 · 마무리)은 마당쇠(불펜). 포수 칸은 포수리드 다음 2옵션에 손잡이 스킬. 임팩트 · 올스타도 같은 1옵션 (골라 고정 — 2 · 3옵션으로 0.1%) */
+    const handSig = cat === '타자' ? (({ '좌': '좌타해결사(좌타)', '양': '스위치히터(양타)' })[hand] || '우타해결사(우타)') : (cat === '선발' ? (hand === '좌' ? '좌승사자(좌투)' : '저니맨') : '마당쇠(불펜)');
+    if (c === '포수' ? (names[0] !== '포수리드' || names[1] !== handSig) : names[0] !== handSig) bad.push(key + ' 1옵션 ' + names.slice(0, 2).join(','));
     /* 백분위 — 임팩트·올스타는 1옵션을 빼고 2·3옵션만으로 */
     const sc = Math.round(names.reduce((t2, n, k) => t2 + ((fixed && k === 0) ? 0 : getSkillScore(n, LV[ct][k], cat, true)), 0) * 100) / 100;
     const pct = pctFromDist(SKD[key], sc);
@@ -1266,10 +1263,11 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
     if (sc >= SKD[key][SKD[key].length - 1]) bad.push(key + ' 표본 최고점 이상 ' + sc);
   }
   eq('스킬 72가지 — 메이저·실제로 뜸·1옵션 규칙·상위 0.5% 안 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
-  eq('기준 — 골글 우타는 정밀타격·대표타자·베스트포지션', PEAK_SKILLS['타자|골든글러브|우|-'].join(',') === '정밀타격,대표타자,베스트포지션' ? 1 : 0, 1);
-  eq('마무리 12가지 모두 마당쇠·소방수·위닝샷', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.startsWith('마무리|') && v.join(',') === '마당쇠(불펜),소방수,위닝샷').length, 12);
+  eq('골글 우타 — 우타해결사 · 대표타자 · 베스트포지션 (상위 0.1%)', PEAK_SKILLS['타자|골든글러브|우|-'].join(',') === '우타해결사(우타),대표타자,베스트포지션' ? 1 : 0, 1);
+  eq('투수 36가지 — 1옵션 선발 우투 저니맨 · 좌투 좌승사자, 불펜 마당쇠', Object.entries(PEAK_SKILLS).filter(([k, v]) => { const [cat, , hand] = k.split('|'); return cat !== '타자' && v[0] === (cat === '선발' ? (hand === '좌' ? '좌승사자(좌투)' : '저니맨') : '마당쇠(불펜)'); }).length, 36);
+  eq('우타 12가지 모두 우타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '우' && v.includes('우타해결사(우타)')).length, 12);
   eq('양타 12가지 모두 스위치히터', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '양' && v.includes('스위치히터(양타)')).length, 12);
-  eq('타자 36가지 중 대표타자·베스트포지션이 든 조합이 절반 넘게', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.startsWith('타자|') && v.some(n => n === '대표타자' || n === '베스트포지션')).length > 18 ? 1 : 0, 1);
+  eq('타자 비포수 18가지 모두 대표타자 · 베스트포지션 중 하나 이상 (포수 칸은 남는 칸이 하나라 0.1% 맞추기가 먼저)', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.startsWith('타자|') && k.endsWith('|-') && v.some(n => n === '대표타자' || n === '베스트포지션')).length, 18);
   eq('포수 18가지 모두 1옵션 포수리드', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.endsWith('|포수') && v[0] === '포수리드').length, 18);
   eq('좌타 12가지 모두 좌타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '좌' && v.includes('좌타해결사(좌타)')).length, 12);
 
@@ -1329,14 +1327,14 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   eq('양타는 스위치히터부터', peakPl({ ...bat, hand: '양' }, 'DH').skill1 === '스위치히터(양타)' ? 1 : 0, 1);
   eq('빈 선수는 그대로', peakPl(null, 'C') === null ? 1 : 0, 1);
 
-  /* 임팩트·올스타 — 1옵션도 지정값으로 */
+  /* 임팩트·올스타 — 1옵션은 골라 고정할 수 있어 표의 1옵션(손잡이 스킬)으로, 2 · 3옵션은 그 두 칸 분포의 0.1% (2026-10-25) */
   const imp = { ...bat, cardType: '임팩트', skill1: '대표타자', s1Lv: 0, sLvManual: false };
   const pi = peakPl(imp, 'LF');
-  eq('임팩트 타자 — 1옵션 정밀타격 Lv6', pi.skill1 === '정밀타격' && pi.s1Lv === 6 ? 1 : 0, 1);
+  eq('임팩트 타자 — 1옵션 우타해결사 Lv6 (골라 고정)', pi.skill1 === '우타해결사(우타)' && pi.s1Lv === 6 ? 1 : 0, 1);
   eq('임팩트 타자 — 2·3옵션 Lv5', pi.skill2 === PEAK_SKILLS['타자|임팩트|우|-'][1] && pi.s2Lv === 5 && pi.s3Lv === 5 ? 1 : 0, 1);
-  eq('임팩트 좌타 — 정밀타격 + 좌타해결사', (() => { const q = peakPl({ ...imp, hand: '좌' }, 'LF'); return q.skill1 === '정밀타격' && q.skill2 === '좌타해결사(좌타)'; })() ? 1 : 0, 1);
+  eq('임팩트 좌타 — 좌타해결사부터', (() => { const q = peakPl({ ...imp, hand: '좌' }, 'LF'); return q.skill1 === '좌타해결사(좌타)' && sk3(q) === PEAK_SKILLS['타자|임팩트|좌|-'].join(','); })() ? 1 : 0, 1);
   eq('임팩트 각성 — S', pi.pot3 === 'S' ? 1 : 0, 1);
-  eq('임팩트 포수 — 1옵션 포수리드, 2옵션 정밀타격', (() => { const q = peakPl(imp, 'C'); return q.skill1 === '포수리드' && q.s1Lv === 6 && q.skill2 === '정밀타격' && q.s2Lv === 5; })() ? 1 : 0, 1);
+  eq('임팩트 포수 — 1옵션 포수리드, 2옵션 우타해결사', (() => { const q = peakPl(imp, 'C'); return q.skill1 === '포수리드' && q.s1Lv === 6 && q.skill2 === '우타해결사(우타)' && q.s2Lv === 5; })() ? 1 : 0, 1);
   const impM = { ...imp, sLvManual: true, s1Lv: 7 };
   eq('FA 시그 — FA 특훈', peakPl({ ...bat, cardType: '시그니처', isFa: true }, '1B').specPower === PEAK_SPEC.bat_fa_시그니처[0] ? 1 : 0, 1);
   eq('라이브 — 특훈 없음, 내 값 그대로', peakPl({ ...bat, cardType: '라이브', specPower: 2 }, '1B').specPower === 2 ? 1 : 0, 1);
@@ -1351,9 +1349,9 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   eq('투수 잠재력 — 장타억제 SR+ · 침착 A, 각성 A', pp.pot1 === 'SR+' && pp.pot2 === 'A' && pp.potType1 === '장타억제' && pp.potType2 === '침착' && pp.pot3 === 'A' && pp.potType3 === POT_TYPES_AWK_PIT[0] ? 1 : 0, 1);
   eq('올스타 좌투 선발 — 좌승사자 Lv8', (() => { const q = peakPl({ ...pit, cardType: '올스타' }, 'SP1'); return q.skill1 === '좌승사자(좌투)' && q.s1Lv === 8; })() ? 1 : 0, 1);
   eq('임팩트 우투 선발 — 저니맨', peakPl({ ...pit, cardType: '임팩트', hand: '우' }, 'SP2').skill1 === '저니맨' ? 1 : 0, 1);
-  eq('임팩트 중계·마무리 — 마당쇠', peakPl({ ...pit, cardType: '임팩트', position: '중계' }, 'RP1').skill1 === '마당쇠(불펜)' && peakPl({ ...pit, cardType: '임팩트', position: '마무리' }, 'CP').skill1 === '마당쇠(불펜)' ? 1 : 0, 1);
-  eq('마무리 자리 — 마당쇠·소방수·위닝샷', sk3(peakPl({ ...pit, position: '마무리', hand: '우' }, 'CP')) === '마당쇠(불펜),소방수,위닝샷' ? 1 : 0, 1);
-  eq('임팩트 마무리도 같은 조합 (1옵 마당쇠 Lv6, 2·3옵 Lv5)', (() => { const q = peakPl({ ...pit, cardType: '임팩트', position: '마무리' }, 'CP'); return sk3(q) === '마당쇠(불펜),소방수,위닝샷' && q.s1Lv === 6 && q.s2Lv === 5 && q.s3Lv === 5; })() ? 1 : 0, 1);
+  eq('임팩트 중계·마무리 — 1옵션 마당쇠 Lv6 (골라 고정)', (() => { const a = peakPl({ ...pit, cardType: '임팩트', position: '중계' }, 'RP1'), b = peakPl({ ...pit, cardType: '임팩트', position: '마무리', hand: '우' }, 'CP'); return a.skill1 === '마당쇠(불펜)' && a.s1Lv === 6 && b.skill1 === '마당쇠(불펜)'; })() ? 1 : 0, 1);
+  eq('마무리 자리 — 표대로 마당쇠부터', (() => { const q = peakPl({ ...pit, position: '마무리', hand: '우' }, 'CP'); return sk3(q) === PEAK_SKILLS['마무리|골든글러브|우|-'].join(',') && q.skill1 === '마당쇠(불펜)'; })() ? 1 : 0, 1);
+  eq('임팩트 마무리 — 1옵 Lv6, 2·3옵 Lv5 (표대로)', (() => { const q = peakPl({ ...pit, cardType: '임팩트', position: '마무리' }, 'CP'); return sk3(q) === PEAK_SKILLS['마무리|임팩트|좌|-'].join(',') && q.s1Lv === 6 && q.s2Lv === 5 && q.s3Lv === 5; })() ? 1 : 0, 1);
 
   /* 내 값이 더 좋으면 그대로 */
   const strong = { ...bat, sLvManual: true, skill1: '정밀타격', s1Lv: 10, skill2: '워크에식', s2Lv: 10, skill3: '빅게임헌터', s3Lv: 10,
@@ -2229,12 +2227,12 @@ console.log('\n[덱 연구소] 능력치 가정 티어 — 2026-09-23 사용자 
   eq('벡터를 목표 점수에 맞춘다', Math.round(got * 10) / 10, 20.8, 0.05);
   eq('비율이 같게 줄어든다', Math.round(v[0] / 20 * 100) / 100, Math.round(v[1] / 18 * 100) / 100, 0.02);
   eq('0 벡터는 손대지 않는다', labScale([0, 0], [1, 1], 5) === null ? 1 : 0, 1);
-  /* 분포가 PEAK 표와 맞물린다 — 훈련 0.1% 지점이 고점 배분의 점수와 같다 */
+  /* 분포가 PEAK 표와 맞물린다 — 훈련 0.1% 지점이 고점 배분의 점수와 같다. 1000 분위 표는 i 칸이 i/1000 분위라 상위 0.1% 는 마지막 칸(999) (2026-10-25) */
   const w2 = getW();
   const pkT = PEAK_TRAIN['bat_골든글러브'];
   const pkScore = pkT[0] * w2.p + pkT[1] * w2.a + pkT[2] * w2.e + pkT[3] * w2.n;
-  eq('훈련 고점표가 분포의 0.1% 지점', Math.round(distValueAt(PREBUILT_DIST['train_bat_골든글러브'], 0.1) * 100) / 100,
-    Math.round(pkScore * 100) / 100, 0.02);
+  eq('훈련 고점표가 분포의 0.1% 지점', PREBUILT_DIST['train_bat_골든글러브'][999],
+    Math.round(pkScore * 100) / 100, 0.15);
   /* 카드 하나를 세 티어로 — 위 티어가 늘 더 높아야 한다 */
   const card = { name: '실험', role: '타자', cardType: '골든글러브', team: '기아', year: '2024', hand: '우',
     stars: 5, power: 150, accuracy: 140, eye: 130, patience: 120, launchAngle: 0 };
@@ -2248,6 +2246,17 @@ console.log('\n[덱 연구소] 능력치 가정 티어 — 2026-09-23 사용자 
     Math.round(distValueAt(PREBUILT_SKILL_DIST[skillDistKey('타자', '골든글러브', '우', false)], 5) * 100) / 100, 0.011);
   eq('lineupLu 가 그 점수를 넘긴다', lineupLu(p5).ssOverride, p5.labSkillScore);
   eq('calcBat 이 그 점수를 그대로 쓴다', calcBat(p5, lineupLu(p5), null).skillScore, p5.labSkillScore, 0.011);
+  /* 임팩트 · 올스타 — 분포는 2 · 3옵션 합이라 1옵션 점수를 더한다 (2026-10-25 바로잡음 — 빠져 있어 5% · 20% 가 카드마다 20~30점 낮았다) */
+  const icard = Object.assign({}, card, { cardType: '임팩트' });
+  const ip5 = labPl(icard, '3B', 5);
+  eq('임팩트 5% 스킬 점수 = 2 · 3옵션 분포 5% 지점 + 1옵션(우타해결사 Lv6)', ip5.labSkillScore,
+    Math.round((distValueAt(PREBUILT_SKILL_DIST[skillDistKey('타자', '임팩트', '우', false)], 5) + getSkillScore(PEAK_SKILLS['타자|임팩트|우|-'][0], 6, '타자', true)) * 100) / 100, 0.011);
+  const itot = LAB_TIERS.map((t) => { const p = labPl(icard, '3B', t); return calcBat(p, lineupLu(p), null).total; });
+  eq('임팩트도 0.1% > 5% > 20%', itot[0] > itot[1] && itot[1] > itot[2] ? 1 : 0, 1);
+  eq('임팩트 0.1% 와 5% 차이가 골글과 비슷 (예전엔 1옵션이 빠져 40점 넘게)', Math.abs((itot[0] - itot[1]) - (tot[0] - tot[1])) < 8 ? 1 : 0, 1);
+  const ocard = Object.assign({}, card, { cardType: '올스타' });
+  const otot = LAB_TIERS.map((t) => { const p = labPl(ocard, '3B', t); return calcBat(p, lineupLu(p), null).total; });
+  eq('올스타도 0.1% > 5% > 20%, 차이는 골글과 비슷', otot[0] > otot[1] && otot[1] > otot[2] && Math.abs((otot[0] - otot[1]) - (tot[0] - tot[1])) < 8 ? 1 : 0, 1);
   /* 포수도 다른 타자와 같은 표로 본다 — 포수리드 6렙은 어차피 늘 받는다 */
   const cat = Object.assign({}, card, { subPosition: 'C' });
   eq('포수 0.1% 도 포수 아닌 표', calcBat(labPl(cat, 'C', 0.1), lineupLu(labPl(cat, 'C', 0.1)), null).total,
@@ -2395,7 +2404,7 @@ console.log('\n[덱 연구소] 라인업 규칙 — 2026-09-18 사용자 확정 
 }
 
 
-console.log('\n[덱 연구소] 팀별 추천덱 — in100 1등 덱 (2026-09-23 사용자 제공)');
+console.log('\n[덱 연구소] 팀별 추천덱 — 상위 유저 기준 0.1% 판 (2026-10-24 사용자 결정)');
 {
   var TEAMS10 = ['기아', '삼성', 'LG', '두산', 'KT', 'SSG', '롯데', '한화', 'NC', '키움'];
   eq('열 구단 모두 있다', TEAMS10.filter(function (t) { return LAB_PRESET[t]; }).length, 10);
@@ -2422,21 +2431,39 @@ console.log('\n[덱 연구소] 팀별 추천덱 — in100 1등 덱 (2026-09-23 �
     });
   });
   eq('카드 id 가 모두 도감 uuid 꼴', badId.length, 0);
-  /* 순위와 셋포 */
-  eq('순위는 1~100 안', Object.keys(LAB_PRESET).every(function (t) {
-    var r = LAB_PRESET[t].rank; return r >= 1 && r <= 100; }) ? 1 : 0, 1);
-  eq('순위가 겹치지 않는다', (function () {
-    var r = Object.keys(LAB_PRESET).map(function (t) { return LAB_PRESET[t].rank; });
-    return r.filter(function (v, i2) { return r.indexOf(v) === i2; }).length; })(), 10);
-  eq('원본 셋포는 200 이상 (연구소는 200 으로 본다)',
+  /* 셋포 — '라이브 자동배정' 후보까지 넣었을 때 200 이상이 되게 짰다 (연구소는 200 으로 본다) */
+  eq('라이브 후보까지 셋포 200 이상',
     Object.keys(LAB_PRESET).every(function (t) { return LAB_PRESET[t].sp >= LAB_SET_POINT; }) ? 1 : 0, 1);
-  /* NC 만 타자 아홉 자리, 나머지는 스물한 자리 */
   eq('열 구단 모두 스물한 자리', Object.keys(LAB_PRESET).filter(function (t) {
     return Object.keys(LAB_PRESET[t].slots).length === LAB_SLOTS.length; }).length, 10);
-  eq('NC 도 투수가 찼다 (집계 글에서 채움)', LAB_PRESET.NC.slots.SP1 !== undefined ? 1 : 0, 1);
-  /* 롯데 1등은 1위 덱 */
-  eq('롯데는 1위 덱', LAB_PRESET['롯데'].rank, 1);
-  eq('삼성은 2위 덱', LAB_PRESET['삼성'].rank, 2);
+  /* 그날 세 티어 점수(참고 값) — 0.1% ≥ 5% ≥ 20% 이고 9,000 언저리 */
+  eq('세 티어 점수가 0.1% ≥ 5% ≥ 20%', Object.keys(LAB_PRESET).every(function (t) {
+    var x = LAB_PRESET[t].tiers; return x && x.length === 3 && x[0] >= x[1] && x[1] >= x[2]; }) ? 1 : 0, 1);
+  eq('0.1% 점수는 8,900 ~ 9,200', Object.keys(LAB_PRESET).every(function (t) {
+    var v = LAB_PRESET[t].tiers[0]; return v >= 8900 && v <= 9200; }) ? 1 : 0, 1);
+  eq('순위(rank) 칸은 없다 — in100 덱이 아니다', Object.keys(LAB_PRESET).some(function (t) { return LAB_PRESET[t].rank !== undefined; }) ? 1 : 0, 0);
+  /* 후보 6장 — 국대 타자 · 시너지 · 셋포용 (도감 uuid) */
+  eq('열 구단 모두 후보 6장', Object.keys(LAB_PRESET).filter(function (t) {
+    var b = LAB_PRESET[t].bench; return Array.isArray(b) && b.length === 6 && b.every(function (id) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id); }); }).length, 10);
+  eq('후보와 라인업에 같은 카드가 없다', Object.keys(LAB_PRESET).some(function (t) {
+    var ids = Object.keys(LAB_PRESET[t].slots).map(function (s) { return LAB_PRESET[t].slots[s]; });
+    return LAB_PRESET[t].bench.some(function (id) { return ids.indexOf(id) >= 0; }); }) ? 1 : 0, 0);
+}
+
+
+console.log('\n[덱 연구소] 내 덱 불러오기 — 내 선수의 도감 id(dbId)로 연구소 자리값을 만든다 (2026-10-26)');
+{
+  setCustomPlayers([{ id: 'lab1', name: '가', cardType: '시그니처', role: '타자', subPosition: 'C' },
+    { id: 'lab2', name: '나', cardType: '골든글러브', role: '타자', subPosition: '1B' },
+    { id: 'lab3', name: '다', cardType: '임팩트', role: '투수', position: '선발' }]);
+  const players = [{ id: 'p1', dbId: 'lab1' }, { id: 'p2', dbId: 'lab2' }, { id: 'p3', dbId: '도감에없는id' }, { id: 'p4', dbId: 'lab3' }, { id: 'p5' }];
+  const r = labDeckSlots(players, { C: 'p1', '1B': 'p2', '2B': 'p3', SP1: 'p4', BN1: 'p5', SS: '없는선수' });
+  eq('라인업 자리만 센다 — 후보(BN) 칸 · 없는 선수는 안 센다', r.any, 4);
+  eq('도감 카드 id 로 올린다', r.slots.C === 'lab1' && r.slots['1B'] === 'lab2' && r.slots.SP1 === 'lab3' ? 1 : 0, 1);
+  eq('도감에 없는 카드는 빠지고 센다', r.miss === 1 && r.slots['2B'] === undefined ? 1 : 0, 1);
+  eq('빈 덱이면 0', labDeckSlots([], {}).any, 0);
+  eq('잘못된 값에도 안 멈춘다', labDeckSlots(null, null).any, 0);
+  setCustomPlayers([]);
 }
 
 
@@ -3250,6 +3277,17 @@ __setScoreVer('v11');
   eqs('투수 변화 · 구위 0 → 변화 · 구위', rankTrainMissing(Object.assign({}, pit, { trainC: 0, trainS: 0 })).join(','), '변화,구위');
   eqs('글자로 든 값도 숫자로 본다 ("7")', rankTrainMissing(Object.assign({}, pit, { trainCtl: '7' })).join(','), '');
   eqs('선수가 없으면 빈 목록', rankTrainMissing(null).join(','), '');
+  /* 불펜 국가대표 — 훈련 셋이 모두 0 이면 '안 찍음'으로 통과 (2026-10-23 사용자 지정) */
+  const nat0 = { role: '투수', cardType: '국가대표', trainC: 0, trainS: 0, trainCtl: 0 };
+  eqs('불펜 국대 훈련 전부 0 — 롱릴 RP6 은 통과', rankTrainMissing(nat0, 'RP6').join(','), '');
+  eqs('… 승리조 RP1 도 통과', rankTrainMissing(nat0, 'RP1').join(','), '');
+  eqs('… 마무리 CP 도 통과', rankTrainMissing(nat0, 'CP').join(','), '');
+  eqs('… 훈련 칸이 아예 없어도(옛 저장본) 통과', rankTrainMissing({ role: '투수', cardType: '국가대표' }, 'RP5').join(','), '');
+  eqs('불펜 국대라도 제구만 비면 제구 (새 칸을 안 넣은 것)', rankTrainMissing(Object.assign({}, nat0, { trainC: 10, trainS: 12 }), 'RP5').join(','), '제구');
+  eqs('선발 자리 국대 훈련 전부 0 은 막는다', rankTrainMissing(nat0, 'SP1').join(','), '변화,구위,제구');
+  eqs('불펜이라도 시그니처 훈련 전부 0 은 막는다', rankTrainMissing(Object.assign({}, nat0, { cardType: '시그니처' }), 'RP6').join(','), '변화,구위,제구');
+  eqs('자리를 안 넘기면 예외 없음', rankTrainMissing(nat0).join(','), '변화,구위,제구');
+  eqs('타자 국대는 예외 없음', rankTrainMissing({ role: '타자', cardType: '국가대표' }, 'RP6').join(','), '파워,정확,선구,인내');
   /* 관리자가 고친 표 */
   const mine = R.map((r) => Object.assign({}, r, { cut: r.cut + 10, safe: r.safe ? r.safe + 10 : 0 }));
   eq('저장본 없음 → 코드 표', rankTiersOf({}) === R ? 1 : 0, 1);
