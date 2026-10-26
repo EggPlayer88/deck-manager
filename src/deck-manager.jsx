@@ -8625,6 +8625,21 @@ function LabPage(p) {
   var _prev = useState(null); var prevTotals = _prev[0]; var setPrevTotals = _prev[1];   /* 바로 앞 계산의 세 티어 — ▲▼ 표시용 */
   var _busy = useState(false); var busy = _busy[0]; var setBusy = _busy[1];
   var _msg = useState(""); var msg = _msg[0]; var setMsg = _msg[1];
+  /* 크기 맞춤 (10-26 사용자: 카드가 화면을 채우게) — 본문 폭과 창 크기를 재서 야구장 · 덕아웃 카드 배율을 정한다 */
+  var pageRef = React.useRef(null);
+  var _cw = useState(0); var contentW = _cw[0]; var setContentW = _cw[1];
+  var _vwh = useState(function () { try { return [window.innerWidth || 1280, window.innerHeight || 900]; } catch (e) { return [1280, 900]; } });
+  var vwh = _vwh[0]; var setVwh = _vwh[1];
+  React.useEffect(function () {
+    var ro = null;
+    try {
+      ro = new ResizeObserver(function (ents) { ents.forEach(function (en) { setContentW(Math.round(en.contentRect.width)); }); });
+      if (pageRef.current) ro.observe(pageRef.current);
+    } catch (e) {}
+    var onR = function () { setVwh([window.innerWidth || 1280, window.innerHeight || 900]); };
+    window.addEventListener("resize", onR);
+    return function () { if (ro) ro.disconnect(); window.removeEventListener("resize", onR); };
+  }, []);
 
   var dexIdx = React.useMemo(function () { return buildDexIndex(dexAll(), getW()); }, [p.skills, SEED_PLAYERS.length]);
   var byId = React.useMemo(function () {
@@ -8888,16 +8903,16 @@ function LabPage(p) {
   })();
   var hintOf = function (sl) { return hints[sl] || null; };
 
-  /* 자리 카드 — 야구장 · 덕아웃이 같이 쓴다 */
-  var slotView = function (sl, size, label, onField) {
+  /* 자리 카드 — 야구장 · 덕아웃이 같이 쓴다. z 를 주면 그 배율로 키운다(CSS zoom — 글자도 선명하게) */
+  var slotView = function (sl, size, label, onField, z) {
     var isBn = /^BN/.test(sl), bi = isBn ? Number(sl.slice(2)) - 1 : -1;
     var r = isBn ? (bench[bi] ? byId[bench[bi]] : null) : rowOf(sl);
     var c = isBn ? null : cards[sl];
     var sel = pickSlot === sl;
-    var w = size === "sm" ? 52 : 64, h = size === "sm" ? 72 : 88;
+    var w = size === "sm" ? 52 : size === "lg" ? 80 : 64, h = size === "sm" ? 72 : size === "lg" ? 110 : 88;
     var hint = !r && !isBn ? hintOf(sl) : null;
     var flag = c && (c.isFa ? "FA" : c.isWildcard ? "WC" : "");
-    return (
+    var el = (
       <div key={sl} onClick={function () { openPick(sl); }} role="button" title={(label || sl) + (r ? " — 누르면 바꾸기" : " — 누르면 카드 넣기")}
         style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer", width: mob ? w : w + 4 }}>
         <div style={{ position: "relative", borderRadius: 8, boxShadow: sel ? "0 0 0 2px var(--acc), 0 0 14px rgba(255,213,79,0.45)" : "none" }}>
@@ -8918,14 +8933,49 @@ function LabPage(p) {
         </span>
       </div>
     );
+    return z && Math.abs(z - 1) > 0.01 ? (<div key={sl} style={{ zoom: z }}>{el}</div>) : el;
   };
 
-  /* 야구장 — 라인업 화면과 같은 카드가 자리에 바로 꽂힌다. 동그라미는 자동 타순 */
+  /* 배율 — PC: 야구장 폭(본문 − 고르기 창 392)과 창 높이로 정한다. 기준 판 760×608 에서 타자 카드 92px(lg × 1.15).
+     본문이 1000px 보다 좁으면(태블릿 · 좁은 창) 야구장을 본문 폭 그대로 쓰고, 고르기 창은 오른쪽에서 덮어 연다.
+     덕아웃(선발 5 · 불펜 7)은 한 줄 열두 장이 가로를 꽉 채우는 배율(zd). 폰은 화면 폭에 맞춰 조금씩 키운다 */
+  var CW = contentW || Math.min(1328, Math.max(320, vwh[0] - (mob ? 20 : 232)));
+  var narrowPc = !mob && CW < 1000;
+  var FW = mob || narrowPc ? CW : CW - 392;
+  var FH = mob ? 0 : Math.round(Math.max(400, Math.min(FW * 0.8, vwh[1] - 200)));
+  var fs = mob ? 1 : Math.max(0.55, Math.min(FW / 760, FH / 608, 1.6));
+  var zf = mob ? Math.max(0.9, Math.min(1.35, FW / 343 * 1.1)) : 1.15 * fs;
+  var benchIn = !mob && fs >= 0.8;   /* 후보 6칸을 야구장 왼쪽 아래 빈 구석에 (좁으면 덕아웃 아래) */
+  var zd = Math.max(0.62, Math.min(1.3, (CW - 116) / 1008));
+  var zsm = Math.max(0.85, Math.min(1.3, (CW - 30) / 260)), zrm = Math.max(0.8, Math.min(1.2, (CW - 33) / 312));
+
+  /* 야구장 — 라인업 화면과 같은 카드가 자리에 바로 꽂힌다. 동그라미는 자동 타순.
+     10-26 사용자: 타자들이 화면을 가득 채우게 — 판 크기에 맞춰 카드를 키우고, 후보 6칸은 왼쪽 아래(3루 쪽 덕아웃 자리) */
   var POS = mob
-    ? { C: [50, 86], "1B": [82, 62], "2B": [61, 43], "3B": [18, 62], SS: [39, 43], LF: [16, 23], CF: [50, 13], RF: [84, 23], DH: [86, 86] }
-    : { C: [50, 85], "1B": [76, 62], "2B": [61, 44], "3B": [24, 62], SS: [39, 44], LF: [18, 26], CF: [50, 14], RF: [82, 26], DH: [89, 85] };
+    ? { C: [50, 86], "1B": [83, 61], "2B": [63, 42], "3B": [17, 61], SS: [37, 42], LF: [15, 26], CF: [50, 14], RF: [85, 26], DH: [87, 86] }
+    : { C: [50, 87], "1B": [79, 52], "2B": [62.5, 41.5], "3B": [21, 52], SS: [37.5, 41.5], LF: [14, 27.5], CF: [50, 13], RF: [86, 27.5], DH: [89, 87] };
+  var dhW = Math.round((mob ? 52 : 84) * zf + 10), dhH = Math.round((mob ? 86 : 125) * zf + 10);
+  var benchSp = bench.reduce(function (a, id) { var r = id ? byId[id] : null; return a + (r ? labSetOf(team, r) : 0); }, 0);
+  var benchBtn = function (onField) {
+    return (<button onClick={autoBench} title="추천덱과 같은 규칙으로 채웁니다 — 국대 타자 1명(약한 자팀 국대 · 국대에이스 셔틀) + 셋포 8 이상 2026 라이브 5명(모자라면 시그니처). 라인업에 있는 선수는 빼요"
+      style={{ padding: onField ? "2px 7px" : "3px 9px", fontSize: onField ? 10.5 : 11.5, fontWeight: 800, borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap",
+        background: onField ? "rgba(255,213,79,0.16)" : "rgba(255,213,79,0.10)", border: "1px solid " + (onField ? "rgba(255,213,79,0.6)" : "rgba(255,213,79,0.45)"), color: onField ? "#FFD54F" : "var(--acc)" }}>{"⚡ 자동배정"}</button>);
+  };
+  var benchField = benchIn ? (
+    <div style={{ position: "absolute", left: Math.round(10 * fs), bottom: Math.round(8 * fs), zIndex: 3 }}>
+      <div style={{ zoom: 0.8 * fs, background: "rgba(0,0,0,0.28)", border: "1px dashed rgba(255,255,255,0.25)", borderRadius: 10, padding: "5px 7px 6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap" }}>{"후보 " + benchN + "/6"}</span>
+          <span title="후보 6장의 셋포 — 셋포 · 시너지 확인용이고 점수에는 안 들어가요" style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", whiteSpace: "nowrap" }}>{"셋포 +" + benchSp}</span>
+          <span style={{ marginLeft: "auto" }}>{benchBtn(true)}</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, auto)", gap: 4 }}>
+          {[0, 1, 2, 3, 4, 5].map(function (i) { return slotView("BN" + (i + 1), "sm", "후보 " + (i + 1), true); })}
+        </div>
+      </div>
+    </div>) : null;
   var field = (
-    <div style={{ position: "relative", width: "100%", aspectRatio: mob ? "0.98" : "1.38", borderRadius: 12, overflow: "hidden",
+    <div style={{ position: "relative", width: "100%", height: mob ? undefined : FH, aspectRatio: mob ? "0.9" : undefined, borderRadius: 12, overflow: "hidden",
       background: "radial-gradient(ellipse at 50% 92%, #2e7d32 0%, #1b5e20 55%, #12401a 100%)", border: "1px solid rgba(255,255,255,0.08)" }}>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
         <path d="M2 64 Q50 -6 98 64" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="0.6" />
@@ -8939,18 +8989,19 @@ function LabPage(p) {
         <rect x="49" y="35" width="2" height="2" fill="#fff" transform="rotate(45 50 36)" />
         <rect x="27" y="61" width="2" height="2" fill="#fff" transform="rotate(45 28 62)" />
       </svg>
-      <div style={{ position: "absolute", left: POS.DH[0] + "%", top: POS.DH[1] + "%", transform: "translate(-50%,-50%)", width: mob ? 82 : 96, height: mob ? 112 : 128,
+      <div style={{ position: "absolute", left: POS.DH[0] + "%", top: POS.DH[1] + "%", transform: "translate(-50%,-50%)", width: dhW, height: dhH,
         border: "1px dashed rgba(255,255,255,0.22)", borderRadius: 10 }} />
       {BAT_SLOTS.map(function (sl) {
         var co = POS[sl];
         return (<div key={sl} style={{ position: "absolute", left: co[0] + "%", top: co[1] + "%", transform: "translate(-50%,-50%)", zIndex: 2 }}>
-          {slotView(sl, mob ? "sm" : "md", sl === "DH" ? "DH" : sl, true)}
+          {slotView(sl, mob ? "sm" : "lg", sl === "DH" ? "DH" : sl, true, zf)}
         </div>);
       })}
+      {benchField}
     </div>
   );
 
-  /* 덕아웃 — 선발 5 | 불펜 1/1/4 + 마무리 | 후보 6 (+ 자동배정) */
+  /* 덕아웃 — 선발 5 | 불펜 1/1/4 + 마무리, 카드가 가로를 꽉 채운다. 폰 · 좁은 화면은 후보 6칸도 여기 */
   var dugBox = function (title, sub, body, extra) {
     return (
       <div style={{ background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 10, padding: mob ? "8px 8px 6px" : "8px 10px 6px", minWidth: 0 }}>
@@ -8963,26 +9014,25 @@ function LabPage(p) {
       </div>
     );
   };
+  var rowFill = { display: "flex", gap: mob ? 3 : 6, justifyContent: "space-between", flexWrap: mob || zd <= 0.62 ? "wrap" : "nowrap" };
   var rpLabel = function (sl) { return sl === "RP1" ? "승리조" : sl === "RP2" ? "추격조" : sl === "CP" ? "마무리" : "롱릴리프"; };
   var spFilled = SP_SLOTS.filter(function (sl) { return cards[sl]; }).length;
   var rpFilled = RP_SLOTS.concat(["CP"]).filter(function (sl) { return cards[sl]; }).length;
   var spBox = dugBox("선발", spFilled + "/5", (
-    <div style={{ display: "flex", gap: mob ? 3 : 4, flexWrap: "wrap" }}>{SP_SLOTS.map(function (sl) { return slotView(sl, "sm", sl); })}</div>));
+    <div style={rowFill}>{SP_SLOTS.map(function (sl) { return slotView(sl, mob ? "sm" : "lg", sl, false, mob ? zsm : zd); })}</div>));
   var rpBox = dugBox("불펜", "1/1/4 기본 고정 + 마무리 · " + rpFilled + "/7", (
-    <div style={{ display: "flex", gap: mob ? 3 : 4, flexWrap: "wrap" }}>
+    <div style={rowFill}>
       {RP_SLOTS.concat(["CP"]).map(function (sl) {
-        return (<div key={sl} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          {slotView(sl, "sm", sl)}
+        return (<div key={sl} style={{ display: "flex", flexDirection: "column", alignItems: "center", zoom: mob ? zrm : zd }}>
+          {slotView(sl, mob ? "sm" : "lg", sl)}
           <span style={{ fontSize: 8.5, color: "var(--td)", borderTop: "2px solid " + (sl === "RP1" ? "#66BB6A" : sl === "RP2" ? "#EF5350" : sl === "CP" ? "#FFD54F" : "#42A5F5"), paddingTop: 1, marginTop: 1 }}>{rpLabel(sl)}</span>
         </div>);
       })}
     </div>));
-  var benchSp = bench.reduce(function (a, id) { var r = id ? byId[id] : null; return a + (r ? labSetOf(team, r) : 0); }, 0);
   var bnBox = dugBox("후보", benchN + "/6 · 셋포에만 들어가요", (
-    <div style={{ display: "flex", gap: mob ? 3 : 4, flexWrap: "wrap" }}>{[0, 1, 2, 3, 4, 5].map(function (i) { return slotView("BN" + (i + 1), "sm", "후보 " + (i + 1)); })}</div>),
+    <div style={Object.assign({}, rowFill, mob ? {} : { justifyContent: "flex-start" })}>{[0, 1, 2, 3, 4, 5].map(function (i) { return slotView("BN" + (i + 1), "sm", "후보 " + (i + 1), false, mob ? zrm : 1); })}</div>),
     (<React.Fragment>
-      <button onClick={autoBench} title="추천덱과 같은 규칙으로 채웁니다 — 국대 타자 1명(약한 자팀 국대 · 국대에이스 셔틀) + 셋포 8 이상 2026 라이브 5명(모자라면 시그니처). 라인업에 있는 선수는 빼요"
-        style={{ padding: "3px 9px", fontSize: 11.5, fontWeight: 800, background: "rgba(255,213,79,0.10)", border: "1px solid rgba(255,213,79,0.45)", borderRadius: 6, color: "var(--acc)", cursor: "pointer", whiteSpace: "nowrap" }}>{"⚡ 자동배정"}</button>
+      {benchBtn(false)}
       <span style={{ fontSize: 11, color: "var(--td)", whiteSpace: "nowrap" }}>{"셋포 +" + benchSp}</span>
     </React.Fragment>));
 
@@ -9122,8 +9172,8 @@ function LabPage(p) {
         <div>{"· 🔥 많이 씀 — " + team + " 상위 덱이 그 자리에 쓴 카드가 먼저 나와요"}</div>
         <div>{"· 넣으면 다음 빈자리로 넘어가요 (자동 넘김)"}</div>
         <div>{"· ⭐ 추천덱 · 📥 내 덱 으로 불러와서 고쳐 봐도 돼요"}</div>
-        <div>{"· 후보 6칸은 셋포 · 시너지 확인용 — 점수는 셋포 200 · 시너지 모두로 셉니다"}</div>
-        <div>{"· 다 넣으면 ⚡ 점수 내기"}</div>
+        <div>{"· 후보 6칸" + (benchIn ? "(야구장 왼쪽 아래)" : "") + "은 셋포 · 시너지 확인용 — 점수는 셋포 200 · 시너지 모두로 셉니다"}</div>
+        <div>{"· 다 넣으면 ⚡ 점수 내기 · 여기서 고쳐도 내 실제 덱은 안 바뀌어요"}</div>
       </div>
     </div>
   );
@@ -9257,6 +9307,33 @@ function LabPage(p) {
     </div>) : null;
   var msgLine = msg ? (<div style={{ fontSize: 11.5, color: "var(--t2)", marginBottom: 8 }}>{msg}</div>) : null;
   /* 실험본 3개 */
+  var saveBtns = function (i, v) {
+    return (<React.Fragment>
+      <button onClick={function () { saveAs(i); }} title={"지금 화면의 라인업과 후보를 실험 " + (i + 1) + " 자리에 저장합니다 (덮어씁니다)"}
+        style={{ padding: "2px 6px", fontSize: 11, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--acc)", cursor: "pointer" }}>{"저장"}</button>
+      {v && (<button onClick={function () { loadFrom(i); }} title={"실험 " + (i + 1) + " 에 저장해 둔 라인업을 화면으로 불러옵니다"}
+        style={{ padding: "2px 6px", fontSize: 11, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--t2)", cursor: "pointer" }}>{"열기"}</button>)}
+      {v && (<button onClick={function () { dropSave(i); }} title="이 실험본을 비웁니다"
+        style={{ padding: "2px 5px", fontSize: 11, background: "none", border: "none", color: "var(--td)", cursor: "pointer" }}>{"✕"}</button>)}
+    </React.Fragment>);
+  };
+  var saveLabel = function (i, v) { return "실험 " + (i + 1) + (v ? " · " + v.team + " " + Object.keys(v.slots || {}).length + "장" : " · 비어 있음"); };
+  /* PC 오른쪽 칸(고르기 창을 안 열었을 때 안내 아래) — 실험본 세 칸을 세로로 */
+  var savesCard = (
+    <div style={{ background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 12, padding: "12px 16px 8px", marginTop: 10 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4 }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--t1)" }}>{"실험본"}</span>
+        <span style={{ fontSize: 11, color: "var(--td)" }}>{"지금 화면(라인업 · 후보)을 저장해 두고 다시 열어요"}</span>
+      </div>
+      {[0, 1, 2].map(function (i) {
+        var v = saves[i];
+        return (<div key={i} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 0", borderTop: i ? "1px solid var(--bd)" : "none" }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: v ? "var(--t1)" : "var(--td)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{saveLabel(i, v)}</span>
+          {saveBtns(i, v)}
+        </div>);
+      })}
+    </div>
+  );
   var savesRow = (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
       <span style={{ fontSize: 11, color: "var(--td)" }}>{"실험본"}</span>
@@ -9266,14 +9343,9 @@ function LabPage(p) {
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--inner)",
             border: "1px solid var(--bd)", borderRadius: 6, padding: "3px 6px" }}>
             <span style={{ fontSize: 11, color: v ? "var(--t2)" : "var(--td)", whiteSpace: "nowrap" }}>
-              {"실험 " + (i + 1) + (v ? " · " + v.team + " " + Object.keys(v.slots || {}).length + "장" : " · 비어 있음")}
+              {saveLabel(i, v)}
             </span>
-            <button onClick={function () { saveAs(i); }} title={"지금 화면의 라인업과 후보를 실험 " + (i + 1) + " 자리에 저장합니다 (덮어씁니다)"}
-              style={{ padding: "2px 6px", fontSize: 11, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--acc)", cursor: "pointer" }}>{"저장"}</button>
-            {v && (<button onClick={function () { loadFrom(i); }} title={"실험 " + (i + 1) + " 에 저장해 둔 라인업을 화면으로 불러옵니다"}
-              style={{ padding: "2px 6px", fontSize: 11, background: "var(--card)", border: "1px solid var(--bd)", borderRadius: 4, color: "var(--t2)", cursor: "pointer" }}>{"열기"}</button>)}
-            {v && (<button onClick={function () { dropSave(i); }} title="이 실험본을 비웁니다"
-              style={{ padding: "2px 5px", fontSize: 11, background: "none", border: "none", color: "var(--td)", cursor: "pointer" }}>{"✕"}</button>)}
+            {saveBtns(i, v)}
           </div>
         );
       })}
@@ -9318,14 +9390,11 @@ function LabPage(p) {
   );
 
   return (
-    <div style={{ padding: mob ? 10 : 16, maxWidth: 1180, margin: "0 auto", paddingBottom: mob ? PAGE_BOTTOM : 16 }}>
+    <div ref={pageRef} style={{ padding: mob ? 10 : 16, maxWidth: mob ? 1180 : 1360, margin: "0 auto", paddingBottom: mob ? PAGE_BOTTOM : 16 }}>
       {mob ? mobHeader : (
         <React.Fragment>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-            <span style={{ fontSize: 20, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"🔬 덱 연구소"}</span>
-            <span style={{ fontSize: 11, color: "var(--td)" }}>{"도감 카드로 짜 보는 실험실 — 고쳐도 내 실제 덱은 바뀌지 않습니다"}</span>
-          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            <span title="도감 카드로 짜 보는 실험실 — 고쳐도 내 실제 덱은 바뀌지 않습니다" style={{ fontSize: 20, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginRight: 4, whiteSpace: "nowrap" }}>{"🔬 덱 연구소"}</span>
             {teamSelect}{btnPreset}{btnMine}{btnRun}{btnSquad}{btnClub}
           </div>
           {scoreBlock}
@@ -9335,7 +9404,6 @@ function LabPage(p) {
       {suggestBox}
       {badLine}
       {msgLine}
-      {!mob && savesRow}
 
       {mob ? (
         <React.Fragment>
@@ -9362,16 +9430,24 @@ function LabPage(p) {
         </React.Fragment>
       ) : (
         <React.Fragment>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 380px", gap: 12, alignItems: "start" }}>
-            <div>{field}</div>
-            <div style={{ position: "sticky", top: 12, height: pickSlot ? "min(78vh, 680px)" : "auto", background: pickSlot ? "var(--card)" : "transparent", border: pickSlot ? "1px solid var(--bd)" : "none", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              {pickSlot ? pickerBody() : guide}
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,316fr) minmax(0,436fr)", gap: 10, marginTop: 12, alignItems: "stretch" }}>
+          {narrowPc ? field : (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 380px", gap: 12, alignItems: "start" }}>
+              <div>{field}</div>
+              <div style={{ position: "sticky", top: 12, height: pickSlot ? Math.min(vwh[1] - 24, Math.max(FH, 560)) : "auto", background: pickSlot ? "var(--card)" : "transparent", border: pickSlot ? "1px solid var(--bd)" : "none", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                {pickSlot ? pickerBody() : (<React.Fragment>{guide}{savesCard}</React.Fragment>)}
+              </div>
+            </div>)}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0," + Math.round(420 * zd + 46) + "fr) minmax(0," + Math.round(588 * zd + 58) + "fr)", gap: 12, marginTop: 12, alignItems: "stretch" }}>
             {spBox}{rpBox}
-            <div style={{ gridColumn: "1 / -1" }}>{bnBox}</div>
+            {!benchIn && (<div style={{ gridColumn: "1 / -1" }}>{bnBox}</div>)}
           </div>
+          {narrowPc && (<div style={{ marginTop: 12 }}>{savesRow}</div>)}
+          {narrowPc && pickSlot && (
+            <div onClick={function () { setPickSlot(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 210, display: "flex", justifyContent: "flex-end" }}>
+              <div onClick={function (e) { e.stopPropagation(); }} style={{ width: "min(400px, 92vw)", height: "100%", backgroundColor: "var(--bg)", backgroundImage: "linear-gradient(var(--card), var(--card))", borderLeft: "1px solid var(--bd)", display: "flex", flexDirection: "column" }}>
+                {pickerBody()}
+              </div>
+            </div>)}
         </React.Fragment>
       )}
     </div>
