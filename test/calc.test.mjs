@@ -20,7 +20,7 @@ import {
   SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, skillBaseName, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
-import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots } from './calc-extract.mjs';
+import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, findCard } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
 import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
@@ -2456,13 +2456,91 @@ console.log('\n[덱 연구소] 내 덱 불러오기 — 내 선수의 도감 id(
   setCustomPlayers([{ id: 'lab1', name: '가', cardType: '시그니처', role: '타자', subPosition: 'C' },
     { id: 'lab2', name: '나', cardType: '골든글러브', role: '타자', subPosition: '1B' },
     { id: 'lab3', name: '다', cardType: '임팩트', role: '투수', position: '선발' }]);
-  const players = [{ id: 'p1', dbId: 'lab1' }, { id: 'p2', dbId: 'lab2' }, { id: 'p3', dbId: '도감에없는id' }, { id: 'p4', dbId: 'lab3' }, { id: 'p5' }];
-  const r = labDeckSlots(players, { C: 'p1', '1B': 'p2', '2B': 'p3', SP1: 'p4', BN1: 'p5', SS: '없는선수' });
+  const players = [{ id: 'p1', dbId: 'lab1' }, { id: 'p2', dbId: 'lab2' }, { id: 'p3', dbId: '도감에없는id' }, { id: 'p4', dbId: 'lab3' }, { id: 'p5' }, { id: 'p6', dbId: 'lab1' }];
+  const r = labDeckSlots(players, { C: 'p1', '1B': 'p2', '2B': 'p3', SP1: 'p4', BN1: 'p5', BN2: 'p6', SS: '없는선수' });
+  eq('후보(BN)는 bench 로 따로 — 도감 id 없는 선수 · 라인업과 같은 카드는 빠진다', JSON.stringify(r.bench) === '[]' ? 1 : 0, 1);
+  eq('후보에 다른 카드면 들어간다', JSON.stringify(labDeckSlots(players, { C: 'p1', BN3: 'p2' }).bench) === JSON.stringify(['lab2']) ? 1 : 0, 1);
   eq('라인업 자리만 센다 — 후보(BN) 칸 · 없는 선수는 안 센다', r.any, 4);
   eq('도감 카드 id 로 올린다', r.slots.C === 'lab1' && r.slots['1B'] === 'lab2' && r.slots.SP1 === 'lab3' ? 1 : 0, 1);
   eq('도감에 없는 카드는 빠지고 센다', r.miss === 1 && r.slots['2B'] === undefined ? 1 : 0, 1);
   eq('빈 덱이면 0', labDeckSlots([], {}).any, 0);
   eq('잘못된 값에도 안 멈춘다', labDeckSlots(null, null).any, 0);
+  setCustomPlayers([]);
+}
+
+
+console.log('\n[데이터센터] 스킬 상위 0.1% 표시 — 분포 꼬리(상위 0.4~0.01% 정확한 점수)로 읽는다 (2026-10-26)');
+{
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/deck-manager.jsx', import.meta.url), 'utf8');
+  const ia = src.indexOf('var PREBUILT_SKILL_DIST = ');
+  const SKD = JSON.parse(src.slice(src.indexOf('{', ia), src.indexOf('};', ia) + 1));
+  const keys = Object.keys(SKD);
+  eq('꼬리 표 72가지 (분포 표와 같은 키)', keys.filter((k) => Array.isArray(PREBUILT_SKILL_TAIL[k]) && PREBUILT_SKILL_TAIL[k].length === SKILL_TAIL_TOPS.length).length, 72);
+  eq('꼬리는 상위 0.5% 칸보다 높고 갈수록 커진다', keys.every((k) => { const a = SKD[k]; let p0 = a[a.length - 2]; return PREBUILT_SKILL_TAIL[k].every((x) => { const ok = x >= p0; p0 = x; return ok; }); }) ? 1 : 0, 1);
+  const k = '타자|골든글러브|우|-', a = SKD[k], t = PREBUILT_SKILL_TAIL[k];
+  eq('상위 0.1% 점수는 0.1%', pctFromDist(a, t[4], t), 0.1);
+  eq('상위 0.2% 점수는 0.2%', pctFromDist(a, t[2], t), 0.2);
+  eq('상위 0.3% 점수는 0.3%', pctFromDist(a, t[1], t), 0.3);
+  eq('상위 0.5% 칸은 0.5%', pctFromDist(a, a[a.length - 2], t), 0.5);
+  eq('그 아래는 꼬리와 상관없다', pctFromDist(a, a[150], t), pctFromDist(a, a[150]));
+  eq('꼬리 없이 부르면 예전 그대로 — 0.1% 점수가 0.3% 대로', pctFromDist(a, t[4]) >= 0.3 ? 1 : 0, 1);
+  eq('표본 최댓값보다 높아도 0.1%', pctFromDist(a, 999, t), 0.1);
+  /* 고점판독기 조합(정확한 상위 0.07~0.15%)은 이제 0.1~0.2% 로 보인다 — 예전에는 0.3~0.4% */
+  const LV = { '골든글러브': [6, 6, 6], '라이브': [7, 7, 7], '올스타': [8, 7, 7], '시그니처': [6, 5, 5], '국가대표': [6, 5, 5], '임팩트': [6, 5, 5] };
+  const bad = [];
+  for (const [key, names] of Object.entries(PEAK_SKILLS)) {
+    const [cat, ct] = key.split('|'); const fixed = ct === '임팩트' || ct === '올스타';
+    const sc = Math.round(names.reduce((s2, n, i) => s2 + ((fixed && i === 0) ? 0 : getSkillScore(n, LV[ct][i], cat, true)), 0) * 100) / 100;
+    const pc = pctFromDist(SKD[key], sc, PREBUILT_SKILL_TAIL[key]);
+    if (!(pc <= 0.2)) bad.push(key + ' ' + pc);
+  }
+  eq('고점 조합 72가지 모두 상위 0.2% 안으로 보인다 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
+}
+
+
+console.log('\n[덱 연구소 야구장 화면] 많이 씀 · 다음 빈자리 · 넣기 전 알림 · 실제 덱 조건 (2026-10-26 구성안 2차)');
+{
+  const TEAMS10 = ['기아', '삼성', 'LG', '두산', 'KT', 'SSG', '롯데', '한화', 'NC', '키움'];
+  const GROUPS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'SP', 'RP', 'CP'];
+  eq('많이 씀 자료 — 열 구단 · 상위 덱 20개', TEAMS10.filter((t) => LAB_USAGE[t] && LAB_USAGE[t].n === 20).length, 10);
+  eq('묶음은 자리 9 + 선발 · 불펜 · 마무리', TEAMS10.every((t) => Object.keys(LAB_USAGE[t].use).every((g) => GROUPS.includes(g))) ? 1 : 0, 1);
+  eq('덱 수는 상위 덱 수를 넘지 않는다', TEAMS10.every((t) => Object.values(LAB_USAGE[t].use).every((m) => Object.values(m).every((n) => n >= 1 && n <= LAB_USAGE[t].n))) ? 1 : 0, 1);
+  eq('계정 정보는 없다 — 카드 id 와 숫자만', /user|email|nick/i.test(JSON.stringify(LAB_USAGE)) ? 1 : 0, 0);
+  eq('기준일이 적혀 있다', typeof LAB_USAGE_AT === 'string' && LAB_USAGE_AT.length > 0 ? 1 : 0, 1);
+  eq('묶음 — 선발 · 불펜은 한 묶음', [labUseGroup('SP3'), labUseGroup('RP6'), labUseGroup('CP'), labUseGroup('DH')].join() === 'SP,RP,CP,DH' ? 1 : 0, 1);
+  const ul = labUsageList('기아', 'SP2');
+  eq('많이 쓴 순 · 비율은 덱 수 / 20', ul.length > 0 && ul.every((u, i) => (i === 0 || ul[i - 1].n >= u.n) && Math.abs(u.share - u.n / 20) < 1e-9) ? 1 : 0, 1);
+  eq('없는 구단은 빈 목록', labUsageList('없는팀', 'C').length, 0);
+  eq('다음 빈자리 — 포수 다음은 1루', labNextEmpty({}, 'C') === '1B' ? 1 : 0, 1);
+  eq('지명 다음은 1선발', labNextEmpty({}, 'DH') === 'SP1' ? 1 : 0, 1);
+  eq('찬 자리는 건너뛴다', labNextEmpty({ SP1: 'a', SP2: 'b' }, 'DH') === 'SP3' ? 1 : 0, 1);
+  eq('끝에서 앞으로 돈다', labNextEmpty({ CP: 'z' }, 'CP') === 'C' ? 1 : 0, 1);
+  const full = {}; ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'SP1', 'SP2', 'SP3', 'SP4', 'SP5', 'RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6', 'CP'].forEach((k) => { full[k] = 'x'; });
+  eq('다 찼으면 없음', labNextEmpty(full, 'C') === null ? 1 : 0, 1);
+  eq('후보는 6칸', LAB_BENCH_N, 6);
+  /* 넣기 전 알림 — 기아 덱 기준, 타팀 시그(FA) 두 장이 이미 있으면 세 번째는 못 넣는다 */
+  setCustomPlayers([
+    { id: 'w1', name: '타팀가', cardType: '시그니처', role: '타자', subPosition: '1B', team: 'LG', year: '2018' },
+    { id: 'w2', name: '타팀나', cardType: '시그니처', role: '타자', subPosition: '2B', team: 'LG', year: '2018' },
+    { id: 'w3', name: '타팀다', cardType: '시그니처', role: '타자', subPosition: '3B', team: 'LG', year: '2018' },
+    { id: 'w4', name: '타팀가', cardType: '국가대표', role: '타자', subPosition: 'DH', team: '기아', year: '2017' },
+    { id: 'w5', name: '타팀라', cardType: '라이브', role: '타자', subPosition: 'SS', team: 'LG', year: '2026', liveType: 'V2' }]);
+  const two = { '1B': 'w1', '2B': 'w2' };
+  const w3 = labPickWarn('기아', two, '3B', findCard('w3'));
+  eq('FA · WC 3장째는 못 넣는다', w3 && w3.block ? 1 : 0, 1);
+  const mv = labPickWarn('기아', two, '3B', findCard('w1'));
+  eq('다른 자리에 있던 카드는 옮기기로 알린다', mv && mv.move === '1B' && !mv.block ? 1 : 0, 1);
+  const sm = labPickWarn('기아', { '1B': 'w1' }, 'DH', findCard('w4'));
+  eq('같은 선수 다른 카드는 알린다 (막지는 않는다)', sm && sm.same === '1B' && !sm.block ? 1 : 0, 1);
+  const bad = labPickWarn('기아', {}, 'SS', findCard('w5'));
+  eq('타팀 라이브는 이 구단 덱에 못 쓴다', bad && bad.block ? 1 : 0, 1);
+  eq('문제없으면 알림 없음', labPickWarn('기아', {}, '1B', findCard('w1')) === null ? 1 : 0, 1);
+  /* 실제 덱 조건 — 라인업 + 후보 */
+  const rc = labRealCounts('기아', { '1B': 'w1', DH: 'w4' }, ['w5']);
+  eq('시그 · 라이브류(국대 + 라이브) · 국대 타자를 센다', [rc.sig, rc.lt, rc.natBat, rc.natPit, rc.n].join() === '1,2,1,0,3' ? 1 : 0, 1);
+  eq('셋포는 카드마다 연구소 기준으로 더한다', rc.sp, labSetOf('기아', findCard('w1')) + labSetOf('기아', findCard('w4')) + labSetOf('기아', findCard('w5')));
+  eq('빈 덱은 0', labRealCounts('기아', {}, []).n, 0);
   setCustomPlayers([]);
 }
 
