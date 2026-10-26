@@ -8448,14 +8448,14 @@ var LAB_PRESET = {
   "삼성": { sp: 202, tiers: [9075.3, 8593.6, 8357.9], slots: {"C":"9f6f1dc3-e597-40b0-9b10-39097a700b24","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"3a1bb72e-306f-49fd-a3af-f66dd0838ab6","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"2b9e5ec7-a99c-41e8-9ea9-91975ada727c","DH":"3df30d37-b93c-4817-8310-7f85fdef6980","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"ea0e46f5-e7c4-4b2c-b88b-af2b06ee0839","SP3":"5c35e6bf-6445-476b-a554-d8a116079d83","SP4":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP5":"2c713ea0-df6a-4af7-aa70-abca74a2a524","CP":"52bd6c83-9b8b-4d2b-bf43-1b3efe09b79b","RP1":"3710d0c3-dc8d-40bf-bd04-c880da246a0f","RP2":"577173a4-463c-40ba-9b63-bd7e45837ec2","RP3":"093ed078-200c-4de3-9b3e-bcaf34b79170","RP4":"b73ea725-f9f8-4b0a-8815-ddff7e717233","RP5":"05d94f7d-265e-4117-b832-c56a6a122de1","RP6":"20d69008-67c6-4262-b8e2-b9c4f2299eac"}, bench: ["649c496c-d891-4907-84f5-3fcfec00eec4","28dba9b4-61bd-4e75-b9f1-ccc6a69ff240","7cc64110-5c02-4845-a0ec-9ca50a9ee38d","8c6e224f-b97d-46ee-aed8-852d3d5124a2","3b1f35ea-54bc-4205-958e-31e7db7e82a3","d47d8603-e190-4ffb-a218-52a58558d3ad"] },
   "LG": { sp: 200, tiers: [9060.1, 8580.5, 8342.0], slots: {"C":"3682c099-a197-402c-b90c-959dd1ae286b","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"6019663f-851b-42ea-ad5b-7b587f140baa","CF":"5573bae9-ff6c-46bd-a70e-09ecfc4ab319","RF":"9a1ccc29-c6b5-43e1-bcb9-500f4aeaf767","DH":"8b5c84db-74d9-45de-a84e-1e5388803933","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"d568ab92-9c2d-4391-bce1-317d8c069a05","SP3":"676077b3-ef6b-4724-b066-d0c3389594dd","SP4":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP5":"32b6ed5d-9cea-4834-b999-7f167883bb1f","CP":"412d262b-2450-415e-9128-99c8abbfba21","RP1":"8ece1a63-bcde-477d-83e4-b8a258e40db3","RP2":"b60a17f1-ea9a-4607-b53a-6e0cfebf39e5","RP3":"25d08682-91c4-4574-80b3-28e2897c63ad","RP4":"1d832a89-eca2-4016-8449-dac8c1d01fe2","RP5":"3767dea3-f902-440c-8b93-c0ff03d9ccc2","RP6":"845f1555-107d-495a-9eab-45aef547804e"}, bench: ["98e047a7-ad9e-4a62-8c63-8b2148426394","6911b890-d129-42e0-beb1-3adf77f030b4","bf080f8d-db96-44ac-b763-094b16b33e53","4a2296cc-61d5-4a21-8658-2244f023464e","a976a9d5-328a-41d7-9622-264bde880a3d","dee8ec10-751c-4256-bed9-2ea073c8d907"] },
   "두산": { sp: 201, tiers: [9050.9, 8571.5, 8320.3], slots: {"C":"9cb2accc-77c9-4d4c-b061-65b78a164535","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"1c9e6727-b48a-4b59-ac65-f0ed746f2c66","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"9788ec06-e74a-4ece-8319-66d24187f23b","CF":"f443bf93-695a-4586-895d-ef313ec129b5","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"ecf5c8d6-1246-41f3-8898-b3db42322065","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP3":"13c2c302-5bfd-44fb-a95a-0a67bda2f562","SP4":"6381fa14-1eae-42c4-b06a-7e190c0f386f","SP5":"07ac79b1-8e8a-4512-bd6f-93fed4344c43","CP":"7952d20a-4a13-4a4b-8cb2-ee2d7e5b6a66","RP1":"f02610aa-aeba-4f7e-84e2-12a49bc37901","RP2":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP3":"3606c625-2dc3-474c-8085-610d42db7cf9","RP4":"88de73cd-34f6-4916-bf4b-f89a1771e290","RP5":"da75148f-05d1-42a4-8c36-999c571dfd9d","RP6":"95ff8746-6701-4b11-9e7d-c483777beb09"}, bench: ["1324022a-fb7b-44aa-8fc1-9111ec89dc0b","52d8b263-3c65-4c47-8c64-386a96021851","aec7ef67-21b7-446e-a2e2-5a9abdb32a77","daad011f-04cd-4cf5-86ba-c06e82041191","d5459f1b-31ec-495d-99e3-ce93f7e8c8ca","39233eab-b687-4782-ace7-41e7169f9709"] },
-  "KT": { sp: 200, tiers: [9035.1, 8560.2, 8319.1], slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"78a0a39a-2e94-4883-b481-b0e9ca450dd2","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"9ce9e064-ab38-4c6c-ba47-5b75d8c7fd1c","CF":"61ef6b87-f198-423b-bcc3-a0ada09b14d0","RF":"efb3c170-7f86-4fd7-bab6-7b5d3fee94fc","DH":"97eb2c83-fde2-45c1-835d-ad39e4f469f9","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"37290fa3-f6e7-4622-b474-58708285abaa","SP3":"7ff33218-dcaa-47ab-a73b-ff9cc31af5b3","SP4":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP5":"2c713ea0-df6a-4af7-aa70-abca74a2a524","CP":"3633b792-63c1-4feb-935b-b8ff18aee028","RP1":"388f2b64-c2b1-4475-92eb-92f543b7febc","RP2":"b12bdd44-d741-49c1-8b1e-7eff7d85a9ac","RP3":"5b8ebc17-cbc3-4c19-94f8-da9cff9fa438","RP4":"cf683d06-889a-4cfe-94c3-ea6278269b51","RP5":"feb8616a-4996-4955-9d85-e69f264dadb4","RP6":"02fdf484-c21f-4053-a25a-a95b5a848668"}, bench: ["94a231a5-b4b8-405d-bf7f-d2c43a221161","7c697d42-3415-4fea-821a-b660b1a8df13","9475b1f5-6779-41f0-a835-9aed71108cfd","8e997bc3-64b5-464f-ace1-cd7e98134022","9decf003-5e14-49fd-95e3-3a6b021ca4af","794d066e-8585-4073-bb0e-231cc8f358ee"] },
+  "KT": { sp: 200, tiers: [9035.1, 8560.2, 8319.1], slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"78a0a39a-2e94-4883-b481-b0e9ca450dd2","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"9ce9e064-ab38-4c6c-ba47-5b75d8c7fd1c","CF":"61ef6b87-f198-423b-bcc3-a0ada09b14d0","RF":"efb3c170-7f86-4fd7-bab6-7b5d3fee94fc","DH":"97eb2c83-fde2-45c1-835d-ad39e4f469f9","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"37290fa3-f6e7-4622-b474-58708285abaa","SP3":"7ff33218-dcaa-47ab-a73b-ff9cc31af5b3","SP4":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP5":"2c713ea0-df6a-4af7-aa70-abca74a2a524","CP":"3633b792-63c1-4feb-935b-b8ff18aee028","RP1":"388f2b64-c2b1-4475-92eb-92f543b7febc","RP2":"b12bdd44-d741-49c1-8b1e-7eff7d85a9ac","RP3":"5b8ebc17-cbc3-4c19-94f8-da9cff9fa438","RP4":"cf683d06-889a-4cfe-94c3-ea6278269b51","RP5":"feb8616a-4996-4955-9d85-e69f264dadb4","RP6":"02fdf484-c21f-4053-a25a-a95b5a848668"}, bench: ["94a231a5-b4b8-405d-bf7f-d2c43a221161","7c697d42-3415-4fea-821a-b660b1a8df13","9475b1f5-6779-41f0-a835-9aed71108cfd","8e997bc3-64b5-464f-ace1-cd7e98134022","64169a50-fb12-4f2a-a97d-48051987beea","9decf003-5e14-49fd-95e3-3a6b021ca4af"] },
   "SSG": { sp: 201, tiers: [9031.2, 8562.4, 8326.0], slots: {"C":"47e7b3de-9966-4e55-8ba1-9bc0443780d2","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"0e931d40-3f3f-4061-aab2-c5f9dd9a6a71","3B":"7757453a-d217-473f-81d0-d261b7458c29","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"bce438b2-8911-4e5e-ba3d-e4afc4c9b648","CF":"87027384-3681-4911-a61a-f5cbbff206fa","RF":"1693575d-3fbe-4374-9282-8a70d5dc932f","DH":"326f17bc-e359-4aea-a6a9-ff69e7ddd741","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"57575fce-be46-42ae-92c1-72662cfec961","SP3":"676077b3-ef6b-4724-b066-d0c3389594dd","SP4":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP5":"32b6ed5d-9cea-4834-b999-7f167883bb1f","CP":"db759674-7e03-4461-99ea-1900d57fd3ef","RP1":"62ef4e8c-22e6-483a-91fc-d681b0723e42","RP2":"35f1503c-be5d-4e44-ac67-3aa1612bfc8d","RP3":"67cd3fb1-3c83-4ab9-9833-074788603e09","RP4":"edf9d4b1-5164-4111-a466-206d4815cbeb","RP5":"0000268b-ff4e-43ce-98a7-ce271fb2038d","RP6":"6cda3e8f-29ef-46c6-81aa-67e35c24a14c"}, bench: ["961f9269-abb3-4217-a9f1-084462bdd405","8d0cabf2-0c5f-437b-b44f-5158e41b840f","77890c12-ac3f-4db0-9b74-4fe1040518e0","9d49ad11-e07f-46c8-991b-b597316a12ac","596c7f7a-f6d2-4fe3-a2ba-e5bbb48c7237","ade93893-b223-4786-a9a5-d2b6650a7377"] },
   "롯데": { sp: 200, tiers: [9048.3, 8571.5, 8332.9], slots: {"C":"04df2d79-c0c7-4fb9-8d44-baf7bafefc1d","1B":"fd1980f4-01b7-4cd5-ae34-fc9bc02f5668","2B":"303ed18a-1ed0-45fb-83cf-c9d10007b4f4","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"5ab23123-24a4-428f-898a-e048b56a5494","LF":"5500ea27-97d1-4a61-bb41-b033ef42f8d9","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"e393424e-d3f0-44ce-9ebc-113c7be356e2","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"2c713ea0-df6a-4af7-aa70-abca74a2a524","SP3":"eba7ff7d-f4e7-463e-b92f-3007b1f781b4","SP4":"af0e8555-ff14-434b-8f94-74ed3ceb5d30","SP5":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","CP":"ae2ea113-6edf-433b-a8a6-85afd30b001e","RP1":"f1270c04-cd46-402d-b508-c6ed50abb3e0","RP2":"f1dd3177-35e7-40ba-9e2e-55a304161940","RP3":"19a2c2c0-198a-4c56-92f1-6438dc0b1e11","RP4":"bb3cd84e-1ef9-4d7e-b646-33e7b3175028","RP5":"ca6924a3-0f70-4072-9951-7112a2b958bc","RP6":"265ec1e2-deeb-4ddd-8d89-0d6bf832e55c"}, bench: ["c85ed538-9e9a-4a70-86e8-0b6f736ef137","3b9eb19e-6c32-4550-9682-857978d57835","4a8e01de-5f89-442b-b076-e046b021d19f","f55bd561-2377-4ab5-9d56-ee9e4ac570a3","a888b61c-7ea6-4165-85f5-4c408b101d0b","9b79670a-f406-434c-8adb-70eecfe46dbb"] },
   "한화": { sp: 202, tiers: [9036.6, 8544.6, 8299.9], slots: {"C":"8cfdb9b9-9f32-4585-9293-d18f5b04bb30","1B":"6ee4b051-fce4-4c3e-86a2-4352e24ea246","2B":"2e783b65-d6e1-486a-8e57-3078ae31502e","3B":"7757453a-d217-473f-81d0-d261b7458c29","SS":"fe687900-f4a4-4a8b-a5ee-d415e807e14d","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"f443bf93-695a-4586-895d-ef313ec129b5","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"966cdff3-d332-4fe1-b09d-a13bebe23829","SP1":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP2":"d2ad72c0-0813-42f6-ba32-cc7f577e069f","SP3":"07ac79b1-8e8a-4512-bd6f-93fed4344c43","SP4":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP5":"7a184ed6-e77d-4e1f-87e6-6b4ad42e82d2","CP":"7450050b-ea25-4632-902e-96ffded3ccba","RP1":"e542200f-1f0c-413a-818a-28b28e98bd72","RP2":"e40648bc-5ac7-4bf9-b39e-a0611a524dc8","RP3":"3e2c7c0a-809d-41e3-b98f-024c3f8983e3","RP4":"4140e10d-f1c4-41be-ad3f-77854ad48c23","RP5":"94cc50a4-c85b-45cf-9b10-cf295020825b","RP6":"86045978-6150-4dcd-8800-daca0340583b"}, bench: ["3e46eff2-768b-41af-8ff3-0e9612c9af4c","8ab45029-ca7e-4290-ac8b-8a5ad2287f84","0c879355-ee93-4b7c-ade8-d256b1152021","d4154656-58ed-4038-a1a8-4b14e08288c6","b7dc35ca-2970-4610-9f50-e1051e2ceea9","3de7c150-1fb4-4600-9bc6-98c0b5c45b58"] },
-  "NC": { sp: 202, tiers: [9034.9, 8556.3, 8313.5], slots: {"C":"20d27998-983f-4d2b-9932-ccc3a70ded06","1B":"1fb099b7-b04b-40a3-a856-dccd305ade03","2B":"5d6f7dc5-2465-4cd2-a7fa-20c625576296","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"b581578c-2f52-436c-a1c0-e55ae50930a5","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"4619f98c-2ca8-42eb-8402-97bdf657459d","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"bdb0c462-e915-4961-9795-2bd1ec0b2004","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"7c0e4204-813a-4657-993f-bf88ea8ea618","SP3":"62e273f1-b533-4e2d-9d8b-5352e48972d7","SP4":"0ec33cc9-7989-4966-8fe2-3b40d6d74078","SP5":"32b6ed5d-9cea-4834-b999-7f167883bb1f","CP":"06a1c5c0-4f21-4816-96c0-d22892ca16dc","RP1":"e7a3aa1e-c651-4fda-af6d-cde0b665e5fa","RP2":"adc0e9fc-d195-414b-a6a1-1eb42c5081b8","RP3":"eb5f97b3-3b8e-4a15-a62a-03c70c48331b","RP4":"fcb292ca-85df-49ad-bf1f-d5895f206727","RP5":"6b1747dd-6c39-49e5-b928-af399f0db64b","RP6":"64fbc86e-9b41-4f3e-920d-1a10d33e22a5"}, bench: ["8907bc36-e238-4d2a-a36c-0aed2c5ede86","8ac787f3-0446-45ec-a832-86eecaddad85","c64e7602-3af6-43fb-b191-03df748a68c0","abaff01d-b571-4a89-99d1-be1da621022a","80f67465-4b8c-46d0-bb55-c2e8cdfd0d69","aa2a2ec2-44a5-469c-a2fe-8841493ff466"] },
+  "NC": { sp: 200, tiers: [9016.0, 8537.1, 8290.2], slots: {"C":"20d27998-983f-4d2b-9932-ccc3a70ded06","1B":"1fb099b7-b04b-40a3-a856-dccd305ade03","2B":"5d6f7dc5-2465-4cd2-a7fa-20c625576296","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"568c5e39-a078-400f-8613-27b91f629763","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"4619f98c-2ca8-42eb-8402-97bdf657459d","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"bdb0c462-e915-4961-9795-2bd1ec0b2004","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"7c0e4204-813a-4657-993f-bf88ea8ea618","SP3":"62e273f1-b533-4e2d-9d8b-5352e48972d7","SP4":"0ec33cc9-7989-4966-8fe2-3b40d6d74078","SP5":"32b6ed5d-9cea-4834-b999-7f167883bb1f","CP":"185af436-48a0-4abc-9fb1-470406ff932b","RP1":"e7a3aa1e-c651-4fda-af6d-cde0b665e5fa","RP2":"adc0e9fc-d195-414b-a6a1-1eb42c5081b8","RP3":"eb5f97b3-3b8e-4a15-a62a-03c70c48331b","RP4":"fcb292ca-85df-49ad-bf1f-d5895f206727","RP5":"6b1747dd-6c39-49e5-b928-af399f0db64b","RP6":"64fbc86e-9b41-4f3e-920d-1a10d33e22a5"}, bench: ["8907bc36-e238-4d2a-a36c-0aed2c5ede86","615690a6-7855-471b-8c8b-44def3b4a73f","8ac787f3-0446-45ec-a832-86eecaddad85","162eba9f-3c4d-476d-8a2b-31a9c5348bb8","00f8cc47-5d4c-4fee-aa01-2613137a2fe8","05e4c38c-abf6-4e6e-8bfe-ef388c46e7ac"] },
   "키움": { sp: 201, tiers: [9043.8, 8570.2, 8308.0], slots: {"C":"b9c7f7b6-1e71-4af6-b0da-3b90909293ad","1B":"8389280c-9535-4af5-8b5a-60667a1a2bb7","2B":"94fba2a8-505e-44f6-a4d0-da9c6456814e","3B":"8c638d8d-8e3c-4b88-b1e4-6b597167934b","SS":"0834489c-48e5-48fa-8432-644c4d19f09f","LF":"31d3d64f-c4cc-4eab-8fc0-7114507e6863","CF":"1fcd1c95-7864-46ef-ba34-4f0089ba5a99","RF":"949761f6-0263-433e-a88d-7e9abfdde36e","DH":"07ccb7fb-5dfc-43e6-9360-b236c87da413","SP1":"53fe7556-2ffd-49aa-ba4a-5632876d7a71","SP2":"5aed71ed-0ff9-4764-ab14-42e284d2060e","SP3":"7a6eb77b-ed50-4046-868c-a34026be8600","SP4":"32b6ed5d-9cea-4834-b999-7f167883bb1f","SP5":"2c713ea0-df6a-4af7-aa70-abca74a2a524","CP":"334b7a3c-e67f-45b3-8f30-909b6faea1ee","RP1":"d70ec371-f790-475e-a933-499b00297bc8","RP2":"fe7d0874-a94c-452a-a05e-8b409bdb5f08","RP3":"6a1d2632-7790-4134-9cab-d6162bbc806b","RP4":"821982ad-6bb3-4991-8a96-c7c8e02bc449","RP5":"7a6ef7aa-616c-4055-8eb4-5311e1b782bb","RP6":"63f4ff6c-4e70-45d2-9bbe-fd648e48be34"}, bench: ["a5e2ff48-1444-4a3a-b258-2a237d4620ff","d1c1d38b-2ee7-43c3-b1e4-7bfc6e62d13f","ec233f41-e768-4ea6-b1d4-d27a630cc540","3b30f3ee-588d-457e-be37-a9605fb2ee60","11702537-9341-43a9-aa76-66a13385de9c","20be33eb-105a-4a0f-b6c4-bd602b482230"] }
 };
-var LAB_PRESET_NOTE = "팀마다 자리별 대안 카드를 세 티어(상위 0.1% · 5% · 20%)로 견주며 고른 덱 (10-26 기준, 불펜 국대 · 후보 국대에이스 포함)";
+var LAB_PRESET_NOTE = "팀마다 자리별 대안 카드를 세 티어(상위 0.1% · 5% · 20%)로 견주며 고른 덱 (10-26 기준, 셋포 200 · 카드 시너지 · 불펜 국대 · 후보 국대에이스까지 실제로 맞춤)";
 
 var LAB_MAX_SAVES = 3;
 var LAB_TIER_COLOR = { 0.1: "#FFD54F", 5: "#7FD4FF", 20: "#A5D6A7" };
@@ -8522,8 +8522,9 @@ function labSetOf(team, c) {
   var d = applyTeamFlags(deckPl(labCard(c, team), sd0), team);
   return cardSetScore(d, team) + ((potmEffect(d, sd0) || {}).setDelta || 0);
 }
-/* 실제 덱 조건 — 셋포(후보 포함) · 시너지(임팩 · 시그 · 라이브류 = 라이브 + 국대 + 올스타) · 국대에이스(불펜 국대 투수 · 국대 타자).
-   점수는 연구소 가정(셋포 200 · 시너지 모두)으로 세고, 이건 실제로 그 조건이 맞는지 보여 주는 값이다 */
+/* 실제 덱 조건 — 셋포(후보 포함) · 시너지(임팩 · 시그 · 라이브류 = 라이브 + 국대 + 올스타, 라인업 + 후보) ·
+   국대에이스(후보의 국대 타자 · 중계의 국대 투수 — 연구소 카드는 스킬이 없어 자리로 본다, 10-26 사용자).
+   ⚡ 점수(labRun opt.real)도 이 값대로 센다: 셋포 200 에서 멈춤 · 모자란 시너지는 빼고 · 국대에이스는 있으면 6렙 */
 function labRealCounts(team, slots, bench) {
   var out = { sp: 0, imp: 0, sig: 0, lt: 0, natPit: 0, natBat: 0, n: 0 };
   var one = function (id, sl) {
@@ -8531,7 +8532,7 @@ function labRealCounts(team, slots, bench) {
     out.n++; out.sp += labSetOf(team, c);
     if (c.cardType === "임팩트") out.imp++; else if (c.cardType === "시그니처") out.sig++;
     if (c.cardType === "라이브" || c.cardType === "국가대표" || c.cardType === "올스타") out.lt++;
-    if (c.cardType === "국가대표") { if (c.role === "타자") out.natBat++; else if (sl && (/^RP/.test(sl) || sl === "CP")) out.natPit++; }
+    if (c.cardType === "국가대표") { if (c.role === "타자") { if (!sl) out.natBat++; } else if (sl && /^RP/.test(sl)) out.natPit++; }
   };
   LAB_SLOTS.forEach(function (sl) { one((slots || {})[sl], sl); });
   (bench || []).forEach(function (id) { one(id, null); });
@@ -8661,8 +8662,18 @@ function labFaLimit(rows, team, slot, curId) {
   return (rows || []).filter(function (e) {
     var c = e && e.sp ? e.sp : e; if (!c) return false;
     if (!((FA_CARDS[c.cardType] || WILDCARD_CARDS[c.cardType]) && isOtherTeam(c, team))) return true;
-    if (curId && c.id === curId) return true;
-    return seen++ < max;
+    if (seen < max) { seen++; return true; }   /* 지금 카드도 위 N 장 안이면 그 안에 센다 */
+    return !!(curId && c.id === curId);   /* N 장 밖이어도 지금 카드는 남긴다 */
+  });
+}
+/* 점수순 목록 — 골든글러브는 가장 높은 3장만, 선발 자리는 5장 (10-26 사용자). 지금 그 자리 카드는 늘 남긴다 */
+function labGgLimit(rows, slot, curId) {
+  var max = /^SP/.test(slot || "") ? 5 : 3, seen = 0;
+  return (rows || []).filter(function (e) {
+    var c = e && e.sp ? e.sp : e; if (!c) return false;
+    if (c.cardType !== "골든글러브") return true;
+    if (seen < max) { seen++; return true; }   /* 지금 카드도 위 N 장 안이면 그 안에 센다 */
+    return !!(curId && c.id === curId);   /* N 장 밖이어도 지금 카드는 남긴다 */
   });
 }
 function LabPage(p) {
@@ -8755,7 +8766,8 @@ function LabPage(p) {
   var real = React.useMemo(function () { return labRealCounts(team, slots, bench); }, [team, slots, bench, byId]);
 
   /* 카드가 바뀌면 점수는 지운다(⚡ 를 다시 눌러야 한다 — 사용자 결정). 지우기 전 점수는 ▲▼ 견줌용으로 남긴다 */
-  var touch = function (fn) { if (res) setPrevTotals(res.tiers.map(function (t) { return t.total; })); setRes(null); setMsg(""); fn(); };
+  /* fresh — 다른 덱을 불러오거나 구단을 바꿀 때: ▲▼ 견줌도 지운다 (다른 덱과 견주지 않게) */
+  var touch = function (fn, fresh) { if (fresh) setPrevTotals(null); else if (res) setPrevTotals(res.tiers.map(function (t) { return t.total; })); setRes(null); setMsg(""); fn(); };
   /* 탭(많이 씀 · 점수순)은 고른 대로 다음 자리에도 이어진다 (10-26 사용자) — 그 자리에 많이 씀 자료가 없으면 화면만 점수순으로 보인다 */
   var openPick = function (sl) {
     setPickSlot(sl); setQ("");
@@ -8776,16 +8788,16 @@ function LabPage(p) {
   var benchArr = function () { var b = bench.slice(0, LAB_BENCH_N); while (b.length < LAB_BENCH_N) b.push(null); return b; };
   var putBench = function (i, sp) {
     var b = benchArr().map(function (id) { return id === sp.id ? null : id; });
-    b[i] = sp.id; setBench(b); setQ("");
+    b[i] = sp.id; touch(function () { setBench(b); }); setQ("");   /* 후보도 ⚡ 점수에 들어간다(셋포 · 시너지 · 국대에이스) — 바꾸면 점수를 지운다 */
     if (autoNext) {
       var j = -1; for (var k = 1; k <= LAB_BENCH_N; k++) { var t = (i + k) % LAB_BENCH_N; if (!b[t]) { j = t; break; } }
       setPickSlot(j >= 0 ? "BN" + (j + 1) : null);
     } else setPickSlot(null);
   };
-  var clearBench = function (i) { var b = benchArr(); b[i] = null; setBench(b); };
+  var clearBench = function (i) { var b = benchArr(); b[i] = null; touch(function () { setBench(b); }); };
   var autoBench = function () {
     var b = labAutoBench(team, slots, benchCtx);
-    setBench(b.ids);
+    touch(function () { setBench(b.ids); });
     setMsg("후보 " + b.ids.length + "명을 넣었어요 — 국대 1 + 셋포 8 이상 라이브(모자라면 시그니처)");
   };
 
@@ -8796,7 +8808,8 @@ function LabPage(p) {
     setTimeout(function () {
       try {
         if (res) setPrevTotals(res.tiers.map(function (t) { return t.total; }));
-        setRes(labRun(cards, team, null, { setPoint: real.sp }));   /* 실제 셋포(라인업 + 후보) — 200 이 안 되면 그 구간 없이 (10-26 사용자) */
+        /* 실제 덱 조건 (10-26 사용자) — 셋포(200 에서 멈춤) · 시너지 장수 · 국대에이스(후보 국대 타자 · 중계 국대 투수면 6렙) */
+        setRes(labRun(cards, team, null, { setPoint: real.sp, real: real }));
       }
       catch (e) { setMsg("계산에 실패했습니다: " + (e && e.message)); }
       setBusy(false);
@@ -8846,7 +8859,7 @@ function LabPage(p) {
   var loadPreset = function () {
     if (!preset) { setMsg("이 구단은 아직 추천덱이 없습니다."); return; }
     if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 " + team + " 추천덱을 불러옵니다. 계속할까요?")) return;
-    touch(function () { setSlots(Object.assign({}, preset.slots)); setBench((preset.bench || []).slice(0, LAB_BENCH_N)); });
+    touch(function () { setSlots(Object.assign({}, preset.slots)); setBench((preset.bench || []).slice(0, LAB_BENCH_N)); }, true);
     setPickSlot(null);
     var n = Object.keys(preset.slots).length;
     setMsg(team + " 추천덱을 불러왔습니다 (" + n + "자리 · 후보 " + (preset.bench || []).length + ")");
@@ -8858,13 +8871,13 @@ function LabPage(p) {
     if (!d.any) { setMsg("내 덱 라인업이 비어 있습니다. 라인업 화면에서 선수를 먼저 넣어 주세요."); return; }
     if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 내 덱을 불러옵니다. 계속할까요?\n(저장해 둔 실험 1~3 은 그대로입니다)")) return;
     var tm = teamKey(p.teamName);
-    touch(function () { if (tm && KBO_TEAMS.indexOf(tm) >= 0) setTeam(tm); setSlots(d.slots); setBench(d.bench || []); });
+    touch(function () { if (tm && KBO_TEAMS.indexOf(tm) >= 0) setTeam(tm); setSlots(d.slots); setBench(d.bench || []); }, true);
     setPickSlot(null);
     setMsg("내 덱을 불러왔습니다 (" + Object.keys(d.slots).length + "자리 · 후보 " + (d.bench || []).length + ")" + (d.miss ? " — 도감 카드로 못 옮긴 " + d.miss + "장은 빠졌습니다" : ""));
   };
   var loadFrom = function (i) {
     var v = saves[i]; if (!v) return;
-    touch(function () { setTeam(teamKey(v.team) || team); setSlots(canonSlotIds(v.slots)); setBench(Array.isArray(v.bench) ? v.bench.map(canonCardId) : []); });
+    touch(function () { setTeam(teamKey(v.team) || team); setSlots(canonSlotIds(v.slots)); setBench(Array.isArray(v.bench) ? v.bench.map(canonCardId) : []); }, true);
     setPickSlot(null);
     setMsg("실험 " + (i + 1) + " 을 불러왔습니다.");
   };
@@ -8884,7 +8897,7 @@ function LabPage(p) {
     if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 클럽에서 가져온 덱을 올릴까요?\n(저장해 둔 실험 1~3 은 그대로입니다)")) {
       (p.onIncomingDone || function () {})(); return;
     }
-    touch(function () { setTeam(teamKey(d.team) || team); setSlots(next); setBench([]); });
+    touch(function () { setTeam(teamKey(d.team) || team); setSlots(next); setBench([]); }, true);
     setPickSlot(null);
     setSuggest(inc.mode === "suggest" ? { post: inc.post, base: d } : null); setSugTxt("");
     setMsg("클럽에서 가져온 덱을 올렸습니다 (" + Object.keys(next).length + "자리)"
@@ -9135,7 +9148,7 @@ function LabPage(p) {
       return ((lineupNames[a.sp.name] ? 1 : 0) - (lineupNames[b.sp.name] ? 1 : 0)) || (setOfRow(b.sp) - setOfRow(a.sp)) || (stdAdj(b.sp, "DH") - stdAdj(a.sp, "DH"));
     });
     var curId = isBn ? bench[bi] : slots[pickSlot];
-    if (tab === "std" && !q.trim()) list = labFaLimit(list, team, pickSlot, curId);
+    if (tab === "std" && !q.trim()) list = labGgLimit(labFaLimit(list, team, pickSlot, curId), pickSlot, curId);
     var shown = list.slice(0, 120);
     var cur = isBn ? (bench[bi] ? byId[bench[bi]] : null) : rowOf(pickSlot);
     var benchWarn = function (sp) {
@@ -9203,7 +9216,7 @@ function LabPage(p) {
             {tab === "use" ? team + " 상위 덱 " + useN + "개(" + LAB_USAGE_AT + " 기준)에서 이 자리에 쓴 비율 · 오른쪽은 표준 점수"
               : tab === "set" ? "셋포 높은 순 — 후보는 셋포 · 시너지에만 들어가요"
               : "표준 점수순 — 훈재분 · 특훈 · 스킬 · 잠재력 상위 0.1% · 세트덱 200 고정 · " + ((isBat ? yb : yp) ? (isBat ? yb : yp) + " 카드는 연도 보너스 포함" : "연도 보너스 없음")
-                + " · 타팀 시그 · 임팩 · 국대는 FA · WC 로 쳐서 " + (/^SP/.test(pickSlot) ? "2장" : "1장") + "만 (검색하면 다 나와요)"}
+                + " · 타팀 시그 · 임팩 · 국대는 FA · WC 로 쳐서 " + (/^SP/.test(pickSlot) ? "2장" : "1장") + ", 골글은 " + (/^SP/.test(pickSlot) ? "5장" : "3장") + "까지 (검색하면 다 나와요)"}
           </div>
         </div>
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
@@ -9267,12 +9280,28 @@ function LabPage(p) {
         <div>{"· 🔥 많이 씀 — " + team + " 상위 덱이 그 자리에 쓴 카드가 먼저 나와요"}</div>
         <div>{"· 넣으면 다음 빈자리로 넘어가요 (자동 넘김)"}</div>
         <div>{"· ⭐ 추천덱 · 📥 내 덱 으로 불러와서 고쳐 봐도 돼요"}</div>
-        <div>{"· 후보 6칸" + (benchIn ? "(야구장 왼쪽 아래)" : "") + "도 셋포에 들어가요 — ⚡ 점수는 라인업 + 후보 셋포로 셉니다 (시너지는 모두 받는 것으로)"}</div>
+        <div>{"· 후보 6칸" + (benchIn ? "(야구장 왼쪽 아래)" : "") + "도 셋포 · 시너지에 들어가요 — ⚡ 점수는 라인업 + 후보 장수대로 셉니다 (국대에이스는 후보 국대 타자 · 중계 국대 투수)"}</div>
         <div>{"· 다 넣으면 ⚡ 점수 내기 · 여기서 고쳐도 내 실제 덱은 안 바뀌어요"}</div>
       </div>
     </div>
   );
 
+  /* 점수 카드 알림 — ⚡ 점수가 실제 덱 조건으로 깎인 것 (셋포 200 안 됨 · 빠진 시너지 · 국대에이스 없음, 10-26 사용자) */
+  var scoreWarn = res ? (function () {
+    var out = [];
+    if (res.sp < LAB_SET_POINT) out.push("셋포 " + res.sp + " 로 계산 — " + LAB_SET_POINT + " 이 안 돼 그 위 구간은 빠졌어요" + (benchN < LAB_BENCH_N ? " (후보 칸을 채워 보세요)" : ""));
+    var c = res.cond;
+    if (c) {
+      var syn = [];
+      if (!c.synImpact) syn.push("임팩 " + real.imp + "/5");
+      if (!c.synSig) syn.push("시그 " + real.sig + "/5");
+      if (!c.synLive) syn.push("라이브류 " + real.lt + "/7");
+      if (syn.length) out.push("시너지 빠짐 — " + syn.join(" · "));
+      if (c.natBat !== "6렙") out.push("국대에이스(타) 없음 — 후보에 국대 타자를 넣으세요");
+      if (c.natPit !== "6렙") out.push("국대에이스(투) 없음 — 중계에 국대 투수를 넣으세요");
+    }
+    return out.length ? (<div style={{ marginTop: 3 }}>{out.map(function (t, i) { return (<div key={i} style={{ fontSize: 11, fontWeight: 700, color: "#FFA726", lineHeight: 1.5 }}>{t}</div>); })}</div>) : null;
+  })() : null;
   var deltaTxt = function (i) {
     if (!res || !prevTotals) return null;
     var d = res.tiers[i].total - prevTotals[i];
@@ -9293,7 +9322,7 @@ function LabPage(p) {
           <span style={{ color: LAB_TIER_COLOR[20] }}>{"상위 20% "}</span><b style={{ color: "var(--t2)", fontFamily: "var(--m)" }}>{res ? res.tiers[2].total.toFixed(1) : "—"}</b>{deltaTxt(2)}
         </div>
         {!res && filled > 0 && (<div style={{ fontSize: 11, color: "var(--td)", marginTop: 3 }}>{"카드를 다 넣고 ⚡ 점수 내기를 누르면 세 티어가 나와요"}</div>)}
-        {res && res.sp < LAB_SET_POINT && (<div style={{ fontSize: 11, fontWeight: 700, color: "#FFA726", marginTop: 3 }}>{"셋포 " + res.sp + " 로 계산 — " + LAB_SET_POINT + " 이 안 돼 그 위 구간은 빠졌어요" + (benchN < LAB_BENCH_N ? " (후보 칸을 채워 보세요)" : "")}</div>)}
+        {scoreWarn}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", flex: 1 }}>
         <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "var(--inner)", border: "1px solid var(--bd)", color: "var(--t2)", whiteSpace: "nowrap" }}>{filled + "/" + LAB_SLOTS.length + "자리 · 후보 " + benchN + "/6"}</span>
@@ -9317,16 +9346,16 @@ function LabPage(p) {
         {real.n > 0 && condChip("셋포 " + real.sp + " (후보 포함)", real.sp >= LAB_SET_POINT,
           "라인업과 후보를 합친 실제 셋포예요. ⚡ 점수도 이 셋포로 셉니다 — " + LAB_SET_POINT + " 이 안 되면 그 위 구간은 빠져요")}
         {real.n > 0 && condChip("시너지 임 " + real.imp + " · 시 " + real.sig + " · 라 " + real.lt, real.imp >= 5 && real.sig >= 5 && real.lt >= 7,
-          "카드 시너지 — 임팩트 5 · 시그니처 5 · 라이브류(라이브 + 국대 + 올스타) 7 장. 점수는 시너지를 모두 받는 것으로 셉니다")}
+          "카드 시너지 — 임팩트 5 · 시그니처 5 · 라이브류(라이브 + 국대 + 올스타) 7 장 (라인업 + 후보). ⚡ 점수도 이 장수대로 — 모자란 시너지는 빼고 셉니다")}
         {real.n > 0 && condChip("국대에이스 투 " + real.natPit + " · 타 " + real.natBat, real.natPit >= 1 && real.natBat >= 1,
-          "국대에이스 — 불펜(중계 · 마무리)에 국대 투수, 라인업이나 후보에 국대 타자가 있어야 해요. 점수는 받는 것으로 셉니다")}
+          "국대에이스 — 후보에 국대 타자, 중계에 국대 투수가 있으면 ⚡ 점수에 6레벨로 넣어요 (연구소 카드는 스킬이 없어 자리로 봅니다). 포수리드는 늘 6레벨")}
       </div>
     </div>
   );
 
   /* 단추 — PC 는 위 한 줄, 폰은 위(불러오기 · 점수)와 아래(실험본 · 공유)로 나눈다 */
   var teamSelect = (
-    <select value={team} onChange={function (e) { var v = e.target.value; touch(function () { setTeam(v); setBench([]); }); setPickSlot(null); }}
+    <select value={team} onChange={function (e) { var v = e.target.value; touch(function () { setTeam(v); setBench([]); }, true); setPickSlot(null); }}
       title="이 구단 덱으로 봅니다 — 선택 팀·군 셋포가 여기에 걸립니다"
       style={{ padding: "5px 8px", fontSize: 13, fontWeight: 700, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 6, color: "var(--acc)", outline: "none" }}>
       {KBO_TEAMS.map(function (t) { return (<option key={t} value={t}>{t}</option>); })}
@@ -9381,7 +9410,9 @@ function LabPage(p) {
   ) : null;
   var detailsLine = res ? (
     <div style={{ fontSize: 11, color: "var(--td)", margin: mob ? "0 0 8px" : "-4px 0 10px", lineHeight: 1.6 }}>
-      {"세트덱 " + res.sp + (res.sp < LAB_SET_POINT ? "(200 안 됨)" : "") + " · 불펜 1/1/4 기본 · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지 모두 적용 · 타순 자동"
+      {"세트덱 " + res.sp + (res.sp < LAB_SET_POINT ? "(200 안 됨)" : "") + " · 불펜 1/1/4 기본 · 포수리드 6렙 · 국대에이스 "
+        + (res.cond ? "타 " + (res.cond.natBat === "6렙" ? "6렙" : "없음") + " · 투 " + (res.cond.natPit === "6렙" ? "6렙" : "없음") : "6렙")
+        + " · 시너지 " + (res.cond ? ([res.cond.synImpact && "임팩", res.cond.synSig && "시그", res.cond.synLive && "라이브"].filter(Boolean).join("·") || "없음") : "모두 적용") + " · 타순 자동"
         + (res.limits.anti ? " · 역시너지 모든 능력치 −" + res.limits.anti + " 반영" : "")}
       {res.tiers[0].blanks.length > 0 && (<span style={{ color: "#FFA726" }}>{" · 연도덱을 안 골라 " + res.tiers[0].blanks.join("·") + " 구간은 비었습니다"}</span>)}
     </div>) : null;
@@ -9479,8 +9510,9 @@ function LabPage(p) {
           {limitChip("FA·WC", limits.fa, limits.faMax, "FA(임팩트·시그니처) + 와일드카드(국가대표) 합쳐 2장까지 — 넘을 수 없습니다")}
           {limits.anti > 0 && (<span style={{ fontSize: 11, fontWeight: 800, padding: "2px 7px", borderRadius: 4, background: "rgba(255,167,38,0.14)", border: "1px solid #FFA726", color: "#FFA726", whiteSpace: "nowrap" }}>{"역시너지 −" + limits.anti}</span>)}
           {real.n > 0 && condChip("셋포 " + real.sp + " · 임" + real.imp + " 시" + real.sig + " 라" + real.lt + " · 국대 " + real.natPit + "/" + real.natBat, condAll,
-            "실제 덱 조건 — 셋포(후보 포함) " + LAB_SET_POINT + " · 임팩트 5 · 시그 5 · 라이브류 7 · 국대에이스(불펜 국대 투수 / 국대 타자). ⚡ 점수는 이 셋포로 세고(200 에서 멈춤), 시너지 · 국대에이스는 받는 것으로 셉니다")}
+            "실제 덱 조건 — 셋포(후보 포함) " + LAB_SET_POINT + " · 임팩트 5 · 시그 5 · 라이브류 7 · 국대에이스(중계 국대 투수 / 후보 국대 타자). ⚡ 점수도 이 조건대로 셉니다 — 셋포는 200 에서 멈추고, 모자란 시너지는 빼고, 국대에이스는 있을 때 6레벨")}
         </div>
+        {scoreWarn}
       </div>
     </React.Fragment>
   );
@@ -12354,7 +12386,13 @@ function labRun(cards, teamName, extra, opt) {
      (calcSDBonus 가 uni* 를 그대로 더하므로 따로 손댈 곳이 없다) */
   var anti = lim.anti ? { uniP: -lim.anti, uniA: -lim.anti, uniE: -lim.anti,
     uniN: -lim.anti, uniC: -lim.anti, uniS: -lim.anti, uniCtl: -lim.anti } : null;
-  var sd0 = labSdState(teamName, anti ? Object.assign({}, extra || {}, anti) : extra);
+  /* 실제 덱 조건 (10-26 사용자) — opt.real = labRealCounts(라인업 + 후보). 카드 시너지(임팩 5 · 시그 5 · 라이브류 7)는
+     장수가 모자라면 빼고, 국대에이스는 후보에 국대 타자 · 중계에 국대 투수가 있으면 6렙(없으면 없음). 포수리드는 늘 6렙.
+     opt.real 을 안 주면 예전처럼 모두 받는다 */
+  var rc = opt && opt.real;
+  var cond = rc ? { synImpact: rc.imp >= 5, synSig: rc.sig >= 5, synLive: rc.lt >= 7,
+    natBat: rc.natBat >= 1 ? "6렙" : "없음", natPit: rc.natPit >= 1 ? "6렙" : "없음" } : null;
+  var sd0 = labSdState(teamName, Object.assign({}, extra || {}, anti || {}, cond || {}));
   /* 카드 사본은 자리마다 한 번만 만든다. 셋포 최적화가 이 함수를 수만 번 부르므로
      여기서 매번 만들면 계산이 1초를 넘는다 (능력치는 세트덱 상태와 무관하다) */
   var rawMemo = {};
@@ -12391,7 +12429,7 @@ function labRun(cards, teamName, extra, opt) {
     return { tier: t, sd: sd, order: order, blanks: blanks,
       total: calcLineupTotal(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: order }), totalSP)) };
   });
-  return { sp: totalSP, tiers: tiers, limits: lim };
+  return { sp: totalSP, tiers: tiers, limits: lim, cond: cond };
 }
 
 /* ── 클럽 라운지에 넘기는 덱 ──────────────────────────────────

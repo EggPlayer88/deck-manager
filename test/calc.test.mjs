@@ -20,7 +20,7 @@ import {
   SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, skillBaseName, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
-import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, labFaLimit, findCard } from './calc-extract.mjs';
+import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, labFaLimit, labGgLimit, findCard } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
 import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
@@ -2538,7 +2538,8 @@ console.log('\n[덱 연구소 야구장 화면] 많이 씀 · 다음 빈자리 �
   eq('문제없으면 알림 없음', labPickWarn('기아', {}, '1B', findCard('w1')) === null ? 1 : 0, 1);
   /* 실제 덱 조건 — 라인업 + 후보 */
   const rc = labRealCounts('기아', { '1B': 'w1', DH: 'w4' }, ['w5']);
-  eq('시그 · 라이브류(국대 + 라이브) · 국대 타자를 센다', [rc.sig, rc.lt, rc.natBat, rc.natPit, rc.n].join() === '1,2,1,0,3' ? 1 : 0, 1);
+  eq('시그 · 라이브류(국대 + 라이브)를 센다 — 라인업의 국대 타자는 국대에이스에 안 센다(후보만)', [rc.sig, rc.lt, rc.natBat, rc.natPit, rc.n].join() === '1,2,0,0,3' ? 1 : 0, 1);
+  eq('후보의 국대 타자는 국대에이스(타)로 센다', labRealCounts('기아', { '1B': 'w1' }, ['w4']).natBat, 1);
   eq('셋포는 카드마다 연구소 기준으로 더한다', rc.sp, labSetOf('기아', findCard('w1')) + labSetOf('기아', findCard('w4')) + labSetOf('기아', findCard('w5')));
   eq('빈 덱은 0', labRealCounts('기아', {}, []).n, 0);
   setCustomPlayers([]);
@@ -2609,6 +2610,43 @@ console.log('\n[연구소 ⚡ 점수] 실제 셋포로 — 200 이 안 되면 �
   eq('200 을 넘으면 200 에서 멈춘다', r250.sp, 200);
   eq('200 구간이 빠지면 점수가 내려간다', r199.tiers[0].total < r200.tiers[0].total ? 1 : 0, 1);
   eq('200 을 넘는 셋포는 200 과 같은 점수', r250.tiers[0].total === r200.tiers[0].total ? 1 : 0, 1);
+}
+
+
+console.log('\n[연구소 ⚡ 점수] 실제 덱 조건 — 시너지 장수 · 국대에이스(후보 국대 타자 · 중계 국대 투수) (2026-10-26 사용자)');
+{
+  const bat = (o) => Object.assign({ name: '조건타자', role: '타자', position: '타자', hand: '우', stars: 5, cardType: '골든글러브', team: '기아', year: '2016', power: 100, accuracy: 95, eye: 80, patience: 60 }, o);
+  const pit = (o) => Object.assign({ name: '조건투수', role: '투수', position: '중계', hand: '우', stars: 5, cardType: '국가대표', team: '기아', year: '2017', change: 100, stuff: 100 }, o);
+  const cs = { C: labCard(bat({ id: 'k1', subPosition: 'C' }), '기아'), '1B': labCard(bat({ id: 'k2', subPosition: '1B', cardType: '임팩트', stars: 4, year: '', impactType: '빅게임헌터' }), '기아'),
+    LF: labCard(bat({ id: 'k3', subPosition: 'LF', cardType: '라이브', stars: 5, year: '2026', liveType: 'V2' }), '기아'), RP1: labCard(pit({ id: 'k4' }), '기아') };
+  const all = { imp: 5, sig: 5, lt: 7, natBat: 1, natPit: 1 };
+  const T = (real) => labRun(cs, '기아', null, real ? { real } : undefined).tiers[0].total;
+  const full = T(all);
+  eq('조건이 다 맞으면 예전(모두 받는다)과 같다', full === T(null) ? 1 : 0, 1);
+  eq('임팩 4장이면 임팩 시너지가 빠져 내려간다', T(Object.assign({}, all, { imp: 4 })) < full ? 1 : 0, 1);
+  eq('라이브류 6장이면 라이브 시너지가 빠져 내려간다', T(Object.assign({}, all, { lt: 6 })) < full ? 1 : 0, 1);
+  eq('후보에 국대 타자가 없으면 국대에이스(타)가 빠져 내려간다', T(Object.assign({}, all, { natBat: 0 })) < full ? 1 : 0, 1);
+  eq('중계에 국대 투수가 없으면 국대에이스(투)가 빠져 내려간다', T(Object.assign({}, all, { natPit: 0 })) < full ? 1 : 0, 1);
+  const r = labRun(cs, '기아', null, { real: Object.assign({}, all, { sig: 3, natPit: 0 }) });
+  eq('결과에 실제 조건이 남는다', r.cond && r.cond.synSig === false && r.cond.natPit === '없음' && r.cond.natBat === '6렙' && r.cond.synImpact === true ? 1 : 0, 1);
+  eq('포수리드는 늘 6렙', labSdState('기아').catchLead === '6렙' ? 1 : 0, 1);
+  /* 중계의 국대 투수만 국대에이스(투) — 마무리 국대는 안 센다 */
+  setCustomPlayers([{ id: 'n1', name: '국대투가', cardType: '국가대표', role: '투수', position: '중계', team: '기아', year: '2017' },
+    { id: 'n2', name: '국대투나', cardType: '국가대표', role: '투수', position: '마무리', team: '기아', year: '2017' }]);
+  eq('중계(RP) 국대 투수는 센다', labRealCounts('기아', { RP3: 'n1' }, []).natPit, 1);
+  eq('마무리(CP) 국대 투수는 안 센다', labRealCounts('기아', { CP: 'n2' }, []).natPit, 0);
+  setCustomPlayers([]);
+}
+
+console.log('\n[연구소 고르기] 점수순의 골든글러브 — 자리마다 3장, 선발 5장 (2026-10-26 사용자)');
+{
+  const G = (id, ct) => ({ sp: { id, cardType: ct || '골든글러브', team: '기아', role: '타자' } });
+  const rows = [G('g1'), G('s1', '시그니처'), G('g2'), G('g3'), G('g4'), G('i1', '임팩트'), G('g5'), G('g6')];
+  const ids = (arr) => arr.map((e) => e.sp.id).join(',');
+  eq('골글은 3장까지 — 나머지 카드는 그대로', ids(labGgLimit(rows, 'LF')) === 'g1,s1,g2,g3,i1' ? 1 : 0, 1);
+  eq('선발은 5장까지', ids(labGgLimit(rows, 'SP4')) === 'g1,s1,g2,g3,g4,i1,g5' ? 1 : 0, 1);
+  eq('지금 그 자리 골글은 늘 남긴다', ids(labGgLimit(rows, 'CF', 'g6')) === 'g1,s1,g2,g3,i1,g6' ? 1 : 0, 1);
+  eq('지금 카드가 위 3장 안이면 3장 안에 센다', ids(labGgLimit(rows, 'LF', 'g2')) === 'g1,s1,g2,g3,i1' ? 1 : 0, 1);
 }
 
 
