@@ -20,7 +20,7 @@ import {
   SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, skillBaseName, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
-import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, labFaLimit, labGgLimit, findCard } from './calc-extract.mjs';
+import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, labFaLimit, labGgLimit, isOldOlstar, cardLvType, OLSTAR_SET_POINTS_OLD, findCard } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
 import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
@@ -790,7 +790,7 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('올스타 평소 셋포 — 다른 군 타팀 2', cardSetScore(ol({ team: '두산' }), K), 2);
   eq('올스타 평소 셋포 — 덱 구단 모르면 2 (다른 군과 같게)', cardSetScore(ol(), ''), 2);
   eq('올스타 평소 셋포 — KIA 는 기아로 (자팀 8)', cardSetScore(ol({ team: 'KIA' }), '기아'), 8);
-  eq('올스타 평소 셋포 — 2025 자팀도 8', cardSetScore(ol({ year: '2025' }), K), 8);
+  eq('올스타 평소 셋포 — 2025 는 자팀 4 (2026-10-26 사용자: 2025 올스타는 4 · 2 · 0)', cardSetScore(ol({ year: '2025' }), K), 4);
   eq('총 셋포 — 다른 군 올스타 2', total({ C: ol({ team: '두산' }) }, { teamName: K }), 2);
   eq('총 셋포 — 같은 군 올스타 4', total({ C: ol({ team: 'LG' }) }, { teamName: K }), 4);
   eq('올스타 다른 군 POTM — 셋포 2 → 4', potmEffect(ol({ team: '두산' }), on(ol({ team: '두산' }))).setDelta, 2);
@@ -1229,18 +1229,18 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
   const src = fs.readFileSync(new URL('../src/deck-manager.jsx', import.meta.url), 'utf8');
   const obj = (name) => { const i = src.indexOf('var ' + name + ' = '); return JSON.parse(src.slice(src.indexOf('{', i), src.indexOf('};', i) + 1)); };
   const SKD = obj('PREBUILT_SKILL_DIST'), TRD = obj('PREBUILT_DIST');
-  const LV = { '골든글러브': [6, 6, 6], '라이브': [7, 7, 7], '올스타': [8, 7, 7], '시그니처': [6, 5, 5], '국가대표': [6, 5, 5], '임팩트': [6, 5, 5] };
+  const LV = { '골든글러브': [6, 6, 6], '라이브': [7, 7, 7], '올스타': [8, 7, 7], '올스타25': [7, 6, 6], '시그니처': [6, 5, 5], '국가대표': [6, 5, 5], '임팩트': [6, 5, 5] };
   const base = (n) => n.replace(/\(.*?\)/g, '').trim();
   /* 조건부 스킬 — 배치·타순·능력치 구간·성급·불펜 자리·이닝에 따라 켜지고 꺼진다.
      베스트포지션은 선호 스킬이라 쓴다 (사용자 지정) */
   const COND = ['철완', '5툴플레이어', '선봉장', '도전정신', '라이징스타', '국대에이스', '리드오프', '핵타선', '공포의하위타선', '수비안정성', '빈틈없는타선', '컨택트히터',
     '원투펀치', '수호신', '긴급투입', '승리의함성', '원포인트릴리프', '얼리스타트', '흐름끊기', '기선제압', '타선지원', '대타스페셜', '약속의8회', '약속의 8회'];
 
-  eq('스킬 경우 72가지 (구워 둔 스킬 분포와 같은 키)', Object.keys(PEAK_SKILLS).filter(k => SKD[k]).length, 72);
+  eq('스킬 경우 84가지 (구워 둔 스킬 분포와 같은 키 — 2025 올스타 12가지 포함)', Object.keys(PEAK_SKILLS).filter(k => SKD[k]).length, 84);
   let bad = [];
   for (const [key, names] of Object.entries(PEAK_SKILLS)) {
     const [cat, ct, hand, c] = key.split('|');
-    const fixed = ct === '임팩트' || ct === '올스타';
+    const fixed = ct === '임팩트' || ct === '올스타' || ct === '올스타25';
     if (names.length !== 3) bad.push(key + ' 개수');
     const cond = { hand, cardType: ct, cat };
     names.forEach(n => {
@@ -1262,14 +1262,14 @@ console.log('\n[고점판독기] 가정값은 전부 메이저이고 실제로 �
     if (!(pct <= 0.5)) bad.push(key + ' 백분위 ' + pct);
     if (sc >= SKD[key][SKD[key].length - 1]) bad.push(key + ' 표본 최고점 이상 ' + sc);
   }
-  eq('스킬 72가지 — 메이저·실제로 뜸·1옵션 규칙·상위 0.5% 안 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
+  eq('스킬 84가지 — 메이저·실제로 뜸·1옵션 규칙·상위 0.5% 안 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
   eq('골글 우타 — 우타해결사 · 대표타자 · 베스트포지션 (상위 0.1%)', PEAK_SKILLS['타자|골든글러브|우|-'].join(',') === '우타해결사(우타),대표타자,베스트포지션' ? 1 : 0, 1);
-  eq('투수 36가지 — 1옵션 선발 우투 저니맨 · 좌투 좌승사자, 불펜 마당쇠', Object.entries(PEAK_SKILLS).filter(([k, v]) => { const [cat, , hand] = k.split('|'); return cat !== '타자' && v[0] === (cat === '선발' ? (hand === '좌' ? '좌승사자(좌투)' : '저니맨') : '마당쇠(불펜)'); }).length, 36);
-  eq('우타 12가지 모두 우타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '우' && v.includes('우타해결사(우타)')).length, 12);
-  eq('양타 12가지 모두 스위치히터', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '양' && v.includes('스위치히터(양타)')).length, 12);
-  eq('타자 비포수 18가지 모두 대표타자 · 베스트포지션 중 하나 이상 (포수 칸은 남는 칸이 하나라 0.1% 맞추기가 먼저)', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.startsWith('타자|') && k.endsWith('|-') && v.some(n => n === '대표타자' || n === '베스트포지션')).length, 18);
-  eq('포수 18가지 모두 1옵션 포수리드', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.endsWith('|포수') && v[0] === '포수리드').length, 18);
-  eq('좌타 12가지 모두 좌타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '좌' && v.includes('좌타해결사(좌타)')).length, 12);
+  eq('투수 42가지 — 1옵션 선발 우투 저니맨 · 좌투 좌승사자, 불펜 마당쇠', Object.entries(PEAK_SKILLS).filter(([k, v]) => { const [cat, , hand] = k.split('|'); return cat !== '타자' && v[0] === (cat === '선발' ? (hand === '좌' ? '좌승사자(좌투)' : '저니맨') : '마당쇠(불펜)'); }).length, 42);
+  eq('우타 14가지 모두 우타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '우' && v.includes('우타해결사(우타)')).length, 14);
+  eq('양타 14가지 모두 스위치히터', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '양' && v.includes('스위치히터(양타)')).length, 14);
+  eq('타자 비포수 21가지 모두 대표타자 · 베스트포지션 중 하나 이상 (포수 칸은 남는 칸이 하나라 0.1% 맞추기가 먼저)', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.startsWith('타자|') && k.endsWith('|-') && v.some(n => n === '대표타자' || n === '베스트포지션')).length, 21);
+  eq('포수 21가지 모두 1옵션 포수리드', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.endsWith('|포수') && v[0] === '포수리드').length, 21);
+  eq('좌타 14가지 모두 좌타해결사', Object.entries(PEAK_SKILLS).filter(([k, v]) => k.split('|')[0] === '타자' && k.split('|')[2] === '좌' && v.includes('좌타해결사(좌타)')).length, 14);
 
   bad = [];
   /* v1.1(2026-10-21): 투수는 [변화, 구위, 제구] 세 칸 · 선발(pit) · 불펜(rp) 가중치 따로 */
@@ -2476,7 +2476,7 @@ console.log('\n[데이터센터] 스킬 상위 0.1% 표시 — 분포 꼬리(상
   const ia = src.indexOf('var PREBUILT_SKILL_DIST = ');
   const SKD = JSON.parse(src.slice(src.indexOf('{', ia), src.indexOf('};', ia) + 1));
   const keys = Object.keys(SKD);
-  eq('꼬리 표 72가지 (분포 표와 같은 키)', keys.filter((k) => Array.isArray(PREBUILT_SKILL_TAIL[k]) && PREBUILT_SKILL_TAIL[k].length === SKILL_TAIL_TOPS.length).length, 72);
+  eq('꼬리 표 84가지 (분포 표와 같은 키 — 2025 올스타 12가지 포함)', keys.filter((k) => Array.isArray(PREBUILT_SKILL_TAIL[k]) && PREBUILT_SKILL_TAIL[k].length === SKILL_TAIL_TOPS.length).length, 84);
   eq('꼬리는 상위 0.5% 칸보다 높고 갈수록 커진다', keys.every((k) => { const a = SKD[k]; let p0 = a[a.length - 2]; return PREBUILT_SKILL_TAIL[k].every((x) => { const ok = x >= p0; p0 = x; return ok; }); }) ? 1 : 0, 1);
   const k = '타자|골든글러브|우|-', a = SKD[k], t = PREBUILT_SKILL_TAIL[k];
   eq('상위 0.1% 점수는 0.1%', pctFromDist(a, t[4], t), 0.1);
@@ -2487,15 +2487,15 @@ console.log('\n[데이터센터] 스킬 상위 0.1% 표시 — 분포 꼬리(상
   eq('꼬리 없이 부르면 예전 그대로 — 0.1% 점수가 0.3% 대로', pctFromDist(a, t[4]) >= 0.3 ? 1 : 0, 1);
   eq('표본 최댓값보다 높아도 0.1%', pctFromDist(a, 999, t), 0.1);
   /* 고점판독기 조합(정확한 상위 0.07~0.15%)은 이제 0.1~0.2% 로 보인다 — 예전에는 0.3~0.4% */
-  const LV = { '골든글러브': [6, 6, 6], '라이브': [7, 7, 7], '올스타': [8, 7, 7], '시그니처': [6, 5, 5], '국가대표': [6, 5, 5], '임팩트': [6, 5, 5] };
+  const LV = { '골든글러브': [6, 6, 6], '라이브': [7, 7, 7], '올스타': [8, 7, 7], '올스타25': [7, 6, 6], '시그니처': [6, 5, 5], '국가대표': [6, 5, 5], '임팩트': [6, 5, 5] };
   const bad = [];
   for (const [key, names] of Object.entries(PEAK_SKILLS)) {
-    const [cat, ct] = key.split('|'); const fixed = ct === '임팩트' || ct === '올스타';
+    const [cat, ct] = key.split('|'); const fixed = ct === '임팩트' || ct === '올스타' || ct === '올스타25';
     const sc = Math.round(names.reduce((s2, n, i) => s2 + ((fixed && i === 0) ? 0 : getSkillScore(n, LV[ct][i], cat, true)), 0) * 100) / 100;
     const pc = pctFromDist(SKD[key], sc, PREBUILT_SKILL_TAIL[key]);
     if (!(pc <= 0.2)) bad.push(key + ' ' + pc);
   }
-  eq('고점 조합 72가지 모두 상위 0.2% 안으로 보인다 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
+  eq('고점 조합 84가지 모두 상위 0.2% 안으로 보인다 (' + (bad.slice(0, 3).join(' / ') || '문제 없음') + ')', bad.length, 0);
 }
 
 
@@ -2647,6 +2647,43 @@ console.log('\n[연구소 고르기] 점수순의 골든글러브 — 자리마�
   eq('선발은 5장까지', ids(labGgLimit(rows, 'SP4')) === 'g1,s1,g2,g3,g4,i1,g5' ? 1 : 0, 1);
   eq('지금 그 자리 골글은 늘 남긴다', ids(labGgLimit(rows, 'CF', 'g6')) === 'g1,s1,g2,g3,i1,g6' ? 1 : 0, 1);
   eq('지금 카드가 위 3장 안이면 3장 안에 센다', ids(labGgLimit(rows, 'LF', 'g2')) === 'g1,s1,g2,g3,i1' ? 1 : 0, 1);
+}
+
+
+console.log('\n[2025 올스타] 셋포 4 · 2 · 0 · 스킬 7/6/6 · POTM 없음 · 훈련 · 각성은 2026 과 같다 (2026-10-26 사용자)');
+{
+  const as = (year, team, o) => Object.assign({ id: 'as' + year + team, name: '올스타' + year, role: '타자', cardType: '올스타', team, year: String(year), subPosition: 'LF', hand: '우', stars: 5, power: 100, accuracy: 95, eye: 80, patience: 60 }, o || {});
+  eq('2025 올스타 판별', isOldOlstar(as(2025, '기아')) && !isOldOlstar(as(2026, '기아')) && !isOldOlstar({ cardType: '시그니처', year: '2025' }) ? 1 : 0, 1);
+  eq('스킬 표 종류 — 2025 만 올스타25', [cardLvType(as(2025, '기아')), cardLvType(as(2026, '기아'))].join() === '올스타25,올스타' ? 1 : 0, 1);
+  setCustomPlayers([as(2025, '기아', { id: 'old1' })]);
+  eq('연도가 없는 저장 선수는 도감(dbId)으로 본다', isOldOlstar({ cardType: '올스타', dbId: 'old1' }) ? 1 : 0, 1);
+  setCustomPlayers([]);
+  /* 셋포 — 기아(나눔) 덱: 자팀 기아 · 같은 군 LG(나눔) · 다른 군 삼성(드림) */
+  eq('2025 올스타 셋포 자팀 4 · 같은 군 2 · 다른 군 0', [cardSetScore(as(2025, '기아'), '기아'), cardSetScore(as(2025, 'LG'), '기아'), cardSetScore(as(2025, '삼성'), '기아')].join() === '4,2,0' ? 1 : 0, 1);
+  eq('2026 올스타는 그대로 8 · 4 · 2', [cardSetScore(as(2026, '기아'), '기아'), cardSetScore(as(2026, 'LG'), '기아'), cardSetScore(as(2026, '삼성'), '기아')].join() === '8,4,2' ? 1 : 0, 1);
+  eq('2025 셋포 표', [OLSTAR_SET_POINTS_OLD.own, OLSTAR_SET_POINTS_OLD.league, OLSTAR_SET_POINTS_OLD.other].join() === '4,2,0' ? 1 : 0, 1);
+  /* 스킬 기본 레벨 */
+  const lv3 = (pl) => [1, 2, 3].map((k) => effSkillLv('정밀타격', 0, false, cardLvType(pl), k, '타자', [])).join();
+  eq('2025 올스타 자동 레벨 7 · 6 · 6', lv3(as(2025, '기아')) === '7,6,6' ? 1 : 0, 1);
+  eq('2026 올스타 자동 레벨 8 · 7 · 7', lv3(as(2026, '기아')) === '8,7,7' ? 1 : 0, 1);
+  /* POTM — 2025 올스타는 명단에 있어도 아무것도 안 받는다(스페셜도 없음) */
+  const sdP = { teamName: '기아', potmOn: ['올스타2025|기아', '올스타2026|기아'] };
+  eq('2025 올스타는 POTM 없음', potmEffect(as(2025, '기아'), sdP).on ? 1 : 0, 0);
+  eq('2026 올스타는 올스타 POTM', potmEffect(as(2026, '기아'), sdP).kind === 'olstar' ? 1 : 0, 1);
+  /* 훈련 · 각성 — 카드 종류로 정해 2025 도 같다 */
+  eq('훈련 최대 90 (2025 · 2026 같음)', TRAIN_POINTS['올스타'], 90);
+  eq('올스타는 각성 잠재력이 있다 (2025 도)', NO_AWAKEN_CARDS['올스타'] ? 1 : 0, 0);
+  /* 분포 · 꼬리 · 고점 표 — 올스타25 12가지 */
+  const ks = []; ['타자', '선발', '중계', '마무리'].forEach((cat) => { (cat === '타자' ? ['우', '좌', '양'] : ['우', '좌']).forEach((h) => { (cat === '타자' ? [false, true] : [false]).forEach((c) => ks.push(skillDistKey(cat, '올스타25', h, c))); }); });
+  eq('올스타25 분포 12가지(201칸)', ks.filter((k) => Array.isArray(PREBUILT_SKILL_DIST[k]) && PREBUILT_SKILL_DIST[k].length === 201).length, 12);
+  eq('올스타25 꼬리 12가지', ks.filter((k) => Array.isArray(PREBUILT_SKILL_TAIL[k]) && PREBUILT_SKILL_TAIL[k].length === SKILL_TAIL_TOPS.length).length, 12);
+  eq('올스타25 고점 12가지 — 1옵션은 손잡이 대표', ks.filter((k) => Array.isArray(PEAK_SKILLS[k]) && PEAK_SKILLS[k].length === 3).length, 12);
+  eq('2025 분포는 2026 보다 낮다 (레벨이 1씩 낮다)', PREBUILT_SKILL_DIST['타자|올스타25|우|-'][190] < PREBUILT_SKILL_DIST['타자|올스타|우|-'][190] ? 1 : 0, 1);
+  /* 고점 사본 — 2025 는 7/6/6 레벨로 */
+  const pk = peakPl(as(2025, '기아'), '-');
+  eq('2025 올스타 고점 레벨 7 · 6 · 6', [pk.s1Lv, pk.s2Lv, pk.s3Lv].join() === '7,6,6' ? 1 : 0, 1);
+  const pk6 = peakPl(as(2026, '기아'), '-');
+  eq('2026 올스타 고점 레벨 8 · 7 · 7', [pk6.s1Lv, pk6.s2Lv, pk6.s3Lv].join() === '8,7,7' ? 1 : 0, 1);
 }
 
 
