@@ -20,7 +20,7 @@ import {
   SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, skillBaseName, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
-import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, findCard } from './calc-extract.mjs';
+import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, findCard } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
 import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
@@ -2542,6 +2542,49 @@ console.log('\n[덱 연구소 야구장 화면] 많이 씀 · 다음 빈자리 �
   eq('셋포는 카드마다 연구소 기준으로 더한다', rc.sp, labSetOf('기아', findCard('w1')) + labSetOf('기아', findCard('w4')) + labSetOf('기아', findCard('w5')));
   eq('빈 덱은 0', labRealCounts('기아', {}, []).n, 0);
   setCustomPlayers([]);
+}
+
+
+console.log('\n[연구소 고르기] 연도 반영 표준 점수 — 타자 180 · 185, 투수 55 · 75 · 190 (2026-10-26 사용자)');
+{
+  const sdY = labStdSdYear('2018', '2022');
+  eq('타자 연도는 180 · 185 우에', sdY.s180 === 'R:2018' && sdY.s185 === 'R:2018' ? 1 : 0, 1);
+  eq('투수 연도는 55 · 75 · 190 우에', sdY.s55 === 'R:2022' && sdY.s75 === 'R:2022' && sdY.s190 === 'R:2022' ? 1 : 0, 1);
+  eq('다른 구간은 표준 그대로', Object.keys(LAB_STD_SD).every((k) => ['s55', 's75', 's180', 's185', 's190'].includes(k) || sdY[k] === LAB_STD_SD[k]) ? 1 : 0, 1);
+  const sd0 = labStdSdYear('', '');
+  eq('연도가 비면 표준과 같다', Object.keys(LAB_STD_SD).every((k) => sd0[k] === LAB_STD_SD[k]) ? 1 : 0, 1);
+  const bat = (o) => Object.assign({ id: 'yb', name: '연도타자', role: '타자', position: '타자', subPosition: 'LF', hand: '우', stars: 5,
+    cardType: '시그니처', team: '기아', year: '2018', power: 100, accuracy: 95, eye: 80, patience: 60 }, o);
+  const pit = (o) => Object.assign({ id: 'yp', name: '연도투수', role: '투수', position: '선발', hand: '우', stars: 5,
+    cardType: '시그니처', team: '기아', year: '2022', change: 100, stuff: 100 }, o);
+  const ctx = labStdCtx('기아'), ctxY = labStdCtxYear('기아', '2018', '2022');
+  const g = (c, sl) => labStdYearGet(ctx, ctxY, c, sl, '2018', '2022');
+  const b18 = bat(), b15 = bat({ id: 'yb2', year: '2015' }), p22 = pit(), p19 = pit({ id: 'yp2', year: '2019' });
+  eq('해가 맞는 타자는 오른다', g(b18, 'LF') > labStdGet(ctx, b18, 'LF') ? 1 : 0, 1);
+  eq('해가 다른 타자는 표준 그대로', g(b15, 'LF') === labStdGet(ctx, b15, 'LF') ? 1 : 0, 1);
+  eq('해가 맞는 투수도 오른다', g(p22, 'SP1') > labStdGet(ctx, p22, 'SP1') ? 1 : 0, 1);
+  eq('해가 다른 투수는 그대로', g(p19, 'SP1') === labStdGet(ctx, p19, 'SP1') ? 1 : 0, 1);
+  const imp = bat({ id: 'yi', cardType: '임팩트', stars: 4, year: '2018', impactType: '빅게임헌터' });
+  eq('임팩트는 이미 연도를 받으므로 그대로', g(imp, 'LF') === labStdGet(ctx, imp, 'LF') ? 1 : 0, 1);
+  eq('연도 판이 없으면 표준', labStdYearGet(ctx, null, b18, 'LF', '2018', '2022') === labStdGet(ctx, b18, 'LF') ? 1 : 0, 1);
+  const pk = labStdPl(b18, '기아');
+  eq('해가 맞는 타자는 180 · 185 우에서 파워 +2', calcSDBonus(pk, 'LF', labSdState('기아', sdY), LAB_SET_POINT, -1).p - calcSDBonus(pk, 'LF', labSdState('기아', LAB_STD_SD), LAB_SET_POINT, -1).p, 2);
+  const pkP = labStdPl(p22, '기아');
+  eq('해가 맞는 투수는 75 우 구위 +3 · 190 우 +1', calcSDBonus(pkP, 'SP1', labSdState('기아', sdY), LAB_SET_POINT, -1).s - calcSDBonus(pkP, 'SP1', labSdState('기아', LAB_STD_SD), LAB_SET_POINT, -1).s, 4);
+  eq('변화구는 55 우 +2 · 190 우 +1', calcSDBonus(pkP, 'SP1', labSdState('기아', sdY), LAB_SET_POINT, -1).c - calcSDBonus(pkP, 'SP1', labSdState('기아', LAB_STD_SD), LAB_SET_POINT, -1).c, 3);
+  /* 자동 연도 — ⚡ 점수 판이 있으면 그 해, 없으면 라인업에 가장 많은 해 */
+  const r1 = labAutoYears({}, { tiers: [{ sd: { s185: 'R:2018', s180: 'R:2018', s190: 'R:2022', s55: 'R:2022', s75: 'L:2018' } }] });
+  eq('점수 판의 해 — 타자 185 · 투수 190', r1.bat === '2018' && r1.pit === '2022' ? 1 : 0, 1);
+  const r2 = labAutoYears({}, { tiers: [{ sd: { s185: 'L', s180: 'L', s75: 'L:2010', s190: 'R:2021', s55: 'R:2021' } }] });
+  eq('180 · 185 가 연도 쪽이 아니면 75 좌의 해', r2.bat === '2010' && r2.pit === '2021' ? 1 : 0, 1);
+  const cards = { C: { role: '타자', year: '2018', cardType: '시그니처' }, '1B': { role: '타자', year: '2018', cardType: '골든글러브' },
+    '2B': { role: '타자', year: '2015', cardType: '시그니처' }, SS: { role: '타자', year: '2015', cardType: '임팩트' }, LF: { role: '타자', year: '2015', cardType: '임팩트' },
+    SP1: { role: '투수', year: '2022', cardType: '시그니처' }, SP2: { role: '투수', year: '2021', cardType: '골든글러브' }, SP3: { role: '투수', year: '2021', cardType: '국가대표' } };
+  const r3 = labAutoYears(cards, null);
+  eq('점수 전엔 라인업에 가장 많은 해 (임팩트는 안 센다)', r3.bat === '2018' && r3.pit === '2021' ? 1 : 0, 1);
+  eq('같으면 최근 해', labAutoYears({ C: { role: '타자', year: '2016', cardType: '시그니처' }, '1B': { role: '타자', year: '2018', cardType: '시그니처' } }, null).bat === '2018' ? 1 : 0, 1);
+  const r4 = labAutoYears({}, null);
+  eq('빈 라인업은 연도 없음', r4.bat === '' && r4.pit === '' ? 1 : 0, 1);
 }
 
 

@@ -8605,6 +8605,52 @@ function labPickWarn(team, slots, sl, sp, now) {
   if (same) return { same: same, text: "같은 선수가 " + same + " 에 있어요" };
   return null;
 }
+/* 고르기 목록의 '연도 반영' (2026-10-26 사용자: 표준 점수에 연도를 넣어 줄 세우기).
+   표준 세트덱(LAB_STD_SD)은 연도 구간을 '연도 쪽 · 연도 비움'으로 둬서 임팩트만 연도 보너스를 받는다.
+   여기서는 쪽은 그대로 두고 연도만 채운다 — 180 · 185 = 타자 연도, 55 · 75 · 190 = 투수 연도 (75 는 표준에서 투수 쪽).
+   연도가 비면 예전 표준 점수와 같다 */
+function labStdSdYear(batYear, pitYear) {
+  var b = batYear ? String(batYear) : "", q = pitYear ? String(pitYear) : "";
+  return Object.assign({}, LAB_STD_SD, { s55: "R:" + q, s75: "R:" + q, s180: "R:" + b, s185: "R:" + b, s190: "R:" + q });
+}
+function labStdCtxYear(teamName, batYear, pitYear) {
+  return { team: teamName, sd: labSdState(teamName, labStdSdYear(batYear, pitYear)), ov: {}, base: {}, off: {} };
+}
+/* 연도 반영 표준 점수 — 해가 맞는 카드(임팩트 말고)만 연도 판으로 다시 잰다. 나머지는 표준 점수 그대로 */
+function labStdYearGet(ctx, ctxY, row, slot, batYear, pitYear) {
+  var base = labStdGet(ctx, row, slot);
+  if (!ctxY || !row || row.cardType === "임팩트") return base;
+  var y = String(row.year || "");
+  if (!y || (y !== String(batYear || "") && y !== String(pitYear || ""))) return base;
+  return labStdGet(ctxY, row, slot);
+}
+/* 연도 자동 — ⚡ 점수가 있으면 그 판이 고른 해(타자: 185 · 180 우 / 75 좌, 투수: 190 · 55 우 / 75 우),
+   없으면 라인업에서 가장 많이 겹치는 해(임팩트 빼고, 같으면 최근 해). cards 는 {자리: 카드} */
+function labAutoYears(cards, res) {
+  var out = { bat: "", pit: "" };
+  var sd = res && res.tiers && res.tiers[0] && res.tiers[0].sd;
+  if (sd) {
+    var pickY = function (list) {
+      for (var i = 0; i < list.length; i++) { var v = sdSideOf(sdPick(sd, list[i][0])); if (v.year && v.side === list[i][1]) return v.year; }
+      return "";
+    };
+    out.bat = pickY([[185, "R"], [180, "R"], [75, "L"]]);
+    out.pit = pickY([[190, "R"], [55, "R"], [75, "R"]]);
+    return out;
+  }
+  var cnt = { bat: {}, pit: {} };
+  LAB_SLOTS.forEach(function (sl) {
+    var c = cards && cards[sl]; if (!c || !c.year || c.cardType === "임팩트") return;
+    var k = c.role === "타자" ? "bat" : "pit", y = String(c.year);
+    cnt[k][y] = (cnt[k][y] || 0) + 1;
+  });
+  ["bat", "pit"].forEach(function (k) {
+    var best = "", bn = 0;
+    Object.keys(cnt[k]).forEach(function (y) { var n = cnt[k][y]; if (n > bn || (n === bn && Number(y) > Number(best))) { best = y; bn = n; } });
+    out[k] = best;
+  });
+  return out;
+}
 function LabPage(p) {
   var mob = p.mobile;
   var _sharing = useState(false); var sharing = _sharing[0]; var setSharing = _sharing[1];
@@ -8617,6 +8663,7 @@ function LabPage(p) {
   var _q = useState(""); var q = _q[0]; var setQ = _q[1];
   var _ct = useState(""); var ctF = _ct[0]; var setCtF = _ct[1];
   var _own = useState(false); var ownOnly = _own[0]; var setOwnOnly = _own[1];
+  var _yr = useState({ bat: "", pit: "" }); var yrSel = _yr[0]; var setYrSel = _yr[1];   /* 고르기 목록 연도 반영 — "" 자동 · "none" 없음 · 해 */
   var _auto = useState(function () { try { return localStorage.getItem("lab-auto-next") !== "0"; } catch (e) { return true; } });
   var autoNext = _auto[0]; var setAutoNextRaw = _auto[1];
   var setAutoNext = function (v) { setAutoNextRaw(v); try { localStorage.setItem("lab-auto-next", v ? "1" : "0"); } catch (e) {} };
@@ -8674,6 +8721,18 @@ function LabPage(p) {
     LAB_SLOTS.forEach(function (sl) { var r = rowOf(sl); if (r) c[sl] = labCard(r, team); });
     return c;
   }, [slots, team, byId]);
+  /* 연도 반영 (10-26 사용자) — 자동이면 ⚡ 점수가 고른 해, 점수 전엔 라인업에 가장 많은 해. 그 해 카드는 연도덱 보너스까지 넣어 줄 세운다 */
+  var autoYears = labAutoYears(cards, res);
+  var yb = yrSel.bat === "" ? autoYears.bat : yrSel.bat === "none" ? "" : yrSel.bat;
+  var yp = yrSel.pit === "" ? autoYears.pit : yrSel.pit === "none" ? "" : yrSel.pit;
+  var stdCtxY = React.useMemo(function () { return yb || yp ? labStdCtxYear(team, yb, yp) : null; }, [team, yb, yp, p.skills, SEED_PLAYERS.length, GLOBAL_POTM_LIST]);
+  var stdAdj = function (sp, sl) { return labStdYearGet(stdCtx, stdCtxY, sp, sl, yb, yp); };
+  var yearList = React.useMemo(function () {
+    var b = {}, q = {};
+    dexAll().forEach(function (c) { if (!c || !c.year || c.cardType === "임팩트" || c.custom) return; (c.role === "타자" ? b : q)[String(c.year)] = 1; });
+    var srt = function (o) { return Object.keys(o).sort(function (x, y) { return Number(y) - Number(x); }); };
+    return { bat: srt(b), pit: srt(q) };
+  }, [p.skills, SEED_PLAYERS.length]);
   var filled = LAB_SLOTS.filter(function (sl) { return cards[sl]; }).length;
   var limits = labLimits(function (sl) { return cards[sl] || null; }, team);
   var benchN = bench.filter(function (id) { return id && byId[id]; }).length;
@@ -9044,20 +9103,20 @@ function LabPage(p) {
     var role = isBat ? "타자" : labPitKind(pickSlot);
     var stdSl = isBn ? "DH" : pickSlot;
     var keep = isBat && !isBn ? function (e) { return labFitsBatSlot(e.sp, pickSlot); } : null;
-    var all = dexSearch(dexIdx, role, q, ctF, (ownOnly || isBn) ? team : "", { scoreOf: function (e) { return stdOf(e.sp, stdSl); }, keep: keep });
+    var all = dexSearch(dexIdx, role, q, ctF, (ownOnly || isBn) ? team : "", { scoreOf: function (e) { return stdAdj(e.sp, stdSl); }, keep: keep });
     var useMap = {}; var useN = (LAB_USAGE[team] || {}).n || 0;
     if (!isBn) labUsageList(team, pickSlot).forEach(function (u) { useMap[u.id] = u; });
     var hasUse = Object.keys(useMap).length > 0;
     var tab = isBn ? "set" : (pickTab === "use" && hasUse ? "use" : "std");
     var list = all;
     if (tab === "use") list = all.filter(function (e) { return useMap[e.sp.id]; })
-      .sort(function (a, b) { return (useMap[b.sp.id].n - useMap[a.sp.id].n) || (stdOf(b.sp, stdSl) - stdOf(a.sp, stdSl)); });
+      .sort(function (a, b) { return (useMap[b.sp.id].n - useMap[a.sp.id].n) || (stdAdj(b.sp, stdSl) - stdAdj(a.sp, stdSl)); });
     var setMemo = {};
     var setOfRow = function (sp) { if (!(sp.id in setMemo)) setMemo[sp.id] = labSetOf(team, sp); return setMemo[sp.id]; };
     var lineupNames = {}; LAB_SLOTS.forEach(function (k) { var r = rowOf(k); if (r) lineupNames[r.name] = k; });
     /* 후보는 셋포 높은 순 — 라인업에 있는 선수(넣을 수 없는 줄)는 맨 아래로 */
     if (tab === "set") list = all.slice(0, 400).sort(function (a, b) {
-      return ((lineupNames[a.sp.name] ? 1 : 0) - (lineupNames[b.sp.name] ? 1 : 0)) || (setOfRow(b.sp) - setOfRow(a.sp)) || (stdOf(b.sp, "DH") - stdOf(a.sp, "DH"));
+      return ((lineupNames[a.sp.name] ? 1 : 0) - (lineupNames[b.sp.name] ? 1 : 0)) || (setOfRow(b.sp) - setOfRow(a.sp)) || (stdAdj(b.sp, "DH") - stdAdj(a.sp, "DH"));
     });
     var shown = list.slice(0, 120);
     var cur = isBn ? (bench[bi] ? byId[bench[bi]] : null) : rowOf(pickSlot);
@@ -9091,7 +9150,7 @@ function LabPage(p) {
             {[["use", "🔥 많이 씀"], ["std", "📊 점수순"]].map(function (t) {
               var on = tab === t[0], dis = t[0] === "use" && !hasUse;
               return (<button key={t[0]} onClick={function () { if (!dis) setPickTab(t[0]); }} disabled={dis}
-                title={t[0] === "use" ? (hasUse ? team + " 상위 덱이 이 자리에 쓴 카드" : "이 자리 자료가 없어요") : "표준 점수 — 상위 0.1% · 고정 세트덱 기준 (라인업과 무관)"}
+                title={t[0] === "use" ? (hasUse ? team + " 상위 덱이 이 자리에 쓴 카드" : "이 자리 자료가 없어요") : "표준 점수 — 상위 0.1% · 고정 세트덱 · 연도 반영"}
                 style={{ flex: 1, padding: "6px 0", fontSize: 12.5, fontWeight: on ? 800 : 600, borderRadius: 6, border: "none", cursor: dis ? "default" : "pointer",
                   background: on ? "rgba(255,213,79,0.14)" : "transparent", color: on ? "var(--acc)" : dis ? "var(--td)" : "var(--t2)" }}>{t[1]}</button>);
             })}
@@ -9107,10 +9166,25 @@ function LabPage(p) {
             {!isBn && (<button onClick={function () { setOwnOnly(!ownOnly); }} title={team + " 카드만"} style={{ marginLeft: "auto", padding: "2px 8px", fontSize: 11, fontWeight: ownOnly ? 800 : 500, borderRadius: 10,
               border: "1px solid " + (ownOnly ? "#EF9A9A" : "var(--bd)"), background: ownOnly ? "rgba(239,154,154,0.12)" : "transparent", color: ownOnly ? "#EF9A9A" : "var(--t2)", cursor: "pointer" }}>{"자팀만"}</button>)}
           </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
+            <span title="그 해 카드는 연도덱 보너스(타자 180 · 185, 투수 55 · 75 · 190)까지 넣은 표준 점수로 줄 세워요. 자동 = ⚡ 점수가 고른 해, 점수 전엔 라인업에 가장 많은 해" style={{ fontSize: 11, color: "var(--td)", whiteSpace: "nowrap" }}>{"연도 반영"}</span>
+            {[["bat", "타자"], ["pit", "투수"]].map(function (k) {
+              var rel = (k[0] === "bat") === isBat;
+              return (<label key={k[0]} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: rel ? 800 : 500, color: rel ? "var(--t1)" : "var(--td)", whiteSpace: "nowrap" }}>
+                {k[1]}
+                <select value={yrSel[k[0]]} onChange={function (e) { var v = e.target.value; setYrSel(function (prev) { var n = Object.assign({}, prev); n[k[0]] = v; return n; }); }}
+                  style={{ fontSize: 11, padding: "1px 4px", background: "var(--inner)", color: "var(--t1)", border: "1px solid " + (rel ? "rgba(129,199,132,0.6)" : "var(--bd)"), borderRadius: 5, outline: "none" }}>
+                  <option value="">{"자동" + (autoYears[k[0]] ? " " + autoYears[k[0]] : " (없음)")}</option>
+                  <option value="none">{"연도 없음"}</option>
+                  {yearList[k[0]].map(function (y) { return (<option key={y} value={y}>{y}</option>); })}
+                </select>
+              </label>);
+            })}
+          </div>
           <div style={{ fontSize: 10.5, color: "var(--td)", marginTop: 6 }}>
             {tab === "use" ? team + " 상위 덱 " + useN + "개(" + LAB_USAGE_AT + " 기준)에서 이 자리에 쓴 비율 · 오른쪽은 표준 점수"
               : tab === "set" ? "셋포 높은 순 — 후보는 셋포 · 시너지에만 들어가요"
-              : "표준 점수순 — 훈재분 · 특훈 · 스킬 · 잠재력 상위 0.1%, 세트덱 200 고정 (라인업과 무관)"}
+              : "표준 점수순 — 훈재분 · 특훈 · 스킬 · 잠재력 상위 0.1% · 세트덱 200 고정 · " + ((isBat ? yb : yp) ? (isBat ? yb : yp) + " 카드는 연도 보너스 포함" : "연도 보너스 없음")}
           </div>
         </div>
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
@@ -9120,6 +9194,7 @@ function LabPage(p) {
             var sp = e.sp, u = useMap[sp.id];
             var wn = isBn ? benchWarn(sp) : labPickWarn(team, slots, pickSlot, sp, limits);
             var isCur = cur && cur.id === sp.id;
+            var yBonus = stdAdj(sp, stdSl) - stdOf(sp, stdSl);   /* 연도 반영으로 더해진 몫 */
             var col = wn ? (wn.block ? "#EF9A9A" : wn.move || wn.same ? "#90CAF9" : "#FFB74D") : null;
             return (
               <button key={sp.id} disabled={!!(wn && wn.block)} onClick={function () { if (wn && wn.block) return; if (isBn) putBench(bi, sp); else putCard(pickSlot, sp); }}
@@ -9136,6 +9211,7 @@ function LabPage(p) {
                     <Badge type={sp.cardType} />
                     <span style={{ fontSize: 10.5, color: sp.cardType === "임팩트" ? "#a78bfa" : "var(--td)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {sp.cardType === "임팩트" ? (sp.impactType || "") + (sp.team ? " · " + sp.team : "") : [sp.year, sp.team].filter(Boolean).join(" · ")}</span>
+                    {yBonus > 0.05 && (<span title={"연도덱 보너스 +" + yBonus.toFixed(1) + " 포함 (" + sp.year + " 연도)"} style={{ fontSize: 9.5, fontWeight: 800, color: "#81C784", border: "1px solid rgba(129,199,132,0.55)", borderRadius: 3, padding: "0 3px", whiteSpace: "nowrap" }}>{"연도"}</span>)}
                     {isCur && (<span style={{ fontSize: 9.5, fontWeight: 800, color: "var(--acc)", border: "1px solid rgba(255,213,79,0.5)", borderRadius: 3, padding: "0 3px" }}>{"지금"}</span>)}
                   </div>
                   {tab === "use" && u && (<div style={{ height: 4, background: "var(--inner)", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
@@ -9144,8 +9220,8 @@ function LabPage(p) {
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
                   {tab === "use" && u && (<div style={{ fontSize: 12, fontWeight: 800, color: "#FFC107" }}>{Math.round(u.share * 100) + "%"}</div>)}
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--t1)", fontFamily: "var(--m)" }}>{tab === "set" ? "셋포 " + setOfRow(sp) : stdOf(sp, stdSl).toFixed(1)}</div>
-                  <div style={{ fontSize: 9.5, color: "var(--td)" }}>{tab === "set" ? "표준 " + stdOf(sp, "DH").toFixed(0) : "표준"}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--t1)", fontFamily: "var(--m)" }}>{tab === "set" ? "셋포 " + setOfRow(sp) : stdAdj(sp, stdSl).toFixed(1)}</div>
+                  <div style={{ fontSize: 9.5, color: yBonus > 0.05 ? "#81C784" : "var(--td)" }}>{tab === "set" ? "표준 " + stdAdj(sp, "DH").toFixed(0) : yBonus > 0.05 ? "연도 +" + yBonus.toFixed(1) : "표준"}</div>
                 </div>
               </button>
             );
