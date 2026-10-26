@@ -20,7 +20,7 @@ import {
   SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, skillBaseName, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
-import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, findCard } from './calc-extract.mjs';
+import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, labFaLimit, findCard } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
 import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
@@ -2587,6 +2587,30 @@ console.log('\n[연구소 고르기] 연도 반영 표준 점수 — 타자 180 
   eq('빈 라인업은 연도 없음', r4.bat === '' && r4.pit === '' ? 1 : 0, 1);
 }
 
+console.log('\n[연구소 고르기] 점수순의 타팀 FA · WC 카드 — 자리마다 1장, 선발 2장 (2026-10-26 사용자)');
+{
+  const C = (id, team, cardType) => ({ sp: { id, team, cardType, role: '타자' } });
+  const rows = [C('a', 'LG', '시그니처'), C('b', '기아', '시그니처'), C('c', '한화', '임팩트'), C('d', '삼성', '골든글러브'), C('e', 'KT', '국가대표'), C('f', '기아', '임팩트')];
+  const ids = (arr) => arr.map((e) => e.sp.id).join('');
+  eq('타팀 시그 · 임팩 · 국대는 가장 높은 1장만 — 자팀 · 골글은 그대로', ids(labFaLimit(rows, '기아', 'RF')) === 'abdf' ? 1 : 0, 1);
+  eq('선발 자리는 2장', ids(labFaLimit(rows, '기아', 'SP2')) === 'abcdf' ? 1 : 0, 1);
+  eq('지금 그 자리 카드는 늘 남긴다', ids(labFaLimit(rows, '기아', 'CF', 'e')) === 'abdef' ? 1 : 0, 1);
+  eq('덱 구단이 바뀌면 자팀이 바뀐다', ids(labFaLimit(rows, 'LG', 'RF')) === 'abd' ? 1 : 0, 1);
+}
+
+console.log('\n[연구소 ⚡ 점수] 실제 셋포로 — 200 이 안 되면 그 위 구간 없이 (2026-10-26 사용자)');
+{
+  const bat = (o) => Object.assign({ name: '셋포타자', role: '타자', position: '타자', hand: '우', stars: 5, cardType: '골든글러브', team: '기아', year: '2016', power: 100, accuracy: 95, eye: 80, patience: 60 }, o);
+  const pit = (o) => Object.assign({ name: '셋포투수', role: '투수', position: '선발', hand: '우', stars: 5, cardType: '골든글러브', team: '기아', year: '2016', change: 100, stuff: 100 }, o);
+  const cs = { C: labCard(bat({ id: 's1', subPosition: 'C' }), '기아'), '1B': labCard(bat({ id: 's2', subPosition: '1B' }), '기아'), SP1: labCard(pit({ id: 's3' }), '기아') };
+  const r200 = labRun(cs, '기아'), r199 = labRun(cs, '기아', null, { setPoint: 199 }), r250 = labRun(cs, '기아', null, { setPoint: 250 });
+  eq('안 주면 200', r200.sp, 200);
+  eq('199 면 199 로 센다', r199.sp, 199);
+  eq('200 을 넘으면 200 에서 멈춘다', r250.sp, 200);
+  eq('200 구간이 빠지면 점수가 내려간다', r199.tiers[0].total < r200.tiers[0].total ? 1 : 0, 1);
+  eq('200 을 넘는 셋포는 200 과 같은 점수', r250.tiers[0].total === r200.tiers[0].total ? 1 : 0, 1);
+}
+
 
 console.log('\n[스쿼드 공유] 그림에 쓰는 이름 — 도감 구분용 접미사는 뗀다');
 {
@@ -2921,16 +2945,20 @@ console.log('\n[연구소 표준 점수] 카드 고르기 — 라인업과 상�
   /* 골든글러브는 늘 선택 팀이고 110(드림/나눔)도 양쪽 다 받는다 — 어느 덱에서든 같은 점수 */
   const gg = bat({ team: '삼성' });
   eq('골글은 덱 구단이 달라도 같다', labStdScore(gg, 'LF', '기아') === labStdScore(gg, 'LF', '삼성') ? 1 : 0, 1);
-  /* 같은 임팩트 카드 — 타팀이면 선택 팀 효과(30·90·150·170·200 좌 = 모든 능력치 +8)를 못 받는다 */
+  /* 같은 임팩트 카드 — 타팀이면 FA 로 본다(10-26 사용자): 선택 팀 효과는 받고 능력치 −3 · 특훈 +2회.
+     FA 는 선택 팀이라 같은 군 · 다른 군 차이(110)도 없다 */
   const imp = (team, o) => bat(Object.assign({ cardType: '임팩트', stars: 4, year: '', team: team, impactType: '빅게임헌터' }, o || {}));
   const own = labStdScore(imp('기아'), 'LF', '기아');
-  eq('타팀(같은 군) 임팩트 타자는 8 × 2.4 만큼 낮다', r1(own - labStdScore(imp('한화'), 'LF', '기아')), 19.2);
-  eq('타팀(다른 군)은 110 의 +1 까지 더 낮다', r1(own - labStdScore(imp('삼성'), 'LF', '기아')), 21.6);
+  eq('타팀(같은 군) 임팩트 타자(FA)는 능력치 −3 만큼 낮고 특훈 +2회만큼 오른다', r1(own - labStdScore(imp('한화'), 'LF', '기아')), 3.1);
+  eq('타팀(다른 군)도 FA 라 같은 군과 같다', r1(labStdScore(imp('한화'), 'LF', '기아') - labStdScore(imp('삼성'), 'LF', '기아')), 0);
   const impP = (team) => pit({ cardType: '임팩트', stars: 4, year: '', team: team, impactType: '여름사나이' });
-  eq('타팀(같은 군) 임팩트 투수는 6 × 2.4 만큼 낮다 (200 은 타자 쪽)', r1(labStdScore(impP('기아'), 'SP1', '기아') - labStdScore(impP('LG'), 'SP1', '기아')), 14.4);
-  /* 타팀 카드를 FA 로 보지 않는다 — 능력치 -3 · 특훈 2회 추가가 붙지 않는다 */
-  eq('표준 카드는 FA 가 아니다', labStdPl(imp('LG'), '기아').isFa ? 1 : 0, 0);
-  eq('국가대표도 와일드카드가 아니다', labStdPl(bat({ cardType: '국가대표', team: 'LG' }), '기아').isWildcard ? 1 : 0, 0);
+  eq('타팀 임팩트 투수(FA)도 −3 · 특훈 +2회', r1(labStdScore(impP('기아'), 'SP1', '기아') - labStdScore(impP('LG'), 'SP1', '기아')), 2.1);
+  /* 타팀 시그 · 임팩은 FA, 국대는 와일드카드 — 덱에 넣을 때와 같다 */
+  eq('표준 카드도 타팀 임팩은 FA', labStdPl(imp('LG'), '기아').isFa ? 1 : 0, 1);
+  eq('타팀 국가대표는 와일드카드', labStdPl(bat({ cardType: '국가대표', team: 'LG' }), '기아').isWildcard ? 1 : 0, 1);
+  eq('자팀 카드는 FA 가 아니다', labStdPl(imp('기아'), '기아').isFa ? 1 : 0, 0);
+  eq('골든글러브는 늘 선택 팀 — FA 아님', labStdPl(bat({ team: '삼성' }), '기아').isFa ? 1 : 0, 0);
+  eq('noFa 판(후보 자동배정용)은 예전처럼 FA 가 아니다', labStdPl(imp('LG'), '기아', labStdCtx('기아', { noFa: true })).isFa ? 1 : 0, 0);
   /* 발사각 보너스는 뺀다 */
   eq('발사각이 있어도 점수는 같다', labStdScore(bat({ power: 200, launchAngle: 16 }), 'LF', '기아') === labStdScore(bat({ power: 200 }), 'LF', '기아') ? 1 : 0, 1);
   /* 연도 구간은 임팩트만 받는다 — 시그니처는 연도가 달라도 같고, 임팩트는 180·185 우에서 +1 씩 받는다 */
@@ -2966,7 +2994,7 @@ console.log('\n[연구소 표준 점수] 카드 고르기 — 라인업과 상�
   const want = D2.slice().sort((a, b) => vals[b.id] - vals[a.id]).map((sp) => sp.id).join('');
   const got = dexSearch(IX2, '타자', '', '', '', { scoreOf: (e) => vals[e.sp.id] }).map((e) => e.sp.id).join('');
   eq('표준 점수 순서로 줄 세운다', got === want ? 1 : 0, 1);
-  eq('파워가 10 높아도 타팀 임팩트가 자팀 임팩트보다 아래', vals.i2 < vals.i1 ? 1 : 0, 1);
+  eq('타팀 임팩트(FA)는 −3 · 특훈 +2 라 파워가 10 높으면 자팀 임팩트보다 위', vals.i2 > vals.i1 ? 1 : 0, 1);
   eq('keep 으로 더 거른다', dexSearch(IX2, '타자', '', '', '', { keep: (e) => e.sp.team === '기아' }).map((e) => e.sp.id).join('') === 'i1' ? 1 : 0, 1);
   eq('옵션이 없으면 예전처럼 9각성 점수순', dexSearch(IX2, '타자', '', '', '').map((e) => e.sp.id).join('') ===
     D2.slice().sort((a, b) => dexScore(b, getW()) - dexScore(a, getW())).map((sp) => sp.id).join('') ? 1 : 0, 1);

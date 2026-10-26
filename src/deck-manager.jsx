@@ -8489,7 +8489,8 @@ function labDeckSlots(players, lm) {
 /* ── 덱 연구소 야구장 화면 (2026-10-26 — 구성안 2차 · 사용자 결정) ─────────────────
    계산(labRun · 한도 · 세 티어)은 그대로 두고 화면만 바꾼다: 야구장 · 덕아웃(선발 5 · 불펜 7 · 후보 6) · 옆(폰은 아래) 고르기 창.
    사용자 결정: 점수는 ⚡ 점수 내기 단추로 · '많이 씀' = 그 팀 상위 덱 · 후보 자동배정 = 추천덱 규칙 · 표 화면은 두지 않는다.
-   후보 6장은 점수에 넣지 않는다 — 연구소는 셋포 200 · 시너지 모두를 가정한다. 후보는 실제 덱 조건(셋포 · 시너지 · 국대에이스)을 보여 주는 데 쓴다 */
+   후보 6장은 능력치 점수에는 안 들어가고 셋포에만 들어간다 — ⚡ 점수는 라인업 + 후보의 실제 셋포로 센다(200 에서 멈춤, 10-26 사용자).
+   카드 시너지 · 국대에이스는 받는 것으로 가정하고, 실제로 맞는지는 위쪽 칩으로 보여 준다 */
 var LAB_BENCH_N = 6;
 /* '많이 씀' — 팀마다 이 사이트 저장 덱 중 신버전 TOTAL 상위 20덱(계정마다 그 팀 최고 덱 1개, 9,500 넘는 덱 뺌)에서
    자리 묶음별로 카드마다 몇 덱이 썼는지. 계정 정보 없이 숫자만 (data/lab_usage/gen_lab_usage.mjs 로 다시 뽑아 붙인다) */
@@ -8543,7 +8544,9 @@ function labRealCounts(team, slots, bench) {
    ③ 모자라면 셋포 8 이상 시그니처 — 셋포 높은 순, 같으면 표준 점수 낮은 순
    라인업에 있는 선수(이름)는 빼고, 한 선수는 한 장만 */
 function labAutoBench(team, slots, ctx) {
-  ctx = ctx || labStdCtx(team);
+  /* 줄 세우기는 FA 를 안 친 표준 점수로 — 추천덱 후보를 정할 때의 잣대 그대로 (10-26 고르기 목록이 FA 로 바뀌어도 후보 규칙은 안 바뀐다).
+     타팀 카드가 FA 로 올라가면 '그 선수의 가장 좋은 카드'가 달라져(박해민 LG 카드 등) 다른 셔틀이 뽑힌다 */
+  ctx = ctx && ctx.noFa ? ctx : labStdCtx(team, { noFa: true });
   var all = dexAll().filter(function (c) { return c && c.role === "타자" && !c.custom; });
   var own = all.filter(function (c) { return !isOtherTeam(c, team); });
   var names = {};
@@ -8651,6 +8654,17 @@ function labAutoYears(cards, res) {
   });
   return out;
 }
+/* 점수순 목록 — 타팀 시그 · 임팩 · 국대(FA · 와일드카드로 쓰는 카드)는 가장 높은 1장만, 선발 자리는 2장 (10-26 사용자:
+   한 자리에 FA 를 둘 넘게 쓰는 일은 없다). rows 는 점수순으로 줄 선 목록({sp} 또는 카드), 지금 그 자리 카드는 늘 남긴다 */
+function labFaLimit(rows, team, slot, curId) {
+  var max = /^SP/.test(slot || "") ? 2 : 1, seen = 0;
+  return (rows || []).filter(function (e) {
+    var c = e && e.sp ? e.sp : e; if (!c) return false;
+    if (!((FA_CARDS[c.cardType] || WILDCARD_CARDS[c.cardType]) && isOtherTeam(c, team))) return true;
+    if (curId && c.id === curId) return true;
+    return seen++ < max;
+  });
+}
 function LabPage(p) {
   var mob = p.mobile;
   var _sharing = useState(false); var sharing = _sharing[0]; var setSharing = _sharing[1];
@@ -8696,6 +8710,8 @@ function LabPage(p) {
   /* 카드 고르기 목록의 표준 점수 — 팀·도감·스킬표·POTM 이 바뀌면 새로 센다 (labStdGet) */
   var stdCtx = React.useMemo(function () { return labStdCtx(team); }, [team, p.skills, SEED_PLAYERS.length, GLOBAL_POTM_LIST]);
   var stdOf = function (sp, sl) { return labStdGet(stdCtx, sp, sl); };
+  /* 후보 자동배정용 — FA 를 안 친 표준 점수 (추천덱 후보 규칙과 같은 잣대) */
+  var benchCtx = React.useMemo(function () { return labStdCtx(team, { noFa: true }); }, [team, p.skills, SEED_PLAYERS.length, GLOBAL_POTM_LIST]);
   /* 연구소에 들어오면 뒤에서 조금씩 미리 세 둔다 — 휴대폰에서 DH(타자 3천 장) 목록을
      처음 열 때 멈칫하지 않게. 12ms 일하고 바로 양보해서 그 사이 누른 것은 곧장 받는다.
      (requestIdleCallback 은 화면이 늘 바쁘면 거의 불리지 않아 쓰지 않는다).
@@ -8740,9 +8756,9 @@ function LabPage(p) {
 
   /* 카드가 바뀌면 점수는 지운다(⚡ 를 다시 눌러야 한다 — 사용자 결정). 지우기 전 점수는 ▲▼ 견줌용으로 남긴다 */
   var touch = function (fn) { if (res) setPrevTotals(res.tiers.map(function (t) { return t.total; })); setRes(null); setMsg(""); fn(); };
+  /* 탭(많이 씀 · 점수순)은 고른 대로 다음 자리에도 이어진다 (10-26 사용자) — 그 자리에 많이 씀 자료가 없으면 화면만 점수순으로 보인다 */
   var openPick = function (sl) {
     setPickSlot(sl); setQ("");
-    if (!/^BN/.test(sl)) setPickTab(labUsageList(team, sl).length ? "use" : "std");
   };
   var putCard = function (sl, sp) {
     var next = Object.assign({}, slots);
@@ -8768,7 +8784,7 @@ function LabPage(p) {
   };
   var clearBench = function (i) { var b = benchArr(); b[i] = null; setBench(b); };
   var autoBench = function () {
-    var b = labAutoBench(team, slots, stdCtx);
+    var b = labAutoBench(team, slots, benchCtx);
     setBench(b.ids);
     setMsg("후보 " + b.ids.length + "명을 넣었어요 — 국대 1 + 셋포 8 이상 라이브(모자라면 시그니처)");
   };
@@ -8780,7 +8796,7 @@ function LabPage(p) {
     setTimeout(function () {
       try {
         if (res) setPrevTotals(res.tiers.map(function (t) { return t.total; }));
-        setRes(labRun(cards, team));
+        setRes(labRun(cards, team, null, { setPoint: real.sp }));   /* 실제 셋포(라인업 + 후보) — 200 이 안 되면 그 구간 없이 (10-26 사용자) */
       }
       catch (e) { setMsg("계산에 실패했습니다: " + (e && e.message)); }
       setBusy(false);
@@ -9025,7 +9041,7 @@ function LabPage(p) {
       <div style={{ zoom: 0.8 * fs, background: "rgba(0,0,0,0.28)", border: "1px dashed rgba(255,255,255,0.25)", borderRadius: 10, padding: "5px 7px 6px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap" }}>{"후보 " + benchN + "/6"}</span>
-          <span title="후보 6장의 셋포 — 셋포 · 시너지 확인용이고 점수에는 안 들어가요" style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", whiteSpace: "nowrap" }}>{"셋포 +" + benchSp}</span>
+          <span title="후보 6장의 셋포 — ⚡ 점수의 셋포에 들어가요 (능력치 점수에는 안 들어가요)" style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", whiteSpace: "nowrap" }}>{"셋포 +" + benchSp}</span>
           <span style={{ marginLeft: "auto" }}>{benchBtn(true)}</span>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, auto)", gap: 4 }}>
@@ -9118,6 +9134,8 @@ function LabPage(p) {
     if (tab === "set") list = all.slice(0, 400).sort(function (a, b) {
       return ((lineupNames[a.sp.name] ? 1 : 0) - (lineupNames[b.sp.name] ? 1 : 0)) || (setOfRow(b.sp) - setOfRow(a.sp)) || (stdAdj(b.sp, "DH") - stdAdj(a.sp, "DH"));
     });
+    var curId = isBn ? bench[bi] : slots[pickSlot];
+    if (tab === "std" && !q.trim()) list = labFaLimit(list, team, pickSlot, curId);
     var shown = list.slice(0, 120);
     var cur = isBn ? (bench[bi] ? byId[bench[bi]] : null) : rowOf(pickSlot);
     var benchWarn = function (sp) {
@@ -9184,7 +9202,8 @@ function LabPage(p) {
           <div style={{ fontSize: 10.5, color: "var(--td)", marginTop: 6 }}>
             {tab === "use" ? team + " 상위 덱 " + useN + "개(" + LAB_USAGE_AT + " 기준)에서 이 자리에 쓴 비율 · 오른쪽은 표준 점수"
               : tab === "set" ? "셋포 높은 순 — 후보는 셋포 · 시너지에만 들어가요"
-              : "표준 점수순 — 훈재분 · 특훈 · 스킬 · 잠재력 상위 0.1% · 세트덱 200 고정 · " + ((isBat ? yb : yp) ? (isBat ? yb : yp) + " 카드는 연도 보너스 포함" : "연도 보너스 없음")}
+              : "표준 점수순 — 훈재분 · 특훈 · 스킬 · 잠재력 상위 0.1% · 세트덱 200 고정 · " + ((isBat ? yb : yp) ? (isBat ? yb : yp) + " 카드는 연도 보너스 포함" : "연도 보너스 없음")
+                + " · 타팀 시그 · 임팩 · 국대는 FA · WC 로 쳐서 " + (/^SP/.test(pickSlot) ? "2장" : "1장") + "만 (검색하면 다 나와요)"}
           </div>
         </div>
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
@@ -9248,7 +9267,7 @@ function LabPage(p) {
         <div>{"· 🔥 많이 씀 — " + team + " 상위 덱이 그 자리에 쓴 카드가 먼저 나와요"}</div>
         <div>{"· 넣으면 다음 빈자리로 넘어가요 (자동 넘김)"}</div>
         <div>{"· ⭐ 추천덱 · 📥 내 덱 으로 불러와서 고쳐 봐도 돼요"}</div>
-        <div>{"· 후보 6칸" + (benchIn ? "(야구장 왼쪽 아래)" : "") + "은 셋포 · 시너지 확인용 — 점수는 셋포 200 · 시너지 모두로 셉니다"}</div>
+        <div>{"· 후보 6칸" + (benchIn ? "(야구장 왼쪽 아래)" : "") + "도 셋포에 들어가요 — ⚡ 점수는 라인업 + 후보 셋포로 셉니다 (시너지는 모두 받는 것으로)"}</div>
         <div>{"· 다 넣으면 ⚡ 점수 내기 · 여기서 고쳐도 내 실제 덱은 안 바뀌어요"}</div>
       </div>
     </div>
@@ -9274,6 +9293,7 @@ function LabPage(p) {
           <span style={{ color: LAB_TIER_COLOR[20] }}>{"상위 20% "}</span><b style={{ color: "var(--t2)", fontFamily: "var(--m)" }}>{res ? res.tiers[2].total.toFixed(1) : "—"}</b>{deltaTxt(2)}
         </div>
         {!res && filled > 0 && (<div style={{ fontSize: 11, color: "var(--td)", marginTop: 3 }}>{"카드를 다 넣고 ⚡ 점수 내기를 누르면 세 티어가 나와요"}</div>)}
+        {res && res.sp < LAB_SET_POINT && (<div style={{ fontSize: 11, fontWeight: 700, color: "#FFA726", marginTop: 3 }}>{"셋포 " + res.sp + " 로 계산 — " + LAB_SET_POINT + " 이 안 돼 그 위 구간은 빠졌어요" + (benchN < LAB_BENCH_N ? " (후보 칸을 채워 보세요)" : "")}</div>)}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", flex: 1 }}>
         <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "var(--inner)", border: "1px solid var(--bd)", color: "var(--t2)", whiteSpace: "nowrap" }}>{filled + "/" + LAB_SLOTS.length + "자리 · 후보 " + benchN + "/6"}</span>
@@ -9295,7 +9315,7 @@ function LabPage(p) {
             {"역시너지 모든 능력치 −" + limits.anti}
           </span>)}
         {real.n > 0 && condChip("셋포 " + real.sp + " (후보 포함)", real.sp >= LAB_SET_POINT,
-          "실제 덱은 라인업과 후보를 합쳐 셋포 " + LAB_SET_POINT + " 이 되어야 해요. 점수는 늘 " + LAB_SET_POINT + " 으로 셉니다")}
+          "라인업과 후보를 합친 실제 셋포예요. ⚡ 점수도 이 셋포로 셉니다 — " + LAB_SET_POINT + " 이 안 되면 그 위 구간은 빠져요")}
         {real.n > 0 && condChip("시너지 임 " + real.imp + " · 시 " + real.sig + " · 라 " + real.lt, real.imp >= 5 && real.sig >= 5 && real.lt >= 7,
           "카드 시너지 — 임팩트 5 · 시그니처 5 · 라이브류(라이브 + 국대 + 올스타) 7 장. 점수는 시너지를 모두 받는 것으로 셉니다")}
         {real.n > 0 && condChip("국대에이스 투 " + real.natPit + " · 타 " + real.natBat, real.natPit >= 1 && real.natBat >= 1,
@@ -9361,7 +9381,7 @@ function LabPage(p) {
   ) : null;
   var detailsLine = res ? (
     <div style={{ fontSize: 11, color: "var(--td)", margin: mob ? "0 0 8px" : "-4px 0 10px", lineHeight: 1.6 }}>
-      {"세트덱 " + res.sp + " 고정 · 불펜 1/1/4 기본 · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지 모두 적용 · 타순 자동"
+      {"세트덱 " + res.sp + (res.sp < LAB_SET_POINT ? "(200 안 됨)" : "") + " · 불펜 1/1/4 기본 · 포수리드 6렙 · 국대에이스 6렙 · 카드 시너지 모두 적용 · 타순 자동"
         + (res.limits.anti ? " · 역시너지 모든 능력치 −" + res.limits.anti + " 반영" : "")}
       {res.tiers[0].blanks.length > 0 && (<span style={{ color: "#FFA726" }}>{" · 연도덱을 안 골라 " + res.tiers[0].blanks.join("·") + " 구간은 비었습니다"}</span>)}
     </div>) : null;
@@ -9459,7 +9479,7 @@ function LabPage(p) {
           {limitChip("FA·WC", limits.fa, limits.faMax, "FA(임팩트·시그니처) + 와일드카드(국가대표) 합쳐 2장까지 — 넘을 수 없습니다")}
           {limits.anti > 0 && (<span style={{ fontSize: 11, fontWeight: 800, padding: "2px 7px", borderRadius: 4, background: "rgba(255,167,38,0.14)", border: "1px solid #FFA726", color: "#FFA726", whiteSpace: "nowrap" }}>{"역시너지 −" + limits.anti}</span>)}
           {real.n > 0 && condChip("셋포 " + real.sp + " · 임" + real.imp + " 시" + real.sig + " 라" + real.lt + " · 국대 " + real.natPit + "/" + real.natBat, condAll,
-            "실제 덱 조건 — 셋포(후보 포함) " + LAB_SET_POINT + " · 임팩트 5 · 시그 5 · 라이브류 7 · 국대에이스(불펜 국대 투수 / 국대 타자). 점수는 이 조건을 모두 받는 것으로 셉니다")}
+            "실제 덱 조건 — 셋포(후보 포함) " + LAB_SET_POINT + " · 임팩트 5 · 시그 5 · 라이브류 7 · 국대에이스(불펜 국대 투수 / 국대 타자). ⚡ 점수는 이 셋포로 세고(200 에서 멈춤), 시너지 · 국대에이스는 받는 것으로 셉니다")}
         </div>
       </div>
     </React.Fragment>
@@ -12187,8 +12207,8 @@ function labSdState(teamName, extra) {
      · 110(드림/나눔)은 덱 구단의 군 — 다른 군 카드는 그 +1 을 못 받는다
      · 훈재분·특훈·스킬·잠재력은 상위 0.1% (peakPl — 카드 종류마다 고점이 다르다)
      · 발사각 보너스와 타순 효과는 뺀다
-     · 타팀 카드는 FA 로 보지 않는다. 선택 팀 효과(30·90·150·170·200 좌, 195 우)를 못 받아
-       따로 깎지 않아도 점수가 낮아진다. 골든글러브는 늘 선택 팀이다
+     · 타팀 시그 · 임팩은 FA, 국대는 와일드카드로 본다 — 덱에 넣을 때와 같다(선택 팀 효과 · 능력치 −3 · 특훈 +2).
+       10-02 엔 FA 로 안 봤다가 10-26 사용자 지정으로 바꿨다. 골든글러브는 늘 선택 팀이다
    구간 선택은 in100 상위 100덱(맞춰 본 97덱)을 연구소 0.1% 로 최적화했을 때 더 많이 고른 쪽이다.
    대부분 97:0 이고 갈린 곳도 한쪽이 80덱 이상이다 (65·75·85·95·135·140·155·195) */
 var LAB_STD_SD = {
@@ -12203,22 +12223,24 @@ var LAB_STD_FIELDS = ["sLvManual", "skill1", "s1Lv", "skill2", "s2Lv", "skill3",
   "specPower", "specAccuracy", "specEye", "specPatience", "specChange", "specStuff", "specControl",
   "potType1", "pot1", "potType2", "pot2", "potType3", "pot3"];
 /* 표준 점수 계산 묶음 — 팀마다 하나. ov 는 고점 덧칠, base 는 카드별 기준 자리 점수, off 는 자리 차이 */
-function labStdCtx(teamName) {
-  return { team: teamName, sd: labSdState(teamName, LAB_STD_SD), ov: {}, base: {}, off: {} };
+/* opt.noFa — 타팀 카드를 FA 로 안 친다(10-26 이전 잣대). 후보 자동배정이 쓴다 */
+function labStdCtx(teamName, opt) {
+  return { team: teamName, sd: labSdState(teamName, LAB_STD_SD), ov: {}, base: {}, off: {}, noFa: !!(opt && opt.noFa) };
 }
 /* 표준 점수에 쓰는 카드 — 0.1% 고점으로 채우고 발사각을 비운 사본.
-   도감 카드는 스킬·훈련·잠재력이 비어 있어 고점이 늘 이긴다. 그래서 (역할 · 카드 종류 · 손) 이 같으면
+   도감 카드는 스킬·훈련·잠재력이 비어 있어 고점이 늘 이긴다. 그래서 (역할 · 카드 종류 · 손 · FA/WC) 가 같으면
    덧칠이 똑같다 — ctx 를 주면 묶음마다 한 번만 센다 (계산의 대부분이 여기다).
    POTM 으로 잠재력이 고정된 카드와 직접 등록한 카드는 하나씩 센다 */
 function labStdPl(row, teamName, ctx) {
   if (!row) return null;
   var sd = ctx ? ctx.sd : labSdState(teamName, LAB_STD_SD);
   var c = labCard(row, teamName);
-  c.isFa = false; c.isWildcard = false;
+  /* 타팀 시그 · 임팩 = FA, 국대 = WC — labCard 가 정한 그대로 둔다 (덱에 넣을 때와 같은 잣대, 10-26 사용자) */
+  if (ctx && ctx.noFa) { c.isFa = false; c.isWildcard = false; }
   var d = deckPl(c, sd);
   var hs = d.role === "타자" ? "-" : "";
   if (ctx && !d.potmPot && !d.custom) {
-    var k = labCat(d) + "|" + d.cardType + "|" + (d.hand || "");
+    var k = labCat(d) + "|" + d.cardType + "|" + (d.hand || "") + "|" + (d.isFa ? "fa" : d.isWildcard ? "wc" : "");
     var ov = ctx.ov[k];
     if (!ov) {
       var pk = peakPl(d, hs); ov = ctx.ov[k] = {};
@@ -12324,8 +12346,9 @@ function labYears(pk, isBat) {
   return out.length ? out : [""];
 }
 /* 연구소 한 판 — 티어마다 셋포를 최적화하고 타순을 자동으로 잡아 점수를 낸다.
-   cards 는 {자리: 도감카드}. 세트덱 점수(totalSP)는 카드 종류로만 정해져 티어와 무관하다 */
-function labRun(cards, teamName, extra) {
+   cards 는 {자리: 도감카드}. 세트덱 점수(totalSP)는 카드 종류로만 정해져 티어와 무관하다.
+   opt.setPoint — 실제 셋포(라인업 + 후보). 200 에서 멈추고, 안 주면 200 (10-26 사용자: 199 면 200 구간 없이) */
+function labRun(cards, teamName, extra, opt) {
   var lim = labLimits(function (sl) { return (cards && cards[sl]) || null; }, teamName);
   /* 역시너지 — 모든 선수 모든 능력치가 깎인다. 유니폼 효과와 같은 자리에 음수로 넣는다
      (calcSDBonus 가 uni* 를 그대로 더하므로 따로 손댈 곳이 없다) */
@@ -12339,9 +12362,9 @@ function labRun(cards, teamName, extra) {
     if (!(sl in rawMemo)) { var c = cards && cards[sl]; rawMemo[sl] = c ? deckPl(c, sd0) : null; }
     return rawMemo[sl];
   };
-  /* 세트덱 점수는 재지 않고 200 으로 둔다. computeLineupSetDeck 이 얹어 주는
+  /* 세트덱 점수 — 화면이 넘겨 준 실제 셋포(200 에서 멈춤), 없으면 200. computeLineupSetDeck 이 얹어 주는
      시너지·팀 버프 자동값은 연구소가 어차피 전부 직접 켜 두므로 부를 일이 없다 */
-  var totalSP = LAB_SET_POINT;
+  var totalSP = opt && isFinite(opt.setPoint) ? Math.max(0, Math.min(LAB_SET_POINT, Math.round(opt.setPoint))) : LAB_SET_POINT;
   var yOpts = { batOn: !!sd0.yearBat, pitOn: !!sd0.yearPit,
     batYears: labYears(raw, true), pitYears: labYears(raw, false) };
   var tiers = LAB_TIERS.map(function (t) {
