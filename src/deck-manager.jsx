@@ -3933,12 +3933,43 @@ function rpAppearance(bpcIdx, order) {
   var pos = {}; seq.forEach(function(s, i) { pos[s] = i; });
   return { seq: seq, pos: pos };
 }
-/* 등판 순서에서 slot 을 같은 조 안에서 한 칸 앞(dir -1) · 뒤(+1)로 옮긴 새 순서. 조 끝이거나 다른 조로 넘어가면 그대로 */
+/* 등판 순서에서 slot 을 같은 조 안에서 한 칸 앞(dir -1) · 뒤(+1)로 옮긴 새 순서. 조 끝이거나 다른 조로 넘어가면 그대로
+   (카드 밑 화살표는 2026-10-28 에 끌기 · RP 칩으로 바꿨다 — 화면에서는 안 쓰고 시험만 남아 있다) */
 function rpOrderMove(bpcIdx, order, slot, dir) {
   var seq = rpAppearance(bpcIdx, order).seq.slice();
   var i = seq.indexOf(slot), j = i + dir;
   if (i < 0 || j < 0 || j >= seq.length || rpGroupOf(seq[j], bpcIdx) !== rpGroupOf(slot, bpcIdx)) return seq;
   seq[i] = seq[j]; seq[j] = slot;
+  return seq;
+}
+/* 편성을 바꿨을 때의 등판 차례 — 2026-10-28 사용자 승인.
+   차례(rpOrder)는 그것을 정한 편성(rpOrderBpc, 편성 이름)과 함께 기억한다.
+   지금 편성에서 RP 번호 구간이 그 편성의 어느 조와 같은 조는 정해 둔 앞뒤를 쓰고, 구간이 바뀐 조는 RP 번호 순으로 돌린다.
+   예) 3/3/0 에서 추격조(RP4~6)를 RP6 → RP5 → RP4 로 두고 1/1/4 로 바꾸면 롱릴리프(RP3~6)는 RP3 → RP4 → RP5 → RP6.
+       3/2/1 로 바꾸면 승리조(RP1~3)는 구간이 같아 그대로 · 3/3/0 으로 돌아오면 정해 둔 차례가 다시 나온다.
+   rpOrderBpc 가 없는 덱(이 규칙 전에 정한 차례)은 지금 편성에서 정한 것으로 본다 — 저장된 덱의 점수가 그대로다.
+   돌려주는 값은 rpAppearance · getRPWeight · slotGroupOf 의 order 로 그대로 넣는다 */
+function rpOrderOf(sd) {
+  if (!sd || !Array.isArray(sd.rpOrder)) return null;
+  var cur = BPC[sd.bpcIdx === undefined ? 4 : sd.bpcIdx] || BPC[4];
+  var from = null;
+  if (sd.rpOrderBpc) for (var i = 0; i < BPC.length; i++) if (BPC[i].label === sd.rpOrderBpc) from = BPC[i];
+  if (!from || from === cur) return sd.rpOrder;
+  var N = RP_SLOTS.length;
+  var spans = function(c) { return [[0, c.w], [c.w, c.w + c.l], [c.w + c.l, N]]; };
+  var same = spans(from).filter(function(g) { return g[1] > g[0]; }).map(function(g) { return g.join("-"); });
+  var rank = {};
+  sd.rpOrder.forEach(function(s, k) { if (RP_SLOTS.indexOf(s) >= 0 && rank[s] === undefined) rank[s] = k; });
+  var seq = [];
+  spans(cur).forEach(function(g) {
+    var slots = RP_SLOTS.slice(g[0], g[1]);
+    if (same.indexOf(g.join("-")) >= 0) slots.sort(function(a, b) {
+      var ra = rank[a], rb = rank[b];
+      if (ra === undefined || rb === undefined) return ra === rb ? RP_SLOTS.indexOf(a) - RP_SLOTS.indexOf(b) : (ra === undefined ? 1 : -1);
+      return ra - rb;
+    });
+    seq = seq.concat(slots);
+  });
   return seq;
 }
 /* 중계 배율 — 편성 · 전술 표에서 그 자리가 받는 값. 배율은 등판 차례에 붙는다 (rpAppearance).
@@ -3977,8 +4008,8 @@ function lineupOpts(sdState, totalSP) {
     tactic: rpTactic(st),            /* 승리조 전술 — 선발 배율 */
     chase: rpChaseTactic(st),        /* 추격조 전술 — 중계 배율에만 */
     bpcIdx: st.bpcIdx !== undefined ? st.bpcIdx : 4,
-    /* 중계 등판 순서 (rpAppearance) — 없으면 자리 순서 */
-    rpOrder: Array.isArray(st.rpOrder) ? st.rpOrder : null
+    /* 중계 등판 순서 (rpAppearance) — 없으면 자리 순서. 편성을 바꿨으면 구간이 바뀐 조는 RP 번호 순 (rpOrderOf) */
+    rpOrder: rpOrderOf(st)
   };
 }
 function lineupBat(pl, slot, sd, o) {
@@ -4337,6 +4368,148 @@ function bestLineupSig(lm, sd) {
 }
 /* ═══ 베스트 라인업 끝 ═══ */
 
+/* ── 끌어서 자리 바꾸기 (2026-10-28 사용자 지정) ──────────────────────────────
+   카드를 끌어 같은 무리(선발끼리 …)의 다른 자리에 놓으면 두 선수가 자리를 맞바꾼다 (빈 자리면 옮긴다).
+   차례와 포지션 특훈은 자리에 붙어 있어서, 선수는 놓인 자리의 것을 받는다 (타순 끌기는 타순만 바꾸는 따로인 기능).
+   마우스는 누른 채 6px 움직이면, 손가락은 0.3초 꾹 누르고 있으면 끌기가 시작된다.
+   손가락을 바로 움직이면 끌기가 아니라 화면 넘기기이고, 짧게 누르면 원래 하던 일(선수 고르기 등)을 한다.
+   끄는 동안 카드 복사본이 손가락을 따라다닌다 — 화면을 다시 그리지 않고 복사본만 옮겨서 가볍다.
+   놓을 자리는 data-sd 속성으로 찾고, 화면은 놓을 자리가 바뀔 때만 다시 그린다.
+     var dg = useSlotDrag({ group: "sp", canDrop: fn(from, to), onDrop: fn(from, to), label: fn(from, to) });
+     끌 수 있는 칸 <div {...dg.handle(slot)}> · 놓기만 되는 빈 칸 <div {...dg.target(slot)}>
+     label — 놓을 자리 위에 있을 때 복사본 머리에 띄우는 글씨 (예: "↔ SP3"). 손가락에 가려지지 않게 복사본에 붙인다
+     dg.drag — 끄는 중이면 { from, over }, 아니면 null */
+var SLOT_DRAG_HOLD = 300;
+function makeSlotDrag(setDrag) {
+  var R = { o: {}, press: null, live: false, over: null, ghost: null, lab: null, timer: 0, raf: 0, mute: 0, x: 0, y: 0, gx: 0, gy: 0 };
+  var findKey = function() {
+    var el = document.elementFromPoint(R.x, R.y);
+    var t = el && el.closest ? el.closest("[data-sd]") : null;
+    if (!t || !R.press || t.getAttribute("data-sd-g") !== R.o.group) return null;
+    var k = t.getAttribute("data-sd");
+    if (k === R.press.key) return null;
+    return (!R.o.canDrop || R.o.canDrop(R.press.key, k)) ? k : null;
+  };
+  var place = function() {
+    if (!R.live) return;
+    if (R.ghost) R.ghost.style.transform = "translate(" + (R.x - R.gx) + "px," + (R.y - R.gy) + "px)";
+    var k = findKey();
+    if (k !== R.over) {
+      R.over = k;
+      if (R.lab) { var t = k ? (R.o.label ? R.o.label(R.press.key, k) : "↔ " + k) : ""; R.lab.textContent = t; R.lab.style.display = t ? "block" : "none"; }
+      setDrag({ from: R.press.key, over: k });
+    }
+  };
+  /* 손가락이 화면 위 · 아래 끝에 닿아 있으면 천천히 넘긴다 */
+  var edge = function() {
+    R.raf = 0; if (!R.live) return;
+    var h = window.innerHeight, E = 56;
+    var v = R.y < E ? -Math.ceil((E - R.y) / 6) : R.y > h - E ? Math.ceil((R.y - (h - E)) / 6) : 0;
+    if (v) { window.scrollBy(0, v); place(); }
+    R.raf = requestAnimationFrame(edge);
+  };
+  var start = function() {
+    var P = R.press; if (!P || R.live) return;
+    clearTimeout(R.timer); R.timer = 0;
+    R.live = true; R.over = null;
+    var b = P.el.getBoundingClientRect();
+    R.gx = P.x0 - b.left; R.gy = P.y0 - b.top;
+    var g = P.el.cloneNode(true);
+    g.removeAttribute("data-sd"); g.removeAttribute("title");
+    g.style.position = "fixed"; g.style.left = "0"; g.style.top = "0"; g.style.margin = "0";
+    g.style.width = b.width + "px"; g.style.height = b.height + "px"; g.style.boxSizing = "border-box";
+    g.style.pointerEvents = "none"; g.style.zIndex = "10000"; g.style.opacity = "0.88"; g.style.transition = "none";
+    g.style.outline = "none"; g.style.boxShadow = "0 10px 24px rgba(0,0,0,0.45)"; g.style.borderRadius = "8px";
+    /* 놓을 자리 글씨 — 복사본 머리 위 (손가락 · 복사본에 놓을 자리가 가려도 보이게) */
+    var lab = document.createElement("div");
+    lab.style.cssText = "position:absolute;left:50%;top:-26px;transform:translateX(-50%);display:none;padding:2px 9px;border-radius:8px;"
+      + "background:#FFD54F;color:#111;font-size:13px;font-weight:800;line-height:18px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.45)";
+    g.appendChild(lab);
+    /* 밝은 화면은 색 값이 .light 상자 안에서만 바뀐다 — 복사본도 그 안에 띄운다 */
+    (P.el.closest(".light") || document.body).appendChild(g);
+    R.ghost = g; R.lab = lab;
+    document.body.style.userSelect = "none";
+    if (P.type === "touch" && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+    setDrag({ from: P.key, over: null });
+    place();
+    R.raf = requestAnimationFrame(edge);
+  };
+  var off = function() {
+    window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onCancel); window.removeEventListener("keydown", onKey);
+    window.removeEventListener("scroll", place, true);
+  };
+  var end = function(drop) {
+    clearTimeout(R.timer); R.timer = 0;
+    if (R.raf) cancelAnimationFrame(R.raf); R.raf = 0;
+    off();
+    var P = R.press, was = R.live, over = R.over;
+    R.press = null; R.live = false; R.over = null;
+    if (R.ghost) { R.ghost.remove(); R.ghost = null; R.lab = null; }
+    if (!was) return;
+    document.body.style.userSelect = "";
+    R.mute = Date.now() + 400;   /* 놓은 뒤 따라오는 클릭(선수 고르기 창)은 먹는다 */
+    setDrag(null);
+    if (drop && P && over && R.o.onDrop) R.o.onDrop(P.key, over);
+  };
+  var onMove = function(e) {
+    var P = R.press; if (!P || e.pointerId !== P.id) return;
+    R.x = e.clientX; R.y = e.clientY;
+    if (R.live) { place(); return; }
+    var d = Math.abs(R.x - P.x0) + Math.abs(R.y - P.y0);
+    if (P.type === "touch") { if (d > 10) end(false); }   /* 꾹 누르기 전에 움직이면 화면 넘기기 */
+    else if (d > 6) start();
+  };
+  var onUp = function(e) { if (R.press && e.pointerId === R.press.id) end(true); };
+  var onCancel = function(e) { if (R.press && e.pointerId === R.press.id) end(false); };
+  var onKey = function(e) { if (e.key === "Escape" && R.live) end(false); };
+  R.handle = function(key) {
+    return { "data-sd": key, "data-sd-g": R.o.group, className: "dm-drag",
+      onDragStart: function(e) { e.preventDefault(); },
+      onPointerDown: function(e) {
+        if (R.press || (e.pointerType === "mouse" && e.button !== 0)) return;
+        R.press = { key: key, id: e.pointerId, type: e.pointerType, x0: e.clientX, y0: e.clientY, el: e.currentTarget };
+        R.x = e.clientX; R.y = e.clientY;
+        window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onCancel); window.addEventListener("keydown", onKey);
+        window.addEventListener("scroll", place, true);
+        if (e.pointerType === "touch") R.timer = setTimeout(start, SLOT_DRAG_HOLD);
+      } };
+  };
+  R.target = function(key) { return { "data-sd": key, "data-sd-g": R.o.group }; };
+  /* 끄는 동안 화면이 같이 넘어가지 않게(손가락), 꾹 누를 때 뜨는 메뉴가 안 뜨게 */
+  R.mount = function() {
+    var noScroll = function(e) { if (R.live) e.preventDefault(); };
+    var noMenu = function(e) { if (R.press || R.live) e.preventDefault(); };
+    var noClick = function(e) { if (Date.now() < R.mute) { e.preventDefault(); e.stopPropagation(); R.mute = 0; } };
+    window.addEventListener("touchmove", noScroll, { passive: false });
+    window.addEventListener("contextmenu", noMenu);
+    window.addEventListener("click", noClick, true);
+    return function() {
+      window.removeEventListener("touchmove", noScroll, { passive: false });
+      window.removeEventListener("contextmenu", noMenu);
+      window.removeEventListener("click", noClick, true);
+      end(false);
+    };
+  };
+  return R;
+}
+function useSlotDrag(o) {
+  var _d = useState(null); var drag = _d[0]; var setDrag = _d[1];
+  var ref = React.useRef(null);
+  if (!ref.current) ref.current = makeSlotDrag(setDrag);
+  var R = ref.current; R.o = o;
+  useEffect(function() { return R.mount(); }, []);
+  return { drag: drag, handle: R.handle, target: R.target };
+}
+/* 끌기 중 자리 테두리 — 끄는 카드는 흐리게, 놓을 수 있는 자리는 점선, 지금 놓을 자리는 굵은 노란 선 */
+function dragRing(dg, slot, color) {
+  if (!dg) return null;
+  if (dg.from === slot) return { opacity: 0.35 };
+  return dg.over === slot ? { outline: "3px solid #FFD54F", outlineOffset: 2, borderRadius: 8 }
+                          : { outline: "2px dashed " + (color || "#CE93D8"), outlineOffset: 2, borderRadius: 8 };
+}
+
 /* 투수 묶음 상자 — 카드를 가로로 눕히고 상자는 사람 수만큼만 차지한다.
    예전처럼 네 칸을 같은 너비로 두고 카드를 세로로 쌓으면, 1명인 묶음에 빈 자리가 크게 남았다.
    창이 좁아지면 상자 단위로 다음 줄에 접힌다 */
@@ -4380,26 +4553,45 @@ function PitSlot(p) {
 
 /* 분업의 셋업1 · 셋업2 표시 색 */
 var SETUP_COLOR = "#F9A825";
-/* 중계 카드 밑 — 같은 조 안에서 등판 차례를 앞(◀) · 뒤(▶)로 옮긴다. 가운데는 차례와 포지션 특훈을 받는 자리.
-   조에 한 명뿐이면 화살표 없이 자리만 적는다. 분업의 셋업이면 그 밑에 셋업1 · 셋업2 (role) */
-function RpOrderBar(p) {
-  var btn = function(dir, on, ch, tip) {
-    return (<button onClick={function(e) { e.stopPropagation(); if (on && p.onMove) p.onMove(p.slot, dir); }} disabled={!on} title={tip}
-      style={{ width: 20, height: 20, padding: 0, borderRadius: 4, border: "1px solid " + (on ? "var(--bd)" : "transparent"), background: on ? "var(--card)" : "transparent",
-        color: on ? "var(--t2)" : "var(--bd)", cursor: on ? "pointer" : "default", fontSize: 9, lineHeight: "18px" }}>{ch}</button>);
-  };
-  var label = (<span title={p.slot + " 자리의 포지션 특훈을 받고, 조 안에서 " + p.no + "번째로 나옵니다"}
-    style={{ fontSize: 11, fontFamily: "var(--m)", color: "var(--t2)", minWidth: 34, textAlign: "center", whiteSpace: "nowrap" }}>
-    <b style={{ color: p.color }}>{p.no}</b>{" · " + p.slot}</span>);
-  var bar = !p.many ? (<div style={{ display: "flex", justifyContent: "center", height: 20, alignItems: "center" }}>{label}</div>)
-    : (<div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-      {btn(-1, p.canUp, "◀", "먼저 나오게 — 같은 조 안에서 한 칸 앞으로")}
-      {label}
-      {btn(1, p.canDown, "▶", "나중에 나오게 — 같은 조 안에서 한 칸 뒤로")}
-    </div>);
-  if (!p.role) return bar;
-  return (<div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>{bar}
-    <span title={"분업 — 승리조 " + p.no + "번째로 나와 스킬의 " + p.role + " 역할을 받습니다"} style={{ fontSize: 10, fontWeight: 800, color: SETUP_COLOR, lineHeight: 1 }}>{p.role}</span></div>);
+/* 중계 카드 밑 — 조 안 등판 차례(번호)와 포지션 특훈을 받는 자리(RP 칩). 2026-10-28 사용자 지정.
+   차례를 바꾸려면 카드를 끌어 다른 자리에 놓는다(그 자리의 조 · 차례 · RP 를 받는다).
+   RP 칩을 누르면 같은 조의 RP 번호가 뜨고, 고르면 그 번호의 선수와 RP 번호만 맞바꾼다 — 두 선수의 차례는 그대로.
+   조에 한 명뿐이면 고를 게 없어 글자로만 적는다. 분업의 셋업이면 그 밑에 셋업1 · 셋업2 (role)
+   opts — 같은 조의 RP 자리(번호 순) [{ slot, name }] */
+function RpBar(p) {
+  var _o = useState(false); var open = _o[0]; var setOpen = _o[1];
+  var _r = useState(false); var right = _r[0]; var setRight = _r[1];
+  var opts = p.opts || [];
+  var can = opts.length > 1 && !!p.onPick;
+  var chip = can
+    ? (<button type="button" aria-haspopup="menu" aria-expanded={open}
+        title={p.slot + " 자리의 포지션 특훈을 받아요. 눌러서 같은 " + p.group + " 안의 다른 RP 번호와 맞바꿀 수 있어요 (등판 차례는 그대로)"}
+        onClick={function(e) { e.stopPropagation(); var b = e.currentTarget.getBoundingClientRect(); setRight(b.left + 170 > window.innerWidth - 8); setOpen(!open); }}
+        style={{ minHeight: p.mobile ? 30 : 26, padding: "2px 6px 2px 7px", borderRadius: 6, border: "1px solid " + (open ? p.color : "var(--bd)"), background: open ? p.color + "22" : "var(--card)",
+          color: "var(--t1)", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 3 }}>
+        {p.slot}<span style={{ fontSize: 8, color: "var(--td)" }}>{"▼"}</span></button>)
+    : (<span title={p.slot + " 자리의 포지션 특훈을 받아요"} style={{ fontSize: 12, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap" }}>{p.slot}</span>);
+  return (<div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+    <div title={"조 안에서 " + p.no + "번째로 나와요"} style={{ display: "flex", alignItems: "center", gap: 5, minHeight: p.mobile ? 30 : 26 }}>
+      <b style={{ color: p.color, fontFamily: "var(--m)", fontSize: 13 }}>{p.no}</b>{chip}</div>
+    {p.role && (<span title={"분업 — 승리조 " + p.no + "번째로 나와 스킬의 " + p.role + " 역할을 받습니다"} style={{ fontSize: 10, fontWeight: 800, color: SETUP_COLOR, lineHeight: 1 }}>{p.role}</span>)}
+    {open && (<React.Fragment>
+      <div onClick={function(e) { e.stopPropagation(); setOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+      <div role="menu" style={Object.assign({ position: "absolute", top: p.mobile ? 34 : 30, zIndex: 61, minWidth: 160, background: "var(--bg)", border: "1px solid " + p.color + "88",
+          borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.5)", overflow: "hidden" }, right ? { right: 0 } : { left: 0 })}>
+        <div style={{ padding: "6px 10px", fontSize: 11, color: "var(--td)", borderBottom: "1px solid var(--bd)", whiteSpace: "nowrap" }}>{"RP만 바꾸기 · 차례 그대로"}</div>
+        {opts.map(function(o) { var cur = o.slot === p.slot;
+          return (<button key={o.slot} type="button" role="menuitem" onClick={function(e) { e.stopPropagation(); setOpen(false); if (!cur) p.onPick(p.slot, o.slot); }}
+            style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 36, padding: "6px 10px", border: "none", borderBottom: "1px solid var(--bd)",
+              background: cur ? p.color + "22" : "transparent", color: "var(--t1)", cursor: cur ? "default" : "pointer", fontSize: 13, textAlign: "left", fontFamily: "inherit" }}>
+            <b style={{ fontFamily: "var(--m)", minWidth: 32 }}>{o.slot}</b>
+            <span style={{ color: cur ? "var(--t1)" : "var(--t2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 96 }}>{o.name || "빈 자리"}</span>
+            {cur && (<span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: p.color }}>{"지금"}</span>)}
+          </button>);
+        })}
+      </div>
+    </React.Fragment>)}
+  </div>);
 }
 
 function BullpenLayout(p) {
@@ -4457,15 +4649,19 @@ function BullpenLayout(p) {
         ].filter(function(col) { return col.count > 0; }).map(function(col) {
           return (
             <PitchGroup key={col.label} label={col.label} count={col.count} color={col.color}>
-              {/* 카드는 등판 차례대로 놓인다 (rpSlots 가 그 순서). 밑의 화살표로 같은 조 안에서만 앞뒤를 바꾼다 */}
+              {/* 카드는 등판 차례대로 놓인다 (rpSlots 가 그 순서). 카드를 끌어 다른 중계 자리에 놓으면 그 자리의 조 · 차례 · RP 를 받고(p.drag),
+                  밑의 RP 칩으로 같은 조 안에서 RP 번호만 맞바꾼다(p.onRpPick) — 2026-10-28 */}
               {col.slots.map(function(s, k) {
+                var dg = p.drag, ring = dg ? dragRing(dg.drag, s.slot, col.color) : null;
                 var card = s.pl
-                  ? (<div onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} style={{ cursor: onSlotClick ? "pointer" : "default" }}><PCard p={s.pl} size="lg" /></div>)
-                  : (<PitSlot slot={s.slot} size="lg" onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} />);
+                  ? (<div {...(dg ? dg.handle(s.slot) : {})} title={dg ? "누르면 선수 고르기 · 끌면 자리 바꾸기" : undefined} onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined}
+                      style={Object.assign({ cursor: onSlotClick ? (dg ? "grab" : "pointer") : "default" }, ring)}><PCard p={s.pl} size="lg" /></div>)
+                  : (<div {...(dg ? dg.target(s.slot) : {})} style={Object.assign({}, ring)}><PitSlot slot={s.slot} size="lg" onClick={onSlotClick ? function() { onSlotClick(s.slot); } : undefined} /></div>);
+                var opts = col.slots.slice().sort(function(a, b) { return RP_SLOTS.indexOf(a.slot) - RP_SLOTS.indexOf(b.slot); })
+                  .map(function(o) { return { slot: o.slot, name: o.pl ? o.pl.name : "" }; });
                 return (<div key={s.slot} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
                   {card}
-                  <RpOrderBar slot={s.slot} no={k + 1} color={col.color} many={col.slots.length > 1} role={setupOf(s.slot)}
-                    canUp={k > 0} canDown={k < col.slots.length - 1} onMove={p.onMove} />
+                  <RpBar slot={s.slot} no={k + 1} color={col.color} group={col.label} role={setupOf(s.slot)} opts={opts} onPick={p.onRpPick} mobile={mob} />
                 </div>);
               })}
             </PitchGroup>
@@ -5888,6 +6084,13 @@ function LineupPage(p) {
     if(pl && pl.name) loadPhotosForPlayer(pl.name);
   },[selId]);
   var _dragOver = useState(null); var dragOverSlot = _dragOver[0]; var setDragOverSlot = _dragOver[1];
+  /* 선발 끌기 — 선발 카드 · 선발 로테이션 줄 어디서 끌어도 선발 자리끼리 맞바꾼다 (swapSlots) */
+  var spDrag = useSlotDrag({ group: "sp", onDrop: function(a, b) { swapSlots(a, b); },
+    label: function(a, b) { return (lm[b] ? "↔ " : "→ ") + b; } });
+  /* 중계 끌기 (2026-10-28) — 중계 카드 · 중계진 줄을 다른 중계 자리에 놓으면 그 자리의 조 · 차례 · RP(포지션 특훈)를 받는다.
+     다른 조로도 옮길 수 있다(조는 RP 번호 구간으로 정해지니 같은 규칙). 등판 차례 목록(rpOrder)은 그대로 — 자리 표시가 안 움직인다 */
+  var rpDrag = useSlotDrag({ group: "rp", onDrop: function(a, b) { swapSlots(a, b); },
+    label: function(a, b) { var t = rpTagOf(b); return (lm[b] ? "↔ " : "→ ") + (t.setup ? t.setup.replace("셋업", "셋") : t.short) + " · " + b; } });
   var _sdOpen = useState(false); var sdOpen = _sdOpen[0]; var setSdOpen = _sdOpen[1];
   var sdState = p.sdState; var setSdState = p.setSdState;
   /* bpcIdx · 중계 전술은 sdState에서 읽고, 변경 시 sdState에 저장 */
@@ -5904,18 +6107,29 @@ function LineupPage(p) {
     var w = rpTactic(prev);
     return Object.assign({}, prev, { rpChaseActive: t === "적극", rpWinActive: w === "적극", rpActive: w === "적극" });
   }); };
-  /* 중계 등판 순서 — 자리(RP n)는 포지션 특훈을 받는 칸, 차례는 같은 조 안에서 유저가 정한다 (rpAppearance · 2026-10-15) */
-  var rpAp = rpAppearance(bpcIdx, sdState.rpOrder);
-  var moveRp = function(slot, dir) { setSdState(function(prev) {
-    return Object.assign({}, prev, { rpOrder: rpOrderMove(prev.bpcIdx !== undefined ? prev.bpcIdx : 4, prev.rpOrder, slot, dir) });
-  }); };
+  /* 중계 등판 순서 — 자리(RP n)는 포지션 특훈을 받는 칸, 차례는 같은 조 안에서 유저가 정한다 (rpAppearance · 2026-10-15).
+     편성을 바꿨으면 RP 번호 구간이 바뀐 조는 RP 번호 순으로 본다 (rpOrderOf · 2026-10-28) */
+  var rpOrd = rpOrderOf(sdState);
+  var rpAp = rpAppearance(bpcIdx, rpOrd);
+  /* RP 칩 (2026-10-28) — 같은 조 안에서 RP 번호(포지션 특훈)만 맞바꾼다. 두 선수의 등판 차례는 그대로.
+     선수는 서로의 RP 자리로 옮기고(swapSlots), 차례 목록에서도 두 RP 를 맞바꿔 차례가 선수를 따라오게 한다.
+     차례를 정한 편성도 같이 적는다 — 편성을 바꿨다가 돌아오면 이 차례가 다시 나온다 (rpOrderOf) */
+  var rpChipSwap = function(a, b) {
+    if (!a || !b || a === b || rpGroupOf(a, bpcIdx) !== rpGroupOf(b, bpcIdx)) return;
+    var seq = rpAp.seq.slice(), i = seq.indexOf(a), j = seq.indexOf(b);
+    if (i < 0 || j < 0) return;
+    seq[i] = b; seq[j] = a;
+    swapSlots(a, b);
+    var lab = (BPC[bpcIdx] || BPC[4]).label;
+    setSdState(function(prev) { return Object.assign({}, prev, { rpOrder: seq, rpOrderBpc: lab }); });
+  };
   var RP_GRP_TAG = { "승리조": ["승", "#4CAF50"], "패전조": ["추", "#FF7043"], "롱릴리프": ["롱", "#42A5F5"] };
   /* 그 자리가 조 안에서 몇 번째로 나오나 — short "승1" · full "승리조 1번째".
      분업이면 승리조 2 · 3번째가 스킬의 셋업1 · 셋업2 다 (setup) */
   var rpTagOf = function(slot) {
     var g = rpGroupOf(slot, bpcIdx), tg = RP_GRP_TAG[g] || ["", "var(--td)"];
     var n = 1; rpAp.seq.forEach(function(s) { if (rpAp.pos[s] < rpAp.pos[slot] && rpGroupOf(s, bpcIdx) === g) n++; });
-    var role = slotGroupOf(slot, bpcIdx, isWinSplit, sdState.rpOrder);
+    var role = slotGroupOf(slot, bpcIdx, isWinSplit, rpOrd);
     return { short: tg[0] + n, full: (g === "패전조" ? "추격조" : g) + " " + n + "번째", color: tg[1], setup: role === "셋업1" || role === "셋업2" ? role : "" };
   };
   /* 투수 줄 맨 앞 칸 — 중계는 "승1" 처럼 조와 등판 차례, 그 밑에 포지션 특훈을 받는 자리(RP n) */
@@ -5956,6 +6170,23 @@ function LineupPage(p) {
   };
   var realPick = function(slot) { var pl = byId(lm[slot]); return pl ? deckPl(mergePl(pl), sdState) : null; };
   var pick = peakOn ? function(slot) { return peakPl(realPick(slot), slot); } : realPick;
+
+  /* 끌어서 자리 바꾸기 (2026-10-28) — 두 자리의 선수를 맞바꾼다. 빈 자리에 놓으면 옮긴다.
+     차례 · 포지션 특훈은 자리에 붙어 있어 선수가 놓인 자리의 것을 받는다. 투수 보직은 assignSlot 처럼 새 자리로 맞춘다 */
+  var swapSlots = function(a, b) {
+    if (!a || !b || a === b) return;
+    var ia = lm[a] || null, ib = lm[b] || null;
+    if (!ia && !ib) return;
+    var next = Object.assign({}, lm); next[a] = ib; next[b] = ia;
+    saveLM(next);
+    var to = {}; if (ia) to[ia] = b; if (ib) to[ib] = a;
+    var hit = false;
+    var np = players.map(function(x) {
+      var s = to[x.id]; if (!s || x.role !== "투수" || x.subPosition === s) return x;
+      hit = true; var c = Object.assign({}, x); c.subPosition = s; c.position = s.indexOf("SP") === 0 ? "선발" : s === "CP" ? "마무리" : "중계"; return c;
+    });
+    if (hit) save(np);
+  };
 
   /* Assign player to slot */
   var assignSlot = function(slot, playerId) {
@@ -6220,7 +6451,7 @@ function LineupPage(p) {
   var slotWeight = function(slot, idx, isBat) {
     if (isBat) return batMult(idx) * strMult(batRanks[idx]);
     if (slot === "CP") return CP_MULT;
-    if (RP_SLOTS.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTacKey(sdState), sdState.rpOrder);
+    if (RP_SLOTS.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTacKey(sdState), rpOrd);
     return spMult(rpTactic(sdState), spRanks[idx]);
   };
   var fmtWt = function(w) { var t = w.toFixed(3); return t.charAt(t.length - 1) === "0" ? t.slice(0, -1) : t; };
@@ -6358,10 +6589,62 @@ function LineupPage(p) {
     );
   };
 
+  /* RP 번호 고르기 미리 보기 (2026-10-29) — rpChipSwap(a, b) 를 하면 TOTAL 이 얼마나 바뀌나.
+     두 선수를 서로의 RP 자리에 놓고 차례 목록도 맞바꾼 라인업으로 다시 센다 (차례 · 배율은 그대로라 포지션 특훈 · 자리 스킬 몫만 달라진다) */
+  var rpSwapGain = function(a, b) {
+    var seq = rpAp.seq.slice(), i = seq.indexOf(a), j = seq.indexOf(b);
+    if (i < 0 || j < 0) return 0;
+    seq[i] = b; seq[j] = a;
+    var add = { rpOrder: seq, rpOrderBpc: (BPC[bpcIdx] || BPC[4]).label };
+    var st2 = Object.assign({}, sdState, add), sd2 = sdCalc === sdState ? st2 : Object.assign({}, sdCalc, add);
+    var pk2 = function(s) { return s === a ? pick(b) : s === b ? pick(a) : pick(s); };
+    return calcLineupTotal(pk2, sd2, lineupOpts(st2, totalSP)) - totalScore;
+  };
+  /* 선수 정보 칸(중계진 줄을 누르면 펼쳐짐)의 RP 번호 고르기 (2026-10-29 사용자 지정) — 위쪽 RP 칩과 같은 동작:
+     같은 조 RP 번호만, 고르면 그 번호의 선수와 RP 번호만 맞바꾸고 두 선수의 등판 차례는 그대로 (rpChipSwap).
+     번호마다 고르면 TOTAL 이 얼마나 바뀌는지 같이 적는다 (rpSwapGain · 고점판독 중에는 안 센다 — 그때는 칸째 못 고친다) */
+  var rpPickBox = function(slot) {
+    var g = rpGroupOf(slot, bpcIdx), col = (RP_GRP_TAG[g] || ["", "#CE93D8"])[1];
+    var gName = g === "패전조" ? "추격조" : g;
+    var mates = RP_SLOTS.filter(function(s) { return rpGroupOf(s, bpcIdx) === g; });
+    var fmt = function(d) { return d >= 0.05 ? "+" + d.toFixed(1) : d <= -0.05 ? "−" + (-d).toFixed(1) : "±0"; };
+    var tip = "지금 " + slot + " 자리의 포지션 특훈을 받아요. 같은 " + gName + " 안의 RP 번호만 고를 수 있고, 고르면 그 번호의 선수와 RP 번호만 맞바꿔요 (두 선수 등판 차례는 그대로)."
+      + (mates.length > 1 && !peakOn ? " 오른쪽 숫자는 고르면 바뀌는 TOTAL 이에요." : "");
+    return (<div>
+      <div title={tip} style={{ display: "flex", alignItems: "baseline", gap: 5, marginBottom: 4, cursor: "help" }}>
+        <span style={{ fontSize: 14, color: "var(--td)" }}>{"RP 번호"}</span>
+        <span style={{ fontSize: 11, color: "var(--td)" }}>{"· 차례 그대로"}</span>
+        {mates.length > 1 && !peakOn && (<span style={{ marginLeft: "auto", fontSize: 10, color: "var(--td)", letterSpacing: 0.5 }}>{"TOTAL"}</span>)}
+      </div>
+      <div role="radiogroup" aria-label="RP 번호" style={{ display: "flex", flexDirection: "column", gap: 3, width: mob ? 172 : 180 }}>
+        {mates.map(function(s) {
+          var cur = s === slot, mp = cur ? null : pick(s), d = cur || peakOn ? null : rpSwapGain(slot, s);
+          var dc = d === null ? "var(--td)" : d >= 0.05 ? "#66BB6A" : d <= -0.05 ? "#EF5350" : "var(--td)";
+          return (<button key={s} type="button" role="radio" aria-checked={cur}
+            title={cur ? tip : s + " · " + (mp ? mp.name : "빈 자리") + " — 고르면 서로 RP 번호만 바뀌고 등판 차례는 그대로예요" + (d === null ? "" : " · TOTAL " + fmt(d))}
+            onClick={function(e) { e.stopPropagation(); if (!cur) rpChipSwap(slot, s); }}
+            style={{ display: "flex", alignItems: "center", gap: 8, minHeight: mob ? 32 : 26, padding: "2px 8px", borderRadius: 6, border: "1px solid " + (cur ? col : "var(--bd)"),
+              background: cur ? col + "22" : "var(--inner)", color: "var(--t1)", cursor: cur ? "default" : "pointer", fontSize: 12, fontFamily: "inherit", textAlign: "left" }}>
+            <b style={{ fontFamily: "var(--m)", minWidth: 30 }}>{s}</b>
+            <span style={{ color: cur ? col : mp ? "var(--t2)" : "var(--td)", fontWeight: cur ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 84 }}>{cur ? "지금" : mp ? mp.name : "빈 자리"}</span>
+            {d !== null && (<span style={{ marginLeft: "auto", fontFamily: "var(--m)", fontWeight: 800, color: dc }}>{fmt(d)}</span>)}
+          </button>);
+        })}
+      </div>
+      {mates.length === 1 && (<div style={{ fontSize: 11, color: "var(--td)", marginTop: 3 }}>{"조에 1명이라 바꿀 번호가 없어요"}</div>)}
+    </div>);
+  };
+
   /* Pitcher row */
   var pitRow = function(slot, pl, idx) {
+    /* 선발 줄 · 중계진 줄은 끌어서 같은 무리 자리끼리 맞바꾼다 (spDrag · rpDrag — 카드와 같은 끌기). 마무리 줄은 끌기 없음.
+       놓을 줄은 타순 끌기처럼 노랗게 */
+    var rowDg = SP_SLOTS.indexOf(slot) >= 0 ? spDrag : RP_SLOTS.indexOf(slot) >= 0 ? rpDrag : null;
+    var sdg = rowDg ? rowDg.drag : null, spRow = !!rowDg;
+    var rowOver = !!(sdg && sdg.over === slot), rowFrom = !!(sdg && sdg.from === slot);
+    var rowDrag = rowDg ? (pl ? rowDg.handle(slot) : rowDg.target(slot)) : {};
     if (!pl) return (
-      <div key={slot} onClick={function() { setPickerSlot(slot); }} style={{ display: "grid", gridTemplateColumns: "32px 68px 1fr", alignItems: "center", gap: 6, padding: "8px 10px", background: idx % 2 === 0 ? "var(--re)" : "transparent", borderBottom: "1px solid var(--bd)", cursor: "pointer" }}>
+      <div key={slot} {...rowDrag} onClick={function() { setPickerSlot(slot); }} style={{ display: "grid", gridTemplateColumns: "32px 68px 1fr", alignItems: "center", gap: 6, padding: "8px 10px", background: rowOver ? "rgba(255,213,79,0.12)" : idx % 2 === 0 ? "var(--re)" : "transparent", boxShadow: rowOver ? "inset 3px 0 0 var(--acc)" : "none", borderBottom: "1px solid var(--bd)", cursor: "pointer" }}>
         {pitNo(slot, idx, false)}
         <div style={{ width: 64, height: 88, borderRadius: 6, border: "1px dashed var(--bd)", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--inner)" }}><span style={{ fontSize: 20, opacity: 0.2 }}>{"+"}</span></div>
         <div style={{ fontSize: 12, color: "var(--td)" }}>{"클릭하여 선수 등록"}</div>
@@ -6371,7 +6654,7 @@ function LineupPage(p) {
     var isSel = selId === pl.id;
     return (
       <React.Fragment key={pl.id}>
-        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : LINEUP_COLS, alignItems: "center", gap: mob ? 6 : LINEUP_GAP, padding: "8px 10px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: isSel ? "3px solid var(--acp)" : "3px solid transparent" }}>
+        <div {...rowDrag} onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : LINEUP_COLS, alignItems: "center", gap: mob ? 6 : LINEUP_GAP, padding: "8px 10px", background: rowOver ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: spRow ? "grab" : "pointer", borderLeft: rowOver ? "3px solid var(--acc)" : isSel ? "3px solid var(--acp)" : "3px solid transparent", opacity: rowFrom ? 0.4 : 1 }}>
           {pitNo(slot, idx, true)}
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name,pl.team); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
@@ -6411,7 +6694,7 @@ function LineupPage(p) {
                 var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
                 var lv = effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), cardLvType(pl), k, pcat, (sdState["pts_" + slot] || []));
                 /* 자리를 옮기면 변형이 안 맞게 된다 — 옮긴 자리에서 바로 보이게 */
-                var hint = skillSlotHint(nm, slotGroupOf(slot, sdState.bpcIdx, sdState.isWinSplit, sdState.rpOrder), pcat);
+                var hint = skillSlotHint(nm, slotGroupOf(slot, sdState.bpcIdx, sdState.isWinSplit, rpOrd), pcat);
                 var nb = natSkillMismatch(nm, pcat, pl.cardType) ? "국가대표 전용 스킬입니다. 지금 카드 종류에는 붙을 수 없으니 확인해 주세요" : "";
                 return (<SkBadge key={k} name={nm} lv={lv} warn={hint} note={nb} wide={true} />);
               })}
@@ -6451,6 +6734,7 @@ function LineupPage(p) {
           })()}
           {peakOn && (<div style={{ fontSize: 12, color: "var(--acc)", marginBottom: 6 }}>{"🔍 고점판독 중에는 수정할 수 없어요. 현실로 돌아온 뒤에 바꿔 주세요"}</div>)}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", opacity: peakOn ? 0.7 : 1, pointerEvents: peakOn ? "none" : undefined }}>
+            {RP_SLOTS.indexOf(slot) >= 0 && rpPickBox(slot)}
             <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"강화"}</div><select value={pl.enhance||""} onChange={function(e){updatePl(pl.id,"enhance",e.target.value);}} style={{ padding: "3px 4px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>{["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e){return(<option key={e} value={e} style={{background:"#1e293b",color:"#e2e8f0"}}>{e}</option>);})}</select></div>
             {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 15, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
             <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}<span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "trainCtl", pl.trainCtl, ctlMissing(pl) ? CTL_MISS_COLOR : "#26A69A")}{ctlMissing(pl) && (<span title={CTL_MISS_TIP} style={{ fontSize: 11, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", cursor: "help" }}>{"미입력"}</span>)}</div></div>
@@ -6591,8 +6875,11 @@ function LineupPage(p) {
             <div style={{ flex: "1 1 300px", minWidth: 0, display: "flex" }}>
               <PitchGroup label="선발" count={spPl.length + "/5"} color="#AB47BC" stretch={true} spread={true} grow={true}>
                 {SP_SLOTS.map(function(pos) { var pl = pick(pos);
-                  return pl ? (<div key={pl.id} onClick={function() { setPickerSlot(pos); }} style={{ cursor: "pointer" }}><PCard p={pl} size="lg" /></div>)
-                            : (<PitSlot key={pos} slot={pos} size="lg" onClick={function() { setPickerSlot(pos); }} />); })}
+                  /* 끌면 선발 자리끼리 맞바꾼다 (빈 자리면 옮긴다) */
+                  var ring = dragRing(spDrag.drag, pos);
+                  return pl ? (<div key={pl.id} {...spDrag.handle(pos)} title={"누르면 선수 고르기 · 끌면 자리 바꾸기"} onClick={function() { setPickerSlot(pos); }}
+                                 style={Object.assign({ cursor: "grab" }, ring)}><PCard p={pl} size="lg" /></div>)
+                            : (<div key={pos} {...spDrag.target(pos)} style={Object.assign({}, ring)}><PitSlot slot={pos} size="lg" onClick={function() { setPickerSlot(pos); }} /></div>); })}
               </PitchGroup>
             </div>
             <PitchGroup label="🔒 마무리" count={cpPl.length + "/1"} color="#EF5350" accent={true}>
@@ -6600,7 +6887,7 @@ function LineupPage(p) {
                       : (<PitSlot slot="CP" size="lg" onClick={function() { setPickerSlot("CP"); }} />)}
             </PitchGroup>
           </div>
-          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} winTac={rpTactic(sdState)} setWinTac={setWinTac} chaseTac={rpChaseTactic(sdState)} setChaseTac={setChaseTac} onMove={moveRp} rpOrder={sdState.rpOrder} />
+          <BullpenLayout mobile={mob} relievers={rpPl} closers={cpPl} rpSlots={rpSlotData} onSlotClick={function(slot) { setPickerSlot(slot); }} bpcIdx={bpcIdx} setBpcIdx={setBpcIdx} winTac={rpTactic(sdState)} setWinTac={setWinTac} chaseTac={rpChaseTactic(sdState)} setChaseTac={setChaseTac} drag={rpDrag} onRpPick={rpChipSwap} rpOrder={rpOrd} />
           </div>
         </div>
       </div>
@@ -9989,7 +10276,7 @@ function MyPlayersPage(p) {
     var c = {10:"#FF4081",9:"#E040FB",8:"#FFD700",7:"#FF6B6B",6:"#4FC3F7",5:"#81C784"}[shownLv] || "var(--t2)";
     /* 배치한 자리와 스킬 변형이 어긋나면 알려준다 — 라인업을 옮기면 조용히 틀어진다 */
     var slotNow = getSlot(pl.id);
-    var grpNow = slotGroupOf(slotNow, sdState.bpcIdx, sdState.isWinSplit, sdState.rpOrder);
+    var grpNow = slotGroupOf(slotNow, sdState.bpcIdx, sdState.isWinSplit, rpOrderOf(sdState));
     var hintName = skillSlotHint(pl[nf], grpNow, cat);
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -13368,6 +13655,7 @@ export default function App(){
     .light input,.light select,.light textarea{color:var(--t1);background:var(--card);border-color:var(--bd);}\
     .light input::placeholder{color:var(--td);}\
     @media (max-width:340px){.nav-beta{display:none;}}.lu-arrow{opacity:0;transition:opacity 0.15s;}.lu-row:hover .lu-arrow{opacity:1;}@media (hover:none){.lu-arrow{opacity:0.45;}}\
+    .dm-drag{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}.dm-drag img{-webkit-user-drag:none;pointer-events:none;}\
     select{-webkit-appearance:none;appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;}\
     input[type=number]{-moz-appearance:textfield;}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}\
   "}</style>);

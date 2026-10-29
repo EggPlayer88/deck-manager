@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpAppearance, rpOrderMove, rpTactic, rpChaseTactic, rpTacKey, rpTacNorm, rpTacLabel, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpAppearance, rpOrderMove, rpOrderOf, rpTactic, rpChaseTactic, rpTacKey, rpTacNorm, rpTacLabel, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
   __setLiveWeights, __setGlobalPotm, __setSkillData, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -3161,6 +3161,38 @@ console.log('[중계 등판 순서 — 배율은 자리가 아니라 조 안의 
   eq('RP2 를 먼저 내보내면 — RP2 0.85 · RP1 0.35', calcLineupTotal(pk, sd1, lineupOpts(sd1, 0)), Math.round((tA * 0.35 + tB * 0.85) * 100) / 100);
   eq('lineupOpts 가 순서를 실어 나른다', JSON.stringify(lineupOpts(sd1, 0).rpOrder) === JSON.stringify(['RP2', 'RP1', 'RP3']) ? 1 : 0, 1);
   eq('순서 칸이 배열이 아니면 없는 것으로', lineupOpts({ rpOrder: 'RP2' }, 0).rpOrder === null ? 1 : 0, 1);
+}
+
+console.log('');
+console.log('[편성을 바꿀 때 등판 차례 — RP 번호 구간이 같은 조만 정해 둔 차례, 바뀐 조는 RP 번호 순, 돌아오면 그대로 (2026-10-28 사용자 승인)]');
+{
+  const S = (a) => (a || []).join(',');
+  const chase = ['RP1', 'RP2', 'RP3', 'RP6', 'RP5', 'RP4'];   /* 3/3/0 에서 추격조를 RP6 → RP5 → RP4 로 */
+  const win = ['RP3', 'RP1', 'RP2', 'RP4', 'RP5', 'RP6'];     /* 3/3/0 에서 승리조를 RP3 → RP1 → RP2 로 */
+  eq('정한 편성이 적혀 있지 않으면(이 규칙 전 덱) 그대로 — 저장된 덱 점수 그대로', rpOrderOf({ bpcIdx: 0, rpOrder: chase }) === chase ? 1 : 0, 1);
+  eq('정한 편성 그대로면 그대로', rpOrderOf({ bpcIdx: 8, rpOrder: chase, rpOrderBpc: '3/3/0' }) === chase ? 1 : 0, 1);
+  eq('순서가 없으면 null', rpOrderOf({ bpcIdx: 8, rpOrderBpc: '3/3/0' }) === null ? 1 : 0, 1);
+  eq('모르는 편성 이름이면 그대로', rpOrderOf({ bpcIdx: 0, rpOrder: chase, rpOrderBpc: '9/9/9' }) === chase ? 1 : 0, 1);
+  eq('3/3/0 → 1/1/4 — 롱릴리프(RP3~6)는 3/3/0 에 없던 구간이라 RP 번호 순', S(rpOrderOf({ bpcIdx: 0, rpOrder: chase, rpOrderBpc: '3/3/0' })) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('… 예전에는 옛 추격조 앞뒤가 롱릴리프에 섞였다', S(rpAppearance(0, chase).seq) === 'RP1,RP2,RP3,RP6,RP5,RP4' ? 1 : 0, 1);
+  eq('3/3/0 → 3/2/1 — 승리조(RP1~3)는 구간이 같아 그대로, 나머지는 RP 번호 순', S(rpOrderOf({ bpcIdx: 7, rpOrder: win, rpOrderBpc: '3/3/0' })) === 'RP3,RP1,RP2,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('3/3/0 → 2/1/3 — 롱릴리프(RP4~6)가 옛 추격조와 같은 구간이라 그 앞뒤를 쓴다', S(rpOrderOf({ bpcIdx: 3, rpOrder: chase, rpOrderBpc: '3/3/0' })) === 'RP1,RP2,RP3,RP6,RP5,RP4' ? 1 : 0, 1);
+  eq('3/3/0 으로 돌아오면 정해 둔 차례 그대로', rpOrderOf({ bpcIdx: 8, rpOrder: win, rpOrderBpc: '3/3/0' }) === win ? 1 : 0, 1);
+  /* 배율 · 총점 — 바뀐 조는 순서 없는 것과 같은 배율 */
+  const sdW = { bpcIdx: 4, rpOrder: win, rpOrderBpc: '3/3/0' };
+  let same = 1;
+  for (const s of ['RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6']) for (const tac of ['기본', '적극'])
+    if (getRPWeight(4, s, tac, rpOrderOf(sdW)) !== getRPWeight(4, s, tac, null)) same = 0;
+  eq('3/3/0 → 2/2/2 — 세 조 모두 구간이 바뀌어 배율이 순서 없는 것과 같다', same, 1);
+  eq('lineupOpts 도 편성에 맞춘 차례를 싣는다', S(lineupOpts({ bpcIdx: 0, rpOrder: chase, rpOrderBpc: '3/3/0' }, 0).rpOrder) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('lineupOpts — 정한 편성 그대로면 저장된 차례', S(lineupOpts({ bpcIdx: 8, rpOrder: win, rpOrderBpc: '3/3/0' }, 0).rpOrder) === S(win) ? 1 : 0, 1);
+  const relA = { id: 'ra', role: '투수', position: '중계', cardType: '골든글러브', hand: '우', change: 90, stuff: 92, enhance: '9각성', sLvManual: true };
+  const pk = (s) => (s === 'RP4' ? relA : null);
+  const sdL = { bpcIdx: 0, rpOrder: chase, rpOrderBpc: '3/3/0' };
+  const tA = lineupPit(relA, 'RP4', sdL, lineupOpts(sdL, 0)).total;
+  eq('1/1/4 — RP4 는 RP 번호 순대로 롱릴리프 2번째 배율 0.125', getRPWeight(0, 'RP4', '기본', rpOrderOf(sdL)), 0.125);
+  eq('… 예전에는 옛 추격조 앞뒤 때문에 4번째(0)였다', getRPWeight(0, 'RP4', '기본', chase), 0);
+  eq('1/1/4 — 총점도 RP4 를 0.125 로 센다', calcLineupTotal(pk, sdL, lineupOpts(sdL, 0)), Math.round(tA * 0.125 * 100) / 100);
 }
 
 console.log('');
