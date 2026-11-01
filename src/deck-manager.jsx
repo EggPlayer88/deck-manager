@@ -7298,7 +7298,7 @@ function PolicyModal(p) {
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"제4조 (회원가입 및 계정)"}</h3>
         <ul style={{ paddingLeft: 20 }}>
           <li>{"이용자는 Google 계정을 통해 로그인하거나, 닉네임만 입력하여 게스트로 이용할 수 있습니다."}</li>
-          <li>{"Google 계정 이용자는 덱을 최대 5개까지 저장할 수 있습니다. 게스트로 입력한 내용은 저장되지 않으며, 새로고침하거나 창을 닫으면 사라집니다."}</li>
+          <li>{"Google 계정 이용자는 덱을 최대 7개까지 저장할 수 있습니다. 게스트로 입력한 내용은 저장되지 않으며, 새로고침하거나 창을 닫으면 사라집니다."}</li>
           <li>{"이용자는 자신의 계정 정보를 제3자에게 양도하거나 공유할 수 없습니다."}</li>
         </ul>
 
@@ -7429,7 +7429,7 @@ function LoginPage(p) {
     { icon: "⭐", title: "잠재력 점수", desc: "C부터 SR+까지 12개 등급의 잠재력을 풀스윙·클러치·장타억제·침착 등 종류별로 구분하여 점수화합니다. 잠재력만으로도 카드 간 우열을 판단할 수 있습니다." },
     { icon: "📊", title: "데이터 센터", desc: "라인업 선수마다 스킬 · 훈련 · 특훈이 상위 몇 %인지 보여 주고, 스킬 계산기 · 훈재분 계산기로 새로 뽑은 카드를 바로 견줘 볼 수 있어 객관적인 수준 파악이 가능합니다." },
     { icon: "🏟️", title: "세트덱 보너스", desc: "카드마다 정해진 세트덱 포인트를 모아 구간마다 좌/우 효과를 고르고, 라이브 · 국가대표 · 올스타처럼 같은 종류 카드를 모으면 켜지는 시너지도 자동으로 셉니다. 어떤 조합이 가장 점수가 높은지 한눈에 확인할 수 있습니다." },
-    { icon: "🔄", title: "다중 덱 관리", desc: "Google 로그인 시 덱을 최대 5개까지 클라우드에 저장할 수 있습니다. 시즌 카드 덱, 임팩트 덱, 타이틀 매치용 덱 등 상황별로 구분해 관리할 수 있습니다." },
+    { icon: "🔄", title: "다중 덱 관리", desc: "Google 로그인 시 덱을 최대 7개까지 클라우드에 저장할 수 있습니다. 시즌 카드 덱, 임팩트 덱, 타이틀 매치용 덱 등 상황별로 구분해 관리할 수 있습니다." },
     { icon: "📱", title: "기기 간 동기화", desc: "반응형 디자인으로 PC·태블릿·스마트폰에서 모두 원활하게 작동하며, Google 로그인을 이용하면 모든 기기에서 동일한 데이터를 실시간으로 확인할 수 있습니다." }
   ];
 
@@ -7455,7 +7455,7 @@ function LoginPage(p) {
               {"컴투스 프로야구 v26 팬이 직접 만든 라인업 구성 및 전력 분석 도구입니다. 수많은 선수 카드 중 최적의 조합을 찾고, 강화·스킬·잠재력을 통합적으로 계산해 가장 강력한 덱을 완성하세요."}
             </p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
-              {["무료 이용", "Google 동기화", "최대 5개 덱 저장", "모바일 대응", "실시간 전력 계산"].map(function(t) {
+              {["무료 이용", "Google 동기화", "최대 7개 덱 저장", "모바일 대응", "실시간 전력 계산"].map(function(t) {
                 return (<span key={t} style={{ fontSize: 12, color: "#c9d1d9", background: "rgba(255,255,255,0.04)", padding: "6px 12px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)" }}>{"✓ " + t}</span>);
               })}
             </div>
@@ -7510,7 +7510,7 @@ function LoginPage(p) {
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 10, padding: "8px 10px", background: "rgba(255,152,0,0.05)", borderRadius: 6, border: "1px solid rgba(255,152,0,0.1)" }}>
                   <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{"!"}</span>
-                  <p style={{ fontSize: 11, color: "rgba(255,152,0,0.5)", margin: 0, lineHeight: 1.5 }}>{"게스트로 넣은 선수 · 라인업은 저장되지 않아요. 새로고침하거나 창을 닫으면 처음으로 돌아가요. 계속 쓰려면 구글 계정으로 시작해 주세요 (덱 5개까지 저장)."}</p>
+                  <p style={{ fontSize: 11, color: "rgba(255,152,0,0.5)", margin: 0, lineHeight: 1.5 }}>{"게스트로 넣은 선수 · 라인업은 저장되지 않아요. 새로고침하거나 창을 닫으면 처음으로 돌아가요. 계속 쓰려면 구글 계정으로 시작해 주세요 (덱 7개까지 저장)."}</p>
                 </div>
               </div>
             )}
@@ -7725,13 +7725,15 @@ function LoginPage(p) {
    NAV (with admin toggle for DB page)
    ================================================================ */
 /* ── 덱 드롭다운: 팀 이름 클릭 → 내 덱 리스트 + 추가 버튼 ── */
+/* 계정당 덱 수 — 2026-11-01 사용자 지정 5 → 7. 한도는 덱 목록의 '＋ 덱 추가' 단추에만 있다(서버 · 저장에는 개수 제한 없음) */
+var DECK_MAX = 7;
 function DeckDropdown(p){
   /* props: decks, curDeckId, onSwitch(deckId), onAdd(), onDelete(deckId), onChangeTeam() — 지금 덱의 구단 바꾸기 */
   var _open=useState(false);var open=_open[0];var setOpen=_open[1];
   var _confirmDel=useState(null);var confirmDel=_confirmDel[0];var setConfirmDel=_confirmDel[1];
   var cur=(p.decks||[]).find(function(d){return d.deckId===p.curDeckId;})||(p.decks&&p.decks[0])||null;
   var label=cur?cur.teamName:"팀 선택";
-  var canAdd=(p.decks||[]).length<5;
+  var canAdd=(p.decks||[]).length<DECK_MAX;
   return(
     <div style={{position:"relative"}}>
       <button onClick={function(){setOpen(!open);setConfirmDel(null);}}
@@ -7783,11 +7785,11 @@ function DeckDropdown(p){
               <button onClick={function(){p.onAdd();setOpen(false);}}
                 style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"10px 14px",background:"transparent",border:"none",color:"#81C784",fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left"}}>
                 <span>{"＋ 덱 추가"}</span>
-                <span style={{fontSize:11,color:"var(--td)"}}>{(p.decks||[]).length+"/5"}</span>
+                <span style={{fontSize:11,color:"var(--td)"}}>{(p.decks||[]).length+"/"+DECK_MAX}</span>
               </button>
             )}
             {!canAdd&&(
-              <div style={{padding:"8px 14px",fontSize:12,color:"var(--td)",textAlign:"center"}}>{"최대 5개 · ✕ 버튼으로 삭제 가능"}</div>
+              <div style={{padding:"8px 14px",fontSize:12,color:"var(--td)",textAlign:"center"}}>{"최대 "+DECK_MAX+"개 · ✕ 버튼으로 삭제 가능"}</div>
             )}
           </div>
         </React.Fragment>
