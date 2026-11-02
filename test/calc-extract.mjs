@@ -303,6 +303,47 @@ function rankTrainMissing(pl, slot) {
   if (miss.length === keys.length && rankTrainFree(pl, slot)) return [];
   return miss;
 }
+/* ── 내 실제 등수 (2026-11-02, 사용자 요청) ──
+   이용자가 자기 랭챌 등수를 적으면 그때의 TOTAL(실제 덱 · 신버전) · 예상 구간과 함께 남긴다 → 모아서 예상 구간을 실제에 맞춘다.
+   덱마다 최근 것부터 RANK_REC_MAX 개. 기록 { r: 등수, full: 풀갱 여부, at: 적은 시각, t: 그때 TOTAL, tier · safe: 그때 예상 }.
+   지금 TOTAL 이 그때와 다르면(덱 · 점수 규칙이 바뀜) '지난 기록'으로 보여 주고 새로 적기를 권한다 — 지난 기록도 그때 점수와 함께 남는다.
+   저장은 sd_state 뿌리 rankRec[덱id] (연구소 실험본 lab 과 같은 길 — useData 의 saveRankRec). 게스트는 이 브라우저에만.
+   솔직하게 적을 길을 다 열어 둔다: 풀갱을 못 했으면 '덜 함', 모르면 비워 두기, 틀렸으면 지우기. 보상 · 공개는 없다 */
+var RANK_REC_MAX = 10, RANK_REC_RMAX = 99999;
+/* 등수 글자 → 수 (1 ~ RANK_REC_RMAX 의 정수가 아니면 0) */
+function rankRecNum(txt) {
+  var s = String(txt == null ? "" : txt).trim();
+  if (!/^[0-9]{1,6}$/.test(s)) return 0;
+  var n = Number(s);
+  return n >= 1 && n <= RANK_REC_RMAX ? n : 0;
+}
+function rankNOf(row) { var m = row && String(row.n).match(/\d+/); return m ? Number(m[0]) : 0; }
+/* 등수 → 드는 구간 순번 (rows 위에서부터, 맨 아래 구간보다 크면 rows.length = 밖) */
+function rankRecIdx(r, rows) { for (var k = 0; k < rows.length; k++) { if (r <= rankNOf(rows[k])) return k; } return rows.length; }
+/* 그때 예상과 견줌 — -1 예상보다 높음(등수가 더 좋음) · 0 예상대로 · 1 예상보다 낮음 */
+function rankRecCmp(rec, rows) {
+  var pi = rows.length;
+  for (var k = 0; k < rows.length; k++) { if (rows[k].n === rec.tier) { pi = k; break; } }
+  var ai = rankRecIdx(rec.r, rows);
+  return ai < pi ? -1 : ai > pi ? 1 : 0;
+}
+/* 쓸 수 있는 기록인가 — 등수 · 점수가 숫자인 것만 (망가진 줄 하나 때문에 라인업 화면이 멈추지 않게) */
+function rankRecOk(x) { return !!x && typeof x === "object" && rankRecNum(x.r) > 0 && isFinite(Number(x.t)); }
+/* 기록의 점수가 지금 TOTAL 과 같은가 (0.1 단위로) — 다르면 그 뒤 덱이나 점수 규칙이 바뀐 것 */
+function rankRecSame(rec, total) { return !!rec && Math.abs((Number(rec.t) || 0) - Math.round(total * 10) / 10) < 0.05; }
+function rankRecDay(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ""; var z = function (v) { return (v < 10 ? "0" : "") + v; }; return z(d.getMonth() + 1) + "-" + z(d.getDate()); }
+/* 기록 하나 — total 은 실제 덱 TOTAL(고점판독 사본 아님), rows 는 지금 쓰는 구간표, at 은 ISO 시각 */
+function rankRecMake(r, full, total, rows, at) {
+  var tt = rankTierOf(total, rows);
+  return { r: r, full: !!full, at: at, t: Math.round(total * 10) / 10, tier: tt.row ? tt.row.n : "", safe: !!tt.safe };
+}
+/* 목록에 넣기 — 맨 위 기록과 점수가 같으면(같은 덱 그대로 고친 것) 그 자리를 바꾸고,
+   점수가 바뀐 뒤 새로 적은 것이면 위에 쌓는다 (지난 기록도 그때 점수와 함께 자료로 남긴다). 최근 RANK_REC_MAX 개까지 */
+function rankRecPut(list, rec) {
+  var a = Array.isArray(list) ? list.filter(rankRecOk) : [];
+  if (a[0] && rankRecSame(a[0], rec.t)) a[0] = rec; else a.unshift(rec);
+  return a.slice(0, RANK_REC_MAX);
+}
 /* ═══ 랭킹챌린지 예상 구간 끝 ═══ */
 var DEFAULT_WEIGHTS={p:1.0,a:0.85,e:0.4,n:0.15,c:1.05,s:1.35};
 var LIVE_WEIGHTS=null;
@@ -3143,6 +3184,7 @@ function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setScoreVer(v){ SCORE_VER = v; }
 export { withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, skillTables, __setScoreVer, CATCH_LEAD_PIT, NAT_ACE_PIT, POS_TRAIN, ENHANCE, pitCatOf, pitDistRole, pitStatScore, sampleSkillScores, SKILL_DIST_CARDS, ctlMissing, applyV11, v11EditCopy, v11Saved, v11WeightsOk, V11_TABLE_VERSION, SKILLS_V11_CODE, PIT_W_V11_CODE };
 export { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankHexA, RANK_TRAIN_BAT, RANK_TRAIN_PIT, rankTrainMissing };
+export { RANK_REC_MAX, RANK_REC_RMAX, rankRecNum, rankRecOk, rankNOf, rankRecIdx, rankRecCmp, rankRecSame, rankRecDay, rankRecMake, rankRecPut };
 export { RP_TAC_STAT, rpTacStat };
 export { bestBatOrder };
 export { ORDER_RENAME, orderRename };

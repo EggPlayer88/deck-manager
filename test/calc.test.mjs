@@ -23,6 +23,7 @@ import {
 import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, labFaLimit, labGgLimit, isOldOlstar, cardLvType, OLSTAR_SET_POINTS_OLD, findCard } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
+import { RANK_REC_MAX, rankRecNum, rankRecOk, rankRecIdx, rankRecCmp, rankRecSame, rankRecMake, rankRecPut } from './calc-extract.mjs';
 import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
 
 /* 아래 시험들은 v1.1(제구 반영) 이전의 계산을 지킨다 — 구버전(v10) 기준으로 돈다.
@@ -3560,6 +3561,51 @@ __setScoreVer('v11');
   eqs('검사: 안정권이 숫자가 아니면', rankTierCheck([{ n: 'a', cut: 100, safe: 'x' }, { n: 'b', cut: 50, safe: 0 }]), 'a 안정권 점수가 이상해요');
   eqs('색: in30 금색 · in100 분홍 · in200 · in500 파랑 · in1000 초록 · in2000 · in3000 회색',
     ['in30', 'in100', 'in200', 'in500', 'in1000', 'in2000', 'in3000'].map((n) => rankTierColor({ n })).join(' '), '#D97706 #EC4899 #3B82F6 #3B82F6 #16A34A #64748B #64748B');
+  /* 내 실제 등수 (2026-11-02) — 등수 글자 · 드는 구간 · 예상과 견줌 · 기록 만들기 · 목록에 넣기 */
+  eq('등수 "312" → 312', rankRecNum('312'), 312);
+  eq('앞뒤 빈칸은 괜찮다 " 45 "', rankRecNum(' 45 '), 45);
+  eq('0위는 없다', rankRecNum('0'), 0);
+  eq('빈 글자 → 0', rankRecNum(''), 0);
+  eq('숫자가 아니면 0 ("3백")', rankRecNum('3백'), 0);
+  eq('소수 → 0', rankRecNum('12.5'), 0);
+  eq('음수 → 0', rankRecNum('-3'), 0);
+  eq('99999 까지', rankRecNum('99999'), 99999);
+  eq('100000 은 넘침 → 0', rankRecNum('100000'), 0);
+  eq('null → 0', rankRecNum(null), 0);
+  eqs('312위 → in500 안 (300 < 312 ≤ 500)', R[rankRecIdx(312, R)].n, 'in500');
+  eqs('300위 → in300 (경계는 안)', R[rankRecIdx(300, R)].n, 'in300');
+  eqs('1위 → in10', R[rankRecIdx(1, R)].n, 'in10');
+  eq('3001위 → 밖 (구간 수)', rankRecIdx(3001, R), R.length);
+  const at = '2026-11-02T03:00:00.000Z';
+  const rr = rankRecMake(312, true, 8764.84, R, at);
+  eqs('기록 — 그때 TOTAL 은 0.1 단위 · 예상 구간 함께', JSON.stringify(rr), JSON.stringify({ r: 312, full: true, at, t: 8764.8, tier: 'in500', safe: true }));
+  eq('예상 in500 안정권 · 실제 312위(in500 안) → 예상대로', rankRecCmp(rr, R), 0);
+  eq('… 실제 280위(in300 안) → 예상보다 높음', rankRecCmp(Object.assign({}, rr, { r: 280 }), R), -1);
+  eq('… 실제 820위(in1000 안) → 예상보다 낮음', rankRecCmp(Object.assign({}, rr, { r: 820 }), R), 1);
+  const low = rankRecMake(4200, false, 8000, R, at);
+  eqs('맨 아래 커트도 못 넘은 덱 — 예상 구간 빈 글자 · 덜 함', low.tier + '/' + low.full + '/' + low.safe, '/false/false');
+  eq('… 실제도 3000 밖 → 예상대로', rankRecCmp(low, R), 0);
+  eq('… 실제 2500위면 → 예상보다 높음', rankRecCmp(Object.assign({}, low, { r: 2500 }), R), -1);
+  eq('같은 점수 (0.1 단위로 반올림해 견줌)', rankRecSame(rr, 8764.83) ? 1 : 0, 1);
+  eq('점수가 바뀌면 다름', rankRecSame(rr, 8786.4) ? 1 : 0, 0);
+  eq('기록이 없으면 다름', rankRecSame(null, 8764.8) ? 1 : 0, 0);
+  /* 목록에 넣기 — 같은 점수면 맨 위를 바꾸고(고치기), 점수가 바뀐 뒤면 위에 쌓는다 */
+  let L = rankRecPut([], rr);
+  eq('빈 목록 + 기록 → 1개', L.length, 1);
+  L = rankRecPut(L, rankRecMake(298, true, 8764.8, R, at));
+  eqs('같은 점수로 다시 적기 → 바꿈 (여전히 1개 · 298위)', L.length + '/' + L[0].r, '1/298');
+  L = rankRecPut(L, rankRecMake(250, true, 8786.4, R, at));
+  eqs('점수가 바뀐 뒤 새로 적기 → 위에 쌓임 (2개 · 250 · 298)', L.length + '/' + L.map((x) => x.r).join(','), '2/250,298');
+  let M = [];
+  for (let k = 0; k < 13; k++) M = rankRecPut(M, rankRecMake(500 - k, true, 8700 + k, R, at));
+  eqs('최근 ' + RANK_REC_MAX + '개까지만 (맨 위가 가장 최근)', M.length + '/' + M[0].r + '/' + M[M.length - 1].r, RANK_REC_MAX + '/488/497');
+  eqs('목록에 섞인 빈 칸은 버린다', rankRecPut([null, 5, rr], rankRecMake(100, true, 9000, R, at)).map((x) => x.r).join(','), '100,312');
+  eq('온전한 기록', rankRecOk(rr) ? 1 : 0, 1);
+  eq('망가진 기록 — 등수 없음', rankRecOk({ t: 8700 }) ? 1 : 0, 0);
+  eq('망가진 기록 — 점수 없음', rankRecOk({ r: 5 }) ? 1 : 0, 0);
+  eq('망가진 기록 — 등수 0', rankRecOk({ r: 0, t: 8700 }) ? 1 : 0, 0);
+  eqs('망가진 기록은 넣을 때 빠진다', rankRecPut([{ t: 1 }, rr], rankRecMake(100, true, 9000, R, at)).map((x) => x.r).join(','), '100,312');
+  eq('목록이 배열이 아니어도 된다', rankRecPut(undefined, rr).length, 1);
 }
 {
   /* 중계 전술 능력치 — 2026년 10월 업데이트 (2026-10-22 사용자 지정): 승리조 분업 +3 · 승리조 적극 +1 · 추격조 적극 +2.

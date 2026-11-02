@@ -651,6 +651,47 @@ function rankTrainMissing(pl, slot) {
   if (miss.length === keys.length && rankTrainFree(pl, slot)) return [];
   return miss;
 }
+/* ── 내 실제 등수 (2026-11-02, 사용자 요청) ──
+   이용자가 자기 랭챌 등수를 적으면 그때의 TOTAL(실제 덱 · 신버전) · 예상 구간과 함께 남긴다 → 모아서 예상 구간을 실제에 맞춘다.
+   덱마다 최근 것부터 RANK_REC_MAX 개. 기록 { r: 등수, full: 풀갱 여부, at: 적은 시각, t: 그때 TOTAL, tier · safe: 그때 예상 }.
+   지금 TOTAL 이 그때와 다르면(덱 · 점수 규칙이 바뀜) '지난 기록'으로 보여 주고 새로 적기를 권한다 — 지난 기록도 그때 점수와 함께 남는다.
+   저장은 sd_state 뿌리 rankRec[덱id] (연구소 실험본 lab 과 같은 길 — useData 의 saveRankRec). 게스트는 이 브라우저에만.
+   솔직하게 적을 길을 다 열어 둔다: 풀갱을 못 했으면 '덜 함', 모르면 비워 두기, 틀렸으면 지우기. 보상 · 공개는 없다 */
+var RANK_REC_MAX = 10, RANK_REC_RMAX = 99999;
+/* 등수 글자 → 수 (1 ~ RANK_REC_RMAX 의 정수가 아니면 0) */
+function rankRecNum(txt) {
+  var s = String(txt == null ? "" : txt).trim();
+  if (!/^[0-9]{1,6}$/.test(s)) return 0;
+  var n = Number(s);
+  return n >= 1 && n <= RANK_REC_RMAX ? n : 0;
+}
+function rankNOf(row) { var m = row && String(row.n).match(/\d+/); return m ? Number(m[0]) : 0; }
+/* 등수 → 드는 구간 순번 (rows 위에서부터, 맨 아래 구간보다 크면 rows.length = 밖) */
+function rankRecIdx(r, rows) { for (var k = 0; k < rows.length; k++) { if (r <= rankNOf(rows[k])) return k; } return rows.length; }
+/* 그때 예상과 견줌 — -1 예상보다 높음(등수가 더 좋음) · 0 예상대로 · 1 예상보다 낮음 */
+function rankRecCmp(rec, rows) {
+  var pi = rows.length;
+  for (var k = 0; k < rows.length; k++) { if (rows[k].n === rec.tier) { pi = k; break; } }
+  var ai = rankRecIdx(rec.r, rows);
+  return ai < pi ? -1 : ai > pi ? 1 : 0;
+}
+/* 쓸 수 있는 기록인가 — 등수 · 점수가 숫자인 것만 (망가진 줄 하나 때문에 라인업 화면이 멈추지 않게) */
+function rankRecOk(x) { return !!x && typeof x === "object" && rankRecNum(x.r) > 0 && isFinite(Number(x.t)); }
+/* 기록의 점수가 지금 TOTAL 과 같은가 (0.1 단위로) — 다르면 그 뒤 덱이나 점수 규칙이 바뀐 것 */
+function rankRecSame(rec, total) { return !!rec && Math.abs((Number(rec.t) || 0) - Math.round(total * 10) / 10) < 0.05; }
+function rankRecDay(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ""; var z = function (v) { return (v < 10 ? "0" : "") + v; }; return z(d.getMonth() + 1) + "-" + z(d.getDate()); }
+/* 기록 하나 — total 은 실제 덱 TOTAL(고점판독 사본 아님), rows 는 지금 쓰는 구간표, at 은 ISO 시각 */
+function rankRecMake(r, full, total, rows, at) {
+  var tt = rankTierOf(total, rows);
+  return { r: r, full: !!full, at: at, t: Math.round(total * 10) / 10, tier: tt.row ? tt.row.n : "", safe: !!tt.safe };
+}
+/* 목록에 넣기 — 맨 위 기록과 점수가 같으면(같은 덱 그대로 고친 것) 그 자리를 바꾸고,
+   점수가 바뀐 뒤 새로 적은 것이면 위에 쌓는다 (지난 기록도 그때 점수와 함께 자료로 남긴다). 최근 RANK_REC_MAX 개까지 */
+function rankRecPut(list, rec) {
+  var a = Array.isArray(list) ? list.filter(rankRecOk) : [];
+  if (a[0] && rankRecSame(a[0], rec.t)) a[0] = rec; else a.unshift(rec);
+  return a.slice(0, RANK_REC_MAX);
+}
 /* ═══ 랭킹챌린지 예상 구간 끝 ═══ */
 async function sGet(k){try{var r=await window.storage.get(k);return r?JSON.parse(r.value):null;}catch(e){return null;}}
 async function sSet(k,d){try{await window.storage.set(k,JSON.stringify(d));return true;}catch(e){return false;}}
@@ -1664,6 +1705,8 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
   var _cd=useState([]);var customDex=_cd[0];var setCustomDexState=_cd[1];
   /* 연구소 실험본 — 덱마다 3개. 뿌리에 덱 id 로 담아 덱 저장기와 부딪히지 않게 한다 */
   var _lab=useState([]);var labSaves=_lab[0];var setLabSaves=_lab[1];
+  /* 내 실제 랭챌 등수 기록 — 덱마다 최근 RANK_REC_MAX 개. 연구소 실험본처럼 뿌리에 덱 id 로 담는다 (rankRec[덱id]) */
+  var _rrec=useState([]);var rankRecs=_rrec[0];var setRankRecs=_rrec[1];
   var _lo=useState(true);var loading=_lo[0];var setLoading=_lo[1];
   /* 서버에서 덱을 읽지 못했을 때의 사유. null 이면 정상.
      이 값이 있으면 화면은 빈 덱 대신 오류를 보여 준다 — 빈 덱을 보여 주면
@@ -1701,8 +1744,8 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
      pendingRef : 아직 서버에 못 올린 변경. 저장이 실패하면 남아 있다가 다음 저장 때 함께 올라간다.
      sentRef    : 이 탭이 보냈던 내용의 지문 — 응답을 못 받았을 뿐 서버에는 반영된 내 저장을 남의 것으로 착각하지 않게 */
   var allDataRef=React.useRef(null);
-  var newPending=function(){ return { decks:{}, listOps:[], customDex:null, lab:{} }; };
-  var newBase=function(){ return { decks:{}, customDex:canonJson([]), lab:{} }; };
+  var newPending=function(){ return { decks:{}, listOps:[], customDex:null, lab:{}, rankRec:{} }; };
+  var newBase=function(){ return { decks:{}, customDex:canonJson([]), lab:{}, rankRec:{} }; };
   var pendingRef=React.useRef(null); if(!pendingRef.current) pendingRef.current=newPending();
   var baseRef=React.useRef(null); if(!baseRef.current) baseRef.current=newBase();
   var sentRef=React.useRef(null); if(!sentRef.current) sentRef.current={};
@@ -1725,17 +1768,17 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
     pendingRef.current=newPending(); baseRef.current=newBase(); sentRef.current={}; unsureRef.current={seq:0,decks:{},flying:{},ok:{}}; declinedRef.current=[]; genRef.current++;
   }
   /* 화면에 깔린 직접 등록 카드 · 연구소 저장본도 앞 계정의 것이다 — 비워 둔다 (새 계정의 덱을 읽을 때 다시 채운다) */
-  useEffect(function(){ setCustomPlayers([]); setCustomDexState([]); setLabSaves([]); },[userId]);
+  useEffect(function(){ setCustomPlayers([]); setCustomDexState([]); setLabSaves([]); setRankRecs([]); },[userId]);
   var globalLoadedRef=React.useRef(false); /* 선수도감/스킬 1회만 로드 */
   var hasPending=function(){
     var p=pendingRef.current;
-    return Object.keys(p.decks).length>0 || p.listOps.length>0 || !!p.customDex || Object.keys(p.lab).length>0;
+    return Object.keys(p.decks).length>0 || p.listOps.length>0 || !!p.customDex || Object.keys(p.lab).length>0 || Object.keys(p.rankRec).length>0;
   };
   /* 창을 닫거나 로그아웃할 때 물을 만한 변경이 남았는가 —
      "마지막으로 본 덱" 표시만 바꾸는 가벼운 목록 변경(soft)은 치지 않는다 (덱만 바꿔도 닫을 때마다 묻게 된다) */
   var hasUnsaved=function(){
     var p=pendingRef.current;
-    return Object.keys(p.decks).length>0 || !!p.customDex || Object.keys(p.lab).length>0 || p.listOps.some(function(op){ return !op.soft; });
+    return Object.keys(p.decks).length>0 || !!p.customDex || Object.keys(p.lab).length>0 || Object.keys(p.rankRec).length>0 || p.listOps.some(function(op){ return !op.soft; });
   };
   var noteSent=function(key,str){
     var a=sentRef.current[key]||(sentRef.current[key]=[]);
@@ -1897,6 +1940,7 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
         if (d.kind === 'deck') { if (!pend.decks[d.id]) pend.decks[d.id] = d.entry; }
         else if (d.kind === 'customDex') { if (!pend.customDex) { d.entry.ok = null; pend.customDex = d.entry; } }
         else if (d.kind === 'lab') { if (!pend.lab[d.id]) { d.entry.ok = null; pend.lab[d.id] = d.entry; } }
+        else if (d.kind === 'rankRec') { if (!pend.rankRec[d.id]) { d.entry.ok = null; pend.rankRec[d.id] = d.entry; } }
       });
       declinedRef.current = [];
     };
@@ -2090,6 +2134,33 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
         }
         if (pend.lab[id] === pl) delete pend.lab[id];
       });
+      /* 내 실제 랭챌 등수 — 연구소 실험본과 같은 식 (덱마다 따로, 다른 곳에서도 바뀌었으면 묻는다) */
+      Object.keys(pend.rankRec).forEach(function(id) {
+        var pr = pend.rankRec[id], sr = (row.rankRec && Array.isArray(row.rankRec[id])) ? row.rankRec[id] : [];
+        var svr = canonJson(sr), mer = canonJson(pr.value);
+        var vr = classifyKeySave(svr, base.rankRec[id] === undefined ? canonJson([]) : base.rankRec[id], mer, sentRef.current["rankRec:" + id]);
+        if (vr === "conflict") {
+          if (!visible) return;
+          if (stopAsk) { unanswered = true; return; }
+          vr = settleAsk(pr, askConflict('랭챌 등수 기록이', '지금 화면의 기록', sr.length + '개', pr.value.length + '개', '불러옵니다'));
+          if (vr !== "server" && vr !== "apply") stopAsk = true;
+          if (vr === "wait") { unanswered = true; return; }
+          if (vr === "apply") { base.rankRec[id] = svr; genRef.current++; }
+        }
+        if (vr === "apply") {
+          row.rankRec = row.rankRec || {}; row.rankRec[id] = pr.value; touched = true;
+          noteSent("rankRec:" + id, mer);
+          done.push(function() { base.rankRec[id] = mer; pr.ok = true; if (pend.rankRec[id] === pr) delete pend.rankRec[id]; });
+          return;
+        }
+        if (vr === "same") { base.rankRec[id] = mer; pr.ok = true; }
+        else {
+          pr.ok = false;
+          if (vr === "server") { base.rankRec[id] = svr; if (deckIdRef.current === id) setRankRecs(sr.slice(0, RANK_REC_MAX)); }
+          else if (vr === "none") noteDeclined("rankRec", id, pr);
+        }
+        if (pend.rankRec[id] === pr) delete pend.rankRec[id];
+      });
       var settleOps = function() {
         ops.forEach(function(op) {
           op.result = { list: (row.deckList || []).slice(), cur: row.deckCurrent || null, deleted: row.deletedDecks || {} };
@@ -2178,6 +2249,19 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
     return rec.ok === true;
   };
 
+  /* 내 실제 랭챌 등수 저장 — sd_state 뿌리의 rankRec[덱id] (연구소 실험본과 같은 길). 게스트는 이 브라우저에만 */
+  var saveRankRec = async function(list) {
+    var arr = (Array.isArray(list) ? list : []).slice(0, RANK_REC_MAX);
+    setRankRecs(arr);
+    var uid = uidRef.current, did = deckIdRef.current;
+    if (!did) return false;
+    if (!supabase || isGuestUid(uid)) { var loc = (await sGet("deck-rankrec")) || {}; loc[did] = arr; await sSet("deck-rankrec", loc); return true; }
+    var rec = { value: arr, ok: null };
+    pendingRef.current.rankRec[did] = rec;
+    await writer.queue(function() { return commit(uid); });
+    return rec.ok === true;
+  };
+
   /* 덱 목록 바꾸기 — fn(row) 이 서버의 최신 줄에서 row.deckList · row.deckCurrent 를 고친다.
      목록을 통째로 보내지 않고 "무엇을 바꾸는지"만 얹으므로, 다른 기기에서 만든 덱이나 이 브라우저에 남은 옛 목록 때문에
      서버 목록이 뒤바뀌지 않는다. 저장이 끝나면 서버 기준 { list, cur } 을 돌려준다.
@@ -2261,6 +2345,12 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
            화면에 든 것은 그 덱의 저장본이고, 거기서 한 칸을 저장하면 그 덱의 저장본이 이 덱에 올라간다 */
         var plab = pendingRef.current.lab[curDeckId];
         if(!stale) setLabSaves(plab ? (Array.isArray(plab.value) ? plab.value.slice(0, LAB_MAX_SAVES) : []) : (Array.isArray(lab) ? lab.slice(0, LAB_MAX_SAVES) : []));
+        /* 내 실제 랭챌 등수 — 실험본과 같은 식 (못 올린 저장이 남아 있으면 그것이 최신) */
+        var rrec = (srv.rankRec && srv.rankRec[curDeckId]) || null;
+        if (!pendingRef.current.rankRec[curDeckId]) baseRef.current.rankRec[curDeckId] = canonJson(Array.isArray(rrec) ? rrec : []);
+        if (!rrec) rrec = ((await sGet("deck-rankrec")) || {})[curDeckId] || [];
+        var prrec = pendingRef.current.rankRec[curDeckId];
+        if(!stale) setRankRecs(prrec ? (Array.isArray(prrec.value) ? prrec.value.slice(0, RANK_REC_MAX) : []) : (Array.isArray(rrec) ? rrec.slice(0, RANK_REC_MAX) : []));
         /* 선수도감/스킬: 로그인 후 딱 1번만 로드 */
         if(!globalLoadedRef.current){
           globalLoadedRef.current = true;
@@ -2279,6 +2369,8 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
         setCustomPlayers(cdxL || []); setCustomDexState((cdxL || []).slice(0, CUSTOM_MAX));
         var labL = ((await sGet("deck-lab")) || {})[curDeckId] || [];
         setLabSaves(Array.isArray(labL) ? labL.slice(0, LAB_MAX_SAVES) : []);
+        var rrecL = ((await sGet("deck-rankrec")) || {})[curDeckId] || [];
+        setRankRecs(Array.isArray(rrecL) ? rrecL.slice(0, RANK_REC_MAX) : []);
         var ver=await sGet(SK.version);var needReset=(!ver||ver<DATA_VERSION);
         if(needReset){await sSet(SK.version,DATA_VERSION);}
         var p2=await sGet("deck-players-"+curDeckId);
@@ -2380,7 +2472,7 @@ function useData(userId, sdState, setSdState, curDeckId, curDeckEntry){
     }
   },[]);
 
-  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,loading:loading,loadError:loadError,setLoadError:setLoadError,deckReady:deckReady,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,listOp:listOp,hasUnsaved:hasUnsaved,flushNow:flushNow,flushRef:flushRef,cancelSdRef:cancelSdRef};
+  return{players:players,lineupMap:lineupMap,skills:skills,potmList:potmList,customDex:customDex,saveCustomDex:saveCustomDex,labSaves:labSaves,saveLab:saveLab,rankRecs:rankRecs,saveRankRec:saveRankRec,loading:loading,loadError:loadError,setLoadError:setLoadError,deckReady:deckReady,savePlayers:saveP,saveLineupMap:saveLM,saveSkills:saveSK,saveSdState:saveSdState,savePotmList:savePotmList,listOp:listOp,hasUnsaved:hasUnsaved,flushNow:flushNow,flushRef:flushRef,cancelSdRef:cancelSdRef};
 }
 
 /* ── 전력공유 ─────────────────────────────────────────────────
@@ -5706,8 +5798,10 @@ function RankTierTile(p) {
   }
   var t = rankTierOf(p.score, rows), last = rows[rows.length - 1];
   var col = t.row ? rankTierColor(t.row) : null;
+  /* 내 실제 등수 한 줄 — 적었으면 '실제 312위', 그 뒤 점수가 바뀌었으면 흐리게 '지난 기록', 안 적었으면 '＋ 실제 등수' (누르면 구간표 창에서 적는다) */
+  var rec = p.rec, same = rankRecSame(rec, p.real);
   return (
-    <button onClick={p.onOpen} title={"랭킹챌린지 예상 구간 — 이 TOTAL 이면 풀갱 시 대략 이 등수예요 (표본이 적어 참고용). 누르면 구간표가 열려요"}
+    <button onClick={p.onOpen} title={"랭킹챌린지 예상 구간 — 이 TOTAL 이면 풀갱 시 대략 이 등수예요 (표본이 적어 참고용). 누르면 구간표가 열리고, 내 실제 등수도 거기서 적을 수 있어요"}
       style={box(col ? rankHexA(col, 0.10) : "var(--inner)", col ? rankHexA(col, 0.45) : "var(--bd)", false)}>
       {head}
       <span style={{ display: "flex", alignItems: "baseline", gap: 5, whiteSpace: "nowrap" }}>
@@ -5715,7 +5809,123 @@ function RankTierTile(p) {
         <span style={{ fontSize: 11.5, fontWeight: 800, color: col || "var(--td)" }}>{t.row ? (t.safe ? "안정권" : "경쟁권") : "밖"}</span>
       </span>
       {t.next && (<span style={{ fontSize: 10.5, color: "var(--t2)", whiteSpace: "nowrap" }}>{t.next.label + "까지 +" + Math.ceil(t.next.gap)}</span>)}
+      {p.canRec && (
+        <span style={{ alignSelf: "stretch", textAlign: mob ? "right" : "center", marginTop: 3, paddingTop: 3, borderTop: "1px dashed " + (col ? rankHexA(col, 0.35) : "var(--bd)"),
+          fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap", color: rec ? (same ? "var(--t1)" : "var(--td)") : "var(--acc)" }}>
+          {rec ? (same ? "실제 " : "지난 기록 ") + rec.r.toLocaleString() + "위" : "＋ 실제 등수"}
+        </span>
+      )}
     </button>
+  );
+}
+
+/* 구간표 창의 '내 실제 등수' 칸 (2026-11-02) — 적기 · 고치기 · 지우기. 점수가 그때와 다르면 '지난 기록'으로 보여 주고 새로 적기를 권한다.
+   정직하게 적을 수 있는 길을 모두 열어 둔다: 풀갱을 못 했으면 '덜 함', 모르면 비워 두기, 틀렸으면 지우기 */
+function RankRecBox(p) {
+  var rows = p.rows, rec = p.rec, same = rankRecSame(rec, p.real), last = rows[rows.length - 1];
+  var _ed = useState(!rec); var editing = _ed[0]; var setEditing = _ed[1];
+  var _r = useState(""); var rTxt = _r[0]; var setRTxt = _r[1];
+  var _f = useState(null); var full = _f[0]; var setFull = _f[1];
+  var _s = useState(false); var sure = _s[0]; var setSure = _s[1];
+  var _m = useState(""); var msg = _m[0]; var setMsg = _m[1];
+  var _ok = useState(false); var thanks = _ok[0]; var setThanks = _ok[1];
+  var rNum = rankRecNum(rTxt);
+  var startEdit = function (fresh) { setRTxt(!fresh && rec ? String(rec.r) : ""); setFull(!fresh && rec ? rec.full : null); setSure(false); setMsg(""); setThanks(false); setEditing(true); };
+  var submit = function () {
+    if (!rNum) { setMsg("등수를 숫자로 적어 주세요"); return; }
+    if (full === null) { setMsg("풀갱했는지 골라 주세요"); return; }
+    if (!sure) { setMsg("이 덱 그대로 받은 등수인지 확인해 주세요"); return; }
+    p.onSave(Math.round(rNum), full); setEditing(false); setMsg(""); setThanks(true);
+  };
+  var del = function () {
+    if (!window.confirm("적어 둔 등수(" + rec.r.toLocaleString() + "위)를 지울까요?")) return;
+    p.onDelete(); setEditing(true); setRTxt(""); setFull(null); setSure(false); setThanks(false);
+  };
+  var sBtn = { padding: "4px 11px", fontSize: 12, fontWeight: 700, borderRadius: 7, cursor: "pointer", fontFamily: "inherit", border: "1px solid var(--bd)", background: "transparent", color: "var(--t2)" };
+  var bBtn = { padding: "7px 18px", fontSize: 13, fontWeight: 800, borderRadius: 8, cursor: "pointer", fontFamily: "inherit", border: "1px solid var(--acc)", background: "var(--ta)", color: "var(--acc)" };
+  var chip = { fontSize: 11.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--bd)", color: "var(--t2)" };
+  var titleRow = (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <span style={{ fontSize: 13.5, fontWeight: 800, color: "var(--t1)" }}>{"📝 내 실제 등수"}<span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--td)", marginLeft: 6 }}>{"선택"}</span></span>
+      {!editing && rec && same && (<button onClick={function () { startEdit(false); }} style={sBtn}>{"고치기"}</button>)}
+      {editing && rec && (<button onClick={function () { setEditing(false); setMsg(""); }} style={sBtn}>{"취소"}</button>)}
+    </div>
+  );
+  var body;
+  if (editing) {
+    body = (
+      <div>
+        <div style={{ fontSize: 12, color: "var(--td)", marginTop: 3 }}>{"가장 최근 랭챌에서 받은 등수예요"}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <input value={rTxt} inputMode="numeric" placeholder="등수" aria-label="실제 랭챌 등수" maxLength={5}
+              onChange={function (e) { setRTxt(e.target.value.replace(/[^0-9]/g, "").slice(0, 5)); setMsg(""); }}
+              style={{ width: 92, boxSizing: "border-box", padding: "7px 9px", fontSize: 16, fontWeight: 800, fontFamily: "var(--m)", textAlign: "right", borderRadius: 8, border: "1px solid var(--bd)", background: "var(--card)", color: "var(--t1)" }} />
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--t2)" }}>{"위"}</span>
+          </span>
+          <span role="radiogroup" aria-label="풀갱 여부" style={{ display: "inline-flex", border: "1px solid var(--bd)", borderRadius: 8, overflow: "hidden" }}>
+            {[[true, "풀갱", "랭챌을 끝까지 다 갱신했어요"], [false, "덜 함", "끝까지 다 돌지 못했어요 — 따로 나눠 참고로 써요"]].map(function (o) {
+              var on = full === o[0];
+              return (<button key={o[1]} role="radio" aria-checked={on} title={o[2]} onClick={function () { setFull(o[0]); setMsg(""); }}
+                style={{ padding: "7px 13px", fontSize: 12.5, fontWeight: 800, border: "none", borderLeft: o[0] ? "none" : "1px solid var(--bd)", cursor: "pointer", fontFamily: "inherit",
+                  background: on ? "var(--ta)" : "transparent", color: on ? "var(--acc)" : "var(--t2)" }}>{o[1]}</button>);
+            })}
+          </span>
+        </div>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 7, marginTop: 10, fontSize: 12.5, color: "var(--t1)", cursor: "pointer", lineHeight: 1.45 }}>
+          <input type="checkbox" checked={sure} onChange={function (e) { setSure(e.target.checked); setMsg(""); }} style={{ marginTop: 2, accentColor: "var(--acc)" }} />
+          <span>{"지금 이 덱 그대로 받은 등수예요"}
+            <span style={{ display: "block", fontSize: 11.5, color: "var(--td)" }}>{"TOTAL " + p.real.toFixed(1) + " 과 함께 남아요 · 덱을 바꾼 뒤라면 다음 랭챌 뒤에 적어 주세요"}</span>
+          </span>
+        </label>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+          <button onClick={submit} style={bBtn}>{rec && same ? "저장" : "적기"}</button>
+          {rec && same && (<button onClick={del} style={sBtn}>{"지우기"}</button>)}
+          {msg && (<span style={{ fontSize: 12, color: CTL_MISS_COLOR, fontWeight: 700 }}>{msg}</span>)}
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6, marginTop: 9 }}>
+          <div>{"· 정확히 아는 등수만 적어 주세요. 모르면 비워 두는 게 더 도움이 돼요."}</div>
+          <div>{"· 다른 이용자에게는 안 보여요. 운영자가 모아 예상 구간을 실제에 맞게 고치는 데만 써요."}</div>
+          {p.peak && (<div>{"· 고점판독 중이어도 지금 덱 그대로의 점수로 적혀요."}</div>)}
+        </div>
+      </div>
+    );
+  } else if (same) {
+    var cmp = rankRecCmp(rec, rows), ai = rankRecIdx(rec.r, rows);
+    var cmpTxt = cmp < 0 ? "예상보다 높아요 ▲" : cmp > 0 ? "예상보다 낮아요 ▼" : "예상대로예요 ✓";
+    var cmpCol = cmp < 0 ? "#3B82F6" : cmp > 0 ? CTL_MISS_COLOR : "#16A34A";
+    body = (
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 24, fontWeight: 900, fontFamily: "var(--h)", color: "var(--t1)", letterSpacing: 0.3 }}>{rec.r.toLocaleString() + "위"}</span>
+          <span style={chip}>{rec.full ? "풀갱" : "덜 함"}</span>
+          <span style={{ fontSize: 12, color: "var(--td)" }}>{rankRecDay(rec.at) + " 적음"}</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 3, lineHeight: 1.5 }}>
+          {"예상 " + (rec.tier ? rec.tier + (rec.safe ? " 안정권" : " 경쟁권") : last.n + " 밖") + " → 실제 " + (ai < rows.length ? rows[ai].n + " 안" : last.n + " 밖") + " · "}
+          <b style={{ color: cmpCol, whiteSpace: "nowrap" }}>{cmpTxt}</b>
+        </div>
+        {thanks && (<div style={{ fontSize: 12, color: "#16A34A", fontWeight: 700, marginTop: 6 }}>{"고마워요! 모이면 예상 구간을 더 정확하게 고칠게요"}</div>)}
+      </div>
+    );
+  } else {
+    body = (
+      <div>
+        <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 4 }}>{"지난 기록 "}<b style={{ color: "var(--t1)" }}>{rec.r.toLocaleString() + "위"}</b>{" · " + (rec.full ? "풀갱" : "덜 함") + " · " + rankRecDay(rec.at)}</div>
+        <div style={{ fontSize: 12, color: "var(--td)", marginTop: 2 }}>{"적을 때 TOTAL " + Number(rec.t).toFixed(1) + " → 지금 " + p.real.toFixed(1)}</div>
+        <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.5 }}>{"점수가 바뀌었어요. 이 덱으로 새 등수가 나오면 다시 적어 주세요 (지난 기록도 그대로 남아요)."}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 9 }}>
+          <button onClick={function () { startEdit(true); }} style={bBtn}>{"새로 적기"}</button>
+          <button onClick={del} style={sBtn}>{"지우기"}</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: "11px 14px", borderRadius: 12, border: "1px solid var(--bd)", background: "var(--inner)", marginBottom: 10 }}>
+      {titleRow}
+      {body}
+    </div>
   );
 }
 
@@ -5808,6 +6018,9 @@ function RankTierModal(p) {
             </div>
           )}
           {ready && p.peak && (<div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5, marginBottom: 10 }}>{"🔍 고점판독 중이라 고점 TOTAL 로 봤어요. 지금 덱 그대로의 구간은 고점판독을 끄면 보여요."}</div>)}
+          {/* 내 실제 등수 — 훈련이 다 들어간 덱만 (비어 있으면 TOTAL 이 낮아 점수 · 등수 짝이 틀린다) */}
+          {ready && p.onSaveRec && (<RankRecBox rows={rows} rec={p.rec} real={p.real} peak={p.peak} onSave={p.onSaveRec} onDelete={p.onDelRec} />)}
+          {!ready && p.onSaveRec && (<div style={{ fontSize: 12, color: "var(--td)", lineHeight: 1.5, marginBottom: 10 }}>{"📝 내 실제 등수는 훈련을 다 넣으면 적을 수 있어요."}</div>)}
           {/* 구간표 — 고치기 중이면 칸마다 입력 */}
           <div style={{ border: "1px solid var(--bd)", borderRadius: 10, overflow: "hidden" }}>
             {head}
@@ -6390,9 +6603,14 @@ function LineupPage(p) {
   var lineupFull = lineupSlots.every(function (s) { return !!pick(s); });
   var rankMiss = lineupFull ? lineupSlots.map(function (s) { var pl = realPick(s); return { slot: s, name: pl ? pl.name : "", miss: rankTrainMissing(pl, s) }; })
     .filter(function (x) { return x.miss.length > 0; }) : [];
-  var rankTile = lineupFull ? (<RankTierTile mobile={mob} rows={rankRows} score={totalScore} peak={peakOn} miss={rankMiss} onOpen={function () { setRankOpen(true); }} />) : null;
   /* 현실 총점은 내 덱 그대로의 선수와 버프로 */
   var realTotal = peakOn ? calcTotalWith(realPick, sdState) : totalScore;
+  /* 내 실제 등수 — 이 덱의 기록(최근 것부터, 서버 sd_state.rankRec[덱id]). 적는 순간의 실제 TOTAL(고점판독 중이어도 실제 덱) · 예상 구간을 함께 남긴다 */
+  var rankRecs = Array.isArray(p.rankRecs) ? p.rankRecs.filter(rankRecOk) : [];
+  var rankRec = rankRecs[0] || null;
+  var saveRankRec = p.saveRankRec ? function (r, full) { p.saveRankRec(rankRecPut(rankRecs, rankRecMake(r, full, realTotal, rankRows, new Date().toISOString()))); } : null;
+  var delRankRec = p.saveRankRec ? function () { p.saveRankRec(rankRecs.slice(1)); } : null;
+  var rankTile = lineupFull ? (<RankTierTile mobile={mob} rows={rankRows} score={totalScore} peak={peakOn} miss={rankMiss} rec={rankRec} real={realTotal} canRec={!!saveRankRec} onOpen={function () { setRankOpen(true); }} />) : null;
   /* 불펜 상자는 등판 차례대로 (조마다 이어 붙인 순서라 상자가 조별로 잘라 쓴다) */
   var rpSlotData = rpAp.seq.map(function(s) { return { slot: s, pl: pick(s) }; });
 
@@ -6851,6 +7069,7 @@ function LineupPage(p) {
       {blView && (<BestLineupModal mobile={mob} view={blView} lm={lm} plOf={function (id) { var x = byId(id); return x ? (mergePl(x) || x) : null; }}
         onApply={applyBest} onClose={function () { setBlView(null); }} />)}
       {rankOpen && lineupFull && (<RankTierModal mobile={mob} rows={rankRows} score={totalScore} peak={peakOn} miss={rankMiss}
+        rec={rankRec} real={realTotal} onSaveRec={saveRankRec} onDelRec={delRankRec}
         skills={p.skills} saveSkills={p.saveSkills} isAdmin={p.isAdmin} onClose={function () { setRankOpen(false); }} />)}
       {peakOn && (
         <div style={{ margin: "-4px 0 14px", padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(255,213,79,0.35)", background: "linear-gradient(135deg,rgba(255,213,79,0.10),rgba(255,143,0,0.04))", fontSize: 13, color: "var(--t2)", lineHeight: 1.5 }}>
@@ -7218,6 +7437,7 @@ function PolicyModal(p) {
           <li>{"Google 계정 로그인 시: 이메일 주소, 프로필 이름, 프로필 이미지 URL (Google OAuth를 통해 제공)"}</li>
           <li>{"게스트 로그인 시: 이용자가 직접 입력한 닉네임"}</li>
           <li>{"서비스 이용 데이터: 구성한 덱 정보, 선수 카드 정보, 강화 수치, 스킬 설정 등 게임과 관련된 데이터"}</li>
+          <li>{"랭킹챌린지 등수를 직접 적은 경우: 그 등수 · 풀갱 여부 · 적을 때의 덱 점수와 날짜. 다른 이용자에게는 보이지 않고, 예상 구간을 실제 등수에 맞게 고치는 통계에만 씁니다. 언제든 고치거나 지울 수 있습니다."}</li>
           <li>{"고객센터 이용 시: 작성한 글의 닉네임 · 제목 · 내용 · 첨부 사진, 그리고 오류 제보의 '기기 정보 같이 보내기'를 켜 둔 경우 기기 정보(브라우저 · 운영체제 · 화면 크기 · 화면 모드 · 사이트 버전). 이 칸은 처음에 켜져 있으며 글쓰기 화면에서 끌 수 있습니다"}</li>
           <li>{"자동 수집: 브라우저 종류, 접속 시간, 쿠키 식별자 (일반적인 웹 로그)"}</li>
         </ul>
@@ -13719,7 +13939,7 @@ export default function App(){
   if(store.loading||!curDeckId)return(<div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
 
   var pg=null;
-  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId} authType={authType} gameUrl={kboGameUrl(googleId)} isAdmin={isAdmin} saveSkills={store.saveSkills}/>);
+  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId} authType={authType} gameUrl={kboGameUrl(googleId)} isAdmin={isAdmin} saveSkills={store.saveSkills} rankRecs={store.rankRecs} saveRankRec={store.saveRankRec}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} customDex={store.customDex} saveCustomDex={store.saveCustomDex} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
   else if(tab==="lab")pg=(<LabPage mobile={mob} teamName={curDeckObj&&curDeckObj.teamName} players={store.players} lineupMap={store.lineupMap} skills={store.skills} labSaves={store.labSaves} saveLab={store.saveLab}
     incoming={labIncoming} onIncomingDone={function(){setLabIncoming(null);}} onShareToClub={isGoogle?shareToClub:null} onSuggest={sendSuggestion}/>);
