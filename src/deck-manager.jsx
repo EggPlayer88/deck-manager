@@ -9438,13 +9438,16 @@ function LabPage(p) {
       var id = canonCardId(d.slots && d.slots[sl]);
       if (id && byId[id]) next[sl] = id; else if (d.view && d.view[sl]) miss++;
     });
-    if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 클럽에서 가져온 덱을 올릴까요?\n(저장해 둔 실험 1~3 은 그대로입니다)")) {
+    /* in100 덱 정보에서 넘어온 덱은 후보까지 받고 문구도 그쪽으로 (2026-11-03) */
+    var srcName = d.src === "in100" ? "in100 " + (d.rank ? d.rank + "위 " : "") + "덱" : "클럽에서 가져온 덱";
+    var nextBench = Array.isArray(d.bench) ? d.bench.map(canonCardId).filter(function (id) { return id && byId[id]; }).slice(0, LAB_BENCH_N) : [];
+    if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 " + srcName + "을 올릴까요?\n(저장해 둔 실험 1~3 은 그대로입니다)")) {
       (p.onIncomingDone || function () {})(); return;
     }
-    touch(function () { setTeam(teamKey(d.team) || team); setSlots(next); setBench([]); }, true);
+    touch(function () { setTeam(teamKey(d.team) || team); setSlots(next); setBench(nextBench); }, true);
     setPickSlot(null);
     setSuggest(inc.mode === "suggest" ? { post: inc.post, base: d } : null); setSugTxt("");
-    setMsg("클럽에서 가져온 덱을 올렸습니다 (" + Object.keys(next).length + "자리)"
+    setMsg(srcName + "을 올렸습니다 (" + Object.keys(next).length + "자리" + (nextBench.length ? " · 후보 " + nextBench.length + "명" : "") + ")"
       + (miss ? " — 도감에 없는 카드 " + miss + "장은 빠졌습니다" : ""));
     if (inc.mode !== "suggest") (p.onIncomingDone || function () {})();
   }, [inc && inc.key]);
@@ -11638,7 +11641,8 @@ function DataCenterPage(p) {
       {dcTab==="train" && <TrainSimulator mobile={mob} skills={skills} />}
       {dcTab==="top" && !in100Snap && <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"36px 20px",textAlign:"center",color:"var(--td)",fontSize:13}}>{in100Err || "in100 자료를 불러오는 중…"}</div>}
       {dcTab==="top" && in100Snap && <In100Page mobile={mob} snap={in100Snap} tools={in100Tools} myTeam={sdState.teamName||""} mySd={sdState} mySlots={in100My.slots} ownSet={in100My.own} myCards={in100My.cards}
-        onLab={p.onOpenLab ? function(d){ p.onOpenLab({ team: d.team, slots: d.slots }); } : null} />}
+        onLab={p.onOpenLab ? function(d){ var bn = d.bench || {}; var arr = Array.isArray(bn) ? bn : Object.keys(bn).sort().map(function(k){ return bn[k]; });
+          p.onOpenLab({ team: d.team, slots: d.slots, bench: arr, src: "in100", rank: d.rank }); } : null} />}
     </div>
   );
 }

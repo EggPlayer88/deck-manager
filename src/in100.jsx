@@ -71,14 +71,14 @@ function cardStats(decks, id) {
     Object.keys(d.slots || {}).forEach(function (sl) { if (d.slots[sl] === id) uses.push({ d: d, sl: sl, e: det[sl] || {}, bench: false }); });
     var bn = benchOf(d); Object.keys(bn).forEach(function (sl) { if (bn[sl] === id) uses.push({ d: d, sl: sl, e: det[sl] || {}, bench: true }); });
   });
-  var combo = {}, sk = {}, tr = {}, p1 = {}, where = {}, ssL = [], abL = [], tsL = [], xsL = [], pat = {}, capN = 0, tSum = [0, 0, 0, 0, 0, 0], tN = 0;
+  var combo = {}, sk = {}, tr = {}, p1 = {}, where = {}, ssL = [], psL = [], tsL = [], xsL = [], pat = {}, capN = 0, tSum = [0, 0, 0, 0, 0, 0], tN = 0;
   uses.forEach(function (u) {
     var names = (u.e.k || []).map(function (x) { return x[0]; }).filter(Boolean);
     if (names.length) { var key = names.slice().sort().join(" · "); combo[key] = (combo[key] || 0) + 1; }
     (u.e.k || []).forEach(function (x) { if (!x[0]) return; var o = sk[x[0]] || (sk[x[0]] = { c: 0, lv: 0, n: 0 }); o.c++; if (x[1] != null) { o.lv += x[1]; o.n++; } });
     if (u.e.t != null) tr[u.e.t] = (tr[u.e.t] || 0) + 1;
     if (!u.bench && u.e.ss != null) ssL.push(u.e.ss);
-    if (!u.bench && u.e.ab != null) abL.push(u.e.ab);
+    if (!u.bench && u.e.ps != null) psL.push(u.e.ps);
     if (!u.bench && u.e.ts && u.e.ts[0] != null) tsL.push(u.e.ts);
     if (!u.bench && u.e.xs && u.e.xs[0] != null) xsL.push(u.e.xs);
     if (!u.bench && u.e.t6 && u.e.t6.some(function (v) { return v; })) { tN++; u.e.t6.forEach(function (v, k) { tSum[k] += v || 0; }); }
@@ -91,7 +91,7 @@ function cardStats(decks, id) {
   var top = function (o) { return Object.keys(o).map(function (k) { return { k: k, c: o[k] }; }).sort(function (a, b) { return b.c - a.c; }); };
   return { n: uses.length, uses: uses, combos: top(combo), skills: Object.keys(sk).map(function (k) { return { k: k, c: sk[k].c, lv: sk[k].n ? sk[k].lv / sk[k].n : null }; }).sort(function (a, b) { return b.c - a.c; }),
     train: top(tr), pot1: top(p1), where: top(where), lineup: uses.filter(function (u) { return !u.bench; }).length,
-    ss: spread(ssL), ab: spread(abL), ts: spreadP(tsL), xs: spreadP(xsL), cap: capN,
+    ss: spread(ssL), ps: spread(psL), ts: spreadP(tsL), xs: spreadP(xsL), cap: capN,
     tAvg: tN ? tSum.map(function (v) { return v / tN; }) : null, tN: tN,
     pats: Object.keys(pat).map(function (k) { return pat[k]; }).sort(function (a, b) { return ((b.ts || [0])[0] - (a.ts || [0])[0]) || b.c - a.c; }) };
 }
@@ -116,6 +116,38 @@ function topPct(x) { return x == null ? "" : "상위 " + (x < 1 ? x.toFixed(1) :
 var TCOLS = { "타자": ["파워", "정확", "선구", "인내", "주루", "수비"], "투수": ["구속", "변화", "구위", "제구", "지구력", "수비"] };
 var TUSE = { "타자": [1, 1, 1, 1, 0, 0], "투수": [0, 1, 1, 1, 0, 0] };     /* 훈재분에 들어가는 칸 */
 var TSHORT = { "타자": ["파", "정", "선", "인", "주", "수"], "투수": ["속", "변", "구", "제", "지", "수"] };   /* 사이트 줄임말 (구속 = 속) */
+/* 색 단계 — in100 라인업 카드끼리 견준 자리(자료의 qt = [스킬, 훈재분, 특훈]): 0 상위 10% · 1 25% · 2 50% · 3 75% · 4 그 아래.
+   스킬 점수는 타자 · 선발 · 불펜끼리 점수로, 훈재분 · 특훈은 사이트 분포의 상위 %로 견줬다 (in100 은 대부분 상위 5% 안이라 라인업과 다른 잣대) */
+var TIER_COL = ["#FF4081", "#E040FB", "#FFD54F", "#4FC3F7"];
+var TIER_TXT = ["in100 상위 10%", "in100 상위 25%", "in100 상위 50%", "in100 상위 75%", "in100 아래쪽 25%"];
+function tierSt(t) {
+  if (t == null || t < 0) return {};
+  var c = TIER_COL[t];
+  return c ? { color: c, fontWeight: 800, textShadow: t === 0 ? "0 0 7px " + c + "77" : "none" } : { color: "var(--t2)", fontWeight: 500, opacity: 0.8 };
+}
+function qtOf(e, k) { return e && e.qt ? e.qt[k] : -1; }
+function TierLegend(p) {
+  return (<div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 10, color: "var(--td)" }}>
+    <span>{p.label || "색 = in100 라인업 카드끼리 견준 자리"}</span>
+    {TIER_COL.map(function (c, i) { return (<span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: c, display: "inline-block" }} />{["상위 10%", "25%", "50%", "75%"][i]}</span>); })}
+    <span style={{ opacity: 0.8 }}>{"· 회색 = 아래쪽 25%"}</span>
+  </div>);
+}
+/* 잠재 등급 색 — 라인업 화면과 같은 표 (SR+ 분홍 · SR 보라 · SS 연보라 · S 금색 · A+ 파랑 · A 초록) */
+var POT_COL = { "SR+": "#FF4081", "SR": "#E040FB", "SS+": "#B388FF", "SS": "#9575CD", "S+": "#FFD54F", "S": "#FFC107", "A+": "#4FC3F7", "A": "#81C784" };
+function PotG(p) {
+  var g = p.g || "", c = POT_COL[g];
+  return (<span style={{ whiteSpace: "nowrap", marginRight: p.mr || 0 }}>{p.l && <span style={{ fontSize: 10, color: "var(--td)", marginRight: 1 }}>{p.l}</span>}
+    <b style={{ fontFamily: "var(--m)", color: c || "var(--t2)", fontWeight: c ? 800 : 500, textShadow: c && (g === "SR+" || g === "SR") ? "0 0 6px " + c + "55" : "none" }}>{g || "-"}</b></span>);
+}
+/* 잠재 셋 — 1칸 풀스윙(투수 장타억제) · 2칸 클러치(침착) · 6칸 각성(라이브 없음) — 라인업 점수에 들어가는 셋, 인게임 잠재 화면 순서 */
+function potTrio(e, c) {
+  var q = (e && e.p) || [], pit = c && c.role === "투수";
+  var out = [{ l: pit ? "장" : "풀", g: q[0] }, { l: pit ? "침" : "클", g: q[1] }];
+  if (q[5] && !(c && c.cardType === "라이브")) out.push({ l: "각", g: q[5] });
+  return out;
+}
+var PS_TIP = "라인업 점수 — 라인업 화면과 같은 식: 인게임 최종 능력치(셋포 · 라커룸 · 포특 · 강화 · 훈련 · 특훈 · 시너지 · POTM 모두 들어간 값) × 가중치 + 스킬 + 잠재(풀스윙 · 클러치 / 장타억제 · 침착 · 각성) + 발사각 · 팀 버프(국대에이스 · 포수리드). 중계 전술 보너스는 덱 자료에 없어 뺐어요";
 function rankIn(sp, x) { if (!sp || !sp.n || x == null) return null; var k = 0; while (k < sp.n && sp.all[k] > x + 0.05) k++; return k + 1; }
 function f1(x) { return x == null ? "—" : (Math.round(x * 10) / 10).toFixed(1); }
 function fmtBp(bp) { return bp && bp[0] != null ? "승" + bp[0] + " · 추" + bp[1] + " · 롱" + bp[2] : "—"; }
@@ -201,6 +233,7 @@ function UseList(p) {
 function CardSheet(p) {
   var t = p.tools, mob = p.mob, c = t.card(p.id);
   var st = useMemo(function () { return cardStats(p.decks, p.id); }, [p.id, p.decks]);
+  var _sb = useState("ss"); var sortBy = _sb[0]; var setSortBy = _sb[1];
   React.useEffect(function () {
     var f = function (e) { if (e.key === "Escape") p.onClose(); };
     window.addEventListener("keydown", f); return function () { window.removeEventListener("keydown", f); };
@@ -229,10 +262,10 @@ function CardSheet(p) {
     {sec("점수 — in100 에서 이 카드", "라인업에 넣은 " + st.ss.n + "장 기준 · 사이트 계산식 · 상위 % 는 훈재분 계산기 분포", (<div style={{ display: "grid", gridTemplateColumns: "92px repeat(3, minmax(0,1fr))" + (mine ? " minmax(0,1.2fr)" : ""), gap: 6, alignItems: "center", fontSize: 12 }}>
       <span />{["최고", "중앙", "최저"].map(function (h) { return (<span key={h} style={{ fontSize: 10, color: "var(--td)", textAlign: "center" }}>{h}</span>); })}
       {mine && <span style={{ fontSize: 10, color: "#4FC3F7", textAlign: "center", fontWeight: 800 }}>{"내 카드"}</span>}
-      {[["스킬 점수", st.ss, mine && mine.ss], ["훈재분", st.ts, mine && mine.tr, mine && mine.trp], ["특훈", st.xs, mine && mine.xs, mine && mine.xsp], ["능력치 점수", st.ab, null]].filter(function (r) { return r[1].n; }).map(function (r) {
+      {[["스킬 점수", st.ss, mine && mine.ss], ["훈재분", st.ts, mine && mine.tr, mine && mine.trp], ["특훈", st.xs, mine && mine.xs, mine && mine.xsp], ["라인업 점수", st.ps, null]].filter(function (r) { return r[1].n; }).map(function (r) {
         var rk = rankIn(r[1], r[2]), pc = r[1].pmax !== undefined ? [r[1].pmax, r[1].pmed, r[1].pmin] : null;
         return (<React.Fragment key={r[0]}>
-          <b style={{ color: "var(--t2)", fontSize: 12 }}>{r[0]}</b>
+          <b title={r[0] === "라인업 점수" ? PS_TIP : undefined} style={{ color: "var(--t2)", fontSize: 12, cursor: r[0] === "라인업 점수" ? "help" : "default" }}>{r[0]}</b>
           {[r[1].max, r[1].med, r[1].min].map(function (v, i) { return (<span key={i} style={{ textAlign: "center", lineHeight: 1.15 }}><b style={{ fontFamily: "var(--m)", fontSize: 15, color: i === 0 ? "var(--acc)" : "var(--t1)" }}>{f1(v)}</b>{pc && pc[i] != null && <span style={{ display: "block", fontSize: 9, color: "var(--td)" }}>{topPct(pc[i])}</span>}</span>); })}
           {mine && <span style={{ textAlign: "center", fontFamily: "var(--m)", lineHeight: 1.15 }}>{r[2] != null ? (<React.Fragment><b style={{ fontSize: 15, color: "#4FC3F7" }}>{f1(r[2])}</b><span style={{ fontSize: 10, color: "var(--td)" }}>{rk ? (rk > r[1].n ? " 최저 아래" : " " + rk + "등") : ""}</span>{r[3] != null && <span style={{ display: "block", fontSize: 9, color: "var(--td)" }}>{topPct(r[3])}</span>}</React.Fragment>) : <span style={{ fontSize: 10, color: "var(--td)" }}>{"—"}</span>}</span>}
         </React.Fragment>);
@@ -256,24 +289,28 @@ function CardSheet(p) {
       })}
       {mine && mine.t6 && <div style={{ fontSize: 11, color: "#4FC3F7", marginTop: 6 }}>{"내 분배 — " + (TSHORT[c.role] || TSHORT["타자"]).map(function (n, k) { return mine.t6[k] != null ? n + " " + mine.t6[k] : null; }).filter(Boolean).join(" · ") + (mine.tr != null ? " · 훈재분 " + f1(mine.tr) + (mine.trp != null ? " · " + topPct(mine.trp) : "") : "")}</div>}
     </div>))}
-    {sec("훈련 · " + (POT1[c.role] || "1옵") + " 등급", null, (<div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+    {sec("훈련 · 잠재(" + (POT1[c.role] || "풀스윙") + ") 등급", null, (<div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
       {st.train.map(function (x) { return (<span key={"t" + x.k} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 8, background: "var(--inner)", border: "1px solid var(--bd)", color: "var(--t1)" }}>{"훈련 " + x.k}<b style={{ marginLeft: 4, fontFamily: "var(--m)" }}>{x.c}</b></span>); })}
       <span style={{ width: 8 }} />
-      {st.pot1.map(function (x) { return (<span key={"p" + x.k} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 8, background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.3)", color: "var(--t1)" }}>{x.k}<b style={{ marginLeft: 4, fontFamily: "var(--m)" }}>{x.c}</b></span>); })}
+      {st.pot1.map(function (x) { return (<span key={"p" + x.k} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 8, background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.3)", color: "var(--t1)" }}><PotG g={x.k} /><b style={{ marginLeft: 4, fontFamily: "var(--m)" }}>{x.c}</b></span>); })}
     </div>))}
-    {sec("덱별 점수", "스킬 점수 높은 순 · 줄을 누르면 그 덱", (<div style={{ display: "flex", flexDirection: "column" }}>
-      {st.uses.filter(function (u) { return !u.bench; }).sort(function (a, b) { return (b.e.ss || 0) - (a.e.ss || 0); }).concat(st.uses.filter(function (u) { return u.bench; })).map(function (u, i) {
+    {sec("덱별 점수", "줄을 누르면 그 덱", (<div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+        {[["ss", "스킬 점수 순"], ["ts", "훈재분 순"], ["ps", "라인업 점수 순"]].map(function (o) { return (<Chip key={o[0]} small on={sortBy === o[0]} onClick={function () { setSortBy(o[0]); }}>{o[1]}</Chip>); })}
+      </div>
+      {st.uses.filter(function (u) { return !u.bench; }).sort(function (a, b) { var f = function (e) { return sortBy === "ts" ? (e.ts ? e.ts[0] : -1) : sortBy === "ps" ? (e.ps || 0) : (e.ss || 0); }; return f(b.e) - f(a.e); }).concat(st.uses.filter(function (u) { return u.bench; })).map(function (u, i) {
         var e = u.e || {};
         return (<div key={i} onClick={function () { p.onOpenDeck(u.d); }} style={{ display: "grid", gridTemplateColumns: mob ? "40px 42px minmax(0,1fr) 40px 30px" : "54px 54px minmax(0,1fr) 64px 54px 40px", gap: 6, alignItems: "center", padding: "6px 2px", borderTop: "1px solid var(--bd)", cursor: "pointer", fontSize: 12, opacity: u.bench ? 0.6 : 1 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><Logo tools={t} team={u.d.team} size={13} /><b style={{ fontFamily: "var(--m)", color: "var(--t1)" }}>{u.d.rank + "위"}</b></span>
-          <b style={{ textAlign: "right", fontFamily: "var(--m)", fontSize: 14, color: i === 0 && !u.bench ? "var(--acc)" : "var(--t1)" }}>{u.bench ? "후보" : f1(e.ss)}</b>
+          <b title={TIER_TXT[qtOf(e, 0)] || ""} style={Object.assign({ textAlign: "right", fontFamily: "var(--m)", fontSize: 14, color: "var(--t1)" }, u.bench ? { color: "var(--td)" } : tierSt(qtOf(e, 0)))}>{u.bench ? "후보" : f1(e.ss)}</b>
           <span style={{ color: "var(--t2)", fontSize: 11, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: mob ? "normal" : "nowrap" }}>{(e.k || []).map(function (x) { return x[0] + " " + x[1]; }).join(" · ")}</span>
-          <span style={{ textAlign: "right", fontFamily: "var(--m)", color: "var(--t1)", lineHeight: 1.1 }}>{e.ts ? f1(e.ts[0]) : "—"}{!mob && e.ts && <span style={{ display: "block", fontSize: 9, color: "var(--td)" }}>{topPct(e.ts[1])}</span>}</span>
-          {!mob && <span style={{ textAlign: "right", fontFamily: "var(--m)", color: "var(--t2)" }}>{f1(e.ab)}</span>}
-          <b style={{ textAlign: "right", fontFamily: "var(--m)", color: "var(--acc)" }}>{(e.p && e.p[0]) || ""}</b>
+          <span title={TIER_TXT[qtOf(e, 1)] || ""} style={{ textAlign: "right", fontFamily: "var(--m)", lineHeight: 1.1 }}><span style={Object.assign({ color: "var(--t1)" }, tierSt(qtOf(e, 1)))}>{e.ts ? f1(e.ts[0]) : "—"}</span>{!mob && e.ts && <span style={{ display: "block", fontSize: 9, color: "var(--td)" }}>{topPct(e.ts[1])}</span>}</span>
+          {!mob && <span title={PS_TIP} style={{ textAlign: "right", fontFamily: "var(--m)", color: "var(--t1)" }}>{f1(e.ps)}</span>}
+          <span style={{ textAlign: "right" }}><PotG g={e.p && e.p[0]} /></span>
         </div>);
       })}
-      <div style={{ fontSize: 10, color: "var(--td)", marginTop: 6 }}>{mob ? "순위 · 스킬 점수 · 스킬 3개(Lv) · 훈재분 · 1옵" : "순위 · 스킬 점수 · 스킬 3개(Lv) · 훈재분(상위 %) · 능력치 점수 · 1옵 등급"}</div>
+      <div style={{ fontSize: 10, color: "var(--td)", marginTop: 6 }}>{mob ? "순위 · 스킬 점수 · 스킬 3개(Lv) · 훈재분 · 잠재(" + (POT1[c.role] || "풀스윙") + ")" : "순위 · 스킬 점수 · 스킬 3개(Lv) · 훈재분(상위 %) · 라인업 점수 · 잠재(" + (POT1[c.role] || "풀스윙") + ")"}</div>
+      <div style={{ marginTop: 4 }}><TierLegend /></div>
     </div>))}
   </div>);
   return (<div onClick={p.onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: mob ? "flex-end" : "center", justifyContent: "center" }}>{box}</div>);
@@ -376,6 +413,8 @@ function PopularView(p) {
 }
 
 /* ── ② 덱 목록 ── */
+/* 덱 목록 줄 — 투수로 바꾸면 선발 5 | 불펜(등판 순서) | 마무리 */
+var PIT_LINE = ["SP1", "SP2", "SP3", "SP4", "SP5", "|", "RP1", "RP2", "RP3", "RP4", "RP5", "RP6", "RP7", "RP8", "|", "CP"];
 function DeckLine(p) {
   var t = p.tools, d = p.deck, mob = p.mob, q = p.q;
   var m = mixOf(d, t.card);
@@ -383,8 +422,9 @@ function DeckLine(p) {
     <span style={{ width: mob ? 30 : 36, textAlign: "right", fontSize: mob ? 15 : 17, fontWeight: 900, fontFamily: "var(--h)", color: d.rank <= 10 ? "var(--acc)" : "var(--t1)" }}>{d.rank}</span>
     <span style={{ display: "flex", alignItems: "center", gap: 5, width: mob ? 58 : 70 }}><Logo tools={t} team={d.team} size={mob ? 18 : 20} /><span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>{d.team}</span></span>
     {!mob && <span style={{ width: 112, fontSize: 11, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", lineHeight: 1.35 }}>{"OVR " + (d.ovr != null ? d.ovr.toFixed(1) : "—")}<br />{"셋포 " + (d.sp || "—") + " · " + (d.bp && d.bp[0] != null ? d.bp.join("/") : "")}</span>}
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: mob ? "wrap" : "nowrap", gap: 4, overflow: "hidden" }}>
-      {BAT.map(function (sl) {
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: mob || p.side === "pit" ? "wrap" : "nowrap", gap: 4, overflow: "hidden" }}>
+      {(p.side === "pit" ? PIT_LINE : BAT).map(function (sl, ix) {
+        if (sl === "|") return (<span key={"bar" + ix} style={{ color: "var(--td)", opacity: 0.5, fontSize: 11, alignSelf: "center" }}>{"|"}</span>);
         var c = t.card(d.slots[sl]); if (!c) return null;
         var hit = q && c.name.indexOf(q) >= 0;
         return (<span key={sl} title={sl + " " + c.name + " · " + tagOf(c)} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: mob ? 10 : 11, padding: mob ? "1px 4px" : "2px 6px", borderRadius: 5, whiteSpace: "nowrap",
@@ -451,20 +491,24 @@ function DeckDetail(p) {
       <thead><tr style={{ color: "var(--td)", fontSize: 10, textAlign: "left" }}>
         <th style={{ padding: "4px 6px" }}>{"자리"}</th><th style={{ padding: "4px 6px" }}>{"카드"}</th><th style={{ padding: "4px 6px", textAlign: "right" }}>{"훈재분"}</th><th style={{ padding: "4px 6px", textAlign: "right" }}>{"특훈"}</th>
         <th style={{ padding: "4px 6px", textAlign: "right" }}>{"스킬 점수"}</th><th style={{ padding: "4px 6px" }}>{"스킬 (Lv · 점수)"}</th>
-        <th style={{ padding: "4px 6px", textAlign: "right" }}>{"능력치 점수"}</th><th style={{ padding: "4px 6px" }}>{"1옵"}</th></tr></thead>
+        <th title={PS_TIP} style={{ padding: "4px 6px", textAlign: "right", cursor: "help" }}>{"라인업 점수"}</th><th style={{ padding: "4px 6px" }}>{"잠재"}</th></tr></thead>
       <tbody>{ALL.map(function (sl) {
         var id = d.slots[sl] || bn[sl], c = t.card(id), e = det[sl] || {};
         if (!c) return null;
         return (<tr key={sl} onClick={function () { open(id); }} style={{ borderTop: "1px solid var(--bd)", cursor: "pointer" }}>
           <td style={{ padding: "5px 6px", color: "var(--td)", fontWeight: 800, whiteSpace: "nowrap" }}>{/^BN/.test(sl) ? "후보" : /^RP/.test(sl) && e.g ? GLABEL[e.g] : sl}</td>
           <td style={{ padding: "5px 6px", whiteSpace: "nowrap" }}><TypeDot tools={t} ct={c.cardType} />{" "}<b style={{ color: "var(--t1)" }}>{c.name}</b><span style={{ color: "var(--t2)", fontSize: 10 }}>{" " + tagOf(c)}</span>{e.cap && <span style={{ marginLeft: 5 }}><Mark kind="own">{"주장"}</Mark></span>}</td>
-          <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t1)", whiteSpace: "nowrap" }}>{e.ts ? f1(e.ts[0]) : "—"}<span style={{ fontSize: 9, color: "var(--td)" }}>{e.ts && e.ts[1] != null ? " " + (e.ts[1] < 1 ? e.ts[1].toFixed(1) : Math.round(e.ts[1])) + "%" : ""}</span></td>
-          <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap" }}>{e.xs ? f1(e.xs[0]) : ""}<span style={{ fontSize: 9, color: "var(--td)" }}>{e.xs && e.xs[1] != null ? " " + (e.xs[1] < 1 ? e.xs[1].toFixed(1) : Math.round(e.xs[1])) + "%" : ""}</span></td>
-          <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", fontWeight: 800, color: "var(--acc)", fontSize: 13 }}>{f1(e.ss)}</td>
+          <td title={TIER_TXT[qtOf(e, 1)] || ""} style={Object.assign({ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t1)", whiteSpace: "nowrap" }, tierSt(qtOf(e, 1)))}>{e.ts ? f1(e.ts[0]) : "—"}<span style={{ fontSize: 9, color: "var(--td)" }}>{e.ts && e.ts[1] != null ? " " + (e.ts[1] < 1 ? e.ts[1].toFixed(1) : Math.round(e.ts[1])) + "%" : ""}</span></td>
+          <td title={TIER_TXT[qtOf(e, 2)] || ""} style={Object.assign({ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap" }, tierSt(qtOf(e, 2)))}>{e.xs ? f1(e.xs[0]) : ""}<span style={{ fontSize: 9, color: "var(--td)" }}>{e.xs && e.xs[1] != null ? " " + (e.xs[1] < 1 ? e.xs[1].toFixed(1) : Math.round(e.xs[1])) + "%" : ""}</span></td>
+          <td title={TIER_TXT[qtOf(e, 0)] || ""} style={Object.assign({ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", fontWeight: 800, color: "var(--t1)", fontSize: 13 }, tierSt(qtOf(e, 0)))}>{f1(e.ss)}</td>
           <td style={{ padding: "5px 6px", color: "var(--t1)" }}>{(e.k || []).map(function (x, i) { return (<span key={i} style={{ whiteSpace: "nowrap", marginRight: 8 }}>{x[0]}<span style={{ color: "var(--td)" }}>{" " + (x[1] != null ? x[1] : "?") + (e.sp3 && e.sp3[i] != null ? " · " + e.sp3[i] : "")}</span></span>); })}</td>
-          <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t1)" }}>{f1(e.ab)}</td>
-          <td style={{ padding: "5px 6px", fontFamily: "var(--m)", fontWeight: 800, color: "var(--acc)" }}>{(e.p && e.p[0]) || ""}</td></tr>);
-      })}</tbody></table></div>);
+          <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t1)", fontWeight: 700 }}>{f1(e.ps)}</td>
+          <td style={{ padding: "5px 6px", whiteSpace: "nowrap" }}>{potTrio(e, c).map(function (x, k) { return (<PotG key={k} l={x.l} g={x.g} mr={6} />); })}</td></tr>);
+      })}</tbody></table>
+    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+      <TierLegend label="스킬 점수 · 훈재분 · 특훈 색 = in100 라인업 카드끼리 견준 자리 (스킬은 타자 · 선발 · 불펜끼리)" />
+      <div style={{ fontSize: 10, color: "var(--td)" }}>{"라인업 점수 = 라인업 화면과 같은 식(인게임 최종 능력치 — 셋포 · 라커룸 등 모두 반영 — + 스킬 + 잠재 + 발사각 · 팀 버프, 중계 전술은 뺌) · 잠재 = 풀스윙 · 클러치(투수 장타억제 · 침착) · 각성"}</div>
+    </div></div>);
   return (<div style={{ padding: mob ? "10px 8px 14px" : "12px 16px 16px", borderTop: "1px dashed var(--bd)", background: "var(--re)" }}>
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
       {chip("OVR", d.ovr != null ? d.ovr.toFixed(1) : "—")}{chip("타자 · 투수", (d.bat != null ? d.bat.toFixed(1) : "—") + " · " + (d.pit != null ? d.pit.toFixed(1) : "—"))}
@@ -479,7 +523,7 @@ function DeckDetail(p) {
         {row("마무리", ["CP"])}
         {row("후보", bnKeys, bn)}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 2 }}>
-          <button type="button" onClick={function () { setTable(!table); }} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: "pointer", background: table ? "var(--ta)" : "var(--inner)", color: table ? "var(--acc)" : "var(--t1)", border: "1px solid " + (table ? "var(--acc)" : "var(--bd)") }}>{table ? "▾ 점수 · 훈련 접기" : "▸ 점수 · 훈련 보기"}</button>
+          <button type="button" onClick={function () { setTable(!table); }} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: "pointer", background: table ? "var(--ta)" : "var(--inner)", color: table ? "var(--acc)" : "var(--t1)", border: "1px solid " + (table ? "var(--acc)" : "var(--bd)") }}>{table ? "▾ 점수 · 훈련 · 잠재 접기" : "▸ 점수 · 훈련 · 잠재 보기"}</button>
           <button type="button" onClick={function () { if (p.onLab) p.onLab(d); }} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: "pointer", background: "var(--acc)", color: "#1a1300", border: "none" }}>{"🔬 연구소에서 열기"}</button>
         </div>
       </div>
@@ -492,6 +536,7 @@ function DeckListView(p) {
   var _q = useState(""); var q = _q[0]; var setQ = _q[1];
   var _o = useState(p.openRank || null); var open = _o[0]; var setOpen = _o[1];
   var _m = useState(20); var more = _m[0]; var setMore = _m[1];
+  var _sd = useState("bat"); var side = _sd[0]; var setSide = _sd[1];
   var list = p.decks.filter(function (d) {
     if (!q) return true;
     return Object.keys(d.slots).some(function (sl) { var c = t.card(d.slots[sl]); return c && c.name.indexOf(q) >= 0; });
@@ -501,6 +546,10 @@ function DeckListView(p) {
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: mob ? "10px 10px" : "12px 14px", borderBottom: "1px solid var(--bd)", flexWrap: "wrap" }}>
       <span style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)" }}>{"덱 " + list.length + "개"}</span>
       <span style={{ fontSize: 11, color: "var(--td)" }}>{q ? "'" + q + "' 를 쓰는 덱" : "순위순 · 누르면 덱 전체"}</span>
+      <span role="group" aria-label="줄에 보일 선수" style={{ display: "inline-flex", background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 8, padding: 2 }}>
+        {[["bat", "⚾ 타자"], ["pit", "🥎 투수"]].map(function (o) { var a = side === o[0]; return (<button key={o[0]} type="button" aria-pressed={a} onClick={function () { setSide(o[0]); }}
+          style={{ padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: a ? 800 : 600, background: a ? "var(--card)" : "transparent", color: a ? "var(--acc)" : "var(--t2)", boxShadow: a ? "0 1px 3px rgba(0,0,0,0.25)" : "none" }}>{o[1]}</button>); })}
+      </span>
       <input value={q} onChange={function (e) { setQ(e.target.value.trim()); }} placeholder="선수 이름" aria-label="선수 이름으로 찾기"
         style={{ marginLeft: "auto", width: mob ? 120 : 170, padding: "6px 10px", borderRadius: 8, border: "1px solid var(--bd)", background: "var(--inner)", color: "var(--t1)", fontSize: 12 }} />
     </div>
@@ -508,7 +557,7 @@ function DeckListView(p) {
       {shown.map(function (d) {
         var id = d.pos || d.rank, on = open === id;
         return (<div key={id} style={{ borderBottom: "1px solid var(--bd)" }}>
-          <DeckLine tools={t} deck={d} mob={mob} q={q} open={on} onToggle={function () { setOpen(on ? null : id); }} />
+          <DeckLine tools={t} deck={d} mob={mob} q={q} side={side} open={on} onToggle={function () { setOpen(on ? null : id); }} />
           {on && <DeckDetail tools={t} deck={d} mob={mob} mySlots={p.mySlots} onLab={p.onLab} onCard={p.onCard} initTable={p.openTable} />}
         </div>);
       })}
