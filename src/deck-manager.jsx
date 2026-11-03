@@ -9,6 +9,24 @@ import { autoPublish as clubAutoPublish, addComment as clubAddComment, loadAlert
 /* 고객센터 — 화면은 feedback-board.jsx(사용설명서는 help-guide.jsx), 서버 일은 feedback-api.js */
 import FeedbackPage from "./feedback-board.jsx";
 import HelpGuide from "./help-guide.jsx";
+import In100Page from "./in100.jsx";
+/* in100 홍보 — 새 판(시즌)을 올리면 IN100_LATEST 를 그 판 id 로 바꾼다 → 왕관 단추 · 메뉴의 NEW 가 다시 붙는다 */
+var IN100_LATEST = "s239", IN100_SEASON = 239;
+function in100SeenGet() { try { return localStorage.getItem("in100Seen") || ""; } catch (e) { return ""; } }
+function in100SeenSet() { try { localStorage.setItem("in100Seen", IN100_LATEST); } catch (e) {} }
+/* 왕관 단추 — bar = 폰 맨 위 헤더용(작게). ring = NEW 딱지 둘레 색(놓인 바탕색) */
+function In100Btn(p) {
+  var small = p.bar, mob = p.mobile;
+  return (<button type="button" onClick={p.onClick} aria-label={"in100 덱 정보" + (p.isNew ? " (새 업데이트)" : "")}
+    title={"랭킹 챌린지 시즌 " + IN100_SEASON + " 상위 100덱 — 훈재분 · 특훈 · 셋포 설정까지 (데이터센터 › in100 덱 정보)"}
+    style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: small ? 3 : 5, flexShrink: 0, padding: small ? (p.isNew ? "3px 17px 3px 7px" : "3px 7px") : (mob ? "5px 9px" : "6px 12px"),
+      fontSize: small ? 11 : (mob ? 12 : 13), fontWeight: 800, lineHeight: 1.2, whiteSpace: "nowrap", cursor: "pointer", fontFamily: "var(--h)", letterSpacing: 0.5,
+      background: "linear-gradient(135deg,rgba(255,213,79,0.22),rgba(186,104,200,0.14))", border: "1px solid rgba(255,213,79,0.55)", borderRadius: 8, color: "var(--acc)" }}>
+    <span aria-hidden="true" style={{ fontSize: small ? 12 : (mob ? 13 : 14) }}>{"\uD83D\uDC51"}</span>{"in100"}
+    {p.isNew && <span aria-hidden="true" style={{ position: "absolute", top: small ? -7 : -8, right: small ? -10 : -9, fontSize: small ? 8 : 9, fontWeight: 900, fontFamily: "var(--m)", letterSpacing: 0.3,
+      color: "#fff", background: "#FF5A5A", borderRadius: 6, padding: "1px 4px", lineHeight: 1.25, boxShadow: "0 0 0 2px " + (p.ring || "var(--card)") }}>{"NEW"}</span>}
+  </button>);
+}
 import { loadBoardAlerts } from "./feedback-api.js";
 
 /* Supabase: injected via window._SUPABASE from main.jsx (Vercel deployment).
@@ -7051,6 +7069,7 @@ function LineupPage(p) {
               + " · 선발 변 " + wSp.c + " / 구 " + wSp.s + " / 제 " + wSp.ctl + " · 불펜 변 " + wRp.c + " / 구 " + wRp.s + " / 제 " + wRp.ctl}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: mob ? 10 : 16, width: mob ? "100%" : undefined }}>
+          {!mob && p.onIn100 && <In100Btn isNew={p.in100New} onClick={p.onIn100} />}
           {!mob && shareBtn}
           {!mob && peakBtn}
           {!mob && rankTile}
@@ -8076,7 +8095,9 @@ function Nav(p){
   if(p.isAdmin){var at=tabs.map(function(t){return t.id;}).indexOf("locker");tabs.splice(at<0?tabs.length:at,0,{id:"db",label:"선수도감",icon:"📖"},{id:"skills",label:"스킬 관리",icon:"⚡"},{id:"enhance",label:"강화 테이블",icon:"📊"});}
   /* 클럽라운지 빨간 점 — 클럽장에게는 가입 신청, 관리자에게는 인증 심사 · 신고가 기다릴 때 (App 의 clubAlerts) */
   tabs.forEach(function(t){if(t.id==="clublounge"&&p.clubDot){t.dot=true;t.dotTitle=p.clubDotTitle||"확인할 것이 있어요";}
-    if(t.id==="board"&&p.boardDot){t.dot=true;t.dotTitle=p.boardDotTitle||"확인할 것이 있어요";}});
+    if(t.id==="board"&&p.boardDot){t.dot=true;t.dotTitle=p.boardDotTitle||"확인할 것이 있어요";}
+    /* in100 새 판 — 데이터센터 메뉴에 NEW (누르면 in100 탭으로 바로, App 의 navTo) */
+    if(t.id==="datacenter"&&p.in100New){t.isNew=true;t.newTitle="NEW — in100 덱 정보 (시즌 "+IN100_SEASON+")";}});
   var anyDot=tabs.some(function(t){return t.dot;});
   var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck,onChangeTeam:p.onChangeTeam};
 
@@ -8085,14 +8106,14 @@ function Nav(p){
       <div style={{position:"fixed",top:0,left:0,right:0,height:44,zIndex:110,background:"var(--side)",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",padding:"0 10px",gap:8}}>
         <span style={{fontSize:12,fontWeight:900,fontFamily:"var(--h)",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",whiteSpace:"nowrap"}}>{"DECK"}</span>
         <DeckDropdown {...deckProps}/>
-
+        {p.onIn100 && <In100Btn bar isNew={p.in100New} ring="var(--side)" onClick={p.onIn100} />}
         <CoffeeLink kind="bar" onClick={p.onCoffee}/>
         <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:2,padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px",paddingBottom:"calc(8px + env(safe-area-inset-bottom, 0px))"}}>
         {tabs.map(function(t){
           var st={flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 0",background:"none",border:"none",color:p.tab===t.id?"var(--acc)":"var(--td)",cursor:"pointer",minHeight:44};
-          var inner=(<React.Fragment><span style={{fontSize:18,lineHeight:1,position:"relative"}}>{t.icon}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{position:"absolute",top:-3,right:-7,width:9,height:9,borderRadius:"50%",background:"#FF5A5A",boxShadow:"0 0 0 2px var(--side)"}}/>)}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1,letterSpacing:(t.short||t.label).length>=4?-0.6:0}}>{t.short||t.label}{t.beta&&(<span className="nav-beta" style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></React.Fragment>);
+          var inner=(<React.Fragment><span style={{fontSize:18,lineHeight:1,position:"relative"}}>{t.icon}{(t.dot||t.isNew)&&(<span title={t.dot?t.dotTitle:t.newTitle} aria-label={t.dot?t.dotTitle:t.newTitle} style={{position:"absolute",top:-3,right:-7,width:9,height:9,borderRadius:"50%",background:"#FF5A5A",boxShadow:"0 0 0 2px var(--side)"}}/>)}</span><span style={{fontSize:10,fontWeight:p.tab===t.id?700:500,whiteSpace:"nowrap",opacity:t.soon?0.55:1,letterSpacing:(t.short||t.label).length>=4?-0.6:0}}>{t.short||t.label}{t.beta&&(<span className="nav-beta" style={{fontSize:8,fontWeight:800,color:"#7FD4FF",marginLeft:1}}>{"\u03B2"}</span>)}</span></React.Fragment>);
           if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} style={Object.assign({},st,{textDecoration:"none"})}>{inner}</a>);
           return(<button key={t.id} onClick={function(){p.setTab(t.id);}} title={t.label+(t.soon?" (준비중)":"")} style={st}>{inner}</button>);
         })}
@@ -8108,7 +8129,7 @@ function Nav(p){
         <div style={{padding:"0 14px 12px"}}><DeckDropdown {...deckProps}/></div>
         {tabs.map(function(t){
           var st={display:"flex",alignItems:"center",gap:8,width:"100%",padding:"12px 16px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:14,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:44};
-          var inner=(<React.Fragment><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{marginLeft:"auto",width:8,height:8,borderRadius:"50%",background:"#FF5A5A",flexShrink:0}}/>)}</React.Fragment>);
+          var inner=(<React.Fragment><span style={{fontSize:16}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}{t.isNew && (<span title={t.newTitle} style={{fontSize:9,fontWeight:900,color:"#fff",background:"#FF5A5A",borderRadius:4,padding:"0 4px",marginLeft:5,letterSpacing:0.3,fontFamily:"var(--m)"}}>{"NEW"}</span>)}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{marginLeft:"auto",width:8,height:8,borderRadius:"50%",background:"#FF5A5A",flexShrink:0}}/>)}</React.Fragment>);
           if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} onClick={function(){setOpen(false);}} style={Object.assign({},st,{textDecoration:"none",boxSizing:"border-box"})}>{inner}</a>);
           return(<button key={t.id} onClick={function(){p.setTab(t.id);setOpen(false);}} style={st}>{inner}</button>);
         })}
@@ -8132,7 +8153,7 @@ function Nav(p){
       <div style={{flex:1}}>
         {tabs.map(function(t){
           var st={display:"flex",alignItems:"center",gap:7,width:"100%",padding:"10px 14px",background:p.tab===t.id?"var(--ta)":"transparent",border:"none",borderLeft:p.tab===t.id?"3px solid var(--acc)":"3px solid transparent",color:p.tab===t.id?"var(--t1)":"var(--t2)",fontSize:13,fontWeight:p.tab===t.id?700:500,cursor:"pointer",textAlign:"left",minHeight:40};
-          var inner=(<React.Fragment><span style={{fontSize:15}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{marginLeft:"auto",width:8,height:8,borderRadius:"50%",background:"#FF5A5A",flexShrink:0}}/>)}</React.Fragment>);
+          var inner=(<React.Fragment><span style={{fontSize:15}}>{t.icon}</span>{t.label}{t.soon && (<span style={{fontSize:9,fontWeight:700,color:"#FFA726",background:"rgba(255,167,38,0.12)",border:"1px solid rgba(255,167,38,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"준비중"}</span>)}{t.beta && (<span style={{fontSize:9,fontWeight:700,color:"#7FD4FF",background:"rgba(127,212,255,0.12)",border:"1px solid rgba(127,212,255,0.3)",borderRadius:4,padding:"0 4px",marginLeft:4}}>{"beta"}</span>)}{t.isNew && (<span title={t.newTitle} style={{fontSize:9,fontWeight:900,color:"#fff",background:"#FF5A5A",borderRadius:4,padding:"0 4px",marginLeft:5,letterSpacing:0.3,fontFamily:"var(--m)"}}>{"NEW"}</span>)}{t.dot&&(<span title={t.dotTitle} aria-label={t.dotTitle} style={{marginLeft:"auto",width:8,height:8,borderRadius:"50%",background:"#FF5A5A",flexShrink:0}}/>)}</React.Fragment>);
           if(t.href)return(<a key={t.id} href={t.href} target="_blank" rel="noopener" title={t.label+" (새 탭)"} style={Object.assign({},st,{textDecoration:"none",boxSizing:"border-box"})}>{inner}</a>);
           return(<button key={t.id} onClick={function(){p.setTab(t.id);}} style={st}>{inner}</button>);
         })}
@@ -11558,13 +11579,56 @@ function DataCenterPage(p) {
   var players = p.players || [];
   var lineupMap = p.lineupMap || {};
   var sdState = p.sdState || {};
-  var _tab = React.useState("analysis"); var dcTab = _tab[0]; var setDcTab = _tab[1];
+  var _tab = React.useState(p.initTab || "analysis"); var dcTab = _tab[0]; var setDcTab = _tab[1];
+  React.useEffect(function(){ if (dcTab === "top" && p.onIn100Seen) p.onIn100Seen(); }, [dcTab]);
+  /* in100 — 내 덱(자리 → 도감 id) · 가진 카드 · 카드 표기 도구 */
+  var in100Tools = React.useMemo(function(){ return { card: findCard, PlayerCard: PlayerCard, photo: getPhotoUrl, logo: function(tm){ return getTeamLogoUrl(tm, 1); }, ctColor: CARD_COLORS, sdRows: SD_ROWS, sdPick: sdPick }; }, []);
+  /* in100 판 — 탭을 열 때 한 번 받는다 (첫 화면을 무겁게 하지 않게) */
+  var _snap = React.useState(null); var in100Snap = _snap[0]; var setIn100Snap = _snap[1];
+  var _snapErr = React.useState(""); var in100Err = _snapErr[0]; var setIn100Err = _snapErr[1];
+  React.useEffect(function(){
+    if (dcTab !== "top" || in100Snap) return;
+    fetch("/in100/s239.json").then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(setIn100Snap).catch(function(){ setIn100Err("in100 자료를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요."); });
+  }, [dcTab]);
+  var in100My = React.useMemo(function(){
+    var byId = {}; players.forEach(function(x){ if (x && x.id) byId[x.id] = x; });
+    var slots = {}, cards = {};
+    var base = function(n){ return String(n || "").replace(/\(.*?\)/g, "").trim(); };
+    Object.keys(lineupMap).forEach(function(sl){
+      if (!/^(C|1B|2B|3B|SS|LF|CF|RF|DH|SP[1-5]|RP[1-8]|CP)$/.test(sl)) return;
+      var x = byId[lineupMap[sl]]; if (!x || !x.dbId) return;
+      slots[sl] = canonCardId(x.dbId);
+      /* 내 카드 스킬 점수 — 라인업과 같은 계산(유효 레벨 · 보직 표). in100 쪽은 화면 레벨 그대로 같은 표에서 셌다 */
+      var cat = /^SP/.test(sl) ? "선발" : /^RP/.test(sl) ? "중계" : sl === "CP" ? "마무리" : "타자";
+      var mn = isLvManual(x), lt = cardLvType(x), ss = 0;
+      [[x.skill1, x.s1Lv], [x.skill2, x.s2Lv], [x.skill3, x.s3Lv]].forEach(function (q, i) { if (q[0]) ss += getSkillScore(q[0], effSkillLv(q[0], q[1], mn, lt, i + 1, cat, []), cat); });
+      cards[sl] = { id: slots[sl], sk: [base(x.skill1), base(x.skill2), base(x.skill3)], lv: [x.s1Lv || 0, x.s2Lv || 0, x.s3Lv || 0], ss: (x.skill1 || x.skill2 || x.skill3) ? Math.round(ss * 10) / 10 : null };
+      /* 내 카드 훈재분 · 특훈 — 훈재분 계산기 · 라인업 분석과 같은 식 (훈련을 안 넣었으면 비움) */
+      var trIn = x.role === "타자" ? (x.trainP || x.trainA || x.trainE || x.trainN) : (x.trainC || x.trainS || x.trainCtl);
+      if (trIn) {
+        cards[sl].tr = Math.round(shareTrainScore(x) * 10) / 10; cards[sl].trp = shareTrainPct(x);
+        cards[sl].t6 = x.role === "타자" ? [x.trainP || 0, x.trainA || 0, x.trainE || 0, x.trainN || 0, null, null] : [null, x.trainC || 0, x.trainS || 0, x.trainCtl || 0, null, null];
+      }
+      var nSp = specTrialsOf(x);
+      if (nSp) {
+        var w9 = getW(), isB9 = x.role === "타자";
+        var xs = isB9 ? (x.specPower || 0) * w9.p + (x.specAccuracy || 0) * w9.a + (x.specEye || 0) * w9.e + (x.specPatience || 0) * (w9.n || 0) : pitStatScore(pitCatOf(x), x.specChange, x.specStuff, x.specControl);
+        if (xs > 0) {
+          var dsp = PREBUILT_DIST[specDistKey(x, isB9)], base9 = isB9 ? nSp * w9.p : nSp * getPW(pitCatOf(x)).s;
+          cards[sl].xs = Math.round(xs * 10) / 10; cards[sl].xsp = dsp ? (xs < base9 - 0.01 ? 100 : getPercentile(dsp, Math.round(xs * 100) / 100)) : null;
+        }
+      }
+    });
+    var own = {}; players.forEach(function(x){ if (x && x.dbId) own[canonCardId(x.dbId)] = 1; });
+    return { slots: slots, own: own, cards: cards };
+  }, [players, lineupMap]);
 
   return (
-    <div style={{padding:mob?12:18,maxWidth:800,paddingBottom:mob?PAGE_BOTTOM:18}}>
+    <div style={{padding:mob?12:18,maxWidth:dcTab==="top"?1180:800,paddingBottom:mob?PAGE_BOTTOM:18}}>
       <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"📊 데이터 센터"}</h2>
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
-        {[{id:"analysis",label:"📈 라인업 분석"},{id:"skill",label:"🎯 스킬 계산기"},{id:"train",label:"🏋️ 훈재분 계산기"},{id:"top",label:"👑 고점덱 정보"}].map(function(t){
+        {[{id:"analysis",label:"📈 라인업 분석"},{id:"skill",label:"🎯 스킬 계산기"},{id:"train",label:"🏋️ 훈재분 계산기"},{id:"top",label:mob?"👑 in100":"👑 in100 덱 정보"}].map(function(t){
           var a = dcTab===t.id;
           return (<button key={t.id} onClick={function(){setDcTab(t.id);}} style={{padding:"8px 16px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
         })}
@@ -11572,13 +11636,9 @@ function DataCenterPage(p) {
       {dcTab==="analysis" && <LineupAnalysis mobile={mob} players={players} lineupMap={lineupMap} skills={skills} sdState={sdState} isAdmin={p.isAdmin} />}
       {dcTab==="skill" && <SkillCalculator mobile={mob} skills={skills} />}
       {dcTab==="train" && <TrainSimulator mobile={mob} skills={skills} />}
-      {dcTab==="top" && (
-        <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"44px 28px",textAlign:"center"}}>
-          <div style={{fontSize:40,marginBottom:10}}>{"👑"}</div>
-          <h3 style={{fontSize:15,fontWeight:700,color:"var(--t1)",margin:"0 0 6px"}}>{"업데이트 예정"}</h3>
-          <p style={{fontSize:14,color:"var(--td)",margin:0}}>{"고점덱 정보가 준비되면 안내드리겠습니다."}</p>
-        </div>
-      )}
+      {dcTab==="top" && !in100Snap && <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"36px 20px",textAlign:"center",color:"var(--td)",fontSize:13}}>{in100Err || "in100 자료를 불러오는 중…"}</div>}
+      {dcTab==="top" && in100Snap && <In100Page mobile={mob} snap={in100Snap} tools={in100Tools} myTeam={sdState.teamName||""} mySd={sdState} mySlots={in100My.slots} ownSet={in100My.own} myCards={in100My.cards}
+        onLab={p.onOpenLab ? function(d){ p.onOpenLab({ team: d.team, slots: d.slots }); } : null} />}
     </div>
   );
 }
@@ -13468,6 +13528,14 @@ export default function App(){
   var _l=useState(false);var li=_l[0];var setLi=_l[1];
   var _u=useState("");var user=_u[0];var setUser=_u[1];
   var _t=useState("lineup");var tab=_t[0];var setTab=_t[1];
+  /* in100 홍보 — NEW 여부 · 데이터센터를 in100 탭으로 열기 */
+  var _i100=useState(in100SeenGet);var in100Seen=_i100[0];var setIn100Seen=_i100[1];
+  var in100New=in100Seen!==IN100_LATEST;
+  var _dci=useState(null);var dcInit=_dci[0];var setDcInit=_dci[1];
+  var openIn100=function(){setDcInit("top");setTab("datacenter");};
+  var markIn100Seen=function(){if(in100SeenGet()!==IN100_LATEST){in100SeenSet();}setIn100Seen(IN100_LATEST);};
+  var navTo=function(id){if(id==="datacenter"&&in100New&&tab!=="datacenter"){openIn100();return;}setTab(id);};
+  useEffect(function(){if(tab!=="datacenter"&&dcInit)setDcInit(null);},[tab]);
   var _cf=useState(false);var coffeeOpen=_cf[0];var setCoffeeOpen=_cf[1];
   var _a=useState(false);var isAdmin=_a[0];var setAdmin=_a[1];
   /* 사진 캐시는 모듈 전역(PHOTO_CACHE)이라 React 가 변화를 모른다.
@@ -13939,7 +14007,7 @@ export default function App(){
   if(store.loading||!curDeckId)return(<div className={theme==="light"?"light":""} style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--t1)"}}><div>{"⚾ 로딩중..."}</div>{CSS}</div>);
 
   var pg=null;
-  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId} authType={authType} gameUrl={kboGameUrl(googleId)} isAdmin={isAdmin} saveSkills={store.saveSkills} rankRecs={store.rankRecs} saveRankRec={store.saveRankRec}/>);
+  if(tab==="lineup")pg=(<LineupPage mobile={mob} tablet={tbl} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} sdState={sdStateWithTeam} setSdState={setSdState} skills={store.skills} decks={decks} curDeckId={curDeckId} onSwitchDeck={handleSwitchDeck} onAddDeck={function(){setShowTeamSelect("add");}} onDeleteDeck={handleDeleteDeck} onChangeTeam={function(){setTeamPick(true);}} userId={userId} authType={authType} gameUrl={kboGameUrl(googleId)} isAdmin={isAdmin} saveSkills={store.saveSkills} rankRecs={store.rankRecs} saveRankRec={store.saveRankRec} in100New={in100New} onIn100={openIn100}/>);
   else if(tab==="myplayers")pg=(<MyPlayersPage mobile={mob} customDex={store.customDex} saveCustomDex={store.saveCustomDex} players={store.players} savePlayers={store.savePlayers} lineupMap={store.lineupMap} saveLineupMap={store.saveLineupMap} skills={store.skills} userId={userId} sdState={sdStateWithTeam} setSdState={setSdState} saveSdState={store.saveSdState} curDeckId={curDeckId}/>);
   else if(tab==="lab")pg=(<LabPage mobile={mob} teamName={curDeckObj&&curDeckObj.teamName} players={store.players} lineupMap={store.lineupMap} skills={store.skills} labSaves={store.labSaves} saveLab={store.saveLab}
     incoming={labIncoming} onIncomingDone={function(){setLabIncoming(null);}} onShareToClub={isGoogle?shareToClub:null} onSuggest={sendSuggestion}/>);
@@ -13948,7 +14016,7 @@ export default function App(){
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
   else if(tab==="skills"&&isAdmin)pg=(<SkillManagePage mobile={mob} skills={store.skills} saveSkills={store.saveSkills}/>);
   else if(tab==="enhance"&&isAdmin)pg=(<EnhancePage mobile={mob}/>);
-  else if(tab==="datacenter")pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin}/>);
+  else if(tab==="datacenter")pg=(<DataCenterPage key={"dc"+(dcInit||"")} mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin} onOpenLab={openInLab} initTab={dcInit} onIn100Seen={markIn100Seen}/>);
   else if(tab==="clublounge")pg=(<ClubLoungePage mobile={mob} userId={userId} authType={isGoogle?"google":authType} isAdmin={isAdmin}
     decks={decks} curDeckId={curDeckId} labSaves={store.labSaves} tools={clubTools} onOpenLab={openInLab}
     draft={clubDraft} onDraftUsed={function(){setClubDraft(null);}} focusPostId={clubFocus} onFocusUsed={function(){setClubFocus(null);}} onAlerts={function(){refreshClubAlerts(true);}}/>);
@@ -13961,7 +14029,7 @@ export default function App(){
 
   return(
     <div className={theme==="light"?"light":""} style={{display:"flex",minHeight:"100vh",background:"var(--bg)",color:"var(--t1)"}}>
-      <Nav tab={tab} setTab={setTab} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin} gameUrl={kboGameUrl(googleId)} clubDot={clubDotN>0} clubDotTitle={clubDotTitle} boardDot={boardDotN>0} boardDotTitle={boardDotTitle}
+      <Nav tab={tab} setTab={navTo} in100New={in100New} onIn100={openIn100} user={user} authType={authType} logout={lo} mobile={mob} tablet={tbl} isAdmin={isAdmin} gameUrl={kboGameUrl(googleId)} clubDot={clubDotN>0} clubDotTitle={clubDotTitle} boardDot={boardDotN>0} boardDotTitle={boardDotTitle}
         decks={decks} curDeckId={curDeckId}
         onSwitchDeck={handleSwitchDeck}
         onAddDeck={function(){setShowTeamSelect("add");}}
