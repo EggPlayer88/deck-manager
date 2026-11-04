@@ -738,17 +738,17 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('올스타 연도 숫자도 인식', potmEffect(ol({ year: 2026 }), on(ol())).on ? 1 : 0, 1);
   const op = applyPotmPot(ol({ pot1: 'C', pot2: 'B', potType2: '풀스윙', pot3: '', potType3: '' }), on(ol()));
   eq('올스타 타자 잠재력 A · 클러치 SR+', op.pot1 === 'A' && op.pot2 === 'SR+' && op.potType2 === '클러치' && op.potmPot === 'olstar' ? 1 : 0, 1);
-  /* 2026-09-27 — 올스타도 각성 잠재력을 가질 수 있게 되었다.
-     POTM 은 각성에도 A 를 주되, 원래 값이 더 높으면 그쪽을 남긴다 (사용자 지정) */
+  /* 2026-11-04 — POTM 은 올스타의 각성 잠재력을 건드리지 않는다 (인게임 in100 POTM 올스타 36장 확인 · 고객센터 제보).
+     9-27 ~ 11-04 에는 A 와 견줘 높은 쪽으로 올렸다 */
   const opA = applyPotmPot(ol({ pot1: 'C', pot2: 'B', pot3: 'S', potType3: '뜬공형' }), on(ol()));
-  eq('POTM 올스타 — 내 S 가 A 보다 높아 그대로', opA.pot3 === 'S' && opA.potType3 === '뜬공형' ? 1 : 0, 1);
+  eq('POTM 올스타 — 내 각성 S 그대로', opA.pot3 === 'S' && opA.potType3 === '뜬공형' ? 1 : 0, 1);
   eq('POTM 올스타 — 일반 잠재력은 그래도 고정', opA.pot1 === 'A' && opA.pot2 === 'SR+' ? 1 : 0, 1);
   const opB = applyPotmPot(ol({ pot3: 'C', potType3: '뜬공형' }), on(ol()));
-  eq('POTM 올스타 — 내 C 는 A 로 올라간다', opB.pot3 === 'A' && opB.potType3 === '뜬공형' ? 1 : 0, 1);
+  eq('POTM 올스타 — 내 각성 C 는 C 그대로 (A 로 안 올림)', opB.pot3 === 'C' && opB.potType3 === '뜬공형' ? 1 : 0, 1);
+  eq('POTM 올스타 — 각성 C 점수 = POTM 아닌 같은 카드', awakenScore(opB), awakenScore(ol({ pot3: 'C', potType3: '뜬공형' })));
   const opC = applyPotmPot(ol({ pot3: '', potType3: '' }), on(ol()));
-  eq('POTM 올스타 — 각성을 안 적었어도 A 를 받는다', opC.pot3 === 'A' ? 1 : 0, 1);
-  eq('POTM 올스타 — 그때 종류는 첫 종류로', opC.potType3 === awkTypesFor('타자')[0] ? 1 : 0, 1);
-  eq('POTM 올스타 — 각성 점수가 실제로 붙는다', awakenScore(opC) > 0 ? 1 : 0, 1);
+  eq('POTM 올스타 — 각성이 없으면 그대로 없음', opC.pot3 === '' && opC.potType3 === '' ? 1 : 0, 1);
+  eq('POTM 올스타 — 그때 각성 점수 0', awakenScore(opC), 0);
   /* 라이브는 각성이 아예 없어 그대로 비어 있어야 한다 */
   const lpA = applyPotmPot(live({ pot3: 'S', potType3: '뜬공형' }), on(live()));
   eq('POTM 라이브 — 각성은 여전히 없음', lpA.pot3 === '' ? 1 : 0, 1);
@@ -819,6 +819,13 @@ console.log('\n[POTM 규칙] 2026-09-18 — (구단, 선수) 한 쌍 · 라이�
   eq('deckPl — POTM 잠재력 고정', dp.pot1 === 'A' && dp.potmPot === 'live' ? 1 : 0, 1);
   const pk = peakPl(Object.assign({}, dp, { potType1: '풀스윙' }), 'DH');
   eq('고점판독 — POTM 고정 잠재력은 그대로', pk.pot1 === 'A' && pk.pot3 === '' ? 1 : 0, 1);
+  /* POTM 올스타 — 풀스윙 · 클러치는 고정 그대로, 각성은 POTM 과 상관없어 다른 올스타처럼 S 까지 굴린다 (2026-11-04) */
+  const dpo = deckPl(ol({ pot1: 'C', pot2: 'B', pot3: 'C', potType3: '뜬공형' }), on(ol()));
+  const pko = peakPl(dpo, 'DH');
+  eq('고점판독 — POTM 올스타 일반 잠재력은 고정 그대로', pko.pot1 === 'A' && pko.pot2 === 'SR+' && pko.potmPot === 'olstar' ? 1 : 0, 1);
+  eq('고점판독 — POTM 올스타 각성 C → S', pko.pot3 === 'S' && pko.potType3 === '뜬공형' ? 1 : 0, 1);
+  const pko0 = peakPl(deckPl(ol({ pot3: '', potType3: '' }), on(ol())), 'DH');
+  eq('고점판독 — POTM 올스타 각성 없음 → 첫 종류 S', pko0.pot3 === 'S' && pko0.potType3 === awkTypesFor('타자')[0] ? 1 : 0, 1);
 
   /* 요약 문구 */
   eq('요약 — 라이브', potmSummary(potmEffect(live(), on(live()))).startsWith('라이브 POTM — 능력치 +8 · 셋포 10') ? 1 : 0, 1);

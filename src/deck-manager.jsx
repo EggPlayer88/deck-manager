@@ -3783,7 +3783,7 @@ var GLOBAL_POTM_LIST = [];
    · 라이브 — 자팀만. 능력치 5성 +8 · 4성 +14 · 1~3성 +18, 셋포 10 (이미 10이면 11),
              잠재력 모두 A · 각성 없음, 50·130 우(임국시골)를 골라도 받는다
    · 올스타 — 2026 카드만 (2025 올스타는 스페셜 POTM 도 받지 않는다 — 10-26 사용자 확인). 자팀 +6 · 셋포 12 / 같은 군(드림·나눔) +3 · 셋포 8 / 다른 군 +3 · 셋포 4,
-             잠재력 모두 A (타자 클러치 · 투수 침착은 SR+).
+             잠재력 모두 A (타자 클러치 · 투수 침착은 SR+). 각성 잠재력은 건드리지 않는다 (2026-11-04).
              평소 셋포는 자팀 8 · 같은 군 4 · 다른 군 2 (cardSetScore).
              세트덱 "선택 팀" 은 같은 군까지 (isSelTeam)
    각성 잠재력이 없는 카드는 라이브뿐이다 (NO_AWAKEN_CARDS)
@@ -3855,8 +3855,8 @@ function getPotmBonus(pl, sdState) {
 
 /* POTM 으로 잠재력이 고정되는 카드의 사본.
    라이브는 모두 A, 올스타(2026)는 모두 A 에 타자 클러치 · 투수 침착 SR+.
-   라이브는 각성 잠재력이 없고(NO_AWAKEN_CARDS), 올스타는 각성도 A 를 받는다 (높은 쪽).
-   potmPot 표시가 붙은 선수는 화면에서 잠재력을 고칠 수 없고 고점판독기도 잠재력을 바꾸지 않는다 */
+   라이브는 각성 잠재력이 없고(NO_AWAKEN_CARDS), 올스타의 각성 잠재력은 카드 것 그대로다.
+   potmPot 표시가 붙은 선수는 화면에서 잠재력(풀스윙 · 클러치)을 고칠 수 없고 고점판독기도 그 둘은 바꾸지 않는다 */
 function applyPotmPot(pl, sdState) {
   if (!pl) return pl;
   var e = potmEffect(pl, sdState);
@@ -3865,10 +3865,11 @@ function applyPotmPot(pl, sdState) {
   if (e.pot === "olstar") {
     out.potType2 = pl.role === "타자" ? "클러치" : "침착";
     out.pot2 = "SR+";
-    /* 각성 잠재력도 POTM 이 A 를 준다 — 원래 값과 A 중 높은 쪽 (2026-09-27 사용자 지정).
-       종류를 안 골랐으면 0 점이라 그때는 첫 종류로 채운다 (종류마다 점수는 같다) */
-    out.potType3 = pl.potType3 || awkTypesFor(pl.role)[0];
-    out.pot3 = betterPot("A", out.potType3, pl.pot3);
+    /* 각성 잠재력은 POTM 이 건드리지 않는다 — 카드에 적힌 등급 그대로, 없으면 없음.
+       인게임 in100(시즌 239) POTM 올스타 36장: 일반 잠재는 모두 A · SR+ 인데 각성은 C ~ S 제각각,
+       각성 칸이 없는 카드도 그대로 없음 (2026-11-04 고객센터 제보 · 사용자 확인. 9-27 ~ 11-04 에는 A 와 견줘 높은 쪽으로 올렸다) */
+    out.potType3 = pl.potType3 || "";
+    out.pot3 = pl.pot3 || "";
   }
   return out;
 }
@@ -12671,14 +12672,16 @@ function peakPl(pl, slot) {
       out.specChange = sp[0]; out.specStuff = sp[1]; out.specControl = sp[2] || 0;
     }
   }
-  /* POTM 으로 잠재력이 고정된 카드(applyPotmPot)는 잠재력을 굴릴 수 없으니 그대로 둔다 */
-  if (pl.potmPot) return out;
-  /* 잠재력 — 칸마다 그 종류의 고점 등급과 내 등급 중 좋은 쪽 */
+  /* 잠재력 — 칸마다 그 종류의 고점 등급과 내 등급 중 좋은 쪽.
+     POTM 으로 고정된 풀스윙 · 클러치(applyPotmPot)는 굴릴 수 없으니 그대로 둔다.
+     각성은 POTM 과 상관없어 POTM 올스타도 아래에서 굴린다 (2026-11-04, 그 전에는 POTM 카드는 잠재력을 통째로 건너뜀) */
   var better = betterPot;
-  out.potType1 = pl.potType1 || (isBat ? "풀스윙" : "장타억제");
-  out.pot1 = better(PEAK_POT[out.potType1] || "A", out.potType1, pl.pot1);
-  out.potType2 = pl.potType2 || (isBat ? "클러치" : "침착");
-  out.pot2 = better(PEAK_POT[out.potType2] || "A", out.potType2, pl.pot2);
+  if (!pl.potmPot) {
+    out.potType1 = pl.potType1 || (isBat ? "풀스윙" : "장타억제");
+    out.pot1 = better(PEAK_POT[out.potType1] || "A", out.potType1, pl.pot1);
+    out.potType2 = pl.potType2 || (isBat ? "클러치" : "침착");
+    out.pot2 = better(PEAK_POT[out.potType2] || "A", out.potType2, pl.pot2);
+  }
   /* 각성 — 라이브만 각성 잠재력이 없다 (NO_AWAKEN_CARDS). 고점은 임팩트·올스타가 S, 나머지는 A.
      종류를 안 골랐으면 0점이라 그때는 첫 종류로 채운다 (종류마다 점수는 같다) */
   if (NO_AWAKEN_CARDS[ct]) return out;
