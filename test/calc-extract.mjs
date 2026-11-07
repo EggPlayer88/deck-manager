@@ -20,6 +20,11 @@ var DEFAULT_POT_SCORES_BY_TYPE = {
      등급을 아직 입력하지 않은 선수(빈칸)는 0 — 미입력과 최저등급은 구분한다. */
   "장타억제": {"C":-5,"C+":1,"B":1.25,"B+":1.5,"A":1.75,"A+":2,"S":5,"S+":5.5,"SS":6,"SS+":6.5,"SR":7,"SR+":16},
   "침착": {"C":-3,"C+":1,"B":1.25,"B+":1.5,"A":1.75,"A+":2,"S":3,"S+":3.25,"SS":3.5,"SS+":3.75,"SR":4,"SR+":9},
+  /* 불펜(중계 · 마무리) 투수 — 2026-11-08 사용자 지정. 위 두 줄은 선발 값이고 불펜은 따로 센다 (신버전만, getPotScoreByType 의 pitRole).
+     사용자 표는 S · SR · SR+ 에 '앞 등급에서 더 받는 몫'을 적었다: 장타억제 선발 5 · +2 · +9 = 16 / 불펜 6 · +2 · +11 = 19,
+     침착 선발 3 · +1 · +5 = 9 / 불펜 2 · +1 · +3 = 6. S+ · SS · SS+ 는 다른 줄처럼 S ~ SR 을 네 칸으로 고르게 나누고, C ~ A+ 는 선발과 같다 */
+  "장타억제(불펜)": {"C":-5,"C+":1,"B":1.25,"B+":1.5,"A":1.75,"A+":2,"S":6,"S+":6.5,"SS":7,"SS+":7.5,"SR":8,"SR+":19},
+  "침착(불펜)": {"C":-3,"C+":1,"B":1.25,"B+":1.5,"A":1.75,"A+":2,"S":2,"S+":2.25,"SS":2.5,"SS+":2.75,"SR":3,"SR+":6},
 };
 var POT_TYPES_BAT = ["풀스윙","클러치"];
 var POT_TYPES_PIT = ["장타억제","침착"];
@@ -42,10 +47,12 @@ function awakenScore(pl) {
 function betterPot(g, type, mine) {
   return getPotScoreByType(g, type, SKILL_DATA) > getPotScoreByType(mine, type, SKILL_DATA) ? g : mine;
 }
-function getPotScoreByType(grade, type, skills) {
+function getPotScoreByType(grade, type, skills, pitRole) {
   if (!grade || !type) return 0;
   var byType = (skills && skills.potScoresByType) ? skills.potScoresByType : DEFAULT_POT_SCORES_BY_TYPE;
-  var sc = byType[type] || DEFAULT_POT_SCORES;
+  if (pitRole && pitRole !== "선발" && SCORE_VER !== "v10" && DEFAULT_POT_SCORES_BY_TYPE[type + "(불펜)"]) type = type + "(불펜)";
+  /* 관리자가 저장한 표에 그 종류가 없으면(새로 생긴 불펜 줄 등) 코드 표로 — 다른 종류 값으로 새지 않게 */
+  var sc = byType[type] || DEFAULT_POT_SCORES_BY_TYPE[type] || DEFAULT_POT_SCORES;
   return sc[grade] !== undefined ? sc[grade] : (DEFAULT_POT_SCORES[grade] || 0);
 }
 var DEFAULT_MAJOR = {"타자":{"슬로우 스타트":true,"스위치히터(양타)":true,"포수리드(버프포함)":true,"황금세대":true,"정밀타격":true,"빈틈없는타선(타순O)":true,"국대 테이블세터":true,"좌타해결사(좌타)":true,"해결사":true,"워크에식":true,"빅게임헌터":true,"전승우승":true,"저니맨":true,"빈틈없는타선(타순X)":true,"선봉장(타순O,주루142+)":true,"좌타해결사(양타)":true,"오버페이스":true,"대표타자":true,"리그탑플레이어":true,"투쟁심":true,"도전정신(4성)":true,"선봉장(타순O,주루130~141)":true,"컨택트히터(타순O)":true,"배팅머신":true,"약속의8회":true,"가을사나이":true,"대도":true,"공포의하위타선(타순O)":true,"5툴플레이어(275299)":true,"5툴플레이어(267274)":true,"국대에이스(버프X)":true,"도전정신(5성)":true,"선봉장(타순O,주루129이하)":true,"순위경쟁":true,"선봉장(타순X,주루142+)":true,"비FA계약":true,"5툴플레이어(250266)":true,"5툴플레이어(234249)":true,"홈어드밴티지":true,"얼리스타트":true,"베스트포지션":true,"백전노장":true,"좌타해결사(우타)":true,"패기(임팩)":true,"결정적한방":true,"수비안정성(타순O)":true,"핵타선(타순O)":true,"5툴플레이어(225233)":true,"5툴플레이어(200224)":true,"집중력":true,"스위치히터(좌타)":true,"난세의영웅":true,"컨택트히터(타순X)":true,"선봉장(타순X,주루130~141)":true,"승부사":true,"승리의함성":true,"짜릿한손맛":true,"노림수":true,"스위치히터(우타)":true,"선봉장(타순X,주루129이하)":true,"대타스페셜":true,"리드오프(타순O)":true,"포수리드":true,"공포의하위타선(타순X)":true,"히든카드":true,"어퍼스윙":true,"클러치히터":true,"패기(국대)":true,"패기(시그/올스타)":true,"하이볼히터":true,"리드오프(타순X)":true,"패기(골글)":true,"수비안정성(타순X)":true,"리그의강자":true,"빠른발":true,"핵타선(타순X)":true},"선발":{"슬로우스타트(선발)":true,"좌승사자(좌투)":true,"황금세대":true,"타순공략":true,"위기탈출":true,"철완(140149)":true,"철완(134139)":true,"저니맨":true,"파이어볼":true,"빅게임헌터":true,"투쟁심":true,"철완(120133)":true,"철완(117119)":true,"해결사":true,"필승카드":true,"패기(임팩선발)":true,"전승우승":true,"원투펀치(배치O)":true,"비FA계약":true,"리그탑플레이어":true,"구속제어":true,"전천후":true,"순위경쟁":true,"철완(100116)":true,"도전정신(4성)":true,"가을사나이":true,"약속의 8회":true,"오버페이스(선발)":true,"국대에이스(버프X)":true,"도전정신(5성)":true,"홈어드밴티지":true,"에이스":true,"좌승사자(우투)":true,"난세의영웅(선발)":true,"워크에식(선발)":true,"부동심":true,"긴급투입(선발)":true,"패기(시그/올스타선발)":true,"베스트포지션":true,"마당쇠(선발)":true,"집념":true,"원투펀치(배치X)":true,"첫단추(선발)":true,"집중력":true,"승부사":true,"얼리스타트(선발)":true,"아티스트":true,"언터쳐블":true,"패기(골글)":true,"승리의함성(선발)":true,"백전노장":true,"원포인트릴리프(선발)":true,"라이징스타(3~5선발)":true,"라이징스타(배치X)":true,"위닝샷":true,"클러치피처":true,"수호신(선발)":true,"타선지원(선발/불펜)":true,"리그의강자":true,"흐름끊기(선발)":true},"중계":{"슬로우스타트(불펜)":true,"원투펀치(배치X)":true,"마당쇠(불펜)":true,"황금세대":true,"타순공략":true,"위기탈출":true,"긴급투입(추격조)":true,"철완(140149)":true,"철완(134139)":true,"저니맨":true,"파이어볼":true,"빅게임헌터":true,"투쟁심":true,"철완(120133)":true,"철완(117119)":true,"패기(임팩불펜)":true,"해결사":true,"필승카드":true,"전승우승":true,"워크에식(중계)":true,"비FA계약":true,"리그탑플레이어":true,"구속제어":true,"전천후":true,"순위경쟁":true,"철완(100116)":true,"도전정신(4성)":true,"가을사나이":true,"패기(시그/올스타불펜)":true,"약속의 8회":true,"긴급투입(롱릴리프)":true,"국대에이스(버프X)":true,"도전정신(5성)":true,"홈어드밴티지":true,"에이스":true,"국민계투":true,"부동심":true,"수호신(셋업2)":true,"원포인트릴리프(셋업/마무리)":true,"승리의함성(필승조)":true,"베스트포지션":true,"라이징스타(추격조)":true,"원포인트릴리프(셋업제외중계)":true,"오버페이스(중계)":true,"얼리스타트(셋업/마무리)":true,"수호신(승리조)":true,"집중력":true,"얼리스타트(셋업제외중계)":true,"승부사":true,"아티스트":true,"언터쳐블":true,"난세의영웅(불펜)":true,"흐름끊기(셋업/마무리)":true,"패기(골글)":true,"백전노장":true,"승리의함성(롱릴리프)":true,"첫단추(불펜)":true,"흐름끊기(셋업제외불펜)":true,"긴급투입(필승조/마무리)":true,"위닝샷":true,"승리의함성(추격조)":true,"수호신(추격조/롱릴리프)":true,"클러치피처":true,"수호신(셋업1)":true,"타선지원(선발/불펜)":true,"리그의강자":true},"마무리":{"슬로우스타트(불펜)":true,"원투펀치(배치X)":true,"마당쇠(불펜)":true,"소방수":true,"황금세대":true,"타순공략":true,"위기탈출":true,"철완(140149)":true,"철완(134139)":true,"저니맨":true,"파이어볼":true,"빅게임헌터":true,"투쟁심":true,"철완(120133)":true,"철완(117119)":true,"패기(임팩불펜)":true,"해결사":true,"필승카드":true,"전승우승":true,"비FA계약":true,"리그탑플레이어":true,"구속제어":true,"전천후":true,"순위경쟁":true,"철완(100116)":true,"수호신(마무리)":true,"도전정신(4성)":true,"가을사나이":true,"패기(시그/올스타불펜)":true,"약속의 8회":true,"국대에이스(버프X)":true,"도전정신(5성)":true,"홈어드밴티지":true,"에이스":true,"국민계투":true,"워크에식(마무리)":true,"승리의함성(마무리)":true,"부동심":true,"원포인트릴리프(셋업/마무리)":true,"베스트포지션":true,"얼리스타트(셋업/마무리)":true,"집중력":true,"승부사":true,"오버페이스(마무리)":true,"아티스트":true,"언터쳐블":true,"난세의영웅(불펜)":true,"흐름끊기(셋업/마무리)":true,"패기(골글)":true,"백전노장":true,"첫단추(불펜)":true,"긴급투입(필승조/마무리)":true,"위닝샷":true,"클러치피처":true,"리그의강자":true,"타선지원(마무리)":true}};
@@ -2183,8 +2190,8 @@ function calcPit(pl,lu,sdB){
     var cl2=sdB._sdState.catchLead||sdB._sdState._autoCatch||"없음";
     var cb=CATCH_LEAD_PIT[cl2]; if(cb){t+=(cb.c*w.c+cb.ctl*w.ctl+cb.s*w.s)*(SCORE_VER==="v10"?1:0.9);}
   }
-  /* 잠재력 점수 */
-  t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
+  /* 잠재력 점수 — 장타억제 · 침착은 선발 / 불펜(중계 · 마무리) 표가 따로다 (pt, 2026-11-08) */
+  t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA, pt) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA, pt);
   /* 각성 잠재력 (C~S). 종류를 고르지 않았거나 라이브·올스타면 0 */
   t += awakenScore(pl);
   return{change:fC,stuff:fS,control:fCtl,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};

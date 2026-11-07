@@ -207,6 +207,11 @@ var DEFAULT_POT_SCORES_BY_TYPE = {
      등급을 아직 입력하지 않은 선수(빈칸)는 0 — 미입력과 최저등급은 구분한다. */
   "장타억제": {"C":-5,"C+":1,"B":1.25,"B+":1.5,"A":1.75,"A+":2,"S":5,"S+":5.5,"SS":6,"SS+":6.5,"SR":7,"SR+":16},
   "침착": {"C":-3,"C+":1,"B":1.25,"B+":1.5,"A":1.75,"A+":2,"S":3,"S+":3.25,"SS":3.5,"SS+":3.75,"SR":4,"SR+":9},
+  /* 불펜(중계 · 마무리) 투수 — 2026-11-08 사용자 지정. 위 두 줄은 선발 값이고 불펜은 따로 센다 (신버전만, getPotScoreByType 의 pitRole).
+     사용자 표는 S · SR · SR+ 에 '앞 등급에서 더 받는 몫'을 적었다: 장타억제 선발 5 · +2 · +9 = 16 / 불펜 6 · +2 · +11 = 19,
+     침착 선발 3 · +1 · +5 = 9 / 불펜 2 · +1 · +3 = 6. S+ · SS · SS+ 는 다른 줄처럼 S ~ SR 을 네 칸으로 고르게 나누고, C ~ A+ 는 선발과 같다 */
+  "장타억제(불펜)": {"C":-5,"C+":1,"B":1.25,"B+":1.5,"A":1.75,"A+":2,"S":6,"S+":6.5,"SS":7,"SS+":7.5,"SR":8,"SR+":19},
+  "침착(불펜)": {"C":-3,"C+":1,"B":1.25,"B+":1.5,"A":1.75,"A+":2,"S":2,"S+":2.25,"SS":2.5,"SS+":2.75,"SR":3,"SR+":6},
 };
 var POT_TYPES_BAT = ["풀스윙","클러치"];
 var POT_TYPES_PIT = ["장타억제","침착"];
@@ -237,10 +242,14 @@ function betterPot(g, type, mine) {
 }
 /* 라인업은 칸이 좁으니 앞글자만 — 좌투선호→좌투, 변화구대처→변화구, 땅볼형→땅볼 */
 function awkShort(type){ return type ? String(type).replace(/(선호|대처|연마|형)$/, "") : ""; }
-function getPotScoreByType(grade, type, skills) {
+/* pitRole — 투수 보직(calcPit 의 선발 · 중계 · 마무리). 중계 · 마무리면 장타억제 · 침착을 불펜 줄로 센다 (2026-11-08).
+   구버전(v10)은 예전 계산이라 보직과 상관없이 위 줄 그대로다. 타자 · 각성은 넘기지 않는다 */
+function getPotScoreByType(grade, type, skills, pitRole) {
   if (!grade || !type) return 0;
   var byType = (skills && skills.potScoresByType) ? skills.potScoresByType : DEFAULT_POT_SCORES_BY_TYPE;
-  var sc = byType[type] || DEFAULT_POT_SCORES;
+  if (pitRole && pitRole !== "선발" && SCORE_VER !== "v10" && DEFAULT_POT_SCORES_BY_TYPE[type + "(불펜)"]) type = type + "(불펜)";
+  /* 관리자가 저장한 표에 그 종류가 없으면(새로 생긴 불펜 줄 등) 코드 표로 — 다른 종류 값으로 새지 않게 */
+  var sc = byType[type] || DEFAULT_POT_SCORES_BY_TYPE[type] || DEFAULT_POT_SCORES;
   return sc[grade] !== undefined ? sc[grade] : (DEFAULT_POT_SCORES[grade] || 0);
 }
 /* 하위 호환: pot1/pot2 + potType1/potType2 */
@@ -1114,8 +1123,8 @@ function calcPit(pl,lu,sdB){
     var cl2=sdB._sdState.catchLead||sdB._sdState._autoCatch||"없음";
     var cb=CATCH_LEAD_PIT[cl2]; if(cb){t+=(cb.c*w.c+cb.ctl*w.ctl+cb.s*w.s)*(SCORE_VER==="v10"?1:0.9);}
   }
-  /* 잠재력 점수 */
-  t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
+  /* 잠재력 점수 — 장타억제 · 침착은 선발 / 불펜(중계 · 마무리) 표가 따로다 (pt, 2026-11-08) */
+  t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA, pt) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA, pt);
   /* 각성 잠재력 (C~S). 종류를 고르지 않았거나 라이브·올스타면 0 */
   t += awakenScore(pl);
   return{change:fC,stuff:fS,control:fCtl,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
@@ -7666,7 +7675,7 @@ function LoginPage(p) {
     { icon: "⚾", title: "라인업 구성", desc: "보유한 선수 카드를 자리마다 배치하고 타순은 끌어서 바꿀 수 있으며, 선발 · 중계 · 마무리와 불펜 전술(승리조 · 추격조)을 자유롭게 편성할 수 있습니다. 타순 · 강함 순위에 따른 배율이 실시간으로 계산됩니다." },
     { icon: "👥", title: "선수 관리", desc: "보유 중인 모든 선수 카드를 한 곳에서 관리합니다. 이름으로 검색하면 기본 정보가 자동으로 채워지고, 강화 · 훈련 · 특훈 · 스킬 레벨 · 잠재력 등급을 세부적으로 입력할 수 있습니다." },
     { icon: "💪", title: "강화 계산", desc: "카드 종류(골든글러브 · 시그니처 · 임팩트 · 국가대표 · 라이브 · 올스타 · 시즌)와 강화 단계에 따라 자동으로 능력치 상승분이 계산됩니다. 5강부터 9각성까지 모든 단계의 수치가 내장되어 있어 정확한 전력 측정이 가능합니다." },
-    { icon: "⭐", title: "잠재력 점수", desc: "C부터 SR+까지 12개 등급의 잠재력을 풀스윙·클러치·장타억제·침착 등 종류별로 구분하여 점수화합니다. 잠재력만으로도 카드 간 우열을 판단할 수 있습니다." },
+    { icon: "⭐", title: "잠재력 점수", desc: "C부터 SR+까지 12개 등급의 잠재력을 풀스윙·클러치·장타억제·침착 등 종류별로 구분하여 점수화합니다. 투수 장타억제·침착은 선발과 불펜(중계·마무리) 점수가 따로입니다. 잠재력만으로도 카드 간 우열을 판단할 수 있습니다." },
     { icon: "📊", title: "데이터 센터", desc: "라인업 선수마다 스킬 · 훈련 · 특훈이 상위 몇 %인지 보여 주고, 스킬 계산기 · 훈재분 계산기로 새로 뽑은 카드를 바로 견줘 볼 수 있어 객관적인 수준 파악이 가능합니다." },
     { icon: "🏟️", title: "세트덱 보너스", desc: "카드마다 정해진 세트덱 포인트를 모아 구간마다 좌/우 효과를 고르고, 라이브 · 국가대표 · 올스타처럼 같은 종류 카드를 모으면 켜지는 시너지도 자동으로 셉니다. 어떤 조합이 가장 점수가 높은지 한눈에 확인할 수 있습니다." },
     { icon: "🔄", title: "다중 덱 관리", desc: "Google 로그인 시 덱을 최대 7개까지 클라우드에 저장할 수 있습니다. 시즌 카드 덱, 임팩트 덱, 타이틀 매치용 덱 등 상황별로 구분해 관리할 수 있습니다." },
@@ -11507,18 +11516,20 @@ function SkillManagePage(p) {
       </div>
       {/* Potential Scores - 종류별 */}
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{"잠재력 등급별 점수 (종류별)"}<span style={{ fontSize: 11, fontWeight: 500, color: "var(--td)", marginLeft: 6 }}>{"신 · 구 공통"}</span></div>
-        {["풀스윙","클러치","장타억제","침착"].concat(POT_TYPES_AWK_ALL).map(function(potType) {
+        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)", marginBottom: 8 }}>{"잠재력 등급별 점수 (종류별)"}<span style={{ fontSize: 11, fontWeight: 500, color: "var(--td)", marginLeft: 6 }}>{"신 · 구 공통 — 불펜 줄은 신버전만(구버전은 불펜도 선발 줄)"}</span></div>
+        {["풀스윙","클러치","장타억제","장타억제(불펜)","침착","침착(불펜)"].concat(POT_TYPES_AWK_ALL).map(function(potType) {
           var byType = skills.potScoresByType || DEFAULT_POT_SCORES_BY_TYPE;
           var typeScores = byType[potType] || DEFAULT_POT_SCORES_BY_TYPE[potType] || DEFAULT_POT_SCORES;
           var isAwk = POT_TYPES_AWK_ALL.indexOf(potType) >= 0;
+          var isBull = potType.indexOf("(불펜)") > 0;
+          var baseType = potType.replace("(불펜)", "");
           var gradeList = isAwk ? POT_GRADES_AWK : POT_GRADES;
-          var typeColor = isAwk?"#FFA726":potType==="풀스윙"?"#EF5350":potType==="클러치"?"#42A5F5":potType==="장타억제"?"#AB47BC":"#66BB6A";
+          var typeColor = isAwk?"#FFA726":baseType==="풀스윙"?"#EF5350":baseType==="클러치"?"#42A5F5":baseType==="장타억제"?"#AB47BC":"#66BB6A";
           var roleTag = isAwk
             ? (POT_TYPES_AWK_BAT.indexOf(potType)>=0 && POT_TYPES_AWK_PIT.indexOf(potType)>=0 ? " (각성·공용)" : POT_TYPES_AWK_BAT.indexOf(potType)>=0 ? " (각성·타자)" : " (각성·투수)")
-            : (potType==="풀스윙"||potType==="클러치" ? " (타자)" : " (투수)");
+            : (baseType==="풀스윙"||baseType==="클러치" ? " (타자)" : isBull ? " (투수 · 불펜 — 중계 · 마무리)" : " (투수 · 선발)");
           return (<div key={potType} style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: typeColor, marginBottom: 4 }}>{potType + roleTag}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: typeColor, marginBottom: 4 }}>{baseType + roleTag}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {gradeList.map(function(g) {
                 var ps = typeScores[g] !== undefined ? typeScores[g] : (DEFAULT_POT_SCORES[g] || 0);
@@ -11527,7 +11538,7 @@ function SkillManagePage(p) {
                   <input type="number" step="1" value={ps} onChange={function(e) {
                     var copy = JSON.parse(JSON.stringify(skills));
                     if (!copy.potScoresByType) copy.potScoresByType = JSON.parse(JSON.stringify(DEFAULT_POT_SCORES_BY_TYPE));
-                    if (!copy.potScoresByType[potType]) copy.potScoresByType[potType] = Object.assign({}, isAwk ? DEFAULT_AWK_SCORES : DEFAULT_POT_SCORES);
+                    if (!copy.potScoresByType[potType]) copy.potScoresByType[potType] = Object.assign({}, DEFAULT_POT_SCORES_BY_TYPE[potType] || (isAwk ? DEFAULT_AWK_SCORES : DEFAULT_POT_SCORES));
                     copy.potScoresByType[potType][g] = parseFloat(e.target.value) || 0;
                     saveSK(copy);
                   }} style={{ width: 36, padding: "3px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+typeColor+"44", borderRadius: 4, color: typeColor, fontSize: 14, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />
