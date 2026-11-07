@@ -3,7 +3,7 @@
    calc-extract.mjs 는 src/deck-manager.jsx 에서 순수 계산 함수만 뽑아낸 것이다.
    (재생성이 필요하면 시트 분석 스크립트의 mkharness 를 다시 돌린다) */
 import {
-  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpAppearance, rpOrderMove, rpOrderOf, rpTactic, rpChaseTactic, rpTacKey, rpTacNorm, rpTacLabel, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
+  pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, getRPWeight, rpAppearance, rpOrderMove, rpOrderOf, RP_WEIGHTS, BPC, RP_ALL, BN_ALL, bpcAt, bpcN, rpSlotsOf, bnSlotsOf, bpcReady, bpcListOf, rpNReady, winTacOk, chaseTacOk, bpcFor, rpTactic, rpChaseTactic, rpTacKey, rpTacNorm, rpTacLabel, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, variantAllowed, pickPaegi, isNatOnlySkill, natSkillMismatch, buffName, skillPickable, canonSkillName, canonPlayerName, playerNameGroup, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, skillAllowedAt, DEFAULT_MAJOR, calcSDBonus, sdPick, buildDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState,
   __setLiveWeights, __setGlobalPotm, __setSkillData, resolveSkills, DEFAULT_SKILLS, getEnhVal, calcBat, calcPit, getSkillScore,
   getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT,
   potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, awakenScore, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, parseHotColdZone, zonesFromRow,
@@ -20,6 +20,7 @@ import {
   SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, ORDER_SKILLS, orderAdjust, orderPl, skillBaseName, shareTrainScore, shareTrainPct, shareSkillPct, labCard, labSdState, labSeatOrder, labBestOrder, labLimits, labYears, labRun,
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
+import { POS_TRAIN } from './calc-extract.mjs';
 import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, labFaLimit, labGgLimit, isOldOlstar, cardLvType, OLSTAR_SET_POINTS_OLD, findCard } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
@@ -902,7 +903,9 @@ eq('타자 쪽에는 전술 칸이 없다', calcSDBonus(bat,"C",on,0,0).tac === 
 var on3 = { bpcIdx:6, s95:"", s125:"", rpActive:true };
 var off3 = { bpcIdx:6, s95:"", s125:"" };
 eq('3/1/2 면 RP3 도 승리조', calcSDBonus(rp,"RP3",on3,0).tac, 1);
-eq('3/1/2 의 RP4 는 추격조라 +1', calcSDBonus(rp,"RP4",on3,0).tac, 1);
+/* 3/1/2 는 추격조가 1명이라 추격조 적극을 못 고른다 (2026-10-29 게임 규칙) — 옛 rpActive 여도 추격조는 0 */
+eq('3/1/2 의 RP4 는 추격조 1명이라 추격조 적극이 안 걸려 0', calcSDBonus(rp,"RP4",on3,0).tac, 0);
+eq('3/2/1 의 RP4 는 추격조 2명이라 +1', calcSDBonus(rp,"RP4",{ bpcIdx:7, s95:"", s125:"", rpActive:true },0).tac, 1);
 eq('3/1/2 의 RP5 는 롱릴이라 0', calcSDBonus(rp,"RP5",on3,0).tac, 0);
 /* 분업 — 승리조만 +2. 추격조·롱릴·마무리는 받지 않는다 */
 var onSplit = { bpcIdx:6, s95:"", s125:"", isWinSplit:true };
@@ -963,26 +966,30 @@ eq('최소 배율', Math.round(Math.min.apply(null,BAT_MULT)*Math.min.apply(null
 eq('최대/최소 비', Math.round(1.5525/0.7225*100)/100, 2.15);
 
 
-console.log('\n[투수 가중치] 총합 10 · 마무리 0.8 고정 · 선발이 깎인 만큼 중계가 가져간다');
+console.log('\n[투수 가중치] 총합 10 · 마무리 고정(CP_MULT) · 선발이 깎인 만큼 중계가 가져간다 — 표: 11-05 틀 (선발 7.30 · 마무리 0.85)');
 var RPS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
+var r3 = function(v){ return Math.round(v*1000)/1000; };
 var sumSP = function(t){ var a=SP_MULT[t], s=0; for(var i=0;i<a.length;i++) s+=a[i]; return s; };
 var sumRP = function(i,t){ var s=0; RPS.forEach(function(sl){ s+=getRPWeight(i,sl,t); }); return s; };
-eq('선발 기본 합 7.00', sumSP('기본'), 7);
-eq('선발 적극 합 6.66', sumSP('적극'), 6.66);
-eq('선발 분업 합 6.331', sumSP('분업'), 6.331);
-eq('중계 기본 몫', Math.round(sumRP(4,'기본')*1000)/1000, 2.2);
-eq('중계 적극 몫', Math.round(sumRP(4,'적극')*1000)/1000, 2.54);
-eq('중계 분업 몫', Math.round(sumRP(6,'분업')*1000)/1000, 2.87);
+/* 이번 표의 기준값 (보고서 '최종 가중치' 위 칸) — 가중치를 바꾸면 여기 다섯 줄만 새 값으로 고친다 */
+eq('선발 기본 합 7.30', r3(sumSP('기본')), 7.3);
+eq('선발 적극 합 7.25', r3(sumSP('적극')), 7.25);
+eq('선발 분업 합 7.10', r3(sumSP('분업')), 7.1);
+eq('마무리 0.85', CP_MULT, 0.85);
+var RP_POOL = { '기본': 1.85, '적극': 1.9, '분업': 2.05 };
+eq('중계 기본 몫 1.85', r3(sumRP(4,'기본')), RP_POOL['기본']);
+eq('중계 적극 몫 1.90', r3(sumRP(4,'적극')), RP_POOL['적극']);
+eq('중계 분업 몫 2.05', r3(sumRP(6,'분업')), RP_POOL['분업']);
 /* 편성 11종 어디서나 총합이 예산과 맞아야 한다 */
 for (var bi = 0; bi < 11; bi++) {
-  eq('편성 ' + bi + ' 기본 합', Math.round(sumRP(bi,'기본')*1000)/1000, 2.2);
-  eq('편성 ' + bi + ' 적극 합', Math.round(sumRP(bi,'적극')*1000)/1000, 2.54);
+  eq('편성 ' + bi + ' 기본 합', r3(sumRP(bi,'기본')), RP_POOL['기본']);
+  /* 승리조 1명 편성도 적극을 고른다 (2026-11-02 게임 규칙 정정) */
+  eq('편성 ' + bi + ' 적극 합', r3(sumRP(bi,'적극')), RP_POOL['적극']);
 }
 /* 투수 전체 합 = 10 */
-eq('투수 총합 기본', Math.round((sumSP('기본') + sumRP(4,'기본') + 0.8)*1000)/1000, 10);
-eq('투수 총합 적극', Math.round((sumSP('적극') + sumRP(4,'적극') + 0.8)*1000)/1000, 10);
-/* 분업은 중계 몫을 2.869 가 아니라 2.870 으로 적어 총합이 10.001 이다 (0.01%, 그대로 둔다) */
-eq('투수 총합 분업', Math.round((sumSP('분업') + sumRP(6,'분업') + 0.8)*1000)/1000, 10.001);
+eq('투수 총합 기본', r3(sumSP('기본') + sumRP(4,'기본') + CP_MULT), 10);
+eq('투수 총합 적극', r3(sumSP('적극') + sumRP(4,'적극') + CP_MULT), 10);
+eq('투수 총합 분업', r3(sumSP('분업') + sumRP(6,'분업') + CP_MULT), 10);
 /* 전술 표는 자리마다 손으로 잡은 값이라 "승리조만 커진다" 같은 규칙은 없다.
    총 몫이 커진다는 것과, 분업에서 승리조 순서가 뒤집힌다는 것만 고정한다. */
 eq('적극이면 중계 몫이 커진다', sumRP(4,'적극') > sumRP(4,'기본') ? 1 : 0, 1);
@@ -991,11 +998,11 @@ eq('편성마다 값이 다르다', getRPWeight(0,'RP2','기본') === getRPWeigh
 eq('없는 분업 표는 기본으로 떨어진다', getRPWeight(4,'RP1','분업'), getRPWeight(4,'RP1','기본'));
 /* 분업은 승리조 순서가 뒤집힌다 (셋업 배치) */
 eq('분업이면 3번째 승리조가 가장 큼', getRPWeight(6,'RP3','분업') > getRPWeight(6,'RP1','분업') ? 1 : 0, 1);
-/* 분업 승리조 — 6회 이전 0.45 · 7회 0.60 · 8회 0.75 (2026-10-16). 뒤 이닝일수록 같은 폭으로 오르고 합 1.80 은 그대로 */
+/* 분업 승리조 — 승1 · 셋업1(7회) · 셋업2(8회). 8회를 맡는 셋업2 가 가장 크고 승1 < 셋업1 < 셋업2 (11-05 틀: 셋업2 0.65 ~ 0.68) */
 [6, 7, 8].forEach(function (bi) {
   var a = ['RP1', 'RP2', 'RP3'].map(function (s) { return getRPWeight(bi, s, '분업'); });
-  eq('분업 승리조 0.45 · 0.60 · 0.75 (편성 ' + bi + ')', a.join(',') === '0.45,0.6,0.75' ? 1 : 0, 1);
-  eq('분업 승리조 합 1.80 (편성 ' + bi + ')', Math.round((a[0] + a[1] + a[2]) * 1000) / 1000, 1.8);
+  eq('분업 셋업2(3번째)가 승리조에서 가장 큼 (편성 ' + bi + ')', a[2] > a[0] && a[2] > a[1] ? 1 : 0, 1);
+  eq('분업 승리조 승1 < 셋1 < 셋2 · 셋2 0.65 ~ 0.68 (편성 ' + bi + ')', a[0] < a[1] && a[1] < a[2] && a[2] >= 0.65 && a[2] <= 0.68 ? 1 : 0, 1);
 });
 eq('기본이면 1번째가 가장 큼', getRPWeight(6,'RP1','기본') > getRPWeight(6,'RP3','기본') ? 1 : 0, 1);
 /* 전술 판정 */
@@ -1005,8 +1012,7 @@ eq('rpActive 면 적극', rpTactic({rpActive:true}) === '적극' ? 1 : 0, 1);
 eq('3/1/2 + isWinSplit 이면 분업', rpTactic({isWinSplit:true, bpcIdx:6}) === '분업' ? 1 : 0, 1);
 eq('분업이 적극보다 우선', rpTactic({isWinSplit:true, rpActive:true, bpcIdx:6}) === '분업' ? 1 : 0, 1);
 /* 시트 가져오기가 2/4/0 + 분업 같은 조합을 넣어도 편성이 이기게 한다.
-   안 걸러내면 선발만 분업 배율(6.331)을 쓰고 중계는 기본(2.200)으로 떨어져
-   투수 합이 9.331 이 된다. */
+   안 걸러내면 선발만 분업 배율을 쓰고 중계는 기본 몫으로 떨어져 투수 합이 10 이 안 된다. */
 eq('2/4/0 + isWinSplit 이면 기본', rpTactic({isWinSplit:true, bpcIdx:9}) === '기본' ? 1 : 0, 1);
 eq('2/4/0 + 분업 + 적극이면 적극', rpTactic({isWinSplit:true, rpActive:true, bpcIdx:9}) === '적극' ? 1 : 0, 1);
 /* 어떤 편성/전술 조합이 와도 투수 합은 10 근처여야 한다 */
@@ -1014,14 +1020,14 @@ for (var bpc = 0; bpc < 11; bpc++) {
   for (var fl = 0; fl < 4; fl++) {
     var st = { bpcIdx: bpc, isWinSplit: !!(fl & 1), rpActive: !!(fl & 2) };
     var tac = rpTactic(st);
-    var tot = sumSP(tac) + sumRP(bpc, tac) + 0.8;
+    var tot = sumSP(tac) + sumRP(bpc, tac) + CP_MULT;
     eq('편성' + bpc + ' 분업' + (fl&1?'O':'X') + ' 적극' + (fl&2?'O':'X') + ' 합',
        Math.round(tot * 10) / 10, 10);
   }
 }
 /* 선발 배율 */
-eq('1선발 기본', spMult('기본',0), 1.5);
-eq('5선발 분업', spMult('분업',4), 1.18);
+eq('1선발 기본', spMult('기본',0), 1.56);
+eq('5선발 분업', spMult('분업',4), 1.32);
 
 
 console.log('\n[선수 개명] 옛 이름으로 적힌 시트·도감도 같은 선수로 본다');
@@ -3127,9 +3133,11 @@ console.log('');
 console.log('[중계 등판 순서 — 배율은 자리가 아니라 조 안의 등판 차례에 (2026-10-15)]');
 {
   const S = (a) => a.join(',');
+  /* 표의 k 번째 등판 칸 — 값이 아니라 '몇 번째 칸을 받는가'를 본다 (가중치를 바꿔도 이 묶음은 그대로) */
+  const T = (bi, key, k) => RP_WEIGHTS[bi][key][k];
   /* 순서를 안 주면 전과 같다 — 자리 순서가 곧 등판 순서 */
   eq('순서를 안 주면 자리 순서', S(rpAppearance(8, null).seq) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
-  eq('순서를 안 주면 배율도 전과 같다 (3/3/0 기본 RP3 = 0.05)', getRPWeight(8, 'RP3', '기본'), 0.05);
+  eq('순서를 안 주면 배율도 자리 순서대로 (3/3/0 기본 RP3 = 3번째 칸)', getRPWeight(8, 'RP3', '기본'), T(8, '기본/기본', 2));
   for (let bi = 0; bi < 11; bi++) for (const tac of ['기본', '적극', '분업']) for (const s of ['RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6'])
     if (getRPWeight(bi, s, tac, null) !== getRPWeight(bi, s, tac, ['RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6'])) eq('자리 순서를 그대로 적은 순서 = 순서 없음 (' + bi + ' ' + tac + ' ' + s + ')', 0, 1);
   /* 3/3/0 — 승리조 RP3 → RP1 → RP2 · 추격조 RP5 → RP4 → RP6 */
@@ -3137,11 +3145,11 @@ console.log('[중계 등판 순서 — 배율은 자리가 아니라 조 안의 
   const ap = rpAppearance(8, ord);
   eq('3/3/0 — 등판 차례', S(ap.seq) === 'RP3,RP1,RP2,RP5,RP4,RP6' ? 1 : 0, 1);
   eq('RP3 이 승리조 첫 배율 자리', ap.pos.RP3, 0);
-  eq('기본 3/3/0 — RP3 이 1번째로 나오면 0.85', getRPWeight(8, 'RP3', '기본', ord), 0.85);
-  eq('… RP1 은 2번째라 0.35', getRPWeight(8, 'RP1', '기본', ord), 0.35);
-  eq('… RP2 는 3번째라 0.05', getRPWeight(8, 'RP2', '기본', ord), 0.05);
-  eq('… 추격조 RP5 가 1번째라 0.70', getRPWeight(8, 'RP5', '기본', ord), 0.7);
-  eq('분업 3/3/0 — 1번째(RP3) 0.45 · 3번째(RP2) 0.75', getRPWeight(8, 'RP3', '분업', ord) === 0.45 && getRPWeight(8, 'RP2', '분업', ord) === 0.75 ? 1 : 0, 1);
+  eq('기본 3/3/0 — RP3 이 1번째로 나오면 승리조 1번째 칸', getRPWeight(8, 'RP3', '기본', ord), T(8, '기본/기본', 0));
+  eq('… RP1 은 2번째 칸', getRPWeight(8, 'RP1', '기본', ord), T(8, '기본/기본', 1));
+  eq('… RP2 는 3번째 칸', getRPWeight(8, 'RP2', '기본', ord), T(8, '기본/기본', 2));
+  eq('… 추격조 RP5 가 추격조 1번째 칸', getRPWeight(8, 'RP5', '기본', ord), T(8, '기본/기본', 3));
+  eq('분업 3/3/0 — 1번째(RP3) 승1 칸 · 3번째(RP2) 셋업2 칸', getRPWeight(8, 'RP3', '분업', ord) === T(8, '분업/기본', 0) && getRPWeight(8, 'RP2', '분업', ord) === T(8, '분업/기본', 2) ? 1 : 0, 1);
   /* 조를 넘지 않는다 */
   eq('다른 조 자리를 앞에 적어도 조를 넘지 않는다', S(rpAppearance(8, ['RP4', 'RP1', 'RP2', 'RP3']).seq) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
   eq('순서에 없는 자리는 그 조 끝에', S(rpAppearance(8, ['RP2']).seq) === 'RP2,RP1,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
@@ -3149,7 +3157,7 @@ console.log('[중계 등판 순서 — 배율은 자리가 아니라 조 안의 
   /* 편성을 바꾸면 조 구성이 바뀐다 — 같은 조에 남은 자리끼리의 앞뒤만 따른다 */
   eq('3/3/0 순서를 2/2/2 로 — 같은 조에 남은 자리끼리의 앞뒤만 따른다', S(rpAppearance(4, ['RP2', 'RP1', 'RP3', 'RP6', 'RP5', 'RP4']).seq) === 'RP2,RP1,RP3,RP4,RP6,RP5' ? 1 : 0, 1);
   eq('1/1/4 — 롱릴리프 넷의 차례를 바꿀 수 있다', S(rpAppearance(0, ['RP6', 'RP5', 'RP4', 'RP3']).seq) === 'RP1,RP2,RP6,RP5,RP4,RP3' ? 1 : 0, 1);
-  eq('1/1/4 — 롱릴리프 1번째(RP6) 가 0.45', getRPWeight(0, 'RP6', '기본', ['RP6', 'RP5', 'RP4', 'RP3']), 0.45);
+  eq('1/1/4 — 롱릴리프 1번째(RP6) 가 롱릴리프 1번째 칸', getRPWeight(0, 'RP6', '기본', ['RP6', 'RP5', 'RP4', 'RP3']), T(0, '기본/기본', 2));
   /* 한 칸 옮기기 */
   eq('◀ — 같은 조 안에서 한 칸 앞으로', S(rpOrderMove(8, null, 'RP2', -1)) === 'RP2,RP1,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
   eq('조 첫 자리는 더 앞으로 못 간다', S(rpOrderMove(8, null, 'RP1', -1)) === 'RP1,RP2,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
@@ -3165,13 +3173,103 @@ console.log('[중계 등판 순서 — 배율은 자리가 아니라 조 안의 
   const sd0 = { bpcIdx: 8 }, sd1 = { bpcIdx: 8, rpOrder: ['RP2', 'RP1', 'RP3'] };
   const tA = lineupPit(relA, 'RP1', sd0, lineupOpts(sd0, 0)).total, tB = lineupPit(relB, 'RP2', sd0, lineupOpts(sd0, 0)).total;
   eq('등판 차례를 바꿔도 선수 점수(포특 포함)는 그대로', lineupPit(relA, 'RP1', sd1, lineupOpts(sd1, 0)).total === tA ? 1 : 0, 1);
-  eq('순서 없음 — RP1 0.85 · RP2 0.35', calcLineupTotal(pk, sd0, lineupOpts(sd0, 0)), Math.round((tA * 0.85 + tB * 0.35) * 100) / 100);
-  eq('RP2 를 먼저 내보내면 — RP2 0.85 · RP1 0.35', calcLineupTotal(pk, sd1, lineupOpts(sd1, 0)), Math.round((tA * 0.35 + tB * 0.85) * 100) / 100);
+  const w0 = T(8, '기본/기본', 0), w1 = T(8, '기본/기본', 1);
+  eq('순서 없음 — RP1 이 1번째 칸 · RP2 가 2번째 칸', calcLineupTotal(pk, sd0, lineupOpts(sd0, 0)), Math.round((tA * w0 + tB * w1) * 100) / 100);
+  eq('RP2 를 먼저 내보내면 — RP2 가 1번째 칸 · RP1 이 2번째 칸', calcLineupTotal(pk, sd1, lineupOpts(sd1, 0)), Math.round((tA * w1 + tB * w0) * 100) / 100);
   eq('lineupOpts 가 순서를 실어 나른다', JSON.stringify(lineupOpts(sd1, 0).rpOrder) === JSON.stringify(['RP2', 'RP1', 'RP3']) ? 1 : 0, 1);
   eq('순서 칸이 배열이 아니면 없는 것으로', lineupOpts({ rpOrder: 'RP2' }, 0).rpOrder === null ? 1 : 0, 1);
 }
 
 console.log('');
+console.log('[중계 6 ~ 8명 — 편성 40가지 · 후보 + 중계 = 12 · 전술 조건(승리조 적극 1명 · 분업 3명 · 추격조 적극 2명부터, 11-02 정정) · 4명 분업 셋업 (2026-10-29 사용자 지정)]');
+{
+  const S = (a) => (a || []).join(',');
+  const byN = (n) => BPC.filter((c) => bpcN(c) === n).length;
+  eq('편성 40가지 — 6명 13 · 7명 14 · 8명 13', BPC.length * 10000 + byN(6) * 100 + byN(7) + byN(8) * 1000000, 40 * 10000 + 1300 + 14 + 13000000);
+  eq('편성 이름이 겹치지 않는다', new Set(BPC.map((c) => c.label)).size, 40);
+  eq('모든 편성이 규칙 안 (승 · 추 1 ~ 4, 롱 0 ~ 4)', BPC.every((c) => c.w >= 1 && c.w <= 4 && c.l >= 1 && c.l <= 4 && c.r >= 0 && c.r <= 4) ? 1 : 0, 1);
+  eq('예전 11편성은 번호 그대로 (저장된 bpcIdx)', (S(BPC.slice(0, 11).map((c) => c.label))) === '1/1/4,1/2/3,1/3/2,2/1/3,2/2/2,2/3/1,3/1/2,3/2/1,3/3/0,2/4/0,1/4/1' ? 1 : 0, 1);
+  eq('새 6명 편성 11 · 12 = 4/1/1 · 4/2/0', (BPC[11].label + ' ' + BPC[12].label) === '4/1/1 4/2/0' ? 1 : 0, 1);
+  eq('중계 자리 = 인원 · 후보 칸 = 12 − 인원', BPC.every((c, i) => rpSlotsOf(i).length === bpcN(c) && bnSlotsOf(i).length === 12 - bpcN(c) && rpSlotsOf(i).length + bnSlotsOf(i).length === 12) ? 1 : 0, 1);
+  eq('8명 편성 자리 RP1 ~ RP8 · 후보 BN1 ~ BN4', (S(rpSlotsOf(27)) + ' | ' + S(bnSlotsOf(27))) === 'RP1,RP2,RP3,RP4,RP5,RP6,RP7,RP8 | BN1,BN2,BN3,BN4' ? 1 : 0, 1);
+  eq('모르는 번호는 2/2/2 (6명)', (bpcAt(99).label + ' ' + rpSlotsOf(undefined).length) === '2/2/2 6' ? 1 : 0, 1);
+  eq('목록 순서 — 인원마다 승리조 · 추격조 적은 순', (S(bpcListOf(6).map((i) => BPC[i].label))) === '1/1/4,1/2/3,1/3/2,1/4/1,2/1/3,2/2/2,2/3/1,2/4/0,3/1/2,3/2/1,3/3/0,4/1/1,4/2/0' ? 1 : 0, 1);
+  eq('8명 목록 끝은 4/4/0', (BPC[bpcListOf(8).slice(-1)[0]].label) === '4/4/0' ? 1 : 0, 1);
+  /* 전술 조건 */
+  const tk = (w, l) => ({ w: w, l: l, r: 0 });
+  eq('승리조 적극은 1명부터 (11-02 정정)', ([1, 2, 3, 4].map((w) => winTacOk(tk(w, 2), '적극') ? 1 : 0).join('')) === '1111' ? 1 : 0, 1);
+  eq('분업은 3명부터', ([1, 2, 3, 4].map((w) => winTacOk(tk(w, 2), '분업') ? 1 : 0).join('')) === '0011' ? 1 : 0, 1);
+  eq('추격조 적극은 2명부터', ([1, 2, 3, 4].map((l) => chaseTacOk(tk(2, l), '적극') ? 1 : 0).join('')) === '0111' ? 1 : 0, 1);
+  eq('기본은 늘 된다', winTacOk(tk(1, 1), '기본') && chaseTacOk(tk(1, 1), '기본') ? 1 : 0, 1);
+  eq('1/1/4 + 승리조 적극 → 적극, 추격조 적극 → 기본 (추격조 1명 · 저장 값은 그대로)', (rpTactic({ bpcIdx: 0, rpWinActive: true }) + '/' + rpChaseTactic({ bpcIdx: 0, rpChaseActive: true })) === '적극/기본' ? 1 : 0, 1);
+  eq('2/1/3 + 둘 다 적극 → 적극/기본', (rpTacKey({ bpcIdx: 3, rpWinActive: true, rpChaseActive: true })) === '적극/기본' ? 1 : 0, 1);
+  eq('4/1/1 + 분업 → 분업 (승리조 4명)', (rpTactic({ bpcIdx: 11, isWinSplit: true })) === '분업' ? 1 : 0, 1);
+  eq('2/2/2 + 분업 → 기본 (2명)', (rpTactic({ bpcIdx: 4, isWinSplit: true })) === '기본' ? 1 : 0, 1);
+  eq('옛 rpActive 덱 1/1/4 → 적극/기본', (rpTacKey({ bpcIdx: 0, rpActive: true })) === '적극/기본' ? 1 : 0, 1);
+  /* 4명 분업 — 승1 · 승2 · 셋1 · 셋2 (마지막 두 차례가 셋업) */
+  const i420 = BPC.findIndex((c) => c.label === '4/2/0');
+  eq('4/2/0 분업: RP1 · RP2 승리조, RP3 셋업1, RP4 셋업2', (['RP1', 'RP2', 'RP3', 'RP4'].map((s) => slotGroupOf(s, i420, true, null)).join(',')) === '승리조,승리조,셋업1,셋업2' ? 1 : 0, 1);
+  eq('… 차례를 RP2 · RP1 · RP4 · RP3 로 바꾸면 RP4 가 셋업1 · RP3 이 셋업2', (['RP4', 'RP3'].map((s) => slotGroupOf(s, i420, true, ['RP2', 'RP1', 'RP4', 'RP3'])).join(',')) === '셋업1,셋업2' ? 1 : 0, 1);
+  eq('4/2/0 분업이 아니면 넷 다 승리조', (['RP1', 'RP2', 'RP3', 'RP4'].map((s) => slotGroupOf(s, i420, false, null)).join(',')) === '승리조,승리조,승리조,승리조' ? 1 : 0, 1);
+  eq('3명 분업은 예전처럼 승1 · 셋1 · 셋2', (['RP1', 'RP2', 'RP3'].map((s) => slotGroupOf(s, 8, true, null)).join(',')) === '승리조,셋업1,셋업2' ? 1 : 0, 1);
+  /* 조 판정 · 등판 차례 (7 · 8명) */
+  const i223 = BPC.findIndex((c) => c.label === '2/2/3'), i224 = BPC.findIndex((c) => c.label === '2/2/4'), i440 = BPC.findIndex((c) => c.label === '4/4/0');
+  eq('2/2/3 의 RP7 은 롱릴리프 · 6명 편성의 RP7 은 없는 자리', (rpGroupOf('RP7', i223) + '|' + rpGroupOf('RP7', 4) + '|' + slotGroupOf('RP7', 4, false, null)) === '롱릴리프||' ? 1 : 0, 1);
+  eq('4/4/0 의 RP8 은 추격조', (rpGroupOf('RP8', i440)) === '패전조' ? 1 : 0, 1);
+  eq('8명 등판 차례 — 순서가 없으면 자리 순서', (S(rpAppearance(i224, null).seq)) === 'RP1,RP2,RP3,RP4,RP5,RP6,RP7,RP8' ? 1 : 0, 1);
+  eq('8명 — 롱릴리프 안 순서만 따른다', (S(rpAppearance(i224, ['RP8', 'RP5', 'RP2', 'RP1']).seq)) === 'RP2,RP1,RP3,RP4,RP8,RP5,RP6,RP7' ? 1 : 0, 1);
+  eq('6명 편성은 순서에 RP7 이 있어도 6자리만', (S(rpAppearance(4, ['RP7', 'RP2', 'RP1']).seq)) === 'RP2,RP1,RP3,RP4,RP5,RP6' ? 1 : 0, 1);
+  eq('2/2/2 → 2/2/3: 승리조 · 추격조는 정해 둔 차례, 롱릴리프(RP5 ~ 7)는 RP 번호 순',
+    S(rpOrderOf({ bpcIdx: i223, rpOrder: ['RP2', 'RP1', 'RP4', 'RP3', 'RP6', 'RP5'], rpOrderBpc: '2/2/2' })) === 'RP2,RP1,RP4,RP3,RP5,RP6,RP7' ? 1 : 0, 1);
+  eq('2/2/3 → 2/2/2 로 돌아오면 그 편성에서 정한 차례', (S(rpOrderOf({ bpcIdx: 4, rpOrder: ['RP2', 'RP1', 'RP4', 'RP3', 'RP6', 'RP5'], rpOrderBpc: '2/2/2' }))) === 'RP2,RP1,RP4,RP3,RP6,RP5' ? 1 : 0, 1);
+  /* 7 · 8명 점수 — 시험용 가중치를 잠깐 꽂아서 (실제 표는 scripts/bullpen-weights.mjs 가 넣는다) */
+  const keep = {};
+  const put = (i, tab) => { keep[i] = RP_WEIGHTS[i]; RP_WEIGHTS[i] = tab; };
+  const n8 = (v) => [v, v, v, v, v, v, v, v];
+  put(i224, { '기본/기본': [0.5, 0.4, 0.3, 0.25, 0.2, 0.15, 0.1, 0.2], '적극/기본': n8(0.3), '기본/적극': n8(0.25), '적극/적극': n8(0.3) });
+  put(i223, { '기본/기본': [0.5, 0.4, 0.3, 0.25, 0.25, 0.2, 0.2], '적극/기본': [0.4, 0.4, 0.3, 0.3, 0.3, 0.2, 0.2], '기본/적극': [0.5, 0.4, 0.3, 0.25, 0.25, 0.2, 0.2], '적극/적극': [0.4, 0.4, 0.3, 0.3, 0.3, 0.2, 0.2] });
+  eq('가중치를 넣으면 그 편성이 준비됨 · 8명 고를 수 있음', (bpcReady(i224) ? 1 : 0) + (rpNReady(8) ? 10 : 0), 11);
+  eq('인원 바꿀 때 갈 편성 — 2/2/2 → 8명 2/2/4 · 7명 2/2/3', (BPC[bpcFor(8, BPC[4])].label + ' ' + BPC[bpcFor(7, BPC[4])].label) === '2/2/4 2/2/3' ? 1 : 0, 1);
+  /* 가중치가 있는 편성으로만 간다 — 8명 편성을 2/2/4 하나만 남기고 잠깐 비워 본다 */
+  const others8 = bpcListOf(8).filter((i) => i !== i224);
+  others8.forEach((i) => put(i, null));
+  eq('가중치가 있는 편성으로만 간다 — 8명이 2/2/4 하나뿐이면 1/1/4 → 8명은 2/2/4', (BPC[bpcFor(8, BPC[0])].label) === '2/2/4' ? 1 : 0, 1);
+  others8.forEach((i) => { RP_WEIGHTS[i] = keep[i]; delete keep[i]; });
+  eq('… 다 있으면 인원이 가장 덜 바뀌는 편성 — 1/1/4 → 7명 1/2/4 · 8명 1/3/4', (BPC[bpcFor(7, BPC[0])].label + ' ' + BPC[bpcFor(8, BPC[0])].label) === '1/2/4 1/3/4' ? 1 : 0, 1);
+  const relX = (id) => ({ id: id, role: '투수', position: '중계', cardType: '골든글러브', hand: '우', change: 90, stuff: 92, enhance: '9각성', sLvManual: true });
+  const R8 = {}; RP_ALL.forEach((s, k) => { R8[s] = relX('r' + k); });
+  const pk8 = (s) => R8[s] || null;
+  const sd8 = { bpcIdx: i224, s95: '', s125: '' };
+  const o8 = lineupOpts(sd8, 0);
+  const one = lineupPit(R8.RP1, 'RP1', sd8, o8).total;
+  let want8 = 0; RP_ALL.forEach((s) => { want8 += lineupPit(R8[s], s, sd8, o8).total * getRPWeight(i224, s, '기본/기본', null); });
+  eq('8명 총점 — RP7 · RP8 도 가중치만큼 들어간다', calcLineupTotal(pk8, sd8, o8), Math.round(want8 * 100) / 100);
+  const pk6 = (s) => (s === 'RP7' || s === 'RP8' ? null : pk8(s));
+  eq('… 같은 선수를 6명 편성(2/2/2)에 두면 RP7 · RP8 은 안 센다 (빼고 센 것과 같다)', calcLineupTotal(pk8, { bpcIdx: 4, s95: '', s125: '' }, lineupOpts({ bpcIdx: 4 }, 0)), calcLineupTotal(pk6, { bpcIdx: 4, s95: '', s125: '' }, lineupOpts({ bpcIdx: 4 }, 0)));
+  eq('중계 한 명 점수는 RP 번호 포특으로 (RP7 · RP8 은 RP5 · RP6 표와 같다)', POS_TRAIN.RP7 && JSON.stringify(POS_TRAIN.RP7) === JSON.stringify(POS_TRAIN.RP5) && JSON.stringify(POS_TRAIN.RP8) === JSON.stringify(POS_TRAIN.RP6) ? 1 : 0, 1);
+  /* 세트덱 · 시너지 — 중계 8명이면 RP7 · RP8 은 세고 후보 BN5 · BN6 은 안 센다 */
+  const bat = (id, ct) => ({ id: id, role: '타자', position: 'C', subPosition: 'C', cardType: ct, team: '기아', stars: 5, power: 80, accuracy: 80, eye: 80, patience: 80 });
+  const imp = (id) => Object.assign(relX(id), { cardType: '임팩트', impactType: '구종마스터', team: '기아' });
+  const pkS = (s) => ({ RP7: imp('i7'), RP8: imp('i8'), BN1: bat('b1', '임팩트'), BN5: bat('b5', '임팩트'), BN6: bat('b6', '임팩트') })[s] || null;
+  const sdA = { bpcIdx: i224, teamName: '기아' }, sdB = { bpcIdx: 4, teamName: '기아' };
+  computeLineupSetDeck(pkS, sdA); computeLineupSetDeck(pkS, sdB);
+  eq('시너지 장수 — 8명: RP7 · RP8 + 후보 BN1 = 임팩트 3장 (BN5 · BN6 은 없는 칸)', sdA._synCounts['임팩트'], 3);
+  eq('… 6명: 후보 BN1 · BN5 · BN6 = 3장 (RP7 · RP8 은 없는 자리)', sdB._synCounts['임팩트'], 3);
+  eq('셋포 — 8명은 RP7 · RP8 카드 셋포가 들어간다', computeLineupSetDeck((s) => ({ RP7: imp('i7') })[s] || null, { bpcIdx: i224, teamName: '기아' }) > 0 ? 1 : 0, 1);
+  eq('… 6명이면 RP7 카드는 셋포에 안 들어간다', computeLineupSetDeck((s) => ({ RP7: imp('i7') })[s] || null, { bpcIdx: 4, teamName: '기아' }), 0);
+  const tried = { 224: RP_WEIGHTS[i224], 223: RP_WEIGHTS[i223] };
+  Object.keys(keep).forEach((i) => { RP_WEIGHTS[i] = keep[i]; });
+  eq('시험용 가중치를 되돌림 (실제 표로)', RP_WEIGHTS[i224] === keep[i224] && RP_WEIGHTS[i223] === keep[i223] && RP_WEIGHTS[i224] !== tried[224] && RP_WEIGHTS[i223] !== tried[223] ? 1 : 0, 1);
+  eq('실제 표 — 중계 6 · 7 · 8명 편성 40가지 모두 가중치가 있다', BPC.filter((c, i) => bpcReady(i)).length, 40);
+  /* 가중치가 없는 인원 — 7 · 8명 표를 잠깐 다 비워 본다 */
+  const keep78 = {};
+  [7, 8].forEach((n) => bpcListOf(n).forEach((i) => { keep78[i] = RP_WEIGHTS[i]; RP_WEIGHTS[i] = null; }));
+  eq('가중치가 없는 인원으로는 못 간다 (-1)', bpcFor(7, BPC[4]) + bpcFor(8, BPC[4]), -2);
+  eq('… 그 인원은 고를 수 없다', (rpNReady(7) ? 1 : 0) + (rpNReady(8) ? 1 : 0), 0);
+  Object.keys(keep78).forEach((i) => { RP_WEIGHTS[i] = keep78[i]; });
+  eq('… 되돌리면 다시 고를 수 있다', (rpNReady(7) ? 1 : 0) + (rpNReady(8) ? 1 : 0), 2);
+}
+
 console.log('[편성을 바꿀 때 등판 차례 — RP 번호 구간이 같은 조만 정해 둔 차례, 바뀐 조는 RP 번호 순, 돌아오면 그대로 (2026-10-28 사용자 승인)]');
 {
   const S = (a) => (a || []).join(',');
@@ -3198,9 +3296,11 @@ console.log('[편성을 바꿀 때 등판 차례 — RP 번호 구간이 같은 
   const pk = (s) => (s === 'RP4' ? relA : null);
   const sdL = { bpcIdx: 0, rpOrder: chase, rpOrderBpc: '3/3/0' };
   const tA = lineupPit(relA, 'RP4', sdL, lineupOpts(sdL, 0)).total;
-  eq('1/1/4 — RP4 는 RP 번호 순대로 롱릴리프 2번째 배율 0.125', getRPWeight(0, 'RP4', '기본', rpOrderOf(sdL)), 0.125);
-  eq('… 예전에는 옛 추격조 앞뒤 때문에 4번째(0)였다', getRPWeight(0, 'RP4', '기본', chase), 0);
-  eq('1/1/4 — 총점도 RP4 를 0.125 로 센다', calcLineupTotal(pk, sdL, lineupOpts(sdL, 0)), Math.round(tA * 0.125 * 100) / 100);
+  const long2 = RP_WEIGHTS[0]['기본/기본'][3], long4 = RP_WEIGHTS[0]['기본/기본'][5];   /* 1/1/4 롱릴리프 2번째 · 4번째 칸 */
+  eq('1/1/4 — RP4 는 RP 번호 순대로 롱릴리프 2번째 칸', getRPWeight(0, 'RP4', '기본', rpOrderOf(sdL)), long2);
+  eq('… 예전에는 옛 추격조 앞뒤 때문에 4번째 칸이었다', getRPWeight(0, 'RP4', '기본', chase), long4);
+  eq('… 두 칸은 값이 달라 차이가 보인다', long2 !== long4 ? 1 : 0, 1);
+  eq('1/1/4 — 총점도 RP4 를 롱릴리프 2번째 칸으로 센다', calcLineupTotal(pk, sdL, lineupOpts(sdL, 0)), Math.round(tA * long2 * 100) / 100);
 }
 
 console.log('');
@@ -3247,7 +3347,8 @@ console.log('\n[중계 전술 나누기] 승리조(기본 · 적극 · 분업) �
   eq('옛 이름 → 표 열쇠', [rpTacNorm('기본'), rpTacNorm('적극'), rpTacNorm('분업'), rpTacNorm('기본/적극'), rpTacNorm('')].join(',') === '기본/기본,적극/적극,분업/기본,기본/적극,기본/기본' ? 1 : 0, 1);
   eq('화면 이름: 두 조가 같으면 한 단어', rpTacLabel({ rpActive: true }) === '적극' && rpTacLabel({}) === '기본' ? 1 : 0, 1);
   eq('화면 이름: 다르면 두 조를 다', rpTacLabel({ rpWinActive: true, rpChaseActive: false }) === '승리조 적극 · 추격조 기본' ? 1 : 0, 1);
-  eq('화면 이름: 분업', rpTacLabel({ isWinSplit: true, bpcIdx: 6 }) === '분업' && rpTacLabel({ isWinSplit: true, bpcIdx: 6, rpChaseActive: true }) === '분업 · 추격조 적극' ? 1 : 0, 1);
+  eq('화면 이름: 분업', rpTacLabel({ isWinSplit: true, bpcIdx: 6 }) === '분업' && rpTacLabel({ isWinSplit: true, bpcIdx: 7, rpChaseActive: true }) === '분업 · 추격조 적극' ? 1 : 0, 1);
+  eq('화면 이름: 추격조 1명(3/1/2)이면 추격조 적극이 안 걸린다', rpTacLabel({ isWinSplit: true, bpcIdx: 6, rpChaseActive: true }) === '분업' ? 1 : 0, 1);
 
   /* 가중치 — 옛 이름은 같은 조합의 값과 같고, 모든 조합에서 중계 합 · 투수 합이 맞는다 */
   const RPS6 = ['RP1', 'RP2', 'RP3', 'RP4', 'RP5', 'RP6'];
@@ -3257,33 +3358,39 @@ console.log('\n[중계 전술 나누기] 승리조(기본 · 적극 · 분업) �
     const w3 = [6, 7, 8].indexOf(bi) >= 0;
     if (RPS6.every((x) => getRPWeight(bi, x, '기본') === getRPWeight(bi, x, '기본/기본') && getRPWeight(bi, x, '적극') === getRPWeight(bi, x, '적극/적극')
       && getRPWeight(bi, x, '분업') === getRPWeight(bi, x, w3 ? '분업/기본' : '기본/기본'))) sameOld++;
-    const combos = ['기본/기본', '적극/기본', '기본/적극', '적극/적극'].concat(w3 ? ['분업/기본', '분업/적극'] : []);
+    /* 게임에서 고를 수 있는 조합만 (승리조 적극 1명 · 분업 3명 · 추격조 적극 2명부터, 11-02 정정) */
+    const combos = ['기본/기본', '적극/기본', '기본/적극', '적극/적극', '분업/기본', '분업/적극'].filter((k) => winTacOk(BPC[bi], k.split('/')[0]) && chaseTacOk(BPC[bi], k.split('/')[1]));
     combos.forEach((k) => {
       cnt++;
-      const win = k.split('/')[0], want = win === '분업' ? 2.87 : win === '적극' ? 2.54 : 2.2;
+      const win = k.split('/')[0], want = Math.round((10 - sumSP(win) - CP_MULT) * 1000) / 1000;
       if (sumK(bi, k) === want) sums++;
-      const t = Math.round((sumSP(win) + sumK(bi, k) + 0.8) * 1000) / 1000;
-      if (t === (win === '분업' ? 10.001 : 10)) tot10++;
+      const t = Math.round((sumSP(win) + sumK(bi, k) + CP_MULT) * 1000) / 1000;
+      if (t === 10) tot10++;
       if (RPS6.every((x) => getRPWeight(bi, x, k) >= 0)) nonneg++;
     });
   }
   eq('옛 이름(기본 · 적극 · 분업) = 같은 조합 값 (편성 11종)', sameOld, 11);
-  eq('중계 합 — 승리조 기본 2.20 · 적극 2.54 · 분업 2.87 (조합 ' + cnt + '개)', sums, cnt);
-  eq('투수 합 10 (분업은 10.001)', tot10, cnt);
+  eq('중계 합 = 10 − 선발 합 − 마무리 (조합 ' + cnt + '개)', sums, cnt);
+  eq('투수 합 10', tot10, cnt);
   eq('음수 가중치 없음', nonneg, cnt);
-  /* 엑셀 수정안 값 몇 칸 — 표를 엑셀에서 그대로 뽑았는지 */
-  eq('2/2/2 적극/기본 추격조 1번째(RP3) 0.570', getRPWeight(4, 'RP3', '적극/기본'), 0.57);
-  eq('2/2/2 기본/적극 추격조 1번째(RP3) 0.425', getRPWeight(4, 'RP3', '기본/적극'), 0.425);
-  eq('1/1/4 기본/적극 롱릴리프 1번째(RP3) 0.550', getRPWeight(0, 'RP3', '기본/적극'), 0.55);
-  eq('3/3/0 분업/적극 추격조 3번째(RP6) 0.110', getRPWeight(8, 'RP6', '분업/적극'), 0.11);
-  eq('3/3/0 적극/기본 추격조 2번째(RP5) 0.390', getRPWeight(8, 'RP5', '적극/기본'), 0.39);
-  eq('분업/적극 도 승리조는 0.45 · 0.60 · 0.75', ['RP1', 'RP2', 'RP3'].map((x) => getRPWeight(7, x, '분업/적극')).join(',') === '0.45,0.6,0.75' ? 1 : 0, 1);
+  /* 보고서 값 몇 칸 — 표를 보고서(투수 가중치 11-05 틀 · 선발 7.30)에서 그대로 뽑았는지 */
+  eq('2/2/2 적극/기본 추격조 1번째(RP3) 0.41', getRPWeight(4, 'RP3', '적극/기본'), 0.41);
+  eq('2/2/2 기본/적극 추격조 1번째(RP3) 0.25', getRPWeight(4, 'RP3', '기본/적극'), 0.25);
+  /* 1/1/4 는 추격조 1명이라 추격조 적극을 못 고른다 — 표에서 뺐고, 물으면 기본/기본 값 (2026-10-29). 승리조 적극(적극/기본)은 11-02 정정으로 있다 */
+  eq('1/1/4 기본/적극은 표에 없고 적극/기본은 있다', RP_WEIGHTS[0]['기본/적극'] === undefined && Array.isArray(RP_WEIGHTS[0]['적극/기본']) ? 1 : 0, 1);
+  eq('1/1/4 기본/적극을 물으면 기본/기본 (RP3 = 롱릴리프 1번째 칸)', getRPWeight(0, 'RP3', '기본/적극'), RP_WEIGHTS[0]['기본/기본'][2]);
+  eq('2/1/3 적극/적극을 물으면 적극/기본 (추격조만 기본으로)', getRPWeight(3, 'RP3', '적극/적극'), getRPWeight(3, 'RP3', '적극/기본'));
+  eq('3/3/0 분업/적극 추격조 3번째(RP6) 0.06', getRPWeight(8, 'RP6', '분업/적극'), 0.06);
+  eq('3/3/0 적극/기본 추격조 2번째(RP5) 0.04', getRPWeight(8, 'RP5', '적극/기본'), 0.04);
+  eq('분업/적극 도 승리조는 분업/기본과 0.02 안 (3/2/1)', ['RP1', 'RP2', 'RP3'].every((x) => Math.abs(getRPWeight(7, x, '분업/적극') - getRPWeight(7, x, '분업/기본')) <= 0.02 + 1e-9) ? 1 : 0, 1);
   eq('분업이 없는 편성의 분업/적극 → 기본/적극', getRPWeight(4, 'RP3', '분업/적극'), getRPWeight(4, 'RP3', '기본/적극'));
-  /* 추격조 적극: 승리조 칸은 그대로, 추격조 1번째 몫이 뒤로 넘어간다 */
-  eq('추격조 적극은 승리조 칸을 안 바꾼다 (2/2/2)', ['RP1', 'RP2'].every((x) => getRPWeight(4, x, '기본/적극') === getRPWeight(4, x, '기본/기본')) ? 1 : 0, 1);
+  /* 추격조 적극: 승리조 칸은 거의 그대로(반올림 차이 0.02 까지), 추격조 1번째 몫이 뒤로 넘어간다 */
+  let chaseMoveMax = 0;
+  BPC.forEach((c, bi) => { const t = RP_WEIGHTS[bi]; if (!t) return; ['기본', '적극', '분업'].forEach((w) => { const a = t[w + '/기본'], b = t[w + '/적극']; if (a && b) for (let k = 0; k < c.w; k++) chaseMoveMax = Math.max(chaseMoveMax, Math.abs(a[k] - b[k])); }); });
+  eq('추격조 적극은 승리조 칸을 거의 안 바꾼다 (모든 편성, 차이 0.04 이하 — 11-05 틀은 중계 합 안에서 다시 나눠 승1 이 0.03 ~ 0.04 오르는 편성이 있다)', chaseMoveMax <= 0.04 + 1e-9 ? 1 : 0, 1);
   eq('추격조 적극은 추격조 1번째 몫을 줄인다 (2/2/2)', getRPWeight(4, 'RP3', '기본/적극') < getRPWeight(4, 'RP3', '기본/기본') ? 1 : 0, 1);
   /* 등판 순서를 바꾸면 새 조합 배율도 차례를 따라간다 — 2/2/2 에서 추격조 RP4 를 1번째로 */
-  eq('순서를 따른다: 2/2/2 기본/적극에서 RP4 가 추격조 1번째면 0.425', getRPWeight(4, 'RP4', '기본/적극', ['RP1', 'RP2', 'RP4', 'RP3']), 0.425);
+  eq('순서를 따른다: 2/2/2 기본/적극에서 RP4 가 추격조 1번째면 추격조 1번째 칸', getRPWeight(4, 'RP4', '기본/적극', ['RP1', 'RP2', 'RP4', 'RP3']), RP_WEIGHTS[4]['기본/적극'][2]);
 
   /* 능력치 보너스 — 승리조 적극 +1 · 분업 +2 · 추격조 적극 +1. 롱릴리프 · 마무리 · 선발은 없음 */
   const rp2 = { role: "투수", position: "중계", cardType: "시즌", stars: 5 };
@@ -3294,10 +3401,10 @@ console.log('\n[중계 전술 나누기] 승리조(기본 · 적극 · 분업) �
   eq('추격조 적극: 승리조 RP1 은 0', calcSDBonus(rp2, "RP1", cOnly, 0).tac, 0);
   eq('추격조 적극: 추격조 RP3 · RP4 +1', calcSDBonus(rp2, "RP3", cOnly, 0).tac + calcSDBonus(rp2, "RP4", cOnly, 0).tac, 2);
   eq('추격조 적극: 롱릴리프 RP5 는 0', calcSDBonus(rp2, "RP5", cOnly, 0).tac, 0);
-  const splitChase = { bpcIdx: 6, s95: "", s125: "", isWinSplit: true, rpChaseActive: true };
+  const splitChase = { bpcIdx: 7, s95: "", s125: "", isWinSplit: true, rpChaseActive: true };   /* 3/2/1 — 추격조 2명이라 추격조 적극을 고를 수 있다 */
   eq('분업 + 추격조 적극: 승리조 +2', calcSDBonus(rp2, "RP2", splitChase, 0).tac, 2);
   eq('분업 + 추격조 적극: 추격조(RP4) +1', calcSDBonus(rp2, "RP4", splitChase, 0).tac, 1);
-  eq('분업 + 추격조 적극: 롱릴리프(RP5) 0', calcSDBonus(rp2, "RP5", splitChase, 0).tac, 0);
+  eq('분업 + 추격조 적극: 롱릴리프(RP6) 0', calcSDBonus(rp2, "RP6", splitChase, 0).tac, 0);
 
   /* 라인업 총점 — 새 칸으로 옛 전술을 똑같이 적으면 점수도 같다. 선발 배율은 승리조 전술만 따른다 */
   const mkR = (n, o) => Object.assign({ name: n, role: '투수', position: '중계', cardType: '골든글러브', team: '기아',
@@ -3424,11 +3531,11 @@ __setScoreVer('v11');
 {
   /* 포수리드(버프포함) — 데이터센터 분포 · 스킬 계산기 · 공유 그림 색에만 쓰는 값 (TOTAL 은 팀버프를 투수에게 따로 얹는다).
      2026-10-21 사용자 지정: 스킬 점수 + 레벨별 투수 점수 증가. 버프는 투수 열두 명 모두에게 붙으므로
-     TOTAL 의 투수 배율(기본 전술: 선발 합 7.0 · 중계 2.2 + 마무리 0.8 = 3.0)을 곱해 더한다 */
+     이닝 비율 선발 7 : 불펜 3 (사용자 지정 고정값)을 곱해 더한다. TOTAL 의 투수 배율(아래, 선발 7.30 · 불펜 2.70)과는 따로다 */
   let spSum = 0; for (let i = 0; i < 5; i++) spSum += spMult('기본', i);
   let bpSum = CP_MULT; for (const s of RP_SLOTS) bpSum += getRPWeight(4, s, '기본/기본');
-  eq('기본 전술 선발 배율 합 7.0', spSum, 7.0, 1e-9);
-  eq('기본 전술 불펜 배율 합 3.0 (중계 2.2 + 마무리 0.8)', bpSum, 3.0, 1e-9);
+  eq('기본 전술 선발 배율 합 7.30', spSum, 7.3, 1e-9);
+  eq('기본 전술 불펜 배율 합 2.70 (중계 1.85 + 마무리 0.85)', bpSum, 2.7, 1e-9);
   const inc = (b, w) => b.c * w.c + b.s * w.s + b.ctl * w.ctl;
   /* 2026-10-22 사용자 지정: 증가 점수 × 8.1 (= 9이닝 × 팀버프 0.9, 이닝은 선발 7 : 불펜 3) */
   const want = [5, 6, 7, 8, 9, 10].map((lv) => { const b = CATCH_LEAD_PIT[lv + '렙']; return Math.round((lv + 9 * 0.9 * (0.7 * inc(b, PIT_W_V11['선발']) + 0.3 * inc(b, PIT_W_V11['중계']))) * 100) / 100; });
@@ -3503,30 +3610,31 @@ __setScoreVer('v11');
   eqs('코드 표는 검사를 통과한다', rankTierCheck(R), '');
   eq('OPS 표의 구간은 모두 구간표에 있다', RANK_OPS.every((o) => R.some((r) => r.n === o.n)) ? 1 : 0, 1);
   eqs('구간 11개 (in200 · in2000 더함)', R.map((r) => r.n).join(' '), 'in10 in30 in50 in100 in200 in300 in500 in700 in1000 in2000 in3000');
-  /* 10-22 3차: 사용자 지정 — 신버전 기준 in200 커트 8900, 모든 구간 +100 (처음 옮긴 값에서) */
-  eqs('커트 (in10 ~ in3000)', R.map((r) => r.cut).join(' '), '9340 9240 9150 9000 8900 8850 8700 8670 8580 8360 8190');
-  eqs('안정권', R.map((r) => r.safe).join(' '), '0 9290 9190 9040 8950 8890 8750 8700 8650 8430 8260');
-  eqs('in200 커트 = 8900 (사용자 지정)', String(R.find((r) => r.n === 'in200').cut), '8900');
-  let x = rankTierOf(8900, R);
-  eqs('8900 → in200 경쟁권 (커트와 같은 점수)', x.row.n + '/' + x.safe, 'in200/false');
+  /* 10-22 3차: 사용자 지정 — 신버전 기준 in200 커트 8900, 모든 구간 +100 (처음 옮긴 값에서)
+     11-05: 투수 가중치(선발 7.30 · 마무리 0.85)로 모든 구간 +16 (in200 8916) — 아래 점수 예도 모두 +16 (남은 점수는 그대로) */
+  eqs('커트 (in10 ~ in3000)', R.map((r) => r.cut).join(' '), '9356 9256 9166 9016 8916 8866 8716 8686 8596 8376 8206');
+  eqs('안정권', R.map((r) => r.safe).join(' '), '0 9306 9206 9056 8966 8906 8766 8716 8666 8446 8276');
+  eqs('in200 커트 = 8916 (8900 + 투수 가중치 +16)', String(R.find((r) => r.n === 'in200').cut), '8916');
+  let x = rankTierOf(8916, R);
+  eqs('8916 → in200 경쟁권 (커트와 같은 점수)', x.row.n + '/' + x.safe, 'in200/false');
   eqs('… in300 안정권 · 다음 in200 안정권 +50', R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in300/in200 안정권 50');
-  eqs('8899.9 → in300 안정권', (() => { const y = rankTierOf(8899.9, R); return y.row.n + '/' + y.safe; })(), 'in300/true');
-  x = rankTierOf(8834.5, R);
-  eqs('8834.5 → in500 안정권 · 다음 in300 커트', x.row.n + '/' + x.safe + '/' + x.next.label, 'in500/true/in300 커트');
+  eqs('8915.9 → in300 안정권', (() => { const y = rankTierOf(8915.9, R); return y.row.n + '/' + y.safe; })(), 'in300/true');
+  x = rankTierOf(8850.5, R);
+  eqs('8850.5 → in500 안정권 · 다음 in300 커트', x.row.n + '/' + x.safe + '/' + x.next.label, 'in500/true/in300 커트');
   eq('… 15.5점 남음', x.next.gap, 15.5, 0.01);
-  x = rankTierOf(8960, R);
-  eqs('8960 → in200 안정권 · 다음 in100 커트 +40', x.row.n + '/' + x.safe + '/' + x.next.label + ' ' + x.next.gap, 'in200/true/in100 커트 40');
-  x = rankTierOf(8400, R);
-  eqs('8400 → in2000 경쟁권 (8360 ~ 8430) · in3000 안정권', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n, 'in2000/false/in3000');
+  x = rankTierOf(8976, R);
+  eqs('8976 → in200 안정권 · 다음 in100 커트 +40', x.row.n + '/' + x.safe + '/' + x.next.label + ' ' + x.next.gap, 'in200/true/in100 커트 40');
+  x = rankTierOf(8416, R);
+  eqs('8416 → in2000 경쟁권 (8376 ~ 8446) · in3000 안정권', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n, 'in2000/false/in3000');
   eqs('… 다음 목표 in2000 안정권 +30', x.next.label + ' ' + x.next.gap, 'in2000 안정권 30');
-  x = rankTierOf(8680, R);
-  eqs('8680 → in700 경쟁권 · in1000 안정권 · 다음 in700 안정권 +20', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in700/false/in1000/in700 안정권 20');
-  eqs('8710 → in500 경쟁권 · in700 안정권', (() => { const y = rankTierOf(8710, R); return y.row.n + '/' + y.safe + '/' + R[y.safeAt].n; })(), 'in500/false/in700');
-  x = rankTierOf(9340, R);
-  eqs('9340 → in10 (안정권 칸 없음 → 경쟁권)', x.row.n + '/' + x.safe, 'in10/false');
+  x = rankTierOf(8696, R);
+  eqs('8696 → in700 경쟁권 · in1000 안정권 · 다음 in700 안정권 +20', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in700/false/in1000/in700 안정권 20');
+  eqs('8726 → in500 경쟁권 · in700 안정권', (() => { const y = rankTierOf(8726, R); return y.row.n + '/' + y.safe + '/' + R[y.safeAt].n; })(), 'in500/false/in700');
+  x = rankTierOf(9356, R);
+  eqs('9356 → in10 (안정권 칸 없음 → 경쟁권)', x.row.n + '/' + x.safe, 'in10/false');
   eq('… 맨 위라 다음 목표 없음', x.next, null);
-  x = rankTierOf(8000, R);
-  eq('8000 → 맨 아래 커트도 못 넘음', x.i, -1);
+  x = rankTierOf(8016, R);
+  eq('8016 → 맨 아래 커트도 못 넘음', x.i, -1);
   eqs('… in3000 커트까지 190', x.next.label + ' ' + x.next.gap, 'in3000 커트 190');
   eq('… 안정권도 없음', x.safeAt, -1);
   /* 훈련이 다 들어갔는지 — 훈련은 0일 수 없다. 포특 · 라커룸 · 특훈 0 은 막지 않는다 (2026-10-22 사용자 지정) */
@@ -3550,6 +3658,16 @@ __setScoreVer('v11');
   eqs('불펜 국대라도 제구만 비면 제구 (새 칸을 안 넣은 것)', rankTrainMissing(Object.assign({}, nat0, { trainC: 10, trainS: 12 }), 'RP5').join(','), '제구');
   eqs('선발 자리 국대 훈련 전부 0 은 막는다', rankTrainMissing(nat0, 'SP1').join(','), '변화,구위,제구');
   eqs('불펜이라도 시그니처 훈련 전부 0 은 막는다', rankTrainMissing(Object.assign({}, nat0, { cardType: '시그니처' }), 'RP6').join(','), '변화,구위,제구');
+  /* 셋포 셔틀 라이브 · 올스타도 같다 (2026-11-04 고객센터 건의 · 사용자 승인) */
+  const live0 = Object.assign({}, nat0, { cardType: '라이브' }), olst0 = Object.assign({}, nat0, { cardType: '올스타' });
+  eqs('불펜 라이브 훈련 전부 0 — 롱릴 RP6 통과', rankTrainMissing(live0, 'RP6').join(','), '');
+  eqs('불펜 올스타 훈련 전부 0 — 승리조 RP1 통과', rankTrainMissing(olst0, 'RP1').join(','), '');
+  eqs('… 중계 8명 덱의 RP8 도 통과 (라이브)', rankTrainMissing(live0, 'RP8').join(','), '');
+  eqs('… 마무리 CP 도 통과 (올스타)', rankTrainMissing(olst0, 'CP').join(','), '');
+  eqs('불펜 라이브라도 제구만 비면 제구', rankTrainMissing(Object.assign({}, live0, { trainC: 9, trainS: 11 }), 'RP4').join(','), '제구');
+  eqs('선발 자리 라이브 훈련 전부 0 은 막는다', rankTrainMissing(live0, 'SP3').join(','), '변화,구위,제구');
+  eqs('불펜이라도 시즌 · 임팩트 · 골든글러브 훈련 전부 0 은 막는다', ['시즌', '임팩트', '골든글러브'].map((ct) => rankTrainMissing(Object.assign({}, nat0, { cardType: ct }), 'RP6').length).join(','), '3,3,3');
+  eqs('타자 라이브는 예외 없음', rankTrainMissing({ role: '타자', cardType: '라이브' }, 'RP6').join(','), '파워,정확,선구,인내');
   eqs('자리를 안 넘기면 예외 없음', rankTrainMissing(nat0).join(','), '변화,구위,제구');
   eqs('타자 국대는 예외 없음', rankTrainMissing({ role: '타자', cardType: '국가대표' }, 'RP6').join(','), '파워,정확,선구,인내');
   /* 관리자가 고친 표 */
@@ -3584,8 +3702,8 @@ __setScoreVer('v11');
   eqs('1위 → in10', R[rankRecIdx(1, R)].n, 'in10');
   eq('3001위 → 밖 (구간 수)', rankRecIdx(3001, R), R.length);
   const at = '2026-11-02T03:00:00.000Z';
-  const rr = rankRecMake(312, true, 8764.84, R, at);
-  eqs('기록 — 그때 TOTAL 은 0.1 단위 · 예상 구간 함께', JSON.stringify(rr), JSON.stringify({ r: 312, full: true, at, t: 8764.8, tier: 'in500', safe: true }));
+  const rr = rankRecMake(312, true, 8789.84, R, at);
+  eqs('기록 — 그때 TOTAL 은 0.1 단위 · 예상 구간 함께', JSON.stringify(rr), JSON.stringify({ r: 312, full: true, at, t: 8789.8, tier: 'in500', safe: true }));
   eq('예상 in500 안정권 · 실제 312위(in500 안) → 예상대로', rankRecCmp(rr, R), 0);
   eq('… 실제 280위(in300 안) → 예상보다 높음', rankRecCmp(Object.assign({}, rr, { r: 280 }), R), -1);
   eq('… 실제 820위(in1000 안) → 예상보다 낮음', rankRecCmp(Object.assign({}, rr, { r: 820 }), R), 1);
@@ -3593,13 +3711,13 @@ __setScoreVer('v11');
   eqs('맨 아래 커트도 못 넘은 덱 — 예상 구간 빈 글자 · 덜 함', low.tier + '/' + low.full + '/' + low.safe, '/false/false');
   eq('… 실제도 3000 밖 → 예상대로', rankRecCmp(low, R), 0);
   eq('… 실제 2500위면 → 예상보다 높음', rankRecCmp(Object.assign({}, low, { r: 2500 }), R), -1);
-  eq('같은 점수 (0.1 단위로 반올림해 견줌)', rankRecSame(rr, 8764.83) ? 1 : 0, 1);
+  eq('같은 점수 (0.1 단위로 반올림해 견줌)', rankRecSame(rr, 8789.83) ? 1 : 0, 1);
   eq('점수가 바뀌면 다름', rankRecSame(rr, 8786.4) ? 1 : 0, 0);
-  eq('기록이 없으면 다름', rankRecSame(null, 8764.8) ? 1 : 0, 0);
+  eq('기록이 없으면 다름', rankRecSame(null, 8789.8) ? 1 : 0, 0);
   /* 목록에 넣기 — 같은 점수면 맨 위를 바꾸고(고치기), 점수가 바뀐 뒤면 위에 쌓는다 */
   let L = rankRecPut([], rr);
   eq('빈 목록 + 기록 → 1개', L.length, 1);
-  L = rankRecPut(L, rankRecMake(298, true, 8764.8, R, at));
+  L = rankRecPut(L, rankRecMake(298, true, 8789.8, R, at));
   eqs('같은 점수로 다시 적기 → 바꿈 (여전히 1개 · 298위)', L.length + '/' + L[0].r, '1/298');
   L = rankRecPut(L, rankRecMake(250, true, 8786.4, R, at));
   eqs('점수가 바뀐 뒤 새로 적기 → 위에 쌓임 (2개 · 250 · 298)', L.length + '/' + L.map((x) => x.r).join(','), '2/250,298');
@@ -3621,7 +3739,7 @@ __setScoreVer('v11');
   const win = Object.assign({}, base, { rpWinActive: true, rpChaseActive: false });
   const chase = Object.assign({}, base, { rpWinActive: false, rpChaseActive: true });
   const both = Object.assign({}, base, { rpWinActive: true, rpChaseActive: true });
-  const split = { bpcIdx: 6, s95: '', s125: '', isWinSplit: true, rpChaseActive: true };   // 3/1/2 · 분업 + 추격조 적극
+  const split = { bpcIdx: 7, s95: '', s125: '', isWinSplit: true, rpChaseActive: true };   // 3/2/1 · 분업 + 추격조 적극 (3/1/2 는 추격조 1명이라 추격조 적극 없음)
   eq('신버전 승리조 적극 +1', calcSDBonus(rp, 'RP1', win, 0).tac, 1);
   eq('신버전 추격조 적극 +2', calcSDBonus(rp, 'RP3', chase, 0).tac, 2);
   eq('승리조만 적극이면 추격조는 0', calcSDBonus(rp, 'RP3', win, 0).tac, 0);
@@ -3630,7 +3748,7 @@ __setScoreVer('v11');
   eq('분업 + 추격조 적극: 추격조 RP4 +2', calcSDBonus(rp, 'RP4', split, 0).tac, 2);
   eq('롱릴리프 · 마무리 · 선발은 0', calcSDBonus(rp, 'RP5', both, 0).tac + calcSDBonus(cp, 'CP', both, 0).tac + calcSDBonus(sp, 'SP1', both, 0).tac, 0);
   eq('화면 구위는 그대로 (점수에만)', calcSDBonus(rp, 'RP3', chase, 0).s - calcSDBonus(rp, 'RP3', base, 0).s, 0);
-  eq('화면 변화도 그대로', calcSDBonus(rp, 'RP1', split, 0).c - calcSDBonus(rp, 'RP1', { bpcIdx: 6, s95: '', s125: '' }, 0).c, 0);
+  eq('화면 변화도 그대로', calcSDBonus(rp, 'RP1', split, 0).c - calcSDBonus(rp, 'RP1', { bpcIdx: 7, s95: '', s125: '' }, 0).c, 0);
   eq('구버전은 예전 값 — 분업 +2', withScoreVer('v10', () => calcSDBonus(rp, 'RP1', split, 0).tac), 2);
   eq('구버전은 예전 값 — 추격조 적극 +1', withScoreVer('v10', () => calcSDBonus(rp, 'RP3', chase, 0).tac), 1);
   eq('구버전 승리조 적극 +1 그대로', withScoreVer('v10', () => calcSDBonus(rp, 'RP1', win, 0).tac), 1);

@@ -227,19 +227,22 @@ function v11RoleSkill(cat, name) {
    사이트 자료도 +100 에서 고르다: 계정마다 가장 센 덱(라인업 21명, 빈 제구는 위 가정으로 채움)으로 '컷 위 계정 수 ÷ 등수'가
    in50 ~ in3000 에서 0.26 ~ 0.36 (in10 1.0 · in30 0.40 은 아직 높다, data/rank_tier_users.mjs · 계정 2,113개).
    구버전 점수 기준 표와 전환 단추는 뺐다 (사용자 지정 — 신버전 점수로만 본다) */
+/* 2026-11-05 — 투수 가중치(선발 7.30 · 7.25 · 7.10 · 마무리 0.85 · 중계 1.85 · 1.90 · 2.05)로 바꾸며 모든 구간 +16 (in200 커트 8900 → 8916).
+   같은 덱 TOTAL 이 평균 +18.0 · 중앙 +16.3, 커트 근처(±100) 덱의 변화 중앙이 +15.6 ~ +20.2 (덱이 많은 in100 ~ in3000 은 +15.6 ~ +17.0, in10 은 덱이 적어 뺌)
+   — 같은 폭으로 올려 구간 사이 간격은 그대로 (11-04 백업 · 고를 수 있는 조합 2,817덱) */
 var RANK_TIER_VERSION = 1;
 var RANK_TIERS_CODE = [
-  { n: "in10", cut: 9340, safe: 0 },
-  { n: "in30", cut: 9240, safe: 9290 },
-  { n: "in50", cut: 9150, safe: 9190 },
-  { n: "in100", cut: 9000, safe: 9040 },
-  { n: "in200", cut: 8900, safe: 8950 },
-  { n: "in300", cut: 8850, safe: 8890 },
-  { n: "in500", cut: 8700, safe: 8750 },
-  { n: "in700", cut: 8670, safe: 8700 },
-  { n: "in1000", cut: 8580, safe: 8650 },
-  { n: "in2000", cut: 8360, safe: 8430 },
-  { n: "in3000", cut: 8190, safe: 8260 }
+  { n: "in10", cut: 9356, safe: 0 },
+  { n: "in30", cut: 9256, safe: 9306 },
+  { n: "in50", cut: 9166, safe: 9206 },
+  { n: "in100", cut: 9016, safe: 9056 },
+  { n: "in200", cut: 8916, safe: 8966 },
+  { n: "in300", cut: 8866, safe: 8906 },
+  { n: "in500", cut: 8716, safe: 8766 },
+  { n: "in700", cut: 8686, safe: 8716 },
+  { n: "in1000", cut: 8596, safe: 8666 },
+  { n: "in2000", cut: 8376, safe: 8446 },
+  { n: "in3000", cut: 8206, safe: 8276 }
 ];
 /* 타자 점수(포특 · 스킬 포함)별 OPS 컷 — 같은 그림. 타자 점수는 이번 업데이트로 거의 안 바뀌어
    (라인업 타자 21,042명: 신버전 − 구버전 중앙값 0 · 평균 −0.2) 신 · 구버전 같은 표로 쓴다 */
@@ -296,13 +299,15 @@ function rankHexA(hex, a) {
 /* 구간을 보여 줄 만큼 덱이 채워졌는지 — 훈련은 0일 수 없어 0 이면 안 넣은 것 (2026-10-22 사용자 지정: 인내가 빈 덱이 많다).
    타자 파워 · 정확 · 선구 · 인내, 투수 변화 · 구위 · 제구가 모두 1 이상이어야 한다.
    포특 · 라커룸 · 특훈은 0 이 정상일 수 있어 보지 않는다 (막으면 안 된다). 빈 칸 이름 목록을 돌려준다 (다 찼으면 []).
-   예외 — 불펜(중계 RP1~6 · 마무리 CP)의 국가대표 카드는 훈련을 일부러 안 찍는 경우가 많다 (2026-10-23 사용자 지정).
+   예외 — 불펜(중계 RP1~8 · 마무리 CP)의 국가대표 카드는 훈련을 일부러 안 찍는 경우가 많다 (2026-10-23 사용자 지정).
+   셋포 셔틀로 쓰는 라이브 · 올스타 카드도 같다 (2026-11-04 고객센터 건의 · 사용자 승인, 다음 업데이트에 넣기로 답함).
    셋(변화 · 구위 · 제구)이 모두 0 이면 '안 찍음'으로 보고 막지 않는다. 일부만 0 이면(거의 다 새로 생긴 제구만 빈 경우) 예전처럼 빈 칸으로 센다.
    10-23 저장 덱: 불펜 국대 훈련 전부 0 은 451장(대부분 롱릴), 일부만 0 은 1,012장 중 1,005장이 제구만 빔. slot 은 라인업 자리 (없으면 예외 없음) */
 var RANK_TRAIN_BAT = [["trainP", "파워"], ["trainA", "정확"], ["trainE", "선구"], ["trainN", "인내"]];
 var RANK_TRAIN_PIT = [["trainC", "변화"], ["trainS", "구위"], ["trainCtl", "제구"]];
-var RANK_TRAIN_FREE_SLOTS = { RP1: 1, RP2: 1, RP3: 1, RP4: 1, RP5: 1, RP6: 1, CP: 1 };
-function rankTrainFree(pl, slot) { return !!pl && pl.role === "투수" && pl.cardType === "국가대표" && !!RANK_TRAIN_FREE_SLOTS[slot]; }
+var RANK_TRAIN_FREE_SLOTS = { RP1: 1, RP2: 1, RP3: 1, RP4: 1, RP5: 1, RP6: 1, RP7: 1, RP8: 1, CP: 1 };
+var RANK_TRAIN_FREE_TYPES = { "국가대표": 1, "라이브": 1, "올스타": 1 };
+function rankTrainFree(pl, slot) { return !!pl && pl.role === "투수" && !!RANK_TRAIN_FREE_TYPES[pl.cardType] && !!RANK_TRAIN_FREE_SLOTS[slot]; }
 function rankTrainMissing(pl, slot) {
   if (!pl) return [];
   var keys = pl.role === "투수" ? RANK_TRAIN_PIT : RANK_TRAIN_BAT;
@@ -974,6 +979,9 @@ var POS_TRAIN = {
   "RP4":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,5,5,6,6,7,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,7,7]},
   "RP5":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
   "RP6":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
+  /* RP7 · RP8 — 중계 7 · 8명 (2026-10-29). 인게임 표(10-21 사진)에서 변화 · 구위 · 제구 모두 RP5 · RP6 과 같은 값 */
+  "RP7":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
+  "RP8":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
   "CP": {mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,6,7,8,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,5,5,5,6,6]},
 };
 var SD_LEGACY_AUTO = { "s95": "R", "s125": "L", "s30": "L", "s90": "L", "s150": "L", "s170": "L" };
@@ -1298,19 +1306,73 @@ function optimizeSetDeck(sdState, totalSP, scoreOf, opts) {
 var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
 var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
-var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1}];
+var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1},{label:"4/1/1",w:4,l:1,r:1},{label:"4/2/0",w:4,l:2,r:0},{label:"1/2/4",w:1,l:2,r:4},{label:"1/3/3",w:1,l:3,r:3},{label:"1/4/2",w:1,l:4,r:2},{label:"2/1/4",w:2,l:1,r:4},{label:"2/2/3",w:2,l:2,r:3},{label:"2/3/2",w:2,l:3,r:2},{label:"2/4/1",w:2,l:4,r:1},{label:"3/1/3",w:3,l:1,r:3},{label:"3/2/2",w:3,l:2,r:2},{label:"3/3/1",w:3,l:3,r:1},{label:"3/4/0",w:3,l:4,r:0},{label:"4/1/2",w:4,l:1,r:2},{label:"4/2/1",w:4,l:2,r:1},{label:"4/3/0",w:4,l:3,r:0},{label:"1/3/4",w:1,l:3,r:4},{label:"1/4/3",w:1,l:4,r:3},{label:"2/2/4",w:2,l:2,r:4},{label:"2/3/3",w:2,l:3,r:3},{label:"2/4/2",w:2,l:4,r:2},{label:"3/1/4",w:3,l:1,r:4},{label:"3/2/3",w:3,l:2,r:3},{label:"3/3/2",w:3,l:3,r:2},{label:"3/4/1",w:3,l:4,r:1},{label:"4/1/3",w:4,l:1,r:3},{label:"4/2/2",w:4,l:2,r:2},{label:"4/3/1",w:4,l:3,r:1},{label:"4/4/0",w:4,l:4,r:0}];
+var RP_ALL = ["RP1","RP2","RP3","RP4","RP5","RP6","RP7","RP8"];
+var BN_ALL = ["BN1","BN2","BN3","BN4","BN5","BN6"];
+var BENCH_RP_TOTAL = 12;
+var BP_W_INFO = { name: "11-05 틀 (선발 7.30 · 마무리 0.85)", made: "2026-11-05" };
+function bpcAt(idx) { return BPC[idx === undefined ? 4 : idx] || BPC[4]; }
+function bpcN(c) { return c.w + c.l + c.r; }
+function rpSlotsOf(idx) { return RP_ALL.slice(0, bpcN(bpcAt(idx))); }
+function bnSlotsOf(idx) { return BN_ALL.slice(0, BENCH_RP_TOTAL - bpcN(bpcAt(idx))); }
+function bpcReady(idx) { var t = RP_WEIGHTS[idx]; return !!(t && t["기본/기본"]); }
+function bpcListOf(n) {
+  var out = []; BPC.forEach(function(c, i) { if (bpcN(c) === n) out.push(i); });
+  return out.sort(function(a, b) { return (BPC[a].w - BPC[b].w) || (BPC[a].l - BPC[b].l); });
+}
+function rpNReady(n) { return bpcListOf(n).some(bpcReady); }
+function winTacOk(c, t) { return t === "분업" ? c.w >= 3 : t === "적극" ? c.w >= 1 : true; }
+function chaseTacOk(c, t) { return t === "적극" ? c.l >= 2 : true; }
+function bpcFor(n, from) {
+  var best = -1, bestD = Infinity;
+  bpcListOf(n).forEach(function(i) {
+    if (!bpcReady(i)) return;
+    var c = BPC[i], d = Math.abs(c.w - from.w) * 100 + Math.abs(c.l - from.l) * 10 + Math.abs(c.r - from.r);
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  return best;
+}
 var RP_WEIGHTS = [
-  /* 1/1/4 */ { "기본/기본":[0.900,0.675,0.450,0.125,0.050,0.000], "적극/기본":[0.850,0.740,0.685,0.190,0.075,0.000], "기본/적극":[0.900,0.575,0.550,0.125,0.050,0.000], "적극/적극":[0.850,0.740,0.600,0.300,0.050,0.000], "분업/기본":null, "분업/적극":null },
-  /* 1/2/3 */ { "기본/기본":[0.900,0.650,0.150,0.450,0.050,0.000], "적극/기본":[0.850,0.700,0.230,0.685,0.075,0.000], "기본/적극":[0.900,0.555,0.210,0.485,0.050,0.000], "적극/적극":[0.850,0.700,0.265,0.500,0.225,0.000], "분업/기본":null, "분업/적극":null },
-  /* 1/3/2 */ { "기본/기본":[0.900,0.650,0.150,0.000,0.450,0.050], "적극/기본":[0.850,0.700,0.230,0.000,0.685,0.075], "기본/적극":[0.900,0.555,0.210,0.030,0.455,0.050], "적극/적극":[0.850,0.700,0.240,0.050,0.500,0.200], "분업/기본":null, "분업/적극":null },
-  /* 2/1/3 */ { "기본/기본":[0.850,0.300,0.550,0.450,0.050,0.000], "적극/기본":[0.800,0.550,0.625,0.510,0.055,0.000], "기본/적극":[0.850,0.300,0.470,0.530,0.050,0.000], "적극/적극":[0.800,0.550,0.650,0.400,0.140,0.000], "분업/기본":null, "분업/적극":null },
-  /* 2/2/2 */ { "기본/기본":[0.850,0.300,0.500,0.150,0.350,0.050], "적극/기본":[0.800,0.550,0.570,0.170,0.395,0.055], "기본/적극":[0.850,0.300,0.425,0.190,0.385,0.050], "적극/적극":[0.800,0.550,0.600,0.150,0.400,0.040], "분업/기본":null, "분업/적극":null },
-  /* 2/3/1 */ { "기본/기본":[0.850,0.300,0.500,0.150,0.000,0.400], "적극/기본":[0.800,0.550,0.565,0.170,0.000,0.455], "기본/적극":[0.850,0.300,0.425,0.190,0.030,0.405], "적극/적극":[0.800,0.550,0.600,0.150,0.000,0.440], "분업/기본":null, "분업/적극":null },
-  /* 3/1/2 */ { "기본/기본":[0.850,0.300,0.050,0.600,0.400,0.000], "적극/기본":[0.800,0.500,0.100,0.685,0.455,0.000], "기본/적극":[0.850,0.300,0.050,0.510,0.490,0.000], "적극/적극":[0.800,0.500,0.100,0.700,0.400,0.040], "분업/기본":[0.450,0.600,0.750,0.700,0.350,0.020], "분업/적극":[0.450,0.600,0.750,0.595,0.455,0.020] },
-  /* 3/2/1 */ { "기본/기본":[0.850,0.300,0.050,0.550,0.050,0.400], "적극/기본":[0.800,0.500,0.100,0.630,0.055,0.455], "기본/적극":[0.850,0.300,0.050,0.465,0.115,0.420], "적극/적극":[0.800,0.500,0.100,0.650,0.090,0.400], "분업/기본":[0.450,0.600,0.750,0.650,0.070,0.350], "분업/적극":[0.450,0.600,0.750,0.555,0.140,0.375] },
-  /* 3/3/0 */ { "기본/기본":[0.850,0.350,0.050,0.700,0.250,0.000], "적극/기본":[0.800,0.500,0.100,0.750,0.390,0.000], "기본/적극":[0.850,0.350,0.050,0.595,0.300,0.055], "적극/적극":[0.800,0.500,0.100,0.750,0.340,0.050], "분업/기본":[0.450,0.600,0.750,0.725,0.295,0.050], "분업/적극":[0.450,0.600,0.750,0.615,0.345,0.110] },
-  /* 2/4/0 */ { "기본/기본":[0.850,0.300,0.650,0.350,0.050,0.000], "적극/기본":[0.800,0.550,0.740,0.395,0.055,0.000], "기본/적극":[0.850,0.300,0.550,0.380,0.100,0.020], "적극/적극":[0.800,0.550,0.750,0.350,0.090,0.000], "분업/기본":null, "분업/적극":null },
-  /* 1/4/1 */ { "기본/기본":[0.900,0.650,0.200,0.050,0.000,0.400], "적극/기본":[0.850,0.650,0.320,0.080,0.000,0.640], "기본/적극":[0.900,0.555,0.255,0.080,0.010,0.400], "적극/적극":[0.850,0.650,0.300,0.140,0.000,0.600], "분업/기본":null, "분업/적극":null },
+  /*  0 · 1/1/4 */ { "기본/기본": [1, 0.6, 0.23, 0.02, 0, 0], "적극/기본": [0.83, 0.79, 0.26, 0.02, 0, 0] },
+  /*  1 · 1/2/3 */ { "기본/기본": [0.99, 0.6, 0.05, 0.2, 0.01, 0], "기본/적극": [1.02, 0.45, 0.14, 0.22, 0.02, 0], "적극/기본": [0.82, 0.78, 0.09, 0.2, 0.01, 0], "적극/적극": [0.86, 0.59, 0.19, 0.24, 0.02, 0] },
+  /*  2 · 1/3/2 */ { "기본/기본": [0.99, 0.6, 0.05, 0, 0.2, 0.01], "기본/적극": [1.01, 0.44, 0.14, 0.04, 0.21, 0.01], "적극/기본": [0.82, 0.78, 0.09, 0, 0.2, 0.01], "적극/적극": [0.83, 0.59, 0.19, 0.07, 0.21, 0.01] },
+  /*  3 · 2/1/3 */ { "기본/기본": [1.07, 0.21, 0.34, 0.22, 0.01, 0], "적극/기본": [0.92, 0.34, 0.41, 0.22, 0.01, 0] },
+  /*  4 · 2/2/2 */ { "기본/기본": [1.07, 0.2, 0.34, 0.01, 0.22, 0.01], "기본/적극": [1.09, 0.2, 0.25, 0.08, 0.22, 0.01], "적극/기본": [0.91, 0.34, 0.41, 0.01, 0.22, 0.01], "적극/적극": [0.93, 0.34, 0.3, 0.1, 0.22, 0.01] },
+  /*  5 · 2/3/1 */ { "기본/기본": [1.07, 0.2, 0.35, 0.01, 0, 0.22], "기본/적극": [1.07, 0.21, 0.25, 0.08, 0.02, 0.22], "적극/기본": [0.91, 0.34, 0.42, 0.01, 0, 0.22], "적극/적극": [0.91, 0.33, 0.31, 0.1, 0.03, 0.22] },
+  /*  6 · 3/1/2 */ { "기본/기본": [1.07, 0.21, 0.02, 0.32, 0.22, 0.01], "적극/기본": [0.92, 0.34, 0.07, 0.34, 0.22, 0.01], "분업/기본": [0.14, 0.54, 0.65, 0.42, 0.27, 0.03] },
+  /*  7 · 3/2/1 */ { "기본/기본": [1.07, 0.2, 0.02, 0.33, 0.01, 0.22], "기본/적극": [1.09, 0.21, 0.02, 0.24, 0.07, 0.22], "적극/기본": [0.92, 0.34, 0.06, 0.35, 0.01, 0.22], "적극/적극": [0.94, 0.34, 0.07, 0.25, 0.08, 0.22], "분업/기본": [0.13, 0.55, 0.66, 0.43, 0.06, 0.22], "분업/적극": [0.15, 0.54, 0.66, 0.34, 0.13, 0.23] },
+  /*  8 · 3/3/0 */ { "기본/기본": [1.07, 0.23, 0.03, 0.48, 0.04, 0], "기본/적극": [1.09, 0.24, 0.02, 0.36, 0.1, 0.04], "적극/기본": [0.91, 0.37, 0.07, 0.51, 0.04, 0], "적극/적극": [0.93, 0.37, 0.07, 0.38, 0.11, 0.04], "분업/기본": [0.14, 0.56, 0.68, 0.56, 0.09, 0.02], "분업/적극": [0.15, 0.56, 0.68, 0.45, 0.15, 0.06] },
+  /*  9 · 2/4/0 */ { "기본/기본": [1.07, 0.23, 0.51, 0.04, 0, 0], "기본/적극": [1.07, 0.23, 0.38, 0.11, 0.04, 0.02], "적극/기본": [0.91, 0.36, 0.57, 0.06, 0, 0], "적극/적극": [0.91, 0.36, 0.43, 0.14, 0.05, 0.01] },
+  /* 10 · 1/4/1 */ { "기본/기본": [0.99, 0.61, 0.05, 0, 0, 0.2], "기본/적극": [1, 0.45, 0.14, 0.04, 0.01, 0.21], "적극/기본": [0.82, 0.79, 0.09, 0, 0, 0.2], "적극/적극": [0.83, 0.59, 0.19, 0.07, 0.02, 0.2] },
+  /* 11 · 4/1/1 */ { "기본/기본": [1.07, 0.21, 0.02, 0, 0.33, 0.22], "적극/기본": [0.92, 0.34, 0.07, 0, 0.35, 0.22], "분업/기본": [0.14, 0, 0.54, 0.65, 0.42, 0.3] },
+  /* 12 · 4/2/0 */ { "기본/기본": [1.08, 0.23, 0.02, 0, 0.48, 0.04], "기본/적극": [1.12, 0.24, 0.03, 0, 0.36, 0.1], "적극/기본": [0.92, 0.37, 0.07, 0, 0.5, 0.04], "적극/적극": [0.96, 0.38, 0.07, 0.01, 0.37, 0.11], "분업/기본": [0.14, 0, 0.56, 0.68, 0.56, 0.11], "분업/적극": [0.17, 0.02, 0.56, 0.69, 0.45, 0.16] },
+  /* 13 · 1/2/4 */ { "기본/기본": [0.99, 0.6, 0.05, 0.2, 0.01, 0, 0], "기본/적극": [1.02, 0.45, 0.14, 0.22, 0.02, 0, 0], "적극/기본": [0.82, 0.78, 0.09, 0.2, 0.01, 0, 0], "적극/적극": [0.86, 0.59, 0.19, 0.24, 0.02, 0, 0] },
+  /* 14 · 1/3/3 */ { "기본/기본": [0.99, 0.6, 0.05, 0, 0.2, 0.01, 0], "기본/적극": [1.01, 0.44, 0.14, 0.04, 0.21, 0.01, 0], "적극/기본": [0.82, 0.78, 0.09, 0, 0.2, 0.01, 0], "적극/적극": [0.83, 0.59, 0.19, 0.07, 0.21, 0.01, 0] },
+  /* 15 · 1/4/2 */ { "기본/기본": [0.99, 0.6, 0.05, 0, 0, 0.2, 0.01], "기본/적극": [1, 0.45, 0.14, 0.04, 0, 0.21, 0.01], "적극/기본": [0.82, 0.78, 0.09, 0, 0, 0.2, 0.01], "적극/적극": [0.83, 0.59, 0.19, 0.07, 0.01, 0.2, 0.01] },
+  /* 16 · 2/1/4 */ { "기본/기본": [1.07, 0.21, 0.34, 0.22, 0.01, 0, 0], "적극/기본": [0.92, 0.34, 0.41, 0.22, 0.01, 0, 0] },
+  /* 17 · 2/2/3 */ { "기본/기본": [1.07, 0.2, 0.34, 0.01, 0.22, 0.01, 0], "기본/적극": [1.09, 0.2, 0.25, 0.08, 0.22, 0.01, 0], "적극/기본": [0.91, 0.34, 0.41, 0.01, 0.22, 0.01, 0], "적극/적극": [0.93, 0.34, 0.3, 0.1, 0.22, 0.01, 0] },
+  /* 18 · 2/3/2 */ { "기본/기본": [1.07, 0.2, 0.34, 0.01, 0, 0.22, 0.01], "기본/적극": [1.07, 0.2, 0.25, 0.08, 0.02, 0.22, 0.01], "적극/기본": [0.91, 0.34, 0.41, 0.01, 0, 0.22, 0.01], "적극/적극": [0.91, 0.33, 0.3, 0.1, 0.03, 0.22, 0.01] },
+  /* 19 · 2/4/1 */ { "기본/기본": [1.07, 0.2, 0.35, 0.01, 0, 0, 0.22], "기본/적극": [1.07, 0.21, 0.25, 0.08, 0.02, 0, 0.22], "적극/기본": [0.91, 0.34, 0.42, 0.01, 0, 0, 0.22], "적극/적극": [0.91, 0.33, 0.31, 0.1, 0.03, 0, 0.22] },
+  /* 20 · 3/1/3 */ { "기본/기본": [1.07, 0.21, 0.02, 0.32, 0.22, 0.01, 0], "적극/기본": [0.92, 0.34, 0.07, 0.34, 0.22, 0.01, 0], "분업/기본": [0.14, 0.54, 0.65, 0.42, 0.27, 0.03, 0] },
+  /* 21 · 3/2/2 */ { "기본/기본": [1.07, 0.2, 0.02, 0.32, 0.01, 0.22, 0.01], "기본/적극": [1.09, 0.21, 0.02, 0.23, 0.07, 0.22, 0.01], "적극/기본": [0.92, 0.34, 0.06, 0.34, 0.01, 0.22, 0.01], "적극/적극": [0.94, 0.34, 0.06, 0.25, 0.08, 0.22, 0.01], "분업/기본": [0.13, 0.55, 0.66, 0.42, 0.06, 0.22, 0.01], "분업/적극": [0.15, 0.55, 0.66, 0.33, 0.12, 0.23, 0.01] },
+  /* 22 · 3/3/1 */ { "기본/기본": [1.07, 0.2, 0.02, 0.33, 0.01, 0, 0.22], "기본/적극": [1.07, 0.21, 0.02, 0.24, 0.07, 0.02, 0.22], "적극/기본": [0.92, 0.34, 0.06, 0.35, 0.01, 0, 0.22], "적극/적극": [0.92, 0.34, 0.07, 0.25, 0.08, 0.02, 0.22], "분업/기본": [0.13, 0.55, 0.67, 0.43, 0.06, 0.01, 0.2], "분업/적극": [0.13, 0.55, 0.66, 0.34, 0.13, 0.04, 0.2] },
+  /* 23 · 3/4/0 */ { "기본/기본": [1.07, 0.23, 0.03, 0.48, 0.04, 0, 0], "기본/적극": [1.08, 0.23, 0.02, 0.36, 0.1, 0.04, 0.02], "적극/기본": [0.91, 0.37, 0.07, 0.51, 0.04, 0, 0], "적극/적극": [0.92, 0.37, 0.07, 0.38, 0.11, 0.04, 0.01], "분업/기본": [0.13, 0.56, 0.68, 0.57, 0.1, 0.01, 0], "분업/적극": [0.13, 0.56, 0.68, 0.45, 0.15, 0.06, 0.02] },
+  /* 24 · 4/1/2 */ { "기본/기본": [1.07, 0.21, 0.02, 0, 0.32, 0.22, 0.01], "적극/기본": [0.92, 0.34, 0.07, 0, 0.34, 0.22, 0.01], "분업/기본": [0.14, 0, 0.53, 0.65, 0.41, 0.28, 0.04] },
+  /* 25 · 4/2/1 */ { "기본/기본": [1.07, 0.2, 0.02, 0, 0.33, 0.01, 0.22], "기본/적극": [1.09, 0.21, 0.02, 0, 0.24, 0.07, 0.22], "적극/기본": [0.92, 0.34, 0.06, 0, 0.35, 0.01, 0.22], "적극/적극": [0.94, 0.34, 0.07, 0, 0.25, 0.08, 0.22], "분업/기본": [0.13, 0, 0.55, 0.66, 0.42, 0.06, 0.23], "분업/적극": [0.15, 0, 0.54, 0.66, 0.34, 0.13, 0.23] },
+  /* 26 · 4/3/0 */ { "기본/기본": [1.07, 0.23, 0.03, 0, 0.48, 0.04, 0], "기본/적극": [1.09, 0.24, 0.02, 0, 0.36, 0.1, 0.04], "적극/기본": [0.91, 0.37, 0.07, 0.01, 0.5, 0.04, 0], "적극/적극": [0.93, 0.37, 0.07, 0.01, 0.37, 0.11, 0.04], "분업/기본": [0.14, 0, 0.56, 0.68, 0.55, 0.1, 0.02], "분업/적극": [0.15, 0, 0.56, 0.68, 0.45, 0.15, 0.06] },
+  /* 27 · 1/3/4 */ { "기본/기본": [0.99, 0.6, 0.05, 0, 0.2, 0.01, 0, 0], "기본/적극": [1.01, 0.44, 0.14, 0.04, 0.21, 0.01, 0, 0], "적극/기본": [0.82, 0.78, 0.09, 0, 0.2, 0.01, 0, 0], "적극/적극": [0.83, 0.59, 0.19, 0.07, 0.21, 0.01, 0, 0] },
+  /* 28 · 1/4/3 */ { "기본/기본": [0.99, 0.6, 0.05, 0, 0, 0.2, 0.01, 0], "기본/적극": [1, 0.45, 0.14, 0.04, 0, 0.21, 0.01, 0], "적극/기본": [0.82, 0.78, 0.09, 0, 0, 0.2, 0.01, 0], "적극/적극": [0.83, 0.59, 0.19, 0.07, 0.01, 0.2, 0.01, 0] },
+  /* 29 · 2/2/4 */ { "기본/기본": [1.07, 0.2, 0.34, 0.01, 0.22, 0.01, 0, 0], "기본/적극": [1.09, 0.2, 0.25, 0.08, 0.22, 0.01, 0, 0], "적극/기본": [0.91, 0.34, 0.41, 0.01, 0.22, 0.01, 0, 0], "적극/적극": [0.93, 0.34, 0.3, 0.1, 0.22, 0.01, 0, 0] },
+  /* 30 · 2/3/3 */ { "기본/기본": [1.07, 0.2, 0.34, 0.01, 0, 0.22, 0.01, 0], "기본/적극": [1.07, 0.2, 0.25, 0.08, 0.02, 0.22, 0.01, 0], "적극/기본": [0.91, 0.34, 0.41, 0.01, 0, 0.22, 0.01, 0], "적극/적극": [0.91, 0.33, 0.3, 0.1, 0.03, 0.22, 0.01, 0] },
+  /* 31 · 2/4/2 */ { "기본/기본": [1.07, 0.2, 0.34, 0.01, 0, 0, 0.22, 0.01], "기본/적극": [1.07, 0.2, 0.25, 0.08, 0.02, 0, 0.22, 0.01], "적극/기본": [0.91, 0.34, 0.41, 0.01, 0, 0, 0.22, 0.01], "적극/적극": [0.91, 0.33, 0.3, 0.1, 0.03, 0, 0.22, 0.01] },
+  /* 32 · 3/1/4 */ { "기본/기본": [1.07, 0.21, 0.02, 0.32, 0.22, 0.01, 0, 0], "적극/기본": [0.92, 0.34, 0.07, 0.34, 0.22, 0.01, 0, 0], "분업/기본": [0.14, 0.54, 0.65, 0.42, 0.27, 0.03, 0, 0] },
+  /* 33 · 3/2/3 */ { "기본/기본": [1.07, 0.2, 0.02, 0.32, 0.01, 0.22, 0.01, 0], "기본/적극": [1.09, 0.21, 0.02, 0.23, 0.07, 0.22, 0.01, 0], "적극/기본": [0.92, 0.34, 0.06, 0.34, 0.01, 0.22, 0.01, 0], "적극/적극": [0.94, 0.34, 0.06, 0.25, 0.08, 0.22, 0.01, 0], "분업/기본": [0.13, 0.55, 0.66, 0.42, 0.06, 0.22, 0.01, 0], "분업/적극": [0.15, 0.55, 0.66, 0.33, 0.12, 0.23, 0.01, 0] },
+  /* 34 · 3/3/2 */ { "기본/기본": [1.07, 0.2, 0.02, 0.32, 0.01, 0, 0.22, 0.01], "기본/적극": [1.07, 0.21, 0.02, 0.23, 0.07, 0.02, 0.22, 0.01], "적극/기본": [0.92, 0.34, 0.06, 0.34, 0.01, 0, 0.22, 0.01], "적극/적극": [0.92, 0.34, 0.06, 0.25, 0.08, 0.02, 0.22, 0.01], "분업/기본": [0.13, 0.55, 0.66, 0.43, 0.06, 0.01, 0.2, 0.01], "분업/적극": [0.13, 0.55, 0.66, 0.34, 0.12, 0.04, 0.2, 0.01] },
+  /* 35 · 3/4/1 */ { "기본/기본": [1.07, 0.2, 0.02, 0.33, 0.01, 0, 0, 0.22], "기본/적극": [1.07, 0.21, 0.02, 0.24, 0.07, 0.02, 0, 0.22], "적극/기본": [0.92, 0.34, 0.06, 0.35, 0.01, 0, 0, 0.22], "적극/적극": [0.92, 0.34, 0.07, 0.25, 0.08, 0.02, 0, 0.22], "분업/기본": [0.13, 0.55, 0.67, 0.43, 0.06, 0.01, 0, 0.2], "분업/적극": [0.13, 0.55, 0.66, 0.34, 0.13, 0.04, 0, 0.2] },
+  /* 36 · 4/1/3 */ { "기본/기본": [1.07, 0.21, 0.02, 0, 0.32, 0.22, 0.01, 0], "적극/기본": [0.92, 0.34, 0.07, 0, 0.34, 0.22, 0.01, 0], "분업/기본": [0.14, 0, 0.53, 0.65, 0.41, 0.28, 0.04, 0] },
+  /* 37 · 4/2/2 */ { "기본/기본": [1.07, 0.2, 0.02, 0, 0.32, 0.01, 0.22, 0.01], "기본/적극": [1.09, 0.21, 0.02, 0, 0.23, 0.07, 0.22, 0.01], "적극/기본": [0.92, 0.34, 0.06, 0, 0.34, 0.01, 0.22, 0.01], "적극/적극": [0.94, 0.34, 0.07, 0, 0.24, 0.08, 0.22, 0.01], "분업/기본": [0.13, 0, 0.55, 0.66, 0.41, 0.06, 0.23, 0.01], "분업/적극": [0.15, 0.01, 0.54, 0.66, 0.33, 0.12, 0.23, 0.01] },
+  /* 38 · 4/3/1 */ { "기본/기본": [1.07, 0.2, 0.02, 0, 0.33, 0.01, 0, 0.22], "기본/적극": [1.07, 0.21, 0.02, 0, 0.24, 0.07, 0.02, 0.22], "적극/기본": [0.92, 0.34, 0.06, 0, 0.35, 0.01, 0, 0.22], "적극/적극": [0.92, 0.34, 0.07, 0, 0.25, 0.08, 0.02, 0.22], "분업/기본": [0.13, 0, 0.55, 0.67, 0.42, 0.06, 0.02, 0.2], "분업/적극": [0.13, 0, 0.55, 0.67, 0.34, 0.12, 0.04, 0.2] },
+  /* 39 · 4/4/0 */ { "기본/기본": [1.07, 0.23, 0.03, 0, 0.48, 0.04, 0, 0], "기본/적극": [1.08, 0.23, 0.02, 0, 0.36, 0.1, 0.04, 0.02], "적극/기본": [0.91, 0.37, 0.07, 0.01, 0.5, 0.04, 0, 0], "적극/적극": [0.92, 0.37, 0.07, 0.01, 0.37, 0.11, 0.04, 0.01], "분업/기본": [0.13, 0, 0.56, 0.68, 0.56, 0.1, 0.02, 0], "분업/적극": [0.14, 0, 0.56, 0.68, 0.45, 0.15, 0.06, 0.01] },
 ];
 var BAT_MULT = [1.100, 1.100, 1.150, 1.150, 1.000, 0.900, 0.900, 0.850, 0.850];
 var STR_MULT = [1.350, 1.350, 1.200, 1.200, 1.200, 1.000, 1.000, 0.850, 0.850];
@@ -1324,23 +1386,23 @@ function strRanks(scores) {
 }
 function batMult(orderIdx) { return BAT_MULT[orderIdx] !== undefined ? BAT_MULT[orderIdx] : BAT_MULT[BAT_MULT.length - 1]; }
 var SP_MULT = {
-  "기본": [1.5,   1.4,   1.4,   1.4,   1.3  ],   /* 합 7.000 */
-  "적극": [1.425, 1.33,  1.33,  1.33,  1.245],   /* 합 6.660 */
-  "분업": [1.35,  1.267, 1.267, 1.267, 1.18 ],   /* 합 6.331 */
+  "기본": [1.56, 1.46, 1.46, 1.46, 1.36],   /* 합 7.300 */
+  "적극": [1.55, 1.45, 1.45, 1.45, 1.35],   /* 합 7.250 */
+  "분업": [1.52, 1.42, 1.42, 1.42, 1.32],   /* 합 7.100 */
 };
-var CP_MULT = 0.8;
+var CP_MULT = 0.85;
 var PIT_TOTAL = 10;
 function rpTactic(sdState) {
   if (!sdState) return "기본";
-  var cfg = BPC[sdState.bpcIdx === undefined ? 4 : sdState.bpcIdx] || BPC[4];
-  if (sdState.isWinSplit && cfg.w === 3) return "분업";
+  var cfg = bpcAt(sdState.bpcIdx);
+  if (sdState.isWinSplit && winTacOk(cfg, "분업")) return "분업";
   var on = sdState.rpWinActive !== undefined ? sdState.rpWinActive : sdState.rpActive;
-  return on ? "적극" : "기본";
+  return on && winTacOk(cfg, "적극") ? "적극" : "기본";
 }
 function rpChaseTactic(sdState) {
   if (!sdState) return "기본";
   var on = sdState.rpChaseActive !== undefined ? sdState.rpChaseActive : (!!sdState.rpActive && rpTactic(sdState) !== "분업");
-  return on ? "적극" : "기본";
+  return on && chaseTacOk(bpcAt(sdState.bpcIdx), "적극") ? "적극" : "기본";
 }
 function rpTacKey(sdState) { return rpTactic(sdState) + "/" + rpChaseTactic(sdState); }
 var RP_TAC_STAT = { v11: { win: { "적극": 1, "분업": 3 }, chase: { "적극": 2 } }, v10: { win: { "적극": 1, "분업": 2 }, chase: { "적극": 1 } } };
@@ -1365,16 +1427,16 @@ function rpBudget(tactic) {
   return Math.round((PIT_TOTAL - sp - CP_MULT) * 1000) / 1000;
 }
 function rpAppearance(bpcIdx, order) {
-  var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
+  var cfg = bpcAt(bpcIdx), N = bpcN(cfg), act = RP_ALL.slice(0, N);   /* 중계 6 ~ 8명 — 그 편성의 RP1 ~ RPn */
   var rank = {};
-  (Array.isArray(order) ? order : []).forEach(function(s, i) { if (RP_SLOTS.indexOf(s) >= 0 && rank[s] === undefined) rank[s] = i; });
+  (Array.isArray(order) ? order : []).forEach(function(s, i) { if (act.indexOf(s) >= 0 && rank[s] === undefined) rank[s] = i; });
   var seq = [];
-  [[0, cfg.w], [cfg.w, cfg.w + cfg.l], [cfg.w + cfg.l, RP_SLOTS.length]].forEach(function(g) {
-    var slots = RP_SLOTS.slice(g[0], g[1]);
+  [[0, cfg.w], [cfg.w, cfg.w + cfg.l], [cfg.w + cfg.l, N]].forEach(function(g) {
+    var slots = act.slice(g[0], g[1]);
     slots.sort(function(a, b) {
       var ra = rank[a], rb = rank[b];
       if (ra === undefined || rb === undefined) {
-        if (ra === undefined && rb === undefined) return RP_SLOTS.indexOf(a) - RP_SLOTS.indexOf(b);
+        if (ra === undefined && rb === undefined) return RP_ALL.indexOf(a) - RP_ALL.indexOf(b);
         return ra === undefined ? 1 : -1;   /* 순서에 없는 자리는 그 조의 끝에 */
       }
       return ra - rb;
@@ -1393,21 +1455,21 @@ function rpOrderMove(bpcIdx, order, slot, dir) {
 }
 function rpOrderOf(sd) {
   if (!sd || !Array.isArray(sd.rpOrder)) return null;
-  var cur = BPC[sd.bpcIdx === undefined ? 4 : sd.bpcIdx] || BPC[4];
+  var cur = bpcAt(sd.bpcIdx);
   var from = null;
   if (sd.rpOrderBpc) for (var i = 0; i < BPC.length; i++) if (BPC[i].label === sd.rpOrderBpc) from = BPC[i];
   if (!from || from === cur) return sd.rpOrder;
-  var N = RP_SLOTS.length;
-  var spans = function(c) { return [[0, c.w], [c.w, c.w + c.l], [c.w + c.l, N]]; };
+  /* 중계 인원이 다른 편성끼리도 같은 규칙 — 예) 2/2/2 → 2/2/3: 승리조 · 추격조는 구간이 같아 그대로, 롱릴리프(RP5 ~ 7)는 RP 번호 순 */
+  var spans = function(c) { var n = bpcN(c); return [[0, c.w], [c.w, c.w + c.l], [c.w + c.l, n]]; };
   var same = spans(from).filter(function(g) { return g[1] > g[0]; }).map(function(g) { return g.join("-"); });
   var rank = {};
-  sd.rpOrder.forEach(function(s, k) { if (RP_SLOTS.indexOf(s) >= 0 && rank[s] === undefined) rank[s] = k; });
+  sd.rpOrder.forEach(function(s, k) { if (RP_ALL.indexOf(s) >= 0 && rank[s] === undefined) rank[s] = k; });
   var seq = [];
   spans(cur).forEach(function(g) {
-    var slots = RP_SLOTS.slice(g[0], g[1]);
+    var slots = RP_ALL.slice(g[0], g[1]);
     if (same.indexOf(g.join("-")) >= 0) slots.sort(function(a, b) {
       var ra = rank[a], rb = rank[b];
-      if (ra === undefined || rb === undefined) return ra === rb ? RP_SLOTS.indexOf(a) - RP_SLOTS.indexOf(b) : (ra === undefined ? 1 : -1);
+      if (ra === undefined || rb === undefined) return ra === rb ? RP_ALL.indexOf(a) - RP_ALL.indexOf(b) : (ra === undefined ? 1 : -1);
       return ra - rb;
     });
     seq = seq.concat(slots);
@@ -1416,15 +1478,16 @@ function rpOrderOf(sd) {
 }
 function getRPWeight(bpcIdx, slot, tactic, order) {
   var set = RP_WEIGHTS[bpcIdx]; if (!set) return 0;
-  var key = rpTacNorm(tactic);
-  var a = set[key] || set["기본/" + key.split("/")[1]] || set["기본/기본"]; if (!a) return 0;
+  var key = rpTacNorm(tactic), kk = key.split("/");
+  var a = set[key] || set[kk[0] + "/기본"] || set["기본/" + kk[1]] || set["기본/기본"]; if (!a) return 0;
   var si = rpAppearance(bpcIdx, order).pos[slot];
   return si === undefined ? 0 : (a[si] || 0);
 }
 function rpGroupOf(slot, bpcIdx) {
-  var si = RP_SLOTS.indexOf(slot);
+  var si = RP_ALL.indexOf(slot);
   if (si < 0) return "";
-  var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
+  var cfg = bpcAt(bpcIdx);
+  if (si >= bpcN(cfg)) return "";   /* 그 편성에 없는 자리 (중계 6명인데 RP7 · RP8) */
   if (si < cfg.w) return "승리조";
   if (si < cfg.w + cfg.l) return "패전조";
   return "롱릴리프";
@@ -1434,14 +1497,15 @@ function slotGroupOf(slot, bpcIdx, isWinSplit, order) {
   if (!slot) return "";
   if (slot === "CP") return "마무리";
   if (SP_SLOTS.indexOf(slot) >= 0) return "선발";
-  var si = RP_SLOTS.indexOf(slot);
+  var si = RP_ALL.indexOf(slot);
   if (si < 0) return "타자";
-  var cfg = BPC[bpcIdx === undefined ? 4 : bpcIdx] || BPC[4];
+  var cfg = bpcAt(bpcIdx);
+  if (si >= bpcN(cfg)) return "";   /* 그 편성에 없는 자리 */
   if (si < cfg.w) {
-    if (isWinSplit && cfg.w === 3) {
-      var n = rpAppearance(bpcIdx, order).pos[slot];
-      if (n === 1) return "셋업1";
-      if (n === 2) return "셋업2";
+    if (isWinSplit && winTacOk(cfg, "분업")) {
+      var n = rpAppearance(bpcIdx, order).pos[slot];   /* 승리조가 맨 앞이라 0 ~ w−1 */
+      if (n === cfg.w - 2) return "셋업1";
+      if (n === cfg.w - 1) return "셋업2";
     }
     return "승리조";
   }
@@ -1974,24 +2038,25 @@ function computeLineupSetDeck(pickRaw, sdState) {
       /* POTM 셋포 — 라이브 10(이미 10이면 11), 올스타 12/8/4, 스페셜 +1 (potmEffect).
          덱별 POTM 설정(끄기·가정)도 능력치와 똑같이 따른다 */
       var getPotmSetDelta = function(pl) { return potmEffect(pl, sdState).setDelta || 0; };
-      var allSlots = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP"]);
+      /* 중계 · 후보는 편성 인원만큼 (중계 6 · 7 · 8명 → 후보 6 · 5 · 4칸) */
+      var allSlots = BAT_SLOTS.concat(SP_SLOTS).concat(rpSlotsOf(sdState.bpcIdx)).concat(["CP"]);
       allSlots.forEach(function(slot) {
         var pl = pick(slot);
         if (!pl) return;
         var sc = cardSetScore(pl, sdState.teamName) + getPotmSetDelta(pl);
         total += sc;
       });
-      for (var bn = 1; bn <= 6; bn++) {
-        var bnPl = pick("BN" + bn);
-        if (!bnPl) continue;
+      bnSlotsOf(sdState.bpcIdx).forEach(function(bnSlot) {
+        var bnPl = pick(bnSlot);
+        if (!bnPl) return;
         var bnSc = cardSetScore(bnPl, sdState.teamName) + getPotmSetDelta(bnPl);
         total += bnSc;
-      }
+      });
       return total;
     };
     /* Compute card type counts for synergy */
     var synCounts = {};
-    var allSlotsForSyn = BAT_SLOTS.concat(SP_SLOTS).concat(RP_SLOTS).concat(["CP","BN1","BN2","BN3","BN4","BN5","BN6"]);
+    var allSlotsForSyn = BAT_SLOTS.concat(SP_SLOTS).concat(rpSlotsOf(sdState.bpcIdx)).concat(["CP"]).concat(bnSlotsOf(sdState.bpcIdx));
     allSlotsForSyn.forEach(function(sl) { var pl2 = pick(sl); if (pl2) { synCounts[pl2.cardType] = (synCounts[pl2.cardType]||0) + 1; } });
     sdState._synCounts = synCounts;
     /* 팀 버프 스킬 자동 감지 (detectTeamBuffs) — 세트덱 패널도 이 값을 그대로 보여 준다 */
@@ -2359,7 +2424,9 @@ function labDeckSlots(players, lm) {
     var r = cardOf(byPid[(lm || {})[b]]);
     if (r && !used[r.id]) { bench.push(r.id); used[r.id] = 1; }
   });
-  return { slots: slots, bench: bench, miss: miss, any: any };
+  /* 중계 7 · 8번째(RP7 · RP8)는 연구소(중계 6명 고정)에 자리가 없어 빠진다 — 몇 명인지 알린다 (2026-10-29) */
+  var cut = 0; ["RP7", "RP8"].forEach(function (sl) { if (byPid[(lm || {})[sl]]) cut++; });
+  return { slots: slots, bench: bench, miss: miss, any: any, cut: cut };
 }
 var LAB_BENCH_N = 6;
 var LAB_USAGE_AT = "10-25";
@@ -2734,7 +2801,8 @@ function calcLineupTotal(pk, sd, o) {
   var spSc = spPl.map(function(pl, i) { return pl ? lineupPit(pl, SP_SLOTS[i], sd, o).total : -1e9; });
   var spRk = strRanks(spSc);
   SP_SLOTS.forEach(function(s, i) { if (spPl[i]) t += spSc[i] * spMult(o.tactic, spRk[i]); });
-  RP_SLOTS.forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.chase ? o.tactic + "/" + o.chase : o.tactic, o.rpOrder); });
+  /* 중계는 편성 인원만큼 (RP1 ~ RPn) */
+  rpSlotsOf(o.bpcIdx).forEach(function(s) { var pl = pk(s); if (pl) t += lineupPit(pl, s, sd, o).total * getRPWeight(o.bpcIdx, s, o.chase ? o.tactic + "/" + o.chase : o.tactic, o.rpOrder); });
   var cp = pk("CP"); if (cp) t += lineupPit(cp, "CP", sd, o).total * CP_MULT;
   return Math.round(t * 100) / 100;
 }
@@ -2963,9 +3031,11 @@ function bestLineup(players, lm, sdState) {
   };
   var now = evalWith(lm, null, null);
   var sd0 = now.sd, totalSP = now.sp, keep = { sp: now.sp, syn: now.syn }, o = lineupOpts(sd0, totalSP);
-  var L21 = BAT_SLOTS.concat(SP_SLOTS, RP_SLOTS, ["CP"]);
-  /* 후보 — 지금 주전 타자 9칸(칸마다) + '내 선수'에만 있는 타자. 후보 6칸 · 투수 칸 선수는 빼고 */
-  var inSlot = {}; BL_SLOTS27.forEach(function (s) { if (lm[s]) inSlot[lm[s]] = 1; });
+  /* 중계 · 후보 칸은 편성 인원대로 (중계 6 · 7 · 8명 → 후보 6 · 5 · 4칸, 2026-10-29) — 라인업은 21 · 22 · 23칸 */
+  var rpS = rpSlotsOf(sd0.bpcIdx), bnS = bnSlotsOf(sd0.bpcIdx);
+  var L21 = BAT_SLOTS.concat(SP_SLOTS, rpS, ["CP"]);
+  /* 후보 — 지금 주전 타자 9칸(칸마다) + '내 선수'에만 있는 타자. 후보 칸 · 투수 칸 선수는 빼고 */
+  var inSlot = {}; L21.concat(bnS).forEach(function (s) { if (lm[s]) inSlot[lm[s]] = 1; });
   var nmOf = function (pl) { return pl ? canonPlayerName(pl.name, pl.team) : ""; };
   var isGG = function (pl) { return !!pl && pl.cardType === "골든글러브"; };
   var ggOwnOf = function (pl) { return isGG(pl) && !isOtherTeam(pl, sd0.teamName); };
@@ -2983,17 +3053,17 @@ function bestLineup(players, lm, sdState) {
      투수 칸은 그대로라 타자 쪽으로만 바뀐다. 지금 이미 넘긴 덱은 그 장수까지만 */
   var ggEffOf = function (n, own) { return n - (own > 0 ? LAB_GG_OWN_BONUS : 0); };
   var ggP = 0, ggPOwn = 0;
-  SP_SLOTS.concat(RP_SLOTS, ["CP"]).forEach(function (s) { var pl = mp(lm[s]); if (isGG(pl)) { ggP++; if (ggOwnOf(pl)) ggPOwn++; } });
+  SP_SLOTS.concat(rpS, ["CP"]).forEach(function (s) { var pl = mp(lm[s]); if (isGG(pl)) { ggP++; if (ggOwnOf(pl)) ggPOwn++; } });
   var ggCount = function (lmX) { var n = 0, own = 0; L21.forEach(function (s) { var pl = mp(lmX[s]); if (isGG(pl)) { n++; if (ggOwnOf(pl)) own++; } }); return ggEffOf(n, own); };
   var ggNow = ggCount(lm), ggMax = Math.max(LAB_GG_BASE, ggNow);
   var ggOk = function (A) { var n = ggP, own = ggPOwn; A.forEach(function (i) { if (i >= 0 && pool[i].gg) { n++; if (pool[i].ggOwn) own++; } }); return ggEffOf(n, own) <= ggMax; };
   var ggPart = function (A) { var n = ggP; A.forEach(function (i) { if (i !== undefined && i >= 0 && pool[i].gg) n++; }); return n - LAB_GG_OWN_BONUS <= ggMax; };
   /* 투수 쪽은 그대로 — 포수리드 버프로 달라지는 점수만 센다 */
-  var pitSlots = SP_SLOTS.concat(RP_SLOTS, ["CP"]);
+  var pitSlots = SP_SLOTS.concat(rpS, ["CP"]);
   var pitOnly = function (s) { return pitSlots.indexOf(s) >= 0 ? mp(lm[s]) : null; };
   /* 국대에이스(타자) — 후보 칸 선수가 주는 레벨(F)은 그대로, 주전으로 고른 선수로 더 높일 수 있다. 레벨마다 풀어 가장 높은 것을 고른다 */
   var natLv = function (pl, slot) { var lv = detectTeamBuffs([slot], function () { return pl; }, sd0).natBat; return lv === "없음" ? 0 : parseInt(lv, 10) || 0; };
-  var F = 0; BL_BN.forEach(function (s) { var pl = mp(lm[s]); if (pl && pl.role === "타자") F = Math.max(F, natLv(pl, s)); });
+  var F = 0; bnS.forEach(function (s) { var pl = mp(lm[s]); if (pl && pl.role === "타자") F = Math.max(F, natLv(pl, s)); });
   var levels = [F];
   if (!sd0.natBat) pool.forEach(function (x) { [x.sub || "DH", "DH", x.cur || "DH"].forEach(function (s) { var lv = natLv(x.pl, s); if (lv > F && levels.indexOf(lv) < 0) levels.push(lv); }); });
   var plan = null;
@@ -3021,7 +3091,7 @@ function bestLineup(players, lm, sdState) {
   /* 셋포 — 실제 셋포로 센 점수 (시너지는 지금 값 — 시너지는 후보로 맞추는 것으로 본다) */
   var spEval = evalWith(plan.lm, plan.sd, { syn: now.syn });
   /* 시너지 — 후보로 맞출 수 있으면 신경 쓰지 않는다 (사용자 지정 2026-10-23). 지금 켜져 있는 임팩트 · 시그니처가
-     바꾼 라인업 21칸 + 후보 6칸(남는 같은 종류 타자)으로 다섯 장이 안 되면 알린다 — 그때 되살릴 수 있는 만큼만 되살린 TOTAL 과 함께 */
+     바꾼 라인업 + 후보 칸(남는 같은 종류 타자)으로 다섯 장이 안 되면 알린다 — 그때 되살릴 수 있는 만큼만 되살린 TOTAL 과 함께 */
   var syn = null;
   if (!same) {
     var on0 = blSynOn(sd0, now.syn);
@@ -3031,7 +3101,7 @@ function bestLineup(players, lm, sdState) {
       var avail = 0; ids.forEach(function (id) { if (in21[id]) return; var pl = mp(id); if (pl && pl.role === "타자" && pl.cardType === x[0]) avail++; });
       return { k: x[0], key: x[1], have: have, need: Math.max(0, 5 - have), avail: avail };
     });
-    var fits = function (sub) { var tot = 0; for (var q = 0; q < sub.length; q++) { if (sub[q].need > sub[q].avail) return false; tot += sub[q].need; } return tot <= BL_BN.length; };
+    var fits = function (sub) { var tot = 0; for (var q = 0; q < sub.length; q++) { if (sub[q].need > sub[q].avail) return false; tot += sub[q].need; } return tot <= bnS.length; };
     if (info.length && !fits(info)) {
       var subs = [[]].concat(info.map(function (x) { return [x]; })); if (info.length > 1) subs.push(info);
       var bestSub = [], bestT = -Infinity;
@@ -3195,6 +3265,7 @@ function __setScoreVer(v){ SCORE_VER = v; }
 export { withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, skillTables, __setScoreVer, CATCH_LEAD_PIT, NAT_ACE_PIT, POS_TRAIN, ENHANCE, pitCatOf, pitDistRole, pitStatScore, sampleSkillScores, SKILL_DIST_CARDS, ctlMissing, applyV11, v11EditCopy, v11Saved, v11WeightsOk, V11_TABLE_VERSION, SKILLS_V11_CODE, PIT_W_V11_CODE };
 export { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankHexA, RANK_TRAIN_BAT, RANK_TRAIN_PIT, rankTrainMissing };
 export { RANK_REC_MAX, RANK_REC_RMAX, rankRecNum, rankRecOk, rankNOf, rankRecIdx, rankRecCmp, rankRecSame, rankRecDay, rankRecMake, rankRecPut };
+export { BPC, RP_ALL, BN_ALL, BENCH_RP_TOTAL, BP_W_INFO, bpcAt, bpcN, rpSlotsOf, bnSlotsOf, bpcReady, bpcListOf, rpNReady, winTacOk, chaseTacOk, bpcFor };
 export { RP_TAC_STAT, rpTacStat };
 export { bestBatOrder };
 export { ORDER_RENAME, orderRename };

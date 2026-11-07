@@ -196,7 +196,9 @@ var CT_COL = { "골든글러브": "#D9A514", "시그니처": "#E5484D", "임팩�
 var BATS = ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
 var SPS = ["SP1", "SP2", "SP3", "SP4", "SP5"];
 var RPS = ["RP1", "RP2", "RP3", "RP4", "RP5", "RP6"];
-var ALL_SLOTS = BATS.concat(SPS).concat(["CP"]).concat(RPS);
+/* 중계 7 · 8명 덱(2026-10-29)의 RP7 · RP8 — 덱 요약에 있을 때만 보인다 */
+var RPS_MORE = ["RP7", "RP8"];
+var ALL_SLOTS = BATS.concat(SPS).concat(["CP"]).concat(RPS).concat(RPS_MORE);
 function SlotLine(p) {
   var e = p.e && typeof p.e === "object" ? p.e : null;
   return (<div style={{ fontSize: 12, padding: "2px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: p.dim ? .45 : 1 }}>
@@ -231,6 +233,7 @@ function DeckBox(p) {
   var cnt = deckCounts(d);
   var view = deckView(d);
   var col = function (slots) { return slots.map(function (s) { return <SlotLine key={s} slot={s} e={view[s]} />; }); };
+  var rpsOf = RPS.concat(RPS_MORE.filter(function (s) { return view[s]; }));
   return (<div style={{ border: "1px solid var(--bd)", borderRadius: 12, background: "var(--inner)", overflow: "hidden", marginTop: p.mt === undefined ? 10 : p.mt }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--bd)" }}>
       <Icon n={d.src === "lab" ? "flask" : "deck"} style={{ color: d.src === "lab" ? "var(--acp)" : "var(--t2)" }} />
@@ -246,8 +249,8 @@ function DeckBox(p) {
       <div>{col(BATS.slice(0, mob ? 9 : 5))}</div>
       {!mob && <div>{col(BATS.slice(5))}</div>}
       <div>{col(SPS.concat(["CP"]))}
-        <button type="button" onClick={function () { setShowRp(!showRp); }} style={{ background: "none", border: "none", padding: "6px 8px 6px 0", color: "var(--td)", fontSize: 11.5, cursor: "pointer" }}>{"중계 6명 " + (showRp ? "▴" : "▾")}</button>
-        {showRp && col(RPS)}
+        <button type="button" onClick={function () { setShowRp(!showRp); }} style={{ background: "none", border: "none", padding: "6px 8px 6px 0", color: "var(--td)", fontSize: 11.5, cursor: "pointer" }}>{"중계 " + rpsOf.length + "명 " + (showRp ? "▴" : "▾")}</button>
+        {showRp && col(rpsOf)}
       </div>
     </div>
     {(p.actions || !mob) && (<div style={{ display: "flex", gap: 4, padding: "6px 10px", borderTop: "1px solid var(--bd)", alignItems: "center", flexWrap: "wrap" }}>
