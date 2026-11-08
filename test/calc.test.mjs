@@ -3610,31 +3610,32 @@ __setScoreVer('v11');
   eqs('코드 표는 검사를 통과한다', rankTierCheck(R), '');
   eq('OPS 표의 구간은 모두 구간표에 있다', RANK_OPS.every((o) => R.some((r) => r.n === o.n)) ? 1 : 0, 1);
   eqs('구간 11개 (in200 · in2000 더함)', R.map((r) => r.n).join(' '), 'in10 in30 in50 in100 in200 in300 in500 in700 in1000 in2000 in3000');
-  /* 10-22 3차: 사용자 지정 — 신버전 기준 in200 커트 8900, 모든 구간 +100 (처음 옮긴 값에서)
-     11-05: 투수 가중치(선발 7.30 · 마무리 0.85)로 모든 구간 +16 (in200 8916) — 아래 점수 예도 모두 +16 (남은 점수는 그대로) */
-  eqs('커트 (in10 ~ in3000)', R.map((r) => r.cut).join(' '), '9356 9256 9166 9016 8916 8866 8716 8686 8596 8376 8206');
-  eqs('안정권', R.map((r) => r.safe).join(' '), '0 9306 9206 9056 8966 8906 8766 8716 8666 8446 8276');
-  eqs('in200 커트 = 8916 (8900 + 투수 가중치 +16)', String(R.find((r) => r.n === 'in200').cut), '8916');
-  let x = rankTierOf(8916, R);
-  eqs('8916 → in200 경쟁권 (커트와 같은 점수)', x.row.n + '/' + x.safe, 'in200/false');
-  eqs('… in300 안정권 · 다음 in200 안정권 +50', R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in300/in200 안정권 50');
-  eqs('8915.9 → in300 안정권', (() => { const y = rankTierOf(8915.9, R); return y.row.n + '/' + y.safe; })(), 'in300/true');
-  x = rankTierOf(8850.5, R);
-  eqs('8850.5 → in500 안정권 · 다음 in300 커트', x.row.n + '/' + x.safe + '/' + x.next.label, 'in500/true/in300 커트');
+  /* 10-22 3차: 사용자 지정 — 신버전 기준 in200 커트 8900, 모든 구간 +100 (처음 옮긴 값에서) · 11-05: 모든 구간 +16
+     11-08 (사용자 지정): 실제 등수 자료로 다시 맞춘 표 — in100 · 실측 · '내 실제 등수', 시즌 239 정지 30명 보정, 커트 60% · 안정권 80% 선, 10점 단위 */
+  eqs('커트 (in10 ~ in3000)', R.map((r) => r.cut).join(' '), '9310 9200 9140 9030 8920 8840 8730 8650 8550 8370 8250');
+  eqs('안정권', R.map((r) => r.safe).join(' '), '0 9230 9170 9070 8960 8880 8770 8690 8600 8420 8310');
+  eqs('in200 커트 = 8920', String(R.find((r) => r.n === 'in200').cut), '8920');
+  eq('안정권은 한 칸 위 커트보다 낮다 (안정권 덱이 위 구간으로 안 넘어감)', R.every((r, i) => i === 0 || !r.safe || r.safe < R[i - 1].cut) ? 1 : 0, 1);
+  let x = rankTierOf(8920, R);
+  eqs('8920 → in200 경쟁권 (커트와 같은 점수)', x.row.n + '/' + x.safe, 'in200/false');
+  eqs('… in300 안정권 · 다음 in200 안정권 +40', R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in300/in200 안정권 40');
+  eqs('8919.9 → in300 안정권', (() => { const y = rankTierOf(8919.9, R); return y.row.n + '/' + y.safe; })(), 'in300/true');
+  x = rankTierOf(8824.5, R);
+  eqs('8824.5 → in500 안정권 · 다음 in300 커트', x.row.n + '/' + x.safe + '/' + x.next.label, 'in500/true/in300 커트');
   eq('… 15.5점 남음', x.next.gap, 15.5, 0.01);
-  x = rankTierOf(8976, R);
-  eqs('8976 → in200 안정권 · 다음 in100 커트 +40', x.row.n + '/' + x.safe + '/' + x.next.label + ' ' + x.next.gap, 'in200/true/in100 커트 40');
-  x = rankTierOf(8416, R);
-  eqs('8416 → in2000 경쟁권 (8376 ~ 8446) · in3000 안정권', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n, 'in2000/false/in3000');
+  x = rankTierOf(8990, R);
+  eqs('8990 → in200 안정권 · 다음 in100 커트 +40', x.row.n + '/' + x.safe + '/' + x.next.label + ' ' + x.next.gap, 'in200/true/in100 커트 40');
+  x = rankTierOf(8390, R);
+  eqs('8390 → in2000 경쟁권 (8370 ~ 8420) · in3000 안정권', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n, 'in2000/false/in3000');
   eqs('… 다음 목표 in2000 안정권 +30', x.next.label + ' ' + x.next.gap, 'in2000 안정권 30');
-  x = rankTierOf(8696, R);
-  eqs('8696 → in700 경쟁권 · in1000 안정권 · 다음 in700 안정권 +20', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in700/false/in1000/in700 안정권 20');
-  eqs('8726 → in500 경쟁권 · in700 안정권', (() => { const y = rankTierOf(8726, R); return y.row.n + '/' + y.safe + '/' + R[y.safeAt].n; })(), 'in500/false/in700');
-  x = rankTierOf(9356, R);
-  eqs('9356 → in10 (안정권 칸 없음 → 경쟁권)', x.row.n + '/' + x.safe, 'in10/false');
+  x = rankTierOf(8670, R);
+  eqs('8670 → in700 경쟁권 · in1000 안정권 · 다음 in700 안정권 +20', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in700/false/in1000/in700 안정권 20');
+  eqs('8740 → in500 경쟁권 · in700 안정권', (() => { const y = rankTierOf(8740, R); return y.row.n + '/' + y.safe + '/' + R[y.safeAt].n; })(), 'in500/false/in700');
+  x = rankTierOf(9310, R);
+  eqs('9310 → in10 (안정권 칸 없음 → 경쟁권)', x.row.n + '/' + x.safe, 'in10/false');
   eq('… 맨 위라 다음 목표 없음', x.next, null);
-  x = rankTierOf(8016, R);
-  eq('8016 → 맨 아래 커트도 못 넘음', x.i, -1);
+  x = rankTierOf(8060, R);
+  eq('8060 → 맨 아래 커트도 못 넘음', x.i, -1);
   eqs('… in3000 커트까지 190', x.next.label + ' ' + x.next.gap, 'in3000 커트 190');
   eq('… 안정권도 없음', x.safeAt, -1);
   /* 훈련이 다 들어갔는지 — 훈련은 0일 수 없다. 포특 · 라커룸 · 특훈 0 은 막지 않는다 (2026-10-22 사용자 지정) */
