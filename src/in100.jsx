@@ -150,6 +150,12 @@ function potTrio(e, c) {
 var PS_TIP = "라인업 점수 — 라인업 화면과 같은 식: 인게임 최종 능력치(셋포 · 라커룸 · 포특 · 강화 · 훈련 · 특훈 · 시너지 · POTM 모두 들어간 값) × 가중치 + 스킬 + 잠재(풀스윙 · 클러치 / 장타억제 · 침착 · 각성) + 발사각 · 팀 버프(국대에이스 · 포수리드). 중계 전술 보너스는 덱 자료에 없어 뺐어요";
 function rankIn(sp, x) { if (!sp || !sp.n || x == null) return null; var k = 0; while (k < sp.n && sp.all[k] > x + 0.05) k++; return k + 1; }
 function f1(x) { return x == null ? "—" : (Math.round(x * 10) / 10).toFixed(1); }
+function fmtTot(x) { return x == null ? "—" : (Math.round(x * 100) / 100).toFixed(1); }
+/* 타순 묶음 — 시즌 239 판은 6 ~ 9번 묶음을 '나머지'로 적었다 */
+function ordG(v) { return v === "나머지" ? "6~9" : v; }
+/* 덱 TOTAL (시즌 240 판부터, 2026-11-10) — 사이트 계산기로 센 값 */
+var TOT_TIP = "TOTAL — 이 덱을 사이트 라인업으로 옮겨(훈련 · 특훈 · 강화 · 포지션 특훈 · 라커룸 · 주장 · 셋포 설정 그대로) 지금 사이트 계산기로 센 값이에요. 중계 전술(적극 · 분업)은 랭커 화면에 없어 기본/기본으로 세고, 타순은 셋포로 알 수 있는 묶음(1~2 · 3~5 · 6~9번) 안에서 가장 높은 순서로 둬요";
+function recTxt(r) { return r ? r.w + "승 " + r.d + "무 " + r.l + "패 · " + String(r.wr.toFixed(3)).replace(/^0/, "") : "—"; }
 function fmtBp(bp) { return bp && bp[0] != null ? "승" + bp[0] + " · 추" + bp[1] + " · 롱" + bp[2] : "—"; }
 
 /* ── 작은 부품 ── */
@@ -420,7 +426,10 @@ function DeckLine(p) {
   var m = mixOf(d, t.card);
   return (<div style={{ display: "flex", alignItems: "center", gap: mob ? 8 : 12, padding: mob ? "9px 8px" : "9px 12px", cursor: "pointer", background: p.open ? "var(--ta)" : "transparent" }} onClick={p.onToggle}>
     <span style={{ width: mob ? 30 : 36, textAlign: "right", fontSize: mob ? 15 : 17, fontWeight: 900, fontFamily: "var(--h)", color: d.rank <= 10 ? "var(--acc)" : "var(--t1)" }}>{d.rank}</span>
-    <span style={{ display: "flex", alignItems: "center", gap: 5, width: mob ? 58 : 70 }}><Logo tools={t} team={d.team} size={mob ? 18 : 20} /><span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>{d.team}</span></span>
+    <span style={{ display: "flex", flexDirection: "column", gap: 1, width: mob ? 58 : 70 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 5 }}><Logo tools={t} team={d.team} size={mob ? 18 : 20} /><span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>{d.team}</span></span>
+      {mob && d.tot && <span title={TOT_TIP} style={{ fontSize: 10.5, fontFamily: "var(--m)", fontWeight: 700, color: "var(--t2)" }}>{fmtTot(d.tot.t)}</span>}</span>
+    {!mob && d.tot && <span title={TOT_TIP} style={{ width: 70, textAlign: "right", lineHeight: 1.15, cursor: "help" }}><span style={{ display: "block", fontSize: 9, fontWeight: 800, color: "var(--td)", letterSpacing: 0.5 }}>{"TOTAL"}</span><span style={{ fontSize: 14, fontWeight: 900, fontFamily: "var(--m)", color: "var(--t1)" }}>{fmtTot(d.tot.t)}</span></span>}
     {!mob && <span style={{ width: 112, fontSize: 11, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", lineHeight: 1.35 }}>{"OVR " + (d.ovr != null ? d.ovr.toFixed(1) : "—")}<br />{"셋포 " + (d.sp || "—") + " · " + (d.bp && d.bp[0] != null ? d.bp.join("/") : "")}</span>}
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: mob || p.side === "pit" ? "wrap" : "nowrap", gap: 4, overflow: "hidden" }}>
       {(p.side === "pit" ? PIT_LINE : BAT).map(function (sl, ix) {
@@ -468,7 +477,7 @@ function DeckDetail(p) {
     </div>);
   };
   var bn = benchOf(d), bnKeys = Object.keys(bn).sort();
-  var chip = function (k, v) { return (<span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 999, background: "var(--inner)", border: "1px solid var(--bd)", color: "var(--t2)", whiteSpace: "nowrap" }}>{k + " "}<b style={{ color: "var(--t1)", fontFamily: "var(--m)" }}>{v}</b></span>); };
+  var chip = function (k, v, tip) { return (<span title={tip} style={{ fontSize: 11, padding: "3px 9px", borderRadius: 999, background: "var(--inner)", border: "1px solid var(--bd)", color: "var(--t2)", whiteSpace: "nowrap" }}>{k + " "}<b style={{ color: "var(--t1)", fontFamily: "var(--m)" }}>{v}</b></span>); };
   var ALL = BAT.concat(["SP1", "SP2", "SP3", "SP4", "SP5", "RP1", "RP2", "RP3", "RP4", "RP5", "RP6", "RP7", "RP8", "CP"]).filter(function (s) { return d.slots[s]; }).concat(bnKeys);
   var capNames = ALL.filter(function (sl) { return (det[sl] || {}).cap; }).map(function (sl) { var c = t.card(d.slots[sl] || bn[sl]); return c ? c.name : sl; });
   var sdRows = (t.sdRows || []).filter(function (r) { return d.sp == null || r.sp <= d.sp; });
@@ -482,8 +491,8 @@ function DeckDetail(p) {
           <b style={{ fontFamily: "var(--m)", color: "var(--td)" }}>{r.sp + " "}</b><b style={{ color: L ? "#4FC3F7" : "#FFB74D" }}>{L ? "좌" : "우"}</b>{" " + (L ? r.l : r.r) + (sd[1] ? " " + sd[1].slice(-2) : "")}</span>);
       })}
     </div>
-    {d.ord && <div style={{ fontSize: 11, color: "var(--t2)", marginTop: 6 }}>{"타순 묶음 — " + ["1~2", "3~5", "6~9"].filter(function (g) { return BAT.some(function (sl) { return d.ord[sl] === g; }); }).map(function (g) {
-      return g + "번: " + BAT.filter(function (sl) { return d.ord[sl] === g; }).map(function (sl) { var c = t.card(d.slots[sl]); return c ? c.name : sl; }).join(" · ");
+    {d.ord && <div style={{ fontSize: 11, color: "var(--t2)", marginTop: 6 }}>{"타순 묶음 — " + ["1~2", "3~5", "6~9"].filter(function (g) { return BAT.some(function (sl) { return ordG(d.ord[sl]) === g; }); }).map(function (g) {
+      return g + "번: " + BAT.filter(function (sl) { return ordG(d.ord[sl]) === g; }).map(function (sl) { var c = t.card(d.slots[sl]); return c ? c.name : sl; }).join(" · ");
     }).join("  /  ")}</div>}
   </div>) : null;
   var tableEl = (<div style={{ marginTop: 12, overflowX: "auto" }}>
@@ -511,6 +520,10 @@ function DeckDetail(p) {
     </div></div>);
   return (<div style={{ padding: mob ? "10px 8px 14px" : "12px 16px 16px", borderTop: "1px dashed var(--bd)", background: "var(--re)" }}>
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+      {d.tot && chip("TOTAL", fmtTot(d.tot.t) + (d.tot.tier ? " · 예상 " + d.tot.tier : ""), TOT_TIP + (d.tot.all ? "\n전술마다: " + Object.keys(d.tot.all).map(function (k) { return k + " " + fmtTot(d.tot.all[k]); }).join(" · ") : ""))}
+      {d.tot && d.tot.best && d.tot.best[0] !== "기본/기본" && chip("전술 최고", d.tot.best[0] + " " + fmtTot(d.tot.best[1]), "고를 수 있는 중계 전술 중 TOTAL 이 가장 높은 것 — 이 덱이 실제로 쓴 전술은 랭커 화면에 없어요")}
+      {d.rec && chip((p.season ? "시즌 " + p.season : "지난 시즌") + " 전적", recTxt(d.rec), "통계 탭 랭킹 챌린지 지난 시즌 — " + d.rec.g + "경기")}{d.rec && chip("포인트", d.rec.pt.toLocaleString() + (d.rec.lg ? " · " + d.rec.lg : ""))}
+      {d.top && chip("최고 시즌", d.top.pt.toLocaleString() + " · " + d.top.rk + "위", "통계 탭 랭킹 챌린지 최고 시즌 — " + recTxt(d.top))}
       {chip("OVR", d.ovr != null ? d.ovr.toFixed(1) : "—")}{chip("타자 · 투수", (d.bat != null ? d.bat.toFixed(1) : "—") + " · " + (d.pit != null ? d.pit.toFixed(1) : "—"))}
       {chip("셋포", d.sp || "—")}{chip("불펜", fmtBp(d.bp))}{chip("스킬 합 타 · 투", f1(d.ssBat) + " · " + f1(d.ssPit))}{chip("라커룸", d.lk != null ? "LV" + d.lk : "—")}{chip("특훈 총", d.pt != null ? "LV" + d.pt : "—")}{capNames.length > 0 && chip("주장 · 조장", capNames.join(" · "))}
     </div>
@@ -558,7 +571,7 @@ function DeckListView(p) {
         var id = d.pos || d.rank, on = open === id;
         return (<div key={id} style={{ borderBottom: "1px solid var(--bd)" }}>
           <DeckLine tools={t} deck={d} mob={mob} q={q} side={side} open={on} onToggle={function () { setOpen(on ? null : id); }} />
-          {on && <DeckDetail tools={t} deck={d} mob={mob} mySlots={p.mySlots} onLab={p.onLab} onCard={p.onCard} initTable={p.openTable} />}
+          {on && <DeckDetail tools={t} deck={d} mob={mob} season={p.season} mySlots={p.mySlots} onLab={p.onLab} onCard={p.onCard} initTable={p.openTable} />}
         </div>);
       })}
     </div>
@@ -838,8 +851,8 @@ export default function In100Page(p) {
         <div style={{ fontSize: 13, color: "var(--t1)", fontWeight: 800 }}>{"랭킹 챌린지 시즌 " + snap.season + " (" + snap.period + ") 1~100위"}</div>
         <div style={{ fontSize: 11, color: "var(--td)", marginTop: 2 }}>{snap.at.slice(5).replace("-", "/") + " 기준 덱 · " + decksAll.length + "덱(같은 점수는 같은 순위라 100위가 둘)"}</div>
       </div>
-      <select aria-label="판 고르기" defaultValue={snap.id} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--bd)", background: "var(--inner)", color: "var(--t1)", fontSize: 12 }}>
-        <option value={snap.id}>{"시즌 " + snap.season + " (최신)"}</option>
+      <select aria-label="판 고르기" value={snap.id} onChange={function (e) { if (p.onSnap) p.onSnap(e.target.value); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--bd)", background: "var(--inner)", color: "var(--t1)", fontSize: 12 }}>
+        {(p.snaps && p.snaps.length ? p.snaps : [{ id: snap.id, season: snap.season }]).map(function (x, i) { return (<option key={x.id} value={x.id}>{"시즌 " + x.season + (i === 0 ? " (최신)" : "")}</option>); })}
       </select>
     </div>
     <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
@@ -856,10 +869,10 @@ export default function In100Page(p) {
     </div>
     {view === "pop" && !team && <TeamSpread tools={t} mob={mob} decks={decksAll} onPick={setTeam} />}
     {view === "pop" && <PopularView tools={t} mob={mob} decks={decks} team={team} mySet={mySet} ownSet={ownSet} onCard={setSheet} />}
-    {view === "list" && <DeckListView key={"l" + openRank} tools={t} mob={mob} decks={decks} mySlots={mySlots} openRank={openRank} openTable={p.openTable} onLab={p.onLab} onCard={setSheet} />}
+    {view === "list" && <DeckListView key={"l" + openRank} tools={t} mob={mob} decks={decks} season={snap.season} mySlots={mySlots} openRank={openRank} openTable={p.openTable} onLab={p.onLab} onCard={setSheet} />}
     {view === "sd" && <SdView tools={t} mob={mob} decks={decks} mySd={p.mySd} />}
     {view === "mine" && <MineView tools={t} mob={mob} allDecks={decksAll} myTeam={myTeam} mySlots={mySlots} ownSet={ownSet} myCards={p.myCards} onCard={setSheet} onOpenDeck={openDeck} />}
-    <div style={{ fontSize: 10, color: "var(--td)", lineHeight: 1.6 }}>{"· 인게임 랭킹 챌린지 지난 시즌 순위 화면에서 모은 덱이에요(모은 날 기준이라 시즌 중 덱과 조금 다를 수 있어요). 닉네임은 싣지 않아요. · 사용률 = 그 칸에 그 카드를 넣은 덱 수 ÷ 덱 수 · 도감에 없는 카드(시즌 카드 등)는 빈칸"}</div>
+    <div style={{ fontSize: 10, color: "var(--td)", lineHeight: 1.6 }}>{"· 인게임 랭킹 챌린지 지난 시즌 순위 화면에서 모은 덱이에요(모은 날 기준이라 시즌 중 덱과 조금 다를 수 있어요). 닉네임은 싣지 않아요. · 사용률 = 그 칸에 그 카드를 넣은 덱 수 ÷ 덱 수 · 도감에 없는 카드(시즌 카드 등)는 빈칸" + (decksAll[0] && decksAll[0].tot ? " · TOTAL = 덱을 사이트 라인업으로 옮겨 지금 계산기로 센 값(중계 전술은 기본/기본) · 전적 · 포인트 = 통계 탭 랭킹 챌린지 지난 시즌 · 최고 시즌" : "")}</div>
     {sheet && <CardSheet tools={t} mob={mob} decks={decksAll} id={sheet} mine={mineCard} onClose={function () { setSheet(null); }} onOpenDeck={openDeck} />}
   </div>);
 }

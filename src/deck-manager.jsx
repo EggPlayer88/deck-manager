@@ -11,7 +11,9 @@ import FeedbackPage from "./feedback-board.jsx";
 import HelpGuide from "./help-guide.jsx";
 import In100Page from "./in100.jsx";
 /* in100 홍보 — 새 판(시즌)을 올리면 IN100_LATEST 를 그 판 id 로 바꾼다 → 왕관 단추 · 메뉴의 NEW 가 다시 붙는다 */
-var IN100_LATEST = "s239", IN100_SEASON = 239;
+var IN100_LATEST = "s240", IN100_SEASON = 240;
+/* 고를 수 있는 판 (public/in100/<id>.json) — 맨 앞이 최신. in100 화면 '판 고르기'에 나온다 (2026-11-10 시즌 240) */
+var IN100_SNAPS = [{ id: "s240", season: 240 }, { id: "s239", season: 239 }];
 function in100SeenGet() { try { return localStorage.getItem("in100Seen") || ""; } catch (e) { return ""; } }
 function in100SeenSet() { try { localStorage.setItem("in100Seen", IN100_LATEST); } catch (e) {} }
 /* 왕관 단추 — bar = 폰 맨 위 헤더용(작게). ring = NEW 딱지 둘레 색(놓인 바탕색) */
@@ -1148,10 +1150,10 @@ function calcPit(pl,lu,sdB){
 var BAT_SLOTS = ["C","1B","2B","3B","SS","LF","CF","RF","DH"];
 var SP_SLOTS = ["SP1","SP2","SP3","SP4","SP5"];
 var RP_SLOTS = ["RP1","RP2","RP3","RP4","RP5","RP6"];
-/* 중계 6 ~ 8명 (2026-10-29 사용자 지정 — 게임 업데이트): 후보 타자 + 중계 = 12명이라 중계 6 · 7 · 8명이면 후보는 6 · 5 · 4칸.
+/* 중계 4 ~ 8명 (2026-10-29 · 11-10 사용자 지정 — 게임 업데이트): 후보 타자 + 중계 = 12명이라 중계 4 · 5 · 6 · 7 · 8명이면 후보는 8 · 7 · 6 · 5 · 4칸.
    RP_SLOTS 는 기본 6자리로 남긴다(덱 연구소처럼 중계 6명 고정인 곳). 라인업은 편성에서 인원을 읽어 rpSlotsOf · bnSlotsOf 로 자리를 정한다 */
 var RP_ALL = ["RP1","RP2","RP3","RP4","RP5","RP6","RP7","RP8"];
-var BN_ALL = ["BN1","BN2","BN3","BN4","BN5","BN6"];
+var BN_ALL = ["BN1","BN2","BN3","BN4","BN5","BN6","BN7","BN8"];
 var BENCH_RP_TOTAL = 12;
 
 /* 팀 버프 스킬(국대에이스·포수리드) 자동 감지.
@@ -1200,7 +1202,7 @@ function computeLineupSetDeck(pickRaw, sdState) {
       /* POTM 셋포 — 라이브 10(이미 10이면 11), 올스타 12/8/4, 스페셜 +1 (potmEffect).
          덱별 POTM 설정(끄기·가정)도 능력치와 똑같이 따른다 */
       var getPotmSetDelta = function(pl) { return potmEffect(pl, sdState).setDelta || 0; };
-      /* 중계 · 후보는 편성 인원만큼 (중계 6 · 7 · 8명 → 후보 6 · 5 · 4칸) */
+      /* 중계 · 후보는 편성 인원만큼 (중계 4 ~ 8명 → 후보 8 ~ 4칸) */
       var allSlots = BAT_SLOTS.concat(SP_SLOTS).concat(rpSlotsOf(sdState.bpcIdx)).concat(["CP"]);
       allSlots.forEach(function(slot) {
         var pl = pick(slot);
@@ -3939,11 +3941,11 @@ function potmSummary(e, role) {
   return head + " — " + parts.join(" · ");
 }
 
-/* 불펜 편성 — 승리조 / 추격조 / 롱릴리프 인원 (중계 6 · 7 · 8명).
-   게임 규칙 (2026-10-29 사용자 지정): 승리조 · 추격조 1 ~ 4명, 롱릴리프 0 ~ 4명 → 6명 13 · 7명 14 · 8명 13가지.
+/* 불펜 편성 — 승리조 / 추격조 / 롱릴리프 인원 (중계 4 ~ 8명).
+   게임 규칙 (2026-10-29 · 11-10 사용자 지정): 승리조 · 추격조 1 ~ 4명, 롱릴리프 0 ~ 4명 → 4명 6 · 5명 10 · 6명 13 · 7명 14 · 8명 13가지.
    덱 설정 bpcIdx 가 이 목록의 번호라 앞 11개(예전 6명 편성)의 번호는 그대로 두고 새 편성은 뒤에 붙인다
-   (11 · 12 = 4/1/1 · 4/2/0, 13 ~ 26 = 7명, 27 ~ 39 = 8명). 화면 순서는 인원마다 승리조 · 추격조 적은 순 (bpcListOf) */
-var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1},{label:"4/1/1",w:4,l:1,r:1},{label:"4/2/0",w:4,l:2,r:0},{label:"1/2/4",w:1,l:2,r:4},{label:"1/3/3",w:1,l:3,r:3},{label:"1/4/2",w:1,l:4,r:2},{label:"2/1/4",w:2,l:1,r:4},{label:"2/2/3",w:2,l:2,r:3},{label:"2/3/2",w:2,l:3,r:2},{label:"2/4/1",w:2,l:4,r:1},{label:"3/1/3",w:3,l:1,r:3},{label:"3/2/2",w:3,l:2,r:2},{label:"3/3/1",w:3,l:3,r:1},{label:"3/4/0",w:3,l:4,r:0},{label:"4/1/2",w:4,l:1,r:2},{label:"4/2/1",w:4,l:2,r:1},{label:"4/3/0",w:4,l:3,r:0},{label:"1/3/4",w:1,l:3,r:4},{label:"1/4/3",w:1,l:4,r:3},{label:"2/2/4",w:2,l:2,r:4},{label:"2/3/3",w:2,l:3,r:3},{label:"2/4/2",w:2,l:4,r:2},{label:"3/1/4",w:3,l:1,r:4},{label:"3/2/3",w:3,l:2,r:3},{label:"3/3/2",w:3,l:3,r:2},{label:"3/4/1",w:3,l:4,r:1},{label:"4/1/3",w:4,l:1,r:3},{label:"4/2/2",w:4,l:2,r:2},{label:"4/3/1",w:4,l:3,r:1},{label:"4/4/0",w:4,l:4,r:0}];
+   (11 · 12 = 4/1/1 · 4/2/0, 13 ~ 26 = 7명, 27 ~ 39 = 8명, 40 ~ 45 = 4명 · 46 ~ 55 = 5명 — 11-10). 화면 순서는 인원마다 승리조 · 추격조 적은 순 (bpcListOf) */
+var BPC = [{label:"1/1/4",w:1,l:1,r:4},{label:"1/2/3",w:1,l:2,r:3},{label:"1/3/2",w:1,l:3,r:2},{label:"2/1/3",w:2,l:1,r:3},{label:"2/2/2",w:2,l:2,r:2},{label:"2/3/1",w:2,l:3,r:1},{label:"3/1/2",w:3,l:1,r:2},{label:"3/2/1",w:3,l:2,r:1},{label:"3/3/0",w:3,l:3,r:0},{label:"2/4/0",w:2,l:4,r:0},{label:"1/4/1",w:1,l:4,r:1},{label:"4/1/1",w:4,l:1,r:1},{label:"4/2/0",w:4,l:2,r:0},{label:"1/2/4",w:1,l:2,r:4},{label:"1/3/3",w:1,l:3,r:3},{label:"1/4/2",w:1,l:4,r:2},{label:"2/1/4",w:2,l:1,r:4},{label:"2/2/3",w:2,l:2,r:3},{label:"2/3/2",w:2,l:3,r:2},{label:"2/4/1",w:2,l:4,r:1},{label:"3/1/3",w:3,l:1,r:3},{label:"3/2/2",w:3,l:2,r:2},{label:"3/3/1",w:3,l:3,r:1},{label:"3/4/0",w:3,l:4,r:0},{label:"4/1/2",w:4,l:1,r:2},{label:"4/2/1",w:4,l:2,r:1},{label:"4/3/0",w:4,l:3,r:0},{label:"1/3/4",w:1,l:3,r:4},{label:"1/4/3",w:1,l:4,r:3},{label:"2/2/4",w:2,l:2,r:4},{label:"2/3/3",w:2,l:3,r:3},{label:"2/4/2",w:2,l:4,r:2},{label:"3/1/4",w:3,l:1,r:4},{label:"3/2/3",w:3,l:2,r:3},{label:"3/3/2",w:3,l:3,r:2},{label:"3/4/1",w:3,l:4,r:1},{label:"4/1/3",w:4,l:1,r:3},{label:"4/2/2",w:4,l:2,r:2},{label:"4/3/1",w:4,l:3,r:1},{label:"4/4/0",w:4,l:4,r:0},{label:"1/1/2",w:1,l:1,r:2},{label:"1/2/1",w:1,l:2,r:1},{label:"1/3/0",w:1,l:3,r:0},{label:"2/1/1",w:2,l:1,r:1},{label:"2/2/0",w:2,l:2,r:0},{label:"3/1/0",w:3,l:1,r:0},{label:"1/1/3",w:1,l:1,r:3},{label:"1/2/2",w:1,l:2,r:2},{label:"1/3/1",w:1,l:3,r:1},{label:"1/4/0",w:1,l:4,r:0},{label:"2/1/2",w:2,l:1,r:2},{label:"2/2/1",w:2,l:2,r:1},{label:"2/3/0",w:2,l:3,r:0},{label:"3/1/1",w:3,l:1,r:1},{label:"3/2/0",w:3,l:2,r:0},{label:"4/1/0",w:4,l:1,r:0}];
 /* 편성 하나 — 번호가 없거나 모르는 값이면 2/2/2 */
 function bpcAt(idx) { return BPC[idx === undefined ? 4 : idx] || BPC[4]; }
 /* 중계 인원 */
@@ -3958,6 +3960,8 @@ function bpcListOf(n) {
   var out = []; BPC.forEach(function(c, i) { if (bpcN(c) === n) out.push(i); });
   return out.sort(function(a, b) { return (BPC[a].w - BPC[b].w) || (BPC[a].l - BPC[b].l); });
 }
+/* 고를 수 있는 중계 인원 — 화면의 '중계' 드롭다운 (2026-11-10 4 · 5명 더함) */
+var RP_N_LIST = [4, 5, 6, 7, 8];
 /* 중계 n 명을 고를 수 있나 — 그 인원 편성 중 하나라도 가중치가 있으면 */
 function rpNReady(n) { return bpcListOf(n).some(bpcReady); }
 /* 고를 수 있는 전술 (게임 규칙) — 승리조 적극은 1명부터(2026-11-02 사용자 정정, 예전엔 2명) · 분업은 3명부터, 추격조 적극은 2명부터.
@@ -3977,12 +3981,12 @@ function bpcFor(n, from) {
 }
 /* 중계 가중치 · 선발 배율 · 마무리 배율 — 편성 x (승리조 전술 / 추격조 전술) 조합마다 등판 차례대로 적는다
    (승리조 1번째 … → 추격조 1번째 … → 롱릴리프 1번째 …). 선발 배율은 승리조 전술로만 정한다.
-   아래 ▼ ▲ 사이는 scripts/bullpen-weights.mjs 가 가중치 파일(6명 편성 목록 · 7 · 8명 편성 표 · 선발 · 마무리)에서 만든다 —
+   아래 ▼ ▲ 사이는 scripts/bullpen-weights.mjs 가 가중치 파일(6명 편성 목록 · 7 · 8명 편성 표 · 4 · 5명 편성 표 · 선발 · 마무리)에서 만든다 —
    손으로 고치지 말고 그 도구로 다시 만든다. 고를 수 없는 전술 조합(승리조 1명의 적극 등)은 넣지 않고,
    표가 없는 편성(null)은 화면에서 고르지 못하게 막는다 (bpcReady) */
 /* ▼ 불펜 가중치 (자동 생성) ▼ */
-/* 2026-11-05 · "11-05 틀 (선발 7.30 · 마무리 0.85)" · 원본 step2_rp_weights_1105.json · step2_rp_weights_1105_78.json · stage1_1105_tool.json — node scripts/bullpen-weights.mjs 로 다시 만든다 */
-var BP_W_INFO = { name: "11-05 틀 (선발 7.30 · 마무리 0.85)", made: "2026-11-05" };
+/* 2026-11-10 · "11-05 틀 (선발 7.30 · 마무리 0.85) · 중계 4 · 5명 11-10" · 원본 step2_rp_weights_1105.json · step2_rp_weights_1105_78.json · step2_rp_weights_1110_45.json · stage1_1105_tool.json — node scripts/bullpen-weights.mjs 로 다시 만든다 */
+var BP_W_INFO = { name: "11-05 틀 (선발 7.30 · 마무리 0.85) · 중계 4 · 5명 11-10", made: "2026-11-10" };
 var RP_WEIGHTS = [
   /*  0 · 1/1/4 */ { "기본/기본": [1, 0.6, 0.23, 0.02, 0, 0], "적극/기본": [0.83, 0.79, 0.26, 0.02, 0, 0] },
   /*  1 · 1/2/3 */ { "기본/기본": [0.99, 0.6, 0.05, 0.2, 0.01, 0], "기본/적극": [1.02, 0.45, 0.14, 0.22, 0.02, 0], "적극/기본": [0.82, 0.78, 0.09, 0.2, 0.01, 0], "적극/적극": [0.86, 0.59, 0.19, 0.24, 0.02, 0] },
@@ -4024,6 +4028,22 @@ var RP_WEIGHTS = [
   /* 37 · 4/2/2 */ { "기본/기본": [1.07, 0.2, 0.02, 0, 0.32, 0.01, 0.22, 0.01], "기본/적극": [1.09, 0.21, 0.02, 0, 0.23, 0.07, 0.22, 0.01], "적극/기본": [0.92, 0.34, 0.06, 0, 0.34, 0.01, 0.22, 0.01], "적극/적극": [0.94, 0.34, 0.07, 0, 0.24, 0.08, 0.22, 0.01], "분업/기본": [0.13, 0, 0.55, 0.66, 0.41, 0.06, 0.23, 0.01], "분업/적극": [0.15, 0.01, 0.54, 0.66, 0.33, 0.12, 0.23, 0.01] },
   /* 38 · 4/3/1 */ { "기본/기본": [1.07, 0.2, 0.02, 0, 0.33, 0.01, 0, 0.22], "기본/적극": [1.07, 0.21, 0.02, 0, 0.24, 0.07, 0.02, 0.22], "적극/기본": [0.92, 0.34, 0.06, 0, 0.35, 0.01, 0, 0.22], "적극/적극": [0.92, 0.34, 0.07, 0, 0.25, 0.08, 0.02, 0.22], "분업/기본": [0.13, 0, 0.55, 0.67, 0.42, 0.06, 0.02, 0.2], "분업/적극": [0.13, 0, 0.55, 0.67, 0.34, 0.12, 0.04, 0.2] },
   /* 39 · 4/4/0 */ { "기본/기본": [1.07, 0.23, 0.03, 0, 0.48, 0.04, 0, 0], "기본/적극": [1.08, 0.23, 0.02, 0, 0.36, 0.1, 0.04, 0.02], "적극/기본": [0.91, 0.37, 0.07, 0.01, 0.5, 0.04, 0, 0], "적극/적극": [0.92, 0.37, 0.07, 0.01, 0.37, 0.11, 0.04, 0.01], "분업/기본": [0.13, 0, 0.56, 0.68, 0.56, 0.1, 0.02, 0], "분업/적극": [0.14, 0, 0.56, 0.68, 0.45, 0.15, 0.06, 0.01] },
+  /* 40 · 1/1/2 */ { "기본/기본": [1, 0.6, 0.23, 0.02], "적극/기본": [0.83, 0.79, 0.26, 0.02] },
+  /* 41 · 1/2/1 */ { "기본/기본": [0.99, 0.6, 0.05, 0.21], "기본/적극": [1.03, 0.45, 0.15, 0.22], "적극/기본": [0.82, 0.79, 0.09, 0.2], "적극/적극": [0.86, 0.6, 0.2, 0.24] },
+  /* 42 · 1/3/0 */ { "기본/기본": [0.98, 0.77, 0.09, 0.01], "기본/적극": [1.01, 0.59, 0.18, 0.07], "적극/기본": [0.81, 0.94, 0.14, 0.01], "적극/적극": [0.84, 0.71, 0.24, 0.11] },
+  /* 43 · 2/1/1 */ { "기본/기본": [1.07, 0.21, 0.35, 0.22], "적극/기본": [0.92, 0.34, 0.42, 0.22] },
+  /* 44 · 2/2/0 */ { "기본/기본": [1.07, 0.23, 0.51, 0.04], "기본/적극": [1.12, 0.24, 0.38, 0.11], "적극/기본": [0.91, 0.36, 0.57, 0.06], "적극/적극": [0.95, 0.38, 0.43, 0.14] },
+  /* 45 · 3/1/0 */ { "기본/기본": [1.1, 0.24, 0.03, 0.48], "적극/기본": [0.94, 0.38, 0.07, 0.51], "분업/기본": [0.16, 0.58, 0.71, 0.6] },
+  /* 46 · 1/1/3 */ { "기본/기본": [1, 0.6, 0.23, 0.02, 0], "적극/기본": [0.83, 0.79, 0.26, 0.02, 0] },
+  /* 47 · 1/2/2 */ { "기본/기본": [0.99, 0.6, 0.05, 0.2, 0.01], "기본/적극": [1.02, 0.45, 0.14, 0.22, 0.02], "적극/기본": [0.82, 0.78, 0.09, 0.2, 0.01], "적극/적극": [0.86, 0.59, 0.19, 0.24, 0.02] },
+  /* 48 · 1/3/1 */ { "기본/기본": [0.99, 0.61, 0.05, 0, 0.2], "기본/적극": [1.01, 0.45, 0.14, 0.04, 0.21], "적극/기본": [0.82, 0.79, 0.09, 0, 0.2], "적극/적극": [0.84, 0.59, 0.19, 0.07, 0.21] },
+  /* 49 · 1/4/0 */ { "기본/기본": [0.98, 0.77, 0.09, 0.01, 0], "기본/적극": [1, 0.59, 0.18, 0.06, 0.02], "적극/기본": [0.81, 0.94, 0.14, 0.01, 0], "적극/적극": [0.82, 0.7, 0.24, 0.1, 0.04] },
+  /* 50 · 2/1/2 */ { "기본/기본": [1.07, 0.21, 0.34, 0.22, 0.01], "적극/기본": [0.92, 0.34, 0.41, 0.22, 0.01] },
+  /* 51 · 2/2/1 */ { "기본/기본": [1.07, 0.2, 0.35, 0.01, 0.22], "기본/적극": [1.09, 0.21, 0.25, 0.08, 0.22], "적극/기본": [0.91, 0.34, 0.42, 0.01, 0.22], "적극/적극": [0.93, 0.34, 0.31, 0.1, 0.22] },
+  /* 52 · 2/3/0 */ { "기본/기본": [1.07, 0.23, 0.51, 0.04, 0], "기본/적극": [1.09, 0.23, 0.38, 0.11, 0.04], "적극/기본": [0.91, 0.36, 0.57, 0.06, 0], "적극/적극": [0.92, 0.37, 0.43, 0.13, 0.05] },
+  /* 53 · 3/1/1 */ { "기본/기본": [1.07, 0.21, 0.02, 0.33, 0.22], "적극/기본": [0.92, 0.34, 0.07, 0.35, 0.22], "분업/기본": [0.14, 0.54, 0.66, 0.42, 0.29] },
+  /* 54 · 3/2/0 */ { "기본/기본": [1.08, 0.23, 0.02, 0.48, 0.04], "기본/적극": [1.12, 0.24, 0.03, 0.36, 0.1], "적극/기본": [0.92, 0.37, 0.07, 0.5, 0.04], "적극/적극": [0.96, 0.38, 0.07, 0.38, 0.11], "분업/기본": [0.14, 0.56, 0.68, 0.57, 0.1], "분업/적극": [0.17, 0.57, 0.69, 0.45, 0.17] },
+  /* 55 · 4/1/0 */ { "기본/기본": [1.1, 0.24, 0.03, 0, 0.48], "적극/기본": [0.94, 0.38, 0.07, 0.01, 0.5], "분업/기본": [0.16, 0.01, 0.57, 0.71, 0.6] },
 ];
 var SP_MULT = {
   "기본": [1.56, 1.46, 1.46, 1.46, 1.36],   /* 합 7.300 */
@@ -4472,7 +4492,7 @@ function bestLineup(players, lm, sdState) {
   };
   var now = evalWith(lm, null, null);
   var sd0 = now.sd, totalSP = now.sp, keep = { sp: now.sp, syn: now.syn }, o = lineupOpts(sd0, totalSP);
-  /* 중계 · 후보 칸은 편성 인원대로 (중계 6 · 7 · 8명 → 후보 6 · 5 · 4칸, 2026-10-29) — 라인업은 21 · 22 · 23칸 */
+  /* 중계 · 후보 칸은 편성 인원대로 (중계 4 ~ 8명 → 후보 8 ~ 4칸, 2026-10-29) — 라인업은 19 ~ 23칸 */
   var rpS = rpSlotsOf(sd0.bpcIdx), bnS = bnSlotsOf(sd0.bpcIdx);
   var L21 = BAT_SLOTS.concat(SP_SLOTS, rpS, ["CP"]);
   /* 후보 — 지금 주전 타자 9칸(칸마다) + '내 선수'에만 있는 타자. 후보 칸 · 투수 칸 선수는 빼고 */
@@ -4817,6 +4837,15 @@ function BullpenLayout(p) {
   var setChaseTac = p.setChaseTac || function(){};
   var isWinSplit = winTac === "분업";
   var _o = useState(false); var open = _o[0]; var setOpen = _o[1];
+  var _on = useState(false); var openN = _on[0]; var setOpenN = _on[1];   /* 중계 인원 드롭다운 */
+  /* 펼친 목록(중계 인원 · 편성)은 바깥을 누르면 닫는다 */
+  var hdrRef = React.useRef(null);
+  useEffect(function() {
+    if (!open && !openN) return;
+    var h = function(e) { if (hdrRef.current && !hdrRef.current.contains(e.target)) { setOpen(false); setOpenN(false); } };
+    document.addEventListener("pointerdown", h);
+    return function() { document.removeEventListener("pointerdown", h); };
+  }, [open, openN]);
   /* 분업이면 승리조의 마지막 두 차례가 셋업1 · 셋업2 (slotGroupOf — 3명 승1 · 셋1 · 셋2, 4명 승1 · 승2 · 셋1 · 셋2) */
   var setupOf = function(slot) { var r = slotGroupOf(slot, idx, isWinSplit, p.rpOrder); return r === "셋업1" || r === "셋업2" ? r : ""; };
   var cfg = bpcAt(idx), N = bpcN(cfg);
@@ -4836,27 +4865,31 @@ function BullpenLayout(p) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+      <div ref={hdrRef} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t2)", letterSpacing: 0.5 }}>{"불펜 편성"}</span>
-        {/* 중계 인원 6 · 7 · 8명 (2026-10-29 사용자 지정) — 후보 + 중계 = 12 라 후보 칸이 6 · 5 · 4칸으로 같이 바뀐다 (p.setRpN).
-            가중치가 들어오지 않은 인원은 흐리게 두고 누르면 알린다 */}
-        <div role="radiogroup" aria-label="중계 인원" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        {/* 중계 인원 4 ~ 8명 (2026-10-29 · 11-10 사용자 지정) — 후보 + 중계 = 12 라 후보 칸이 8 ~ 4칸으로 같이 바뀐다 (p.setRpN).
+            인원이 다섯 가지라 단추 대신 드롭다운으로 고른다 (2026-11-10 사용자 요청). 가중치가 들어오지 않은 인원은 흐리게 두고 누르면 알린다 */}
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: "#42A5F5", whiteSpace: "nowrap" }}>{"중계"}</span>
-          <div style={{ display: "inline-flex", border: "1px solid var(--bd)", borderRadius: 7, overflow: "hidden" }}>
-            {[6, 7, 8].map(function(n, i) {
-              var on = n === N, ok = rpNReady(n);
-              return (<button key={n} type="button" role="radio" aria-checked={on} aria-disabled={!ok || undefined}
-                title={"중계 " + n + "명 · 후보 " + (BENCH_RP_TOTAL - n) + "칸" + (ok ? "" : " — 가중치 준비 중")}
-                onClick={function() { if (on) return; if (!ok) { showNote("중계 " + n + "명은 가중치가 들어오면 고를 수 있어요"); return; } if (p.setRpN) p.setRpN(n); }}
-                style={{ width: 34, minHeight: 30, padding: "4px 0", fontSize: 13, fontWeight: on ? 800 : 600, border: "none", borderLeft: i ? "1px solid var(--bd)" : "none",
-                  background: on ? "#42A5F5" : "var(--inner)", color: on ? "#fff" : "var(--t2)", opacity: ok ? 1 : 0.38,
-                  cursor: on ? "default" : ok ? "pointer" : "not-allowed", fontFamily: "var(--m)" }}>{n}</button>);
-            })}
-          </div>
+          <button type="button" aria-haspopup="listbox" aria-expanded={openN} aria-label={"중계 인원 " + N + "명"} title={"중계 " + N + "명 · 후보 " + (BENCH_RP_TOTAL - N) + "칸"}
+            onClick={function() { setOpenN(!openN); setOpen(false); }}
+            style={{ height: 28, padding: "0 8px 0 10px", borderRadius: 6, background: "var(--inner)", border: "1px solid var(--bd)", color: "#42A5F5", cursor: "pointer", fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
+            {N + "명"}<span style={{ fontSize: 7, color: "var(--td)" }}>{openN ? "▲" : "▼"}</span></button>
+          {openN && (
+            <div role="listbox" aria-label="중계 인원" style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, marginTop: 4, background: "var(--bg)", border: "1px solid var(--bd)", borderRadius: 8, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", width: 140 }}>
+              {RP_N_LIST.map(function(n) {
+                var on = n === N, ok = rpNReady(n);
+                return (<button key={n} type="button" role="option" aria-selected={on} aria-disabled={!ok || undefined} title={ok ? undefined : "가중치 준비 중"}
+                  onClick={function() { setOpenN(false); if (on) return; if (!ok) { showNote("중계 " + n + "명은 가중치가 들어오면 고를 수 있어요"); return; } if (p.setRpN) p.setRpN(n); }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 14px", background: on ? "var(--ta)" : "transparent", border: "none", borderBottom: "1px solid var(--bd)", color: on ? "#42A5F5" : "var(--t2)", cursor: ok ? "pointer" : "not-allowed", opacity: ok ? 1 : 0.45, fontSize: 14, fontFamily: "var(--m)", fontWeight: on ? 800 : 500, textAlign: "left" }}>
+                  <span>{n + "명"}</span><span style={{ fontSize: 11, color: "var(--td)" }}>{ok ? "후보 " + (BENCH_RP_TOTAL - n) : "준비 중"}</span></button>);
+              })}
+            </div>
+          )}
         </div>
         <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
           <button type="button" aria-label="앞 편성" onClick={function() { step(-1); }} style={{ width: 28, height: 28, borderRadius: "6px 0 0 6px", background: "var(--inner)", border: "1px solid var(--bd)", borderRight: "none", color: "var(--t2)", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{"◀"}</button>
-          <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={function() { setOpen(!open); }} style={{ width: 80, height: 28, background: "var(--inner)", border: "1px solid var(--bd)", borderLeft: "none", borderRight: "none", color: "var(--acc)", cursor: "pointer", fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>{cfg.label}<span style={{ fontSize: 7, color: "var(--td)" }}>{open ? "▲" : "▼"}</span></button>
+          <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={function() { setOpen(!open); setOpenN(false); }} style={{ width: 80, height: 28, background: "var(--inner)", border: "1px solid var(--bd)", borderLeft: "none", borderRight: "none", color: "var(--acc)", cursor: "pointer", fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>{cfg.label}<span style={{ fontSize: 7, color: "var(--td)" }}>{open ? "▲" : "▼"}</span></button>
           <button type="button" aria-label="다음 편성" onClick={function() { step(1); }} style={{ width: 28, height: 28, borderRadius: "0 6px 6px 0", background: "var(--inner)", border: "1px solid var(--bd)", borderLeft: "none", color: "var(--t2)", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{"▶"}</button>
           {open && (
             <div role="listbox" aria-label={"중계 " + N + "명 편성"} style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, marginTop: 4, background: "var(--bg)", border: "1px solid var(--bd)", borderRadius: 8, overflow: "hidden", overflowY: "auto", maxHeight: "60vh", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", width: 176 }}>
@@ -6378,7 +6411,7 @@ function BestLineupModal(p) {
         </div>
       )}
       <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6, marginTop: 10 }}>
-        <div>{"· 지금 주전과 '내 선수'에 넣어 둔 타자 중에서 골라요. 후보 6칸과 투수는 그대로예요."}</div>
+        <div>{"· 지금 주전과 '내 선수'에 넣어 둔 타자 중에서 골라요. 후보 칸과 투수는 그대로예요."}</div>
         <div>{"· 수비 자리는 그 포지션 선수만, 같은 선수(다른 카드) 둘은 함께 주전으로 세우지 않아요. 골든글러브는 라인업에 5장(자팀 골글이 있으면 6장)까지만 — 넘으면 역시너지예요."}</div>
         <div>{"· 점수에 들어가는 걸 다 셌어요 — 타순 스킬 · 세트덱 타순 · 외야 구간 · 자리마다 다른 포지션 특훈(능력치 · 스킬 보너스) · 타순 × 강함 배율 · 포수리드 · 국대에이스. 셋포 · 시너지는 지금 값 그대로 두고 셌어요 (시너지는 후보로 맞추면 돼요)."}</div>
         {!v.same && (<div>{"· 바꾼 뒤에도 '↩ 되돌리기'로 지금 타선으로 돌아올 수 있어요."}</div>)}
@@ -6471,9 +6504,9 @@ function LineupPage(p) {
   var bpcIdx = sdState.bpcIdx !== undefined ? sdState.bpcIdx : 4;
   var isWinSplit = rpTactic(sdState) === "분업";
   var setBpcIdx = function(v) { setSdState(function(prev) { return Object.assign({}, prev, { bpcIdx: typeof v === "function" ? v(prev.bpcIdx !== undefined ? prev.bpcIdx : 4) : v }); }); };
-  /* 중계 인원 바꾸기 (6 · 7 · 8명, 2026-10-29 사용자 지정) — 후보 + 중계 = 12 라 후보 칸이 6 · 5 · 4칸으로 같이 바뀐다.
+  /* 중계 인원 바꾸기 (4 ~ 8명, 2026-10-29 · 11-10 사용자 지정) — 후보 + 중계 = 12 라 후보 칸이 8 ~ 4칸으로 같이 바뀐다.
      편성은 인원이 가장 덜 바뀌는 것으로 간다 (bpcFor — 승리조 → 추격조 → 롱릴리프 순으로 지킨다).
-     없어지는 중계 자리(RP7 · RP8)의 선수는 라인업에서 빠지고, 없어지는 후보 칸의 선수는 남는 빈 후보 칸으로 옮긴다 — 빈 칸이 없으면 빠진다.
+     없어지는 중계 자리(줄이면 RP 끝 번호)의 선수는 라인업에서 빠지고, 없어지는 후보 칸의 선수는 남는 빈 후보 칸으로 옮긴다 — 빈 칸이 없으면 빠진다.
      빠지는 선수가 있으면 한 번 묻는다 ('내 선수'에는 그대로 남는다). 등판 차례는 rpOrderOf 가 편성에 맞춰 읽는다 */
   var setRpN = function(n) {
     var cur = bpcAt(bpcIdx);
@@ -6622,7 +6655,7 @@ function LineupPage(p) {
   /* lBats: 타순 기준으로 정렬 (다이아몬드는 lineupMap 기준 그대로) */
   var lBats = batOrder.map(function(s) { return { slot: s, pl: pick(s) }; });
   var lSP = SP_SLOTS.map(function(s) { return { slot: s, pl: pick(s) }; });
-  /* 중계 · 후보 칸은 편성 인원대로 (중계 6 · 7 · 8명 → 후보 6 · 5 · 4칸) */
+  /* 중계 · 후보 칸은 편성 인원대로 (중계 4 ~ 8명 → 후보 8 ~ 4칸) */
   var rpSlotsNow = rpSlotsOf(bpcIdx), bnSlotsNow = bnSlotsOf(bpcIdx);
   var lRP = rpSlotsNow.map(function(s) { return { slot: s, pl: pick(s) }; });
   var lCP = { slot: "CP", pl: pick("CP") };
@@ -6703,7 +6736,7 @@ function LineupPage(p) {
     }
     return (<button onClick={runBest} disabled={!blReady || blBusy} style={blBtnSt}
       title={peakOn ? "고점판독 중에는 쓸 수 없어요 — '현실로 돌아오기' 뒤에 눌러 주세요" : !blReady ? "'내 선수'에 선수를 넣으면 쓸 수 있어요"
-        : "셋포는 그대로 두고 지금 주전과 '내 선수'에 넣어 둔 타자로 TOTAL 이 가장 높은 타선을 찾아요 — 누가 수비 · 지명타자로 나가는지와 타순. 후보 6칸 · 투수는 그대로예요. 바꾸기 전에 미리 보여 줘요"}>
+        : "셋포는 그대로 두고 지금 주전과 '내 선수'에 넣어 둔 타자로 TOTAL 이 가장 높은 타선을 찾아요 — 누가 수비 · 지명타자로 나가는지와 타순. 후보 칸 · 투수는 그대로예요. 바꾸기 전에 미리 보여 줘요"}>
       {blBusy ? "계산 중…" : "⚡ 베스트 라인업"}
     </button>);
   };
@@ -6777,7 +6810,7 @@ function LineupPage(p) {
   /* 구버전(v10) 환산 점수 — 같은 덱 · 같은 세트덱 선택을 제구 반영(v1.1) 이전 계산으로 다시 센다.
      2026-10-21 사용자 결정: 새 점수가 메인, 구버전 점수도 당분간 같이 보여 준다.
      고점판독 중에는 고점 표가 새 기준으로만 있어 띄우지 않는다 */
-  /* 중계 7 · 8명 덱은 예전 계산에 없던 구성이라 구버전 점수를 띄우지 않는다 (2026-10-29) */
+  /* 중계 6명이 아닌 덱(4 · 5 · 7 · 8명)은 예전 계산에 없던 구성이라 구버전 점수를 띄우지 않는다 (2026-10-29 · 11-10) */
   var oldTotal = peakOn || rpSlotsNow.length !== 6 ? null : withScoreVer("v10", function () { return calcTotalWith(pick, sdCalc); });
   /* 제구 미입력 투수 수 — 실제 선수 기준 (고점판독 중에는 고점 사본이라 띄우지 않는다) */
   var ctlMissN = peakOn ? 0 : SP_SLOTS.concat(rpSlotsNow).concat(["CP"]).filter(function (s) { return ctlMissing(realPick(s)); }).length;
@@ -9199,13 +9232,16 @@ function labDeckSlots(players, lm) {
     var r = cardOf(pl);
     if (r && !used[r.id]) { slots[sl] = r.id; used[r.id] = 1; } else miss++;
   });
-  BL_BN.forEach(function (b) {
+  /* 후보는 연구소 칸(LAB_BENCH_N = 6)까지 — 중계 4 · 5명 덱의 후보 7 · 8번째는 넘치면 빠진다 (bcut, 2026-11-10) */
+  var bcut = 0;
+  BN_ALL.forEach(function (b) {
     var r = cardOf(byPid[(lm || {})[b]]);
-    if (r && !used[r.id]) { bench.push(r.id); used[r.id] = 1; }
+    if (!r || used[r.id]) return;
+    if (bench.length < LAB_BENCH_N) { bench.push(r.id); used[r.id] = 1; } else bcut++;
   });
   /* 중계 7 · 8번째(RP7 · RP8)는 연구소(중계 6명 고정)에 자리가 없어 빠진다 — 몇 명인지 알린다 (2026-10-29) */
   var cut = 0; ["RP7", "RP8"].forEach(function (sl) { if (byPid[(lm || {})[sl]]) cut++; });
-  return { slots: slots, bench: bench, miss: miss, any: any, cut: cut };
+  return { slots: slots, bench: bench, miss: miss, any: any, cut: cut, bcut: bcut };
 }
 /* ── 덱 연구소 야구장 화면 (2026-10-26 — 구성안 2차 · 사용자 결정) ─────────────────
    계산(labRun · 한도 · 세 티어)은 그대로 두고 화면만 바꾼다: 야구장 · 덕아웃(선발 5 · 불펜 7 · 후보 6) · 옆(폰은 아래) 고르기 창.
@@ -9595,7 +9631,8 @@ function LabPage(p) {
     touch(function () { if (tm && KBO_TEAMS.indexOf(tm) >= 0) setTeam(tm); setSlots(d.slots); setBench(d.bench || []); }, true);
     setPickSlot(null);
     setMsg("내 덱을 불러왔습니다 (" + Object.keys(d.slots).length + "자리 · 후보 " + (d.bench || []).length + ")" + (d.miss ? " — 도감 카드로 못 옮긴 " + d.miss + "장은 빠졌습니다" : "")
-      + (d.cut ? " — 중계 7 · 8번째 " + d.cut + "명은 연구소(중계 6명)에 자리가 없어 빠졌습니다" : ""));
+      + (d.cut ? " — 중계 7 · 8번째 " + d.cut + "명은 연구소(중계 6명)에 자리가 없어 빠졌습니다" : "")
+      + (d.bcut ? " — 후보 " + d.bcut + "명은 연구소(후보 6칸)에 자리가 없어 빠졌습니다" : ""));
   };
   var loadFrom = function (i) {
     var v = saves[i]; if (!v) return;
@@ -9619,7 +9656,8 @@ function LabPage(p) {
     });
     /* in100 덱 정보에서 넘어온 덱은 후보까지 받고 문구도 그쪽으로 (2026-11-03) */
     var srcName = d.src === "in100" ? "in100 " + (d.rank ? d.rank + "위 " : "") + "덱" : "클럽에서 가져온 덱";
-    var nextBench = Array.isArray(d.bench) ? d.bench.map(canonCardId).filter(function (id) { return id && byId[id]; }).slice(0, LAB_BENCH_N) : [];
+    var benchAll = Array.isArray(d.bench) ? d.bench.map(canonCardId).filter(function (id) { return id && byId[id]; }) : [];
+    var nextBench = benchAll.slice(0, LAB_BENCH_N), bcut = benchAll.length - nextBench.length;   /* 연구소 후보 6칸 — 넘치는 후보(중계 4 · 5명 덱)는 빠진다 */
     if (filled > 0 && !window.confirm("지금 올려 둔 카드를 지우고 " + srcName + "을 올릴까요?\n(저장해 둔 실험 1~3 은 그대로입니다)")) {
       (p.onIncomingDone || function () {})(); return;
     }
@@ -9628,7 +9666,8 @@ function LabPage(p) {
     setSuggest(inc.mode === "suggest" ? { post: inc.post, base: d } : null); setSugTxt("");
     setMsg(srcName + "을 올렸습니다 (" + Object.keys(next).length + "자리" + (nextBench.length ? " · 후보 " + nextBench.length + "명" : "") + ")"
       + (miss ? " — 도감에 없는 카드 " + miss + "장은 빠졌습니다" : "")
-      + (cut ? " — 중계 7 · 8번째 " + cut + "명은 연구소(중계 6명)에 자리가 없어 빠졌습니다" : ""));
+      + (cut ? " — 중계 7 · 8번째 " + cut + "명은 연구소(중계 6명)에 자리가 없어 빠졌습니다" : "")
+      + (bcut ? " — 후보 " + bcut + "명은 연구소(후보 6칸)에 자리가 없어 빠졌습니다" : ""));
     if (inc.mode !== "suggest") (p.onIncomingDone || function () {})();
   }, [inc && inc.key]);
   var clubDeckNow = function (cb) {
@@ -11771,11 +11810,16 @@ function DataCenterPage(p) {
   /* in100 판 — 탭을 열 때 한 번 받는다 (첫 화면을 무겁게 하지 않게) */
   var _snap = React.useState(null); var in100Snap = _snap[0]; var setIn100Snap = _snap[1];
   var _snapErr = React.useState(""); var in100Err = _snapErr[0]; var setIn100Err = _snapErr[1];
+  /* 고른 판 (기본 최신) — 받은 판은 기억해 두고 다시 고르면 바로 */
+  var _sid = React.useState(IN100_LATEST); var in100Id = _sid[0]; var setIn100Id = _sid[1];
+  var in100Cache = React.useRef({});
   React.useEffect(function(){
-    if (dcTab !== "top" || in100Snap) return;
-    fetch("/in100/s239.json").then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(setIn100Snap).catch(function(){ setIn100Err("in100 자료를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요."); });
-  }, [dcTab]);
+    if (dcTab !== "top" || (in100Snap && in100Snap.id === in100Id)) return;
+    if (in100Cache.current[in100Id]) { setIn100Snap(in100Cache.current[in100Id]); return; }
+    setIn100Err("");
+    fetch("/in100/" + in100Id + ".json").then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function(s){ in100Cache.current[in100Id] = s; setIn100Snap(s); }).catch(function(){ setIn100Err("in100 자료를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요."); });
+  }, [dcTab, in100Id]);
   var in100My = React.useMemo(function(){
     var byId = {}; players.forEach(function(x){ if (x && x.id) byId[x.id] = x; });
     var slots = {}, cards = {};
@@ -11822,7 +11866,7 @@ function DataCenterPage(p) {
       {dcTab==="skill" && <SkillCalculator mobile={mob} skills={skills} />}
       {dcTab==="train" && <TrainSimulator mobile={mob} skills={skills} />}
       {dcTab==="top" && !in100Snap && <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"36px 20px",textAlign:"center",color:"var(--td)",fontSize:13}}>{in100Err || "in100 자료를 불러오는 중…"}</div>}
-      {dcTab==="top" && in100Snap && <In100Page mobile={mob} snap={in100Snap} tools={in100Tools} myTeam={sdState.teamName||""} mySd={sdState} mySlots={in100My.slots} ownSet={in100My.own} myCards={in100My.cards}
+      {dcTab==="top" && in100Snap && <In100Page key={in100Snap.id} snaps={IN100_SNAPS} onSnap={setIn100Id} mobile={mob} snap={in100Snap} tools={in100Tools} myTeam={sdState.teamName||""} mySd={sdState} mySlots={in100My.slots} ownSet={in100My.own} myCards={in100My.cards}
         onLab={p.onOpenLab ? function(d){ var bn = d.bench || {}; var arr = Array.isArray(bn) ? bn : Object.keys(bn).sort().map(function(k){ return bn[k]; });
           p.onOpenLab({ team: d.team, slots: d.slots, bench: arr, src: "in100", rank: d.rank }); } : null} />}
     </div>

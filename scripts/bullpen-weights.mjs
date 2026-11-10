@@ -1,10 +1,11 @@
 /* 불펜 가중치 넣기 — 가중치 파일을 읽어 검사하고 src/deck-manager.jsx 의 '▼ 불펜 가중치 (자동 생성) ▼' 칸을 다시 쓴다.
 
-   node scripts/bullpen-weights.mjs --six <6명.json> [--more <7·8명.json>] --stage1 <선발·마무리.json> [--name "이름"] [--check]
+   node scripts/bullpen-weights.mjs --six <6명.json> [--more <7·8명.json>] [--few <4·5명.json>] --stage1 <선발·마무리.json> [--name "이름"] [--check]
 
    --six     중계 6명 편성 — 목록(사이트 편성 순서: 1/1/4 1/2/3 1/3/2 2/1/3 2/2/2 2/3/1 3/1/2 3/2/1 3/3/0 2/4/0 1/4/1 4/1/1 4/2/0)
              또는 { "2/2/2": {...}, ... } 처럼 편성 이름으로.
    --more    중계 7 · 8명 편성 — { "2/2/3": {...}, "4/4/0": {...}, ... } (없으면 7 · 8명은 '가중치 준비 중'으로 막힌다)
+   --few     중계 4 · 5명 편성 — { "1/1/2": {...}, "3/2/0": {...}, ... } 같은 모양 (2026-11-10, 없으면 4 · 5명은 막힌다)
    --stage1  { "sp": { "기본": [선발 5], "적극": [...], "분업": [...] }, "cp": 마무리, "rpSum"?: { "기본": 중계 합, ... } }
    --name    화면 · 기록용 이름 (예: "6판 한도110")
    --check   검사만 하고 파일은 안 바꾼다
@@ -53,9 +54,10 @@ if (Array.isArray(six)) {
   if (six.length > SIX.length) die('6명 목록이 ' + six.length + '개예요 (최대 ' + SIX.length + ')');
   six.forEach((e, i) => { if (e) byLabel[SIX[i]] = e; });
 } else Object.assign(byLabel, six);
-if (args.more) {
-  const more = readJson(args.more);
-  if (Array.isArray(more)) die('--more 는 { "편성": {...} } 모양이어야 해요');
+for (const opt of ['more', 'few']) {
+  if (!args[opt]) continue;
+  const more = readJson(args[opt]);
+  if (Array.isArray(more)) die('--' + opt + ' 는 { "편성": {...} } 모양이어야 해요');
   for (const k of Object.keys(more)) { if (byLabel[k]) die(k + ' 가 두 파일에 다 있어요'); byLabel[k] = more[k]; }
 }
 const known = new Set(BPC.map((c) => c.label));
@@ -97,7 +99,7 @@ const table = BPC.map((c, idx) => {
 const uniqWarn = [...new Set(warns)];
 const ready = (i) => !!(table[i] && table[i]['기본/기본']);
 const count = (n) => { const ids = BPC.map((c, i) => i).filter((i) => nOf(BPC[i]) === n); return ids.filter(ready).length + ' / ' + ids.length; };
-console.log('편성 준비 — 중계 6명 ' + count(6) + ' · 7명 ' + count(7) + ' · 8명 ' + count(8) + ' · 조합 ' + combos + '개'
+console.log('편성 준비 — 중계 4명 ' + count(4) + ' · 5명 ' + count(5) + ' · 6명 ' + count(6) + ' · 7명 ' + count(7) + ' · 8명 ' + count(8) + ' · 조합 ' + combos + '개'
   + (dropped ? ' · 게임에서 못 고르는 조합 ' + dropped + '칸은 버림' : ''));
 console.log('선발 합 기본 ' + spSum('기본').toFixed(3) + ' · 적극 ' + spSum('적극').toFixed(3) + ' · 분업 ' + spSum('분업').toFixed(3) + ' · 마무리 ' + cp
   + ' → 중계 합 ' + WIN.map((t) => t + ' ' + expect(t).toFixed(3)).join(' · '));
@@ -111,7 +113,7 @@ const fmt = (v) => '[' + v.map((x) => String(x)).join(', ') + ']';
 const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 const name = args.name || path.basename(args.six, '.json');
 const lines = [BEGIN,
-  '/* ' + today + ' · "' + name + '" · 원본 ' + [args.six, args.more, args.stage1].filter(Boolean).map((f) => path.basename(f)).join(' · ')
+  '/* ' + today + ' · "' + name + '" · 원본 ' + [args.six, args.more, args.few, args.stage1].filter(Boolean).map((f) => path.basename(f)).join(' · ')
     + ' — node scripts/bullpen-weights.mjs 로 다시 만든다 */',
   'var BP_W_INFO = { name: ' + JSON.stringify(name) + ', made: "' + today + '" };',
   'var RP_WEIGHTS = ['];
