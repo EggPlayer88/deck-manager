@@ -192,6 +192,22 @@ function watchApi(api) {
 
 /* ── 덱 표시 ────────────────────────────────────────────── */
 
+/* 임팩트 종류 줄임말 — 클럽 덱 줄은 한 줄이라 긴 이름이면 잘린다. 덱 매니저도 이 표로 공유할 때 이름표(l)를 만든다.
+   덱 자료에는 공유하던 때의 이름표가 그대로 있으니, 보여 줄 때 · 견줄 때 이 표로 다시 맞춘다
+   (예전에 공유한 덱의 '라이징스타' 와 새로 공유한 덱의 '라스' 가 같은 카드로 보이게) */
+export var CLUB_IMPACT_SHORT = {
+  "얼리스타터": "얼리", "여름사나이": "여사", "좌완에이스": "좌에", "우완에이스": "우에", "가을사나이": "가사",
+  "키플레이어": "키플", "빅게임헌터": "빅게임", "돌격대장": "돌대", "분위기메이커": "분메", "대표타자": "대표", "안방마님": "안방",
+  "비FA계약": "비FA", "파이어볼러": "파이어", "구종마스터": "구마", "좌타해결사": "좌타",
+  /* 2026-11-13 더함 — 4글자 넘는 종류 · 연도 붙은 TOP3 */
+  "라이징스타": "라이징", "추억의선수": "추선", "베스트포지션": "베포", "WAR상위": "워상", "마성의주자": "마성", "난세의영웅": "난세",
+  "백전노장": "백노", "주력선수": "주력", "원투펀치": "원투", "중간계투": "중간", "5툴선수": "5툴", "호타준족": "호준",
+  "프랜차이즈": "프차", "대체외인": "대체", "원클럽맨": "원클", "안경에이스": "안경", "느림의미학": "느미", "필승계투": "필승",
+  "스위치히터": "스위치", "최강몬스터즈": "몬스터", "슬로우스타터": "슬로우", "홈런타자": "홈런", "우타거포": "우거포",
+  "FA선수": "FA", "2025TOP3": "25탑", "2026TOP3": "26탑",
+  /* 지운 종류 — 예전에 공유한 덱에 남아 있다 ('중계' 33장은 2026-10-22 '중간계투' 로 합침) */
+  "중계": "중간" };
+function lab(e) { var l = txt(e && e.l); return CLUB_IMPACT_SHORT[l] || l; }
 var CT_COL = { "골든글러브": "#D9A514", "시그니처": "#E5484D", "임팩트": "#2EAD5B", "국가대표": "#3B82F6", "올스타": "#A855F7", "라이브": "#F97316", "시즌": "#4CAF50" };
 var BATS = ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
 var SPS = ["SP1", "SP2", "SP3", "SP4", "SP5"];
@@ -203,7 +219,7 @@ function SlotLine(p) {
   var e = p.e && typeof p.e === "object" ? p.e : null;
   return (<div style={{ fontSize: 12, padding: "2px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: p.dim ? .45 : 1 }}>
     <span style={{ fontFamily: "var(--h)", fontSize: 11, color: "var(--td)", width: 30, display: "inline-block" }}>{p.slot}</span>
-    {e ? (<span style={{ color: CT_COL[txt(e.ct)] || "var(--t1)", textDecoration: p.strike ? "line-through" : "none" }}>{(txt(e.l) ? txt(e.l) + " " : "") + txt(e.n)}</span>)
+    {e ? (<span style={{ color: CT_COL[txt(e.ct)] || "var(--t1)", textDecoration: p.strike ? "line-through" : "none" }}>{(lab(e) ? lab(e) + " " : "") + txt(e.n)}</span>)
       : (<span style={{ color: "var(--td)" }}>{"—"}</span>)}
   </div>);
 }
@@ -270,7 +286,7 @@ function DeckCompare(p) {
     </div>
     {ALL_SLOTS.map(function (s) {
       var x = deckView(a)[s], y = deckView(b)[s];
-      var same = x && y && typeof x === "object" && typeof y === "object" && txt(x.n) === txt(y.n) && txt(x.ct) === txt(y.ct) && txt(x.l) === txt(y.l);
+      var same = x && y && typeof x === "object" && typeof y === "object" && txt(x.n) === txt(y.n) && txt(x.ct) === txt(y.ct) && lab(x) === lab(y);
       return (<div key={s} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: "1px 6px", borderRadius: 6, background: same ? "transparent" : "rgba(255,213,79,.06)" }}>
         <SlotLine slot={s} e={x} dim={same} /><SlotLine slot={s} e={y} dim={same} />
       </div>);
@@ -1601,9 +1617,9 @@ function Suggestion(p) {
         var f = card(c.from), t = card(c.to);
         return (<div key={txt(c.slot) || i} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           <span style={{ fontFamily: "var(--h)", fontSize: 11, color: "var(--td)", width: 30, display: "inline-block" }}>{txt(c.slot)}</span>
-          {f ? <span style={{ color: CT_COL[txt(f.ct)], textDecoration: "line-through", opacity: .6 }}>{(txt(f.l) ? txt(f.l) + " " : "") + txt(f.n)}</span> : <span style={{ color: "var(--td)" }}>{"빈 자리"}</span>}
+          {f ? <span style={{ color: CT_COL[txt(f.ct)], textDecoration: "line-through", opacity: .6 }}>{(lab(f) ? lab(f) + " " : "") + txt(f.n)}</span> : <span style={{ color: "var(--td)" }}>{"빈 자리"}</span>}
           {" → "}
-          {t ? <span style={{ color: CT_COL[txt(t.ct)] }}>{(txt(t.l) ? txt(t.l) + " " : "") + txt(t.n)}</span> : <span style={{ color: "var(--td)" }}>{"비움"}</span>}
+          {t ? <span style={{ color: CT_COL[txt(t.ct)] }}>{(lab(t) ? lab(t) + " " : "") + txt(t.n)}</span> : <span style={{ color: "var(--td)" }}>{"비움"}</span>}
         </div>);
       })}
     </div>

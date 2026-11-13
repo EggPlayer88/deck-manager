@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { downloadSquadImage as downloadSquadTemplate } from "./squad-share.js";
 import KboPromoBanner from "./KboPromoBanner.jsx";
 /* 클럽 라운지 — 화면은 club-lounge.jsx, 서버 일은 club-api.js. 이 파일은 덱 계산(카드 표기·점수)만 넘겨 준다 */
-import ClubLoungePage from "./club-lounge.jsx";
+import ClubLoungePage, { CLUB_IMPACT_SHORT } from "./club-lounge.jsx";
 /* 개발자에게 커피 — 메뉴 구석의 작은 버튼과 선물코드 창 (coffee-gift.jsx) */
 import CoffeeModal, { CoffeeLink } from "./coffee-gift.jsx";
 import { autoPublish as clubAutoPublish, addComment as clubAddComment, loadAlerts as clubLoadAlerts } from "./club-api.js";
@@ -13265,9 +13265,7 @@ function labRun(cards, teamName, extra, opt) {
    scores(연구소 세 티어) 또는 total·setPoint(내 덱) } 로 주고받는다.
    표기(view)를 같이 실어 두어 도감이 바뀌거나 직접 등록한 카드여도 글은 그대로 읽힌다.
    연구소로 열 때는 slots 의 도감 id 만 쓴다 — 도감에 없는 카드는 빠진다 */
-var CLUB_IMPACT_SHORT = { "얼리스타터": "얼리", "여름사나이": "여사", "좌완에이스": "좌에", "우완에이스": "우에", "가을사나이": "가사",
-  "키플레이어": "키플", "빅게임헌터": "빅게임", "돌격대장": "돌대", "분위기메이커": "분메", "대표타자": "대표", "안방마님": "안방",
-  "비FA계약": "비FA", "파이어볼러": "파이어", "구종마스터": "구마", "좌타해결사": "좌타" };
+/* 임팩트 줄임말 표(CLUB_IMPACT_SHORT)는 club-lounge.jsx 에 있다 — 보여 줄 때도 같은 표로 맞춘다 */
 function clubCardLabel(c) {
   if (!c) return "";
   if (c.cardType === "임팩트" && c.impactType) return CLUB_IMPACT_SHORT[c.impactType] || String(c.impactType);
