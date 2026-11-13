@@ -3287,6 +3287,56 @@ function pushAudit(row, note) {
   list.push(note);
   row.audit = list.slice(-20);
 }
+var CARD_TYPES=["골든글러브","시그니처","임팩트","국가대표","라이브","시즌","올스타"];
+/* ═══ 내 선수 순서 (2026-11-13 사용자 지정) ═══
+   '내 선수' 목록 순서 = 덱 선수 목록(players) 순서. 탭(타자 · 선발 · 중계 · 마무리)마다 그 탭 선수끼리만 움직이고
+   다른 탭 선수가 목록에서 차지한 자리는 그대로 둔다. 순서는 이 화면에만 쓰인다 — 점수 · 셋포 · 라인업은 그대로
+   (라인업 선수 고르기 창은 점수순으로 따로 줄 세운다). 새로 넣은 선수는 맨 위(목록 앞)에 넣는다.
+   끌어서 옮기기(라인업 카드 끌기와 같은 useSlotDrag) · 편집 창 ▲ ▼ · 정렬(고른 순서로 저장, '↩ 정렬 전'으로 되돌림) */
+/* ids(한 탭의 새 순서)를 목록에서 그 탭 선수들이 있던 자리에 차례로 다시 놓는다. 수가 안 맞으면 그대로 */
+function myOrderPut(players, ids) {
+  var want = {}, byId = {}, n = 0;
+  ids.forEach(function (id) { want[id] = 1; });
+  players.forEach(function (x) { if (x && want[x.id]) { byId[x.id] = x; n++; } });
+  if (n !== ids.length || Object.keys(byId).length !== ids.length) return players;
+  var k = 0;
+  return players.map(function (x) { return x && want[x.id] ? byId[ids[k++]] : x; });
+}
+/* from 을 to 자리로 — 아래로 옮기면 to 뒤, 위로 옮기면 to 앞에 선다 (옮긴 선수는 to 가 있던 번째가 된다) */
+function myOrderMove(ids, from, to) {
+  var a = ids.slice(), i = a.indexOf(from), j = a.indexOf(to);
+  if (i < 0 || j < 0 || i === j) return a;
+  a.splice(i, 1); a.splice(j, 0, from);
+  return a;
+}
+/* 정렬 전으로 — 정렬 바로 전 순서(prevIds)대로. 그사이 빠진 선수는 빼고, 새로 들어온 선수는 맨 위에 */
+function myOrderRestore(curIds, prevIds) {
+  var prev = prevIds.filter(function (id) { return curIds.indexOf(id) >= 0; });
+  return curIds.filter(function (id) { return prev.indexOf(id) < 0; }).concat(prev);
+}
+var MY_SORTS = [{ k: "lineup", l: "라인업 순", d: "타순 1 ~ 9번 → 후보 → 나머지 (투수는 자리 순)" }, { k: "score", l: "점수순", d: "점수 높은 선수부터" },
+  { k: "name", l: "이름순", d: "가나다 순" }, { k: "type", l: "카드 종류순", d: "골글 · 시그 · 임팩 · 국대 · 라이브 · 시즌 · 올스타, 같은 종류는 점수순" }];
+/* 정렬 — list: 그 탭 선수(지금 순서), rank(pl): 라인업 자리 번째(없으면 null), score(pl): 화면 점수. 같으면 지금 순서 */
+function myOrderSort(kind, list, rank, score) {
+  var rows = list.map(function (pl, i) { return { pl: pl, i: i, r: rank(pl), s: score(pl), t: CARD_TYPES.indexOf(pl.cardType) }; });
+  var cmp = {
+    lineup: function (a, b) { return (a.r == null ? 1e9 : a.r) - (b.r == null ? 1e9 : b.r); },
+    score: function (a, b) { return b.s - a.s; },
+    name: function (a, b) { return String(a.pl.name || "").localeCompare(String(b.pl.name || ""), "ko"); },
+    type: function (a, b) { return ((a.t < 0 ? 99 : a.t) - (b.t < 0 ? 99 : b.t)) || (b.s - a.s); }
+  }[kind];
+  if (!cmp) return list.map(function (pl) { return pl.id; });
+  return rows.sort(function (a, b) { return cmp(a, b) || (a.i - b.i); }).map(function (x) { return x.pl.id; });
+}
+/* 라인업 자리 번째 — 타자: 타순 1 ~ 9번(0 ~ 8) → 후보 BN1 ~ / 투수: SP1 ~ 5 · RP1 ~ 8 · CP 자리 순, 라인업 밖은 null */
+function myLineupRank(slot, batOrder) {
+  if (!slot) return null;
+  var bi = batOrder.indexOf(slot); if (bi >= 0) return bi;
+  var m = /^BN(\d+)$/.exec(slot); if (m) return 9 + Number(m[1]);
+  m = /^(SP|RP)(\d+)$/.exec(slot); if (m) return (m[1] === "SP" ? 0 : 10) + Number(m[2]);
+  return slot === "CP" ? 30 : 50;
+}
+/* ═══ 내 선수 순서 끝 ═══ */
 function __setLiveWeights(w){ LIVE_WEIGHTS = w; }
 function __setScoreVer(v){ SCORE_VER = v; }
 export { withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, skillTables, __setScoreVer, CATCH_LEAD_PIT, NAT_ACE_PIT, POS_TRAIN, ENHANCE, pitCatOf, pitDistRole, pitStatScore, sampleSkillScores, SKILL_DIST_CARDS, ctlMissing, applyV11, v11EditCopy, v11Saved, v11WeightsOk, V11_TABLE_VERSION, SKILLS_V11_CODE, PIT_W_V11_CODE };
@@ -3298,6 +3348,7 @@ export { bestBatOrder };
 export { ORDER_RENAME, orderRename };
 export { BL_EPS, batOrderRow, bestOrderCore };
 export { BL_BN, BL_SLOTS27, bestBatting, blSynOn, bestLineup, BL_SD_KEYS, blHash, bestLineupSig, blGain };
+export { CARD_TYPES, myOrderPut, myOrderMove, myOrderRestore, MY_SORTS, myOrderSort, myLineupRank };
 function __setGlobalPotm(list){ GLOBAL_POTM_LIST = list || []; }
 function __setSeed(a){ SEED_PLAYERS.length = 0; (a||[]).forEach(function(p){ SEED_PLAYERS.push(p); }); }
 function __setSkillData(d){ SKILL_DATA = d || DEFAULT_SKILLS; }

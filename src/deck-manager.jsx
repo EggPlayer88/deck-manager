@@ -4648,6 +4648,8 @@ function makeSlotDrag(setDrag) {
     g.style.width = b.width + "px"; g.style.height = b.height + "px"; g.style.boxSizing = "border-box";
     g.style.pointerEvents = "none"; g.style.zIndex = "10000"; g.style.opacity = "0.88"; g.style.transition = "none";
     g.style.outline = "none"; g.style.boxShadow = "0 10px 24px rgba(0,0,0,0.45)"; g.style.borderRadius = "8px";
+    /* ghost — 복사본에 더 입힐 모양 (예: 배경이 비치는 목록 줄은 바탕색을 깐다 — '내 선수' 순서, 2026-11-13) */
+    if (R.o.ghost) Object.keys(R.o.ghost).forEach(function(k) { g.style[k] = R.o.ghost[k]; });
     /* 놓을 자리 글씨 — 복사본 머리 위 (손가락 · 복사본에 놓을 자리가 가려도 보이게) */
     var lab = document.createElement("div");
     lab.style.cssText = "position:absolute;left:50%;top:-26px;transform:translateX(-50%);display:none;padding:2px 9px;border-radius:8px;"
@@ -10350,6 +10352,62 @@ function LabPage(p) {
   );
 }
 
+/* ═══ 내 선수 순서 (2026-11-13 사용자 지정) ═══
+   '내 선수' 목록 순서 = 덱 선수 목록(players) 순서. 탭(타자 · 선발 · 중계 · 마무리)마다 그 탭 선수끼리만 움직이고
+   다른 탭 선수가 목록에서 차지한 자리는 그대로 둔다. 순서는 이 화면에만 쓰인다 — 점수 · 셋포 · 라인업은 그대로
+   (라인업 선수 고르기 창은 점수순으로 따로 줄 세운다). 새로 넣은 선수는 맨 위(목록 앞)에 넣는다.
+   끌어서 옮기기(라인업 카드 끌기와 같은 useSlotDrag) · 편집 창 ▲ ▼ · 정렬(고른 순서로 저장, '↩ 정렬 전'으로 되돌림) */
+/* ids(한 탭의 새 순서)를 목록에서 그 탭 선수들이 있던 자리에 차례로 다시 놓는다. 수가 안 맞으면 그대로 */
+function myOrderPut(players, ids) {
+  var want = {}, byId = {}, n = 0;
+  ids.forEach(function (id) { want[id] = 1; });
+  players.forEach(function (x) { if (x && want[x.id]) { byId[x.id] = x; n++; } });
+  if (n !== ids.length || Object.keys(byId).length !== ids.length) return players;
+  var k = 0;
+  return players.map(function (x) { return x && want[x.id] ? byId[ids[k++]] : x; });
+}
+/* from 을 to 자리로 — 아래로 옮기면 to 뒤, 위로 옮기면 to 앞에 선다 (옮긴 선수는 to 가 있던 번째가 된다) */
+function myOrderMove(ids, from, to) {
+  var a = ids.slice(), i = a.indexOf(from), j = a.indexOf(to);
+  if (i < 0 || j < 0 || i === j) return a;
+  a.splice(i, 1); a.splice(j, 0, from);
+  return a;
+}
+/* 정렬 전으로 — 정렬 바로 전 순서(prevIds)대로. 그사이 빠진 선수는 빼고, 새로 들어온 선수는 맨 위에 */
+function myOrderRestore(curIds, prevIds) {
+  var prev = prevIds.filter(function (id) { return curIds.indexOf(id) >= 0; });
+  return curIds.filter(function (id) { return prev.indexOf(id) < 0; }).concat(prev);
+}
+var MY_SORTS = [{ k: "lineup", l: "라인업 순", d: "타순 1 ~ 9번 → 후보 → 나머지 (투수는 자리 순)" }, { k: "score", l: "점수순", d: "점수 높은 선수부터" },
+  { k: "name", l: "이름순", d: "가나다 순" }, { k: "type", l: "카드 종류순", d: "골글 · 시그 · 임팩 · 국대 · 라이브 · 시즌 · 올스타, 같은 종류는 점수순" }];
+/* 정렬 — list: 그 탭 선수(지금 순서), rank(pl): 라인업 자리 번째(없으면 null), score(pl): 화면 점수. 같으면 지금 순서 */
+function myOrderSort(kind, list, rank, score) {
+  var rows = list.map(function (pl, i) { return { pl: pl, i: i, r: rank(pl), s: score(pl), t: CARD_TYPES.indexOf(pl.cardType) }; });
+  var cmp = {
+    lineup: function (a, b) { return (a.r == null ? 1e9 : a.r) - (b.r == null ? 1e9 : b.r); },
+    score: function (a, b) { return b.s - a.s; },
+    name: function (a, b) { return String(a.pl.name || "").localeCompare(String(b.pl.name || ""), "ko"); },
+    type: function (a, b) { return ((a.t < 0 ? 99 : a.t) - (b.t < 0 ? 99 : b.t)) || (b.s - a.s); }
+  }[kind];
+  if (!cmp) return list.map(function (pl) { return pl.id; });
+  return rows.sort(function (a, b) { return cmp(a, b) || (a.i - b.i); }).map(function (x) { return x.pl.id; });
+}
+/* 라인업 자리 번째 — 타자: 타순 1 ~ 9번(0 ~ 8) → 후보 BN1 ~ / 투수: SP1 ~ 5 · RP1 ~ 8 · CP 자리 순, 라인업 밖은 null */
+function myLineupRank(slot, batOrder) {
+  if (!slot) return null;
+  var bi = batOrder.indexOf(slot); if (bi >= 0) return bi;
+  var m = /^BN(\d+)$/.exec(slot); if (m) return 9 + Number(m[1]);
+  m = /^(SP|RP)(\d+)$/.exec(slot); if (m) return (m[1] === "SP" ? 0 : 10) + Number(m[2]);
+  return slot === "CP" ? 30 : 50;
+}
+/* ═══ 내 선수 순서 끝 ═══ */
+/* 끌기 손잡이 — 점 6개 (⋮⋮ 글자는 글꼴마다 모양이 달라 그림으로) */
+function GripDots(p) {
+  var s = p.size || 12;
+  return (<svg width={Math.round(s * 0.6)} height={s} viewBox="0 0 6 10" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
+    {[[1.5, 1.5], [4.5, 1.5], [1.5, 5], [4.5, 5], [1.5, 8.5], [4.5, 8.5]].map(function (c, i) { return (<circle key={i} cx={c[0]} cy={c[1]} r="0.95" fill="currentColor" />); })}
+  </svg>);
+}
 function MyPlayersPage(p) {
   var mob = p.mobile;
   var players = p.players;
@@ -10414,7 +10472,7 @@ function MyPlayersPage(p) {
      "change","stuff","speed","control","stamina","setScore"].forEach(function(k){
       if (src[k] !== undefined) np[k] = src[k];
     });
-    save(players.concat([np]));
+    save([np].concat(players));   /* 새로 넣은 선수는 맨 위 (2026-11-13) */
     setSelId(id2);
   };
   var cdSave = function() {
@@ -10593,11 +10651,11 @@ function MyPlayersPage(p) {
       nameToId[en.name] = np.id;
     });
 
-    /* 병합이면 시트에 없는 기존 선수만 남긴다 */
+    /* 병합이면 시트에 없는 기존 선수만 남긴다 — 시트에서 들어온 선수는 시트 순서 그대로 맨 위 (2026-11-13) */
     var next = made;
     if (impMode === "merge") {
       var sheetNames = {}; R.entries.forEach(function(en) { sheetNames[en.name] = 1; });
-      next = players.filter(function(pl) { return !sheetNames[pl.name]; }).concat(made);
+      next = made.concat(players.filter(function(pl) { return !sheetNames[pl.name]; }));
     }
     save(next, "import");
 
@@ -10721,6 +10779,33 @@ function MyPlayersPage(p) {
   var rps = mergedPlayers.filter(function(x) { return x.position === "중계"; });
   var cps = mergedPlayers.filter(function(x) { return x.position === "마무리"; });
   var filtered = filter === "타자" ? bats : filter === "선발" ? sps : filter === "중계" ? rps : cps;
+  /* ── 순서 바꾸기 (2026-11-13) — 끌기 · 편집 창 ▲▼ · 정렬. 이 탭 선수끼리만, 바꿀 때마다 저장 ── */
+  var tabIds = filtered.map(function (x) { return x.id; });
+  var _ordUndo = useState(null); var ordUndo = _ordUndo[0]; var setOrdUndo = _ordUndo[1];   /* { tab, ids, l } — 정렬 바로 전 순서 */
+  var _sortOpen = useState(false); var sortOpen = _sortOpen[0]; var setSortOpen = _sortOpen[1];
+  var putOrder = function (ids) {
+    var next = myOrderPut(players, ids);
+    if (next.some(function (x, i) { return x !== players[i]; })) save(next, "order");
+  };
+  var moveTo = function (from, to) { putOrder(myOrderMove(tabIds, from, to)); setOrdUndo(null); };
+  var stepMove = function (id, d) { var i = tabIds.indexOf(id), j = i + d; if (i >= 0 && j >= 0 && j < tabIds.length) moveTo(id, tabIds[j]); };
+  var dg = useSlotDrag({ group: "myp", canDrop: function (a, b) { return a !== b && tabIds.indexOf(b) >= 0; }, onDrop: moveTo,
+    label: function (a, b) { return "↕ " + (tabIds.indexOf(b) + 1) + "번째로"; },
+    ghost: { background: "linear-gradient(var(--ta), var(--ta)), linear-gradient(var(--card), var(--card)), var(--bg)", border: "1px solid rgba(255,213,79,0.7)", opacity: "1" } });
+  var sortTab = function (kind) {
+    setSortOpen(false);
+    var ids = myOrderSort(kind, filtered, function (pl) { return myLineupRank(slotOf(pl), myBatOrder); }, function (pl) { return rowCalcOf(pl).calc.total; });
+    if (ids.join() === tabIds.join()) return;
+    var opt = MY_SORTS.filter(function (o) { return o.k === kind; })[0];
+    setOrdUndo({ tab: filter, ids: tabIds.slice(), l: opt ? opt.l : "" });
+    putOrder(ids);
+  };
+  /* 정렬 전으로 — 순서만 되돌린다(그 뒤에 고친 값은 그대로). 그사이 새로 넣은 선수는 맨 위에 둔다 */
+  var undoOrder = function () {
+    if (!ordUndo) return;
+    putOrder(myOrderRestore(tabIds, ordUndo.ids));
+    setOrdUndo(null);
+  };
 
   var miniIn = function(id, field, val, color, max) {
     return (<input type="number" value={val || 0} onChange={function(e) { var v = parseInt(e.target.value) || 0; if (max) v = Math.min(max, Math.max(0, v)); upd(id, field, v); }} style={{ width: 32, padding: "2px 1px", textAlign: "center", background: "var(--inner)", border: "1px solid " + (color || "var(--bd)") + "44", borderRadius: 3, color: color || "var(--t1)", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} />);
@@ -10792,27 +10877,39 @@ function MyPlayersPage(p) {
     );
   };
 
-  var renderRow = function(pl, idx) {
+  /* 줄 점수 — 정렬 '점수순'도 이 값으로 */
+  var rowCalcOf = function(pl) {
     var isBat = pl.role === "타자";
-    var slot = getSlot(pl.id);
-    var isSel = selId === pl.id;
     var lu = { enhance: pl.enhance || "9각성", trainP: pl.trainP||0, trainA: pl.trainA||0, trainE: pl.trainE||0, trainN: pl.trainN||0, trainC: pl.trainC||0, trainS: pl.trainS||0, trainCtl: pl.trainCtl||0, skill1: pl.skill1||"", s1Lv: pl.s1Lv||0, skill2: pl.skill2||"", s2Lv: pl.s2Lv||0, skill3: pl.skill3||"", s3Lv: pl.s3Lv||0 };
     /* 라인업과 동일한 세트덱·특훈 보너스를 넘긴다.
        그래야 배지 레벨과 발사각 달성 여부가 라인업 판정과 어긋나지 않는다. */
     var sdbMy = sdBonusFor(pl);
-    var potmMy = potmEffect(pl, sdState);
     /* 라인업에 서 있는 타자면 그 타순에 맞춰 스킬·발사각을 바꿔 놓고 센다 (라인업 화면과 같은 값) */
     var mySlot = slotOf(pl);
     var myOi = mySlot ? myBatOrder.indexOf(mySlot) : -1;
     var oAdj = orderAdjust(pl, myOi >= 0 ? myOi : undefined);
     var epl = oAdj ? oAdj.pl : pl;
     if (oAdj) { lu = Object.assign({}, lu, { skill1: epl.skill1 || "", skill2: epl.skill2 || "", skill3: epl.skill3 || "" }); }
-    var calc = isBat ? calcBat(epl, lu, sdbMy) : calcPit(pl, lu, sdbMy);
+    return { lu: lu, sdbMy: sdbMy, oAdj: oAdj, epl: epl, calc: isBat ? calcBat(epl, lu, sdbMy) : calcPit(pl, lu, sdbMy) };
+  };
+  var renderRow = function(pl, idx) {
+    var isBat = pl.role === "타자";
+    var slot = getSlot(pl.id);
+    var isSel = selId === pl.id;
+    var rc = rowCalcOf(pl);
+    var lu = rc.lu, sdbMy = rc.sdbMy, oAdj = rc.oAdj, epl = rc.epl, calc = rc.calc;
+    var potmMy = potmEffect(pl, sdState);
     var accentC = isBat ? "var(--acc)" : "var(--acp)";
+    /* 끄는 중 — 끄는 줄은 흐리게, 놓을 줄은 노란 선(아래로 옮기면 그 줄 아래, 위로 옮기면 위) */
+    var dgs = dg.drag;
+    var dragFrom = dgs && dgs.from === pl.id;
+    var dropLine = dgs && dgs.over === pl.id ? (tabIds.indexOf(dgs.from) < idx ? "inset 0 -3px 0 0 #FFD54F" : "inset 0 3px 0 0 #FFD54F") : null;
 
     return (
       <React.Fragment key={pl.id}>
-        <div onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "1fr 50px" : "minmax(110px,1fr) 70px 90px 70px 130px 50px", alignItems: "center", gap: 5, padding: "8px 12px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: slot ? ("3px solid " + accentC) : "3px solid transparent" }}>
+        <div {...dg.handle(pl.id)} onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "12px 1fr 50px" : "14px minmax(110px,1fr) 70px 90px 70px 130px 50px", alignItems: "center", gap: 5, padding: mob ? "8px 10px 8px 6px" : "8px 12px 8px 8px", background: isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "pointer", borderLeft: slot ? ("3px solid " + accentC) : "3px solid transparent", opacity: dragFrom ? 0.35 : 1, boxShadow: dropLine || "none" }}>
+          {/* 손잡이 — 끌 수 있다는 표시 (줄 어디를 끌어도 된다 · 폰은 꾹 눌렀다 끌기) */}
+          <div title={mob ? "꾹 눌렀다 끌면 순서를 바꿔요" : "끌어서 순서를 바꿔요"} style={{ color: "var(--td)", display: "flex", justifyContent: "center", opacity: 0.8, cursor: "grab" }}><GripDots size={mob ? 13 : 14} /></div>
           {/* Name */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <Badge type={pl.cardType} />
@@ -10865,6 +10962,15 @@ function MyPlayersPage(p) {
             <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
               <div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"이름"}</div><span style={{ fontSize: 15, fontWeight: 700, color: "var(--t1)" }}>{pl.name}</span></div>
               <div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"카드"}</div><Badge type={pl.cardType} /></div>
+              {/* 순서 — 이 탭 안에서 한 칸씩 (끌기가 어려울 때) */}
+              {tabIds.length > 1 && (<div title="이 탭 안에서 한 칸씩 옮겨요"><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"순서"}</div>
+                <div style={{ display: "flex", gap: 3 }}>
+                  {[[-1, "▲"], [1, "▼"]].map(function (b) {
+                    var i = tabIds.indexOf(pl.id), j = i + b[0], off = i < 0 || j < 0 || j >= tabIds.length;
+                    return (<button key={b[1]} disabled={off} onClick={function (e) { e.stopPropagation(); stepMove(pl.id, b[0]); }}
+                      style={{ width: 30, height: 26, padding: 0, fontSize: 12, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, color: off ? "var(--td)" : "var(--t1)", cursor: off ? "default" : "pointer", opacity: off ? 0.4 : 1 }}>{b[1]}</button>);
+                  })}
+                </div></div>)}
               {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><span style={{ fontSize: 14, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
               {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"세트덱"}</div><input type="number" value={pl.setScore||0} onChange={function(e){upd(pl.id,"setScore",parseInt(e.target.value)||0);}} style={{ width: 36, padding: "3px 4px", background: "var(--inner)", border: "1px solid var(--acc)", borderRadius: 3, color: "var(--acc)", fontSize: 14, fontFamily: "var(--m)", fontWeight: 700, outline: "none" }} /></div>)}
               {pl.cardType==="라이브"&&(<div><div style={{ fontSize: 13, color: "var(--td)", marginBottom: 2 }}>{"종류"}</div><select value={pl.liveType||""} onChange={function(e){upd(pl.id,"liveType",e.target.value);}} style={{ width: 44, padding: "3px 2px", fontSize: 13, background: "#1e293b", border: "1px solid #334155", borderRadius: 3, color: "#e2e8f0", outline: "none" }}><option value="">-</option><option value="V1">V1</option><option value="V2">V2</option><option value="V3">V3</option></select></div>)}
@@ -11228,7 +11334,7 @@ function MyPlayersPage(p) {
             specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0, specControl: 0,
             skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
             enhance: "9각성", pot1: "", pot2: "", isFa: false, isWildcard: false };
-          var newList = players.concat([np]);
+          var newList = [np].concat(players);   /* 새로 넣은 선수는 맨 위 (2026-11-13) */
           save(newList);
           setAddOpen(false);
           setSelId(id2);
@@ -11413,9 +11519,34 @@ function MyPlayersPage(p) {
         </div>
       )}
 
+      {/* 순서 — 끌기 안내 · 정렬(이 탭 순서를 다시 세워 저장) · 정렬 전으로 (2026-11-13) */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, margin: "0 0 6px", flexWrap: "wrap" }}>
+        <div style={{ fontSize: 12, color: "var(--td)", display: "flex", alignItems: "center", gap: 6 }}><GripDots size={12} />{mob ? "꾹 눌렀다 끌어 순서 바꾸기 · 새 선수는 맨 위" : "줄을 끌어 순서 바꾸기 · 새로 넣은 선수는 맨 위"}</div>
+        <div style={{ display: "flex", gap: 4, alignItems: "center", position: "relative" }}>
+          {ordUndo && ordUndo.tab === filter && (
+            <button onClick={undoOrder} title={"'" + ordUndo.l + "' 정렬하기 전 순서로 되돌려요"} style={{ padding: "4px 9px", fontSize: 12, fontWeight: 700, background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 5, color: "var(--t2)", cursor: "pointer" }}>{"↩ 정렬 전"}</button>)}
+          <button onClick={function () { setSortOpen(!sortOpen); }} title={filter + " 순서를 한 번에 다시 세워 저장해요"} aria-expanded={sortOpen}
+            style={{ padding: "4px 10px", fontSize: 12, fontWeight: 700, background: sortOpen ? "var(--ta)" : "var(--inner)", border: "1px solid " + (sortOpen ? "var(--acc)" : "var(--bd)"), borderRadius: 5, color: sortOpen ? "var(--acc)" : "var(--t2)", cursor: "pointer" }}>{"정렬 ▾"}</button>
+          {sortOpen && (<React.Fragment>
+            <div onClick={function () { setSortOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+            <div role="menu" aria-label="내 선수 정렬" style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 41, width: 260, maxWidth: "calc(100vw - 24px)", background: "linear-gradient(var(--card), var(--card)), var(--bg)", border: "1px solid var(--bd)", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.35)", padding: 4 }}>
+              <div style={{ fontSize: 11, color: "var(--td)", padding: "4px 8px 6px" }}>{filter + " 순서를 바꿔 저장해요 · 바로 되돌릴 수 있어요"}</div>
+              {MY_SORTS.map(function (o) {
+                return (<button key={o.k} role="menuitem" onClick={function () { sortTab(o.k); }}
+                  onMouseEnter={function (e) { e.currentTarget.style.background = "var(--ta)"; }} onMouseLeave={function (e) { e.currentTarget.style.background = "transparent"; }}
+                  style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 9px", background: "transparent", border: "none", borderRadius: 5, cursor: "pointer", color: "var(--t1)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{o.l}</div>
+                  <div style={{ fontSize: 11, color: "var(--td)", marginTop: 1 }}>{o.d}</div>
+                </button>);
+              })}
+            </div>
+          </React.Fragment>)}
+        </div>
+      </div>
       <div style={{ background: "var(--card)", borderRadius: 10, border: "1px solid var(--bd)", overflow: "hidden" }}>
         {/* Header */}
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 50px" : "minmax(110px,1fr) 70px 90px 70px 130px 50px", gap: 5, padding: "6px 12px", borderBottom: "1px solid var(--bd)", fontSize: 13, fontWeight: 700, color: "var(--td)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "12px 1fr 50px" : "14px minmax(110px,1fr) 70px 90px 70px 130px 50px", gap: 5, padding: mob ? "6px 10px 6px 9px" : "6px 12px 6px 11px", borderBottom: "1px solid var(--bd)", fontSize: 13, fontWeight: 700, color: "var(--td)" }}>
+          <div />
           <div>{"선수 (클릭→편집)"}</div>
           <div style={{ textAlign: "center" }}>{"점수"}</div>
           {!mob && (<React.Fragment>

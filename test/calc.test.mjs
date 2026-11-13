@@ -26,6 +26,7 @@ import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, C
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
 import { RANK_REC_MAX, rankRecNum, rankRecOk, rankRecIdx, rankRecCmp, rankRecSame, rankRecMake, rankRecPut } from './calc-extract.mjs';
 import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
+import { CARD_TYPES, myOrderPut, myOrderMove, myOrderRestore, MY_SORTS, myOrderSort, myLineupRank } from './calc-extract.mjs';
 
 /* 아래 시험들은 v1.1(제구 반영) 이전의 계산을 지킨다 — 구버전(v10) 기준으로 돈다.
    새 점수(v11) 시험은 이 파일 끝의 'v1.1 제구 반영' 칸에 있다 (2026-10-21) */
@@ -4098,6 +4099,52 @@ console.log('\n[잠재력 선발 / 불펜] 장타억제 · 침착은 중계 · �
   eq('종류를 안 적어도 투수는 장타억제 · 침착 (중계 SR+ · S → 19 + 2)', potPart('중계', { pot1: 'SR+', pot2: 'S' }), 21);
   eq('구버전 중계 장타억제 SR+ 몫은 예전 16', withScoreVer('v10', () => potPart('중계', { pot1: 'SR+', potType1: '장타억제' })), 16);
   eq('타자 풀스윙 SR+ 는 그대로 14', Math.round((calcBat({ hand: '우', power: 150, accuracy: 120, eye: 100, cardType: '시즌', role: '타자', pot1: 'SR+', potType1: '풀스윙' }, {}, null).total - calcBat({ hand: '우', power: 150, accuracy: 120, eye: 100, cardType: '시즌', role: '타자' }, {}, null).total) * 100) / 100, 14);
+}
+{
+  /* '내 선수' 순서 (2026-11-13 사용자 지정) — 탭 선수끼리만 · 끼워 넣기 · 정렬(저장) · 정렬 전. 새 선수 맨 위 · 끌기는 화면 시험 */
+  const eqs = (label, got, want) => { if (got === want) { pass++; console.log(`  ok   ${label}  = ${got}`); } else { fail++; console.log(`  FAIL ${label}  got ${got}, want ${want}`); } };
+  const P = [{ id: 'b1', name: '가', role: '타자' }, { id: 'p1', name: '투1', role: '투수', position: '선발' }, { id: 'b2', name: '나', role: '타자' },
+    { id: 'b3', name: '다', role: '타자' }, { id: 'p2', name: '투2', role: '투수', position: '중계' }, { id: 'b4', name: '라', role: '타자' }];
+  const ids = (a) => a.map((x) => x.id).join(',');
+  const put = myOrderPut(P, ['b4', 'b1', 'b2', 'b3']);
+  eqs('타자만 새 순서로 · 투수가 있던 자리(2 · 5번째)는 그대로', ids(put), 'b4,p1,b1,b2,p2,b3');
+  eq('선수 수 그대로', put.length, 6);
+  eqs('선수 값은 그대로 옮긴다 (같은 객체)', put[0] === P[5] && put[2] === P[0] ? '같음' : '다름', '같음');
+  eqs('원래 목록은 안 바뀜', ids(P), 'b1,p1,b2,b3,p2,b4');
+  const part = myOrderPut(P, ['b4', 'b1', 'b2']);
+  eqs('일부만 주면 그 선수들끼리만 자리를 바꾼다 (b3 · 투수는 그대로)', ids(part), 'b4,p1,b1,b3,p2,b2');
+  eqs('… 빠지거나 겹치는 선수 없음', part.map((x) => x.id).sort().join(','), P.map((x) => x.id).sort().join(','));
+  eqs('모르는 id 가 섞이면 그대로', ids(myOrderPut(P, ['b4', 'b1', 'b2', 'zz'])), ids(P));
+  eqs('같은 id 가 두 번이면 그대로', ids(myOrderPut(P, ['b1', 'b1', 'b2', 'b3'])), ids(P));
+  const T = ['a', 'b', 'c', 'd', 'e'];
+  eqs('아래로 끌기 — a 를 c 에 놓으면 c 뒤(3번째)', myOrderMove(T, 'a', 'c').join(''), 'bcade');
+  eqs('위로 끌기 — e 를 b 에 놓으면 b 앞(2번째)', myOrderMove(T, 'e', 'b').join(''), 'aebcd');
+  eqs('▲ 한 칸 — c 를 b 자리로', myOrderMove(T, 'c', 'b').join(''), 'acbde');
+  eqs('▼ 한 칸 — c 를 d 자리로', myOrderMove(T, 'c', 'd').join(''), 'abdce');
+  eqs('제자리 · 모르는 id 는 그대로', myOrderMove(T, 'c', 'c').join('') + '/' + myOrderMove(T, 'x', 'a').join(''), 'abcde/abcde');
+  eqs('끌기 전 배열은 안 바뀜', T.join(''), 'abcde');
+  eqs('정렬 전으로 — 그 순서대로', myOrderRestore(['c', 'a', 'b'], ['a', 'b', 'c']).join(''), 'abc');
+  eqs('… 그사이 새로 넣은 선수는 맨 위', myOrderRestore(['n', 'c', 'a', 'b'], ['a', 'b', 'c']).join(''), 'nabc');
+  eqs('… 그사이 지운 선수는 빠짐', myOrderRestore(['c', 'a'], ['a', 'b', 'c']).join(''), 'ac');
+  const BO = ['3B', 'DH', 'C', '1B', '2B', 'SS', 'LF', 'CF', 'RF'];
+  eq('라인업 자리 — 타순 1번 0 · 9번 8', myLineupRank('3B', BO) * 10 + myLineupRank('RF', BO), 8);
+  eq('… 후보 BN1 10 · BN6 15 (타순 뒤)', myLineupRank('BN1', BO) * 100 + myLineupRank('BN6', BO), 1015);
+  eq('… SP2 2 · RP3 13 · RP8 18 · CP 30', myLineupRank('SP2', BO) * 1000000 + myLineupRank('RP3', BO) * 10000 + myLineupRank('RP8', BO) * 100 + myLineupRank('CP', BO), 2131830);
+  eqs('… 라인업 밖은 null', String(myLineupRank(null, BO)), 'null');
+  const L = [{ id: 'x1', name: '최형우', cardType: '시그니처' }, { id: 'x2', name: '김도영', cardType: '임팩트' }, { id: 'x3', name: '오스틴', cardType: '올스타' },
+    { id: 'x4', name: '양의지', cardType: '골든글러브' }, { id: 'x5', name: '나성범', cardType: '라이브' }];
+  const slot = { x1: 'DH', x2: '3B', x3: null, x4: 'C', x5: 'BN2' }, sc = { x1: 443.3, x2: 469.6, x3: 370.2, x4: 453.7, x5: 299.3 };
+  const run = (k) => myOrderSort(k, L, (pl) => myLineupRank(slot[pl.id], BO), (pl) => sc[pl.id]).join(',');
+  eqs('정렬 종류 4가지', MY_SORTS.map((o) => o.k).join(','), 'lineup,score,name,type');
+  eqs('라인업 순 — 타순(김도영 · 최형우 · 양의지) → 후보 → 라인업 밖', run('lineup'), 'x2,x1,x4,x5,x3');
+  eqs('점수순 — 높은 선수부터', run('score'), 'x2,x4,x1,x3,x5');
+  eqs('이름순 — 가나다', run('name'), 'x2,x5,x4,x3,x1');
+  eqs('카드 종류순 — ' + CARD_TYPES.join(' · '), run('type'), 'x4,x1,x2,x5,x3');
+  const L2 = [{ id: 't1', name: '가', cardType: '임팩트' }, { id: 't2', name: '나', cardType: '임팩트' }, { id: 't3', name: '다', cardType: '임팩트' }];
+  eqs('같은 값이면 지금 순서 그대로 (라인업 밖끼리)', myOrderSort('lineup', L2, () => null, () => 1).join(','), 't1,t2,t3');
+  eqs('같은 종류는 점수순', myOrderSort('type', L2, () => null, (pl) => ({ t1: 1, t2: 3, t3: 2 })[pl.id]).join(','), 't2,t3,t1');
+  eqs('모르는 정렬이면 지금 순서', myOrderSort('?', L2, () => null, () => 0).join(','), 't1,t2,t3');
+  eqs('정렬은 다른 탭 선수 자리를 안 건드림 (정렬 → 넣기)', ids(myOrderPut(P, myOrderSort('name', P.filter((x) => x.role === '타자').reverse(), () => null, () => 0))), 'b1,p1,b2,b3,p2,b4');
 }
 __setScoreVer('v10');
 
