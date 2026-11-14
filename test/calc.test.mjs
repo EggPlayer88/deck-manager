@@ -3516,6 +3516,13 @@ __setScoreVer('v11');
     .filter((k) => Array.isArray(DEFAULT_SKILLS[c][k])).every((k) => Array.isArray(SKILLS_V11[c][k]))) ? 1 : 0, 1);
   eq('국대 전용 스킬 레벨 상한은 v11 에서도 6', maxSkillLv('황금세대', '타자'), 6);
   eq('새 스킬 레벨 상한 10', maxSkillLv('우타해결사(우타)', '타자'), 10);
+  /* 백투백히터 — 2026-11-14 사용자 지정 점수로 먼저 넣음(스킬 내용은 추후) */
+  [[5, 5.83], [6, 8.23], [7, 8.23], [8, 10.8], [9, 10.8], [10, 13.2]].forEach(([lv, v]) => eq('타자 백투백히터 Lv' + lv, getSkillScore('백투백히터', lv, '타자'), v));
+  eq('백투백히터 레벨 상한 10', maxSkillLv('백투백히터', '타자'), 10);
+  eq('백투백히터는 아직 비메이저', MAJOR_V11['타자']['백투백히터'] ? 1 : 0, 0);
+  eq('구버전 백투백히터 Lv6 = 새 표 값 8.23 (옛 표에 없는 스킬)', withScoreVer('v10', () => getSkillScore('백투백히터', 6, '타자')), 8.23);
+  eq('백투백히터는 타자 표에만', ['선발', '중계', '마무리'].some((c) => SKILLS_V11[c]['백투백히터']) ? 0 : 1, 1);
+  eq('타자 표는 Lv6 점수 내림차순 그대로 (포수리드(버프포함) 뒤 0점 줄 빼고)', (() => { const t = SKILLS_V11['타자']; const ks = Object.keys(t); const end = ks.indexOf('포수리드(버프포함)'); for (let i = 1; i < end; i++) if (t[ks[i]][1] > t[ks[i - 1]][1] + 1e-9) return 0; return 1; })(), 1);
 
   /* 강화 · 각성 제구 */
   eq('제구 강화 = 정확 강화 (골글 10강)', getEnhVal('골든글러브', '제구', '10강'), getEnhVal('골든글러브', '정확', '10강'));
