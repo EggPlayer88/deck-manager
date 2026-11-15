@@ -16,7 +16,9 @@ export async function signInWithGoogle() {
   if (!supabase) return { error: 'Supabase not configured' };
   return await supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin }
+    /* prompt: select_account — 다시 로그인할 때 구글 계정 고르는 창을 늘 띄운다.
+       없으면 구글이 지난번 계정으로 바로 넣어 버려 다른 계정으로 바꿀 수 없다 (2026-11-15, 고객센터 14e519a9) */
+    options: { redirectTo: window.location.origin, queryParams: { prompt: 'select_account' } }
   });
 }
 

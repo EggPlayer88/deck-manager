@@ -8290,6 +8290,47 @@ var KBO_PROMO_KEY="kbo-promo-hide-until";
 function kboPromoHidden(){try{return Number(localStorage.getItem(KBO_PROMO_KEY)||0)>Date.now();}catch(e){return false;}}
 function kboPromoHide(days){try{localStorage.setItem(KBO_PROMO_KEY,String(Date.now()+days*864e5));}catch(e){}}
 
+/* 계정 그림 — 구글이면 G, 게스트면 이름 첫 글자 (PC · 태블릿 메뉴 아래쪽과 같은 모양) */
+function AcctAvatar(p){
+  var sz=p.size||26;
+  if(p.authType==="google")return(
+    <span style={{width:sz,height:sz,borderRadius:"50%",background:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      <svg width={Math.round(sz*0.54)} height={Math.round(sz*0.54)} viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+    </span>);
+  return(<span style={{width:sz,height:sz,borderRadius:"50%",background:"linear-gradient(135deg,#FFD54F,#FF8F00)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:Math.round(sz/2),fontWeight:900,color:"#1a1100",flexShrink:0}}>{(p.user||"?")[0]}</span>);
+}
+/* 폰 머리 막대의 계정 단추 (2026-11-15, 고객센터 14e519a9 — 폰 화면에는 로그아웃이 없었다).
+   ☀ 자리에 두고, 누르면 PC · 태블릿 메뉴 아래쪽처럼 계정 이름 · 라이트/다크 · 로그아웃을 연다 */
+function AccountMenu(p){
+  var _o=useState(false);var open=_o[0];var setOpen=_o[1];
+  var google=p.authType==="google";
+  var tip="계정 · 화면 모드 · 로그아웃";
+  var BTN={display:"block",width:"100%",padding:"9px 10px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,cursor:"pointer",fontFamily:"inherit"};
+  return(
+    <div style={{position:"relative",flexShrink:0}}>
+      <button onClick={function(){setOpen(!open);}} title={tip} aria-label={tip} aria-expanded={open}
+        style={{marginLeft:2,padding:2,background:"var(--inner)",border:"1px solid "+(open?"var(--acc)":"var(--bd)"),borderRadius:"50%",cursor:"pointer",lineHeight:0,display:"flex"}}>
+        <AcctAvatar user={p.user} authType={p.authType} size={24}/>
+      </button>
+      {open&&(<React.Fragment>
+        <div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,zIndex:299}}/>
+        <div role="menu" style={{position:"absolute",top:"calc(100% + 8px)",right:0,width:220,zIndex:300,background:"var(--side)",border:"1px solid var(--bd)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.45)",padding:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <AcctAvatar user={p.user} authType={p.authType} size={30}/>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:"var(--t1)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.user}</div>
+              <div style={{fontSize:10,color:"var(--td)"}}>{(google?"Google 계정":"게스트")+(p.isAdmin?" · 👑 관리자":"")}</div>
+            </div>
+          </div>
+          <button onClick={p.toggleTheme} style={Object.assign({},BTN,{color:"var(--t2)",marginBottom:6})}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
+          <button onClick={function(){setOpen(false);p.logout();}} style={Object.assign({},BTN,{color:"var(--t1)"})}>{"로그아웃"}</button>
+          <div style={{marginTop:8,fontSize:10,lineHeight:1.5,color:"var(--td)"}}>{google?"다른 구글 계정으로 바꾸려면 로그아웃 뒤 다시 로그인하세요. 덱은 이 계정에 그대로 남아요.":"게스트로 넣은 선수 · 라인업은 저장되지 않아요."}</div>
+        </div>
+      </React.Fragment>)}
+    </div>
+  );
+}
+
 function Nav(p){
   var _o=useState(false);var open=_o[0];var setOpen=_o[1];
   /* 모든 로그인 유저에게 연다 (2026-09-30). 게스트는 구글 계정이 없어 게임에 못 들어가므로 뺀다.
@@ -8320,7 +8361,7 @@ function Nav(p){
         <DeckDropdown {...deckProps}/>
         {p.onIn100 && <In100Btn bar isNew={p.in100New} ring="var(--side)" onClick={p.onIn100} />}
         <CoffeeLink kind="bar" onClick={p.onCoffee}/>
-        <button onClick={p.toggleTheme} title={p.theme==="light"?"다크 모드":"라이트 모드"} style={{marginLeft:2,padding:"4px 8px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:5,color:"var(--t2)",cursor:"pointer",flexShrink:0,lineHeight:1}}>{p.theme==="light"?"🌙":"☀️"}</button>
+        <AccountMenu user={p.user} authType={p.authType} isAdmin={p.isAdmin} theme={p.theme} toggleTheme={p.toggleTheme} logout={p.logout}/>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px",paddingBottom:"calc(8px + env(safe-area-inset-bottom, 0px))"}}>
         {tabs.map(function(t){
@@ -14326,7 +14367,7 @@ export default function App(){
           <div style={{fontSize:48,marginBottom:12}}>{"⚾"}</div>
           <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--acc)"}}>{isFirst?"팀 선택":"덱 추가"}</h2>
           <p style={{margin:"0 0 6px",fontSize:14,color:"var(--td)"}}>{isFirst?"덱 매니저에서 사용할 팀을 선택하세요":"추가할 팀을 선택하세요"}</p>
-          <p style={{margin:"0 0 18px",fontSize:12,color:"var(--td)"}}>{isFirst?"고른 구단이 세트덱 선택 팀·드림/나눔 기준이 됩니다":decks.length+"/5 덱 사용 중"}</p>
+          <p style={{margin:"0 0 18px",fontSize:12,color:"var(--td)"}}>{isFirst?"고른 구단이 세트덱 선택 팀·드림/나눔 기준이 됩니다":decks.length+"/"+DECK_MAX+" 덱 사용 중"}</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             {KBO_TEAMS.map(function(t){return(
               <button key={t} onClick={function(){handleSelectTeam(t);}}
@@ -14338,6 +14379,12 @@ export default function App(){
             );})}
           </div>
           {!isFirst&&(<button onClick={function(){setShowTeamSelect(false);}} style={{marginTop:14,padding:"8px 20px",fontSize:13,background:"transparent",border:"1px solid var(--bd)",borderRadius:8,color:"var(--td)",cursor:"pointer"}}>{"취소"}</button>)}
+          {/* 처음 들어온 계정이 잘못이면 구단을 고르기 전에 나갈 길 (2026-11-15, 고객센터 14e519a9) */}
+          {isFirst&&(<div style={{marginTop:18,paddingTop:14,borderTop:"1px solid var(--bd)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,flexWrap:"wrap",fontSize:12,color:"var(--td)"}}>
+            <AcctAvatar user={user} authType={authType} size={22}/>
+            <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}}><b style={{color:"var(--t2)"}}>{user}</b>{authType==="google"?" · Google":" · 게스트"}</span>
+            <button onClick={lo} style={{padding:"6px 12px",fontSize:12,background:"transparent",border:"1px solid var(--bd)",borderRadius:8,color:"var(--td)",cursor:"pointer",fontFamily:"inherit"}}>{authType==="google"?"다른 계정으로 로그인":"처음 화면으로"}</button>
+          </div>)}
         </div>
         {CSS}
       </div>
