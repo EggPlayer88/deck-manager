@@ -73,9 +73,10 @@ function cardStats(decks, id) {
   });
   var combo = {}, sk = {}, tr = {}, p1 = {}, where = {}, ssL = [], psL = [], tsL = [], xsL = [], pat = {}, capN = 0, tSum = [0, 0, 0, 0, 0, 0], tN = 0;
   uses.forEach(function (u) {
-    var names = (u.e.k || []).map(function (x) { return x[0]; }).filter(Boolean);
+    var kk = u.e.nk ? [] : (u.e.k || []);   /* nk = 후보 카드 앞면만 모음(시즌 241 판부터) — 스킬 · 잠재 없음 */
+    var names = kk.map(function (x) { return x[0]; }).filter(Boolean);
     if (names.length) { var key = names.slice().sort().join(" · "); combo[key] = (combo[key] || 0) + 1; }
-    (u.e.k || []).forEach(function (x) { if (!x[0]) return; var o = sk[x[0]] || (sk[x[0]] = { c: 0, lv: 0, n: 0 }); o.c++; if (x[1] != null) { o.lv += x[1]; o.n++; } });
+    kk.forEach(function (x) { if (!x[0]) return; var o = sk[x[0]] || (sk[x[0]] = { c: 0, lv: 0, n: 0 }); o.c++; if (x[1] != null) { o.lv += x[1]; o.n++; } });
     if (u.e.t != null) tr[u.e.t] = (tr[u.e.t] || 0) + 1;
     if (!u.bench && u.e.ss != null) ssL.push(u.e.ss);
     if (!u.bench && u.e.ps != null) psL.push(u.e.ps);
@@ -509,13 +510,14 @@ function DeckDetail(p) {
           <td style={{ padding: "5px 6px", whiteSpace: "nowrap" }}><TypeDot tools={t} ct={c.cardType} />{" "}<b style={{ color: "var(--t1)" }}>{c.name}</b><span style={{ color: "var(--t2)", fontSize: 10 }}>{" " + tagOf(c)}</span>{e.cap && <span style={{ marginLeft: 5 }}><Mark kind="own">{"주장"}</Mark></span>}</td>
           <td title={TIER_TXT[qtOf(e, 1)] || ""} style={Object.assign({ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t1)", whiteSpace: "nowrap" }, tierSt(qtOf(e, 1)))}>{e.ts ? f1(e.ts[0]) : "—"}<span style={{ fontSize: 9, color: "var(--td)" }}>{e.ts && e.ts[1] != null ? " " + (e.ts[1] < 1 ? e.ts[1].toFixed(1) : Math.round(e.ts[1])) + "%" : ""}</span></td>
           <td title={TIER_TXT[qtOf(e, 2)] || ""} style={Object.assign({ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap" }, tierSt(qtOf(e, 2)))}>{e.xs ? f1(e.xs[0]) : ""}<span style={{ fontSize: 9, color: "var(--td)" }}>{e.xs && e.xs[1] != null ? " " + (e.xs[1] < 1 ? e.xs[1].toFixed(1) : Math.round(e.xs[1])) + "%" : ""}</span></td>
-          <td title={TIER_TXT[qtOf(e, 0)] || ""} style={Object.assign({ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", fontWeight: 800, color: "var(--t1)", fontSize: 13 }, tierSt(qtOf(e, 0)))}>{f1(e.ss)}</td>
-          <td style={{ padding: "5px 6px", color: "var(--t1)" }}>{(e.k || []).map(function (x, i) { return (<span key={i} style={{ whiteSpace: "nowrap", marginRight: 8 }}>{x[0]}<span style={{ color: "var(--td)" }}>{" " + (x[1] != null ? x[1] : "?") + (e.sp3 && e.sp3[i] != null ? " · " + e.sp3[i] : "")}</span></span>); })}</td>
-          <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t1)", fontWeight: 700 }}>{f1(e.ps)}</td>
-          <td style={{ padding: "5px 6px", whiteSpace: "nowrap" }}>{potTrio(e, c).map(function (x, k) { return (<PotG key={k} l={x.l} g={x.g} mr={6} />); })}</td></tr>);
+          <td title={TIER_TXT[qtOf(e, 0)] || ""} style={Object.assign({ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", fontWeight: 800, color: "var(--t1)", fontSize: 13 }, tierSt(qtOf(e, 0)))}>{e.nk ? "—" : f1(e.ss)}</td>
+          <td style={{ padding: "5px 6px", color: "var(--t1)" }}>{e.nk ? (<span style={{ color: "var(--td)", fontSize: 11 }}>{(e.k || []).length ? e.k.map(function (x) { return x[0] + " " + x[1]; }).join(" · ") + " (가정)" : "안 모음"}</span>) : (e.k || []).map(function (x, i) { return (<span key={i} style={{ whiteSpace: "nowrap", marginRight: 8 }}>{x[0]}<span style={{ color: "var(--td)" }}>{" " + (x[1] != null ? x[1] : "?") + (e.sp3 && e.sp3[i] != null ? " · " + e.sp3[i] : "")}</span></span>); })}</td>
+          <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--m)", color: "var(--t1)", fontWeight: 700 }}>{e.nk ? "—" : f1(e.ps)}</td>
+          <td style={{ padding: "5px 6px", whiteSpace: "nowrap", color: "var(--td)" }}>{e.nk ? "—" : potTrio(e, c).map(function (x, k) { return (<PotG key={k} l={x.l} g={x.g} mr={6} />); })}</td></tr>);
       })}</tbody></table>
     <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
       <TierLegend label="스킬 점수 · 훈재분 · 특훈 색 = in100 라인업 카드끼리 견준 자리 (스킬은 타자 · 선발 · 불펜끼리)" />
+      {ALL.some(function (sl) { return (det[sl] || {}).nk; }) && <div style={{ fontSize: 10, color: "var(--td)" }}>{"후보 카드는 시즌 241 판부터 카드 앞면(종류 · 셋포)만 모아요 — 스킬 · 잠재 · 라인업 점수는 비우고, 국대 타자 후보는 국대에이스 Lv 6 을 가정해요"}</div>}
       <div style={{ fontSize: 10, color: "var(--td)" }}>{"라인업 점수 = 라인업 화면과 같은 식(인게임 최종 능력치 — 셋포 · 라커룸 등 모두 반영 — + 스킬 + 잠재 + 발사각 · 팀 버프, 중계 전술은 뺌) · 잠재 = 풀스윙 · 클러치(투수 장타억제 · 침착) · 각성"}</div>
     </div></div>);
   return (<div style={{ padding: mob ? "10px 8px 14px" : "12px 16px 16px", borderTop: "1px dashed var(--bd)", background: "var(--re)" }}>
@@ -849,7 +851,7 @@ export default function In100Page(p) {
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <div style={{ flex: 1, minWidth: 200 }}>
         <div style={{ fontSize: 13, color: "var(--t1)", fontWeight: 800 }}>{"랭킹 챌린지 시즌 " + snap.season + " (" + snap.period + ") 1~100위"}</div>
-        <div style={{ fontSize: 11, color: "var(--td)", marginTop: 2 }}>{snap.at.slice(5).replace("-", "/") + " 기준 덱 · " + decksAll.length + "덱(같은 점수는 같은 순위라 100위가 둘)"}</div>
+        <div style={{ fontSize: 11, color: "var(--td)", marginTop: 2 }}>{snap.at.slice(5).replace("-", "/") + " 기준 덱 · " + decksAll.length + "덱" + (decksAll.length > 100 ? "(같은 점수는 같은 순위라 동률 포함)" : "")}</div>
       </div>
       <select aria-label="판 고르기" value={snap.id} onChange={function (e) { if (p.onSnap) p.onSnap(e.target.value); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--bd)", background: "var(--inner)", color: "var(--t1)", fontSize: 12 }}>
         {(p.snaps && p.snaps.length ? p.snaps : [{ id: snap.id, season: snap.season }]).map(function (x, i) { return (<option key={x.id} value={x.id}>{"시즌 " + x.season + (i === 0 ? " (최신)" : "")}</option>); })}

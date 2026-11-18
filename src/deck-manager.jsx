@@ -11,9 +11,9 @@ import FeedbackPage from "./feedback-board.jsx";
 import HelpGuide from "./help-guide.jsx";
 import In100Page from "./in100.jsx";
 /* in100 홍보 — 새 판(시즌)을 올리면 IN100_LATEST 를 그 판 id 로 바꾼다 → 왕관 단추 · 메뉴의 NEW 가 다시 붙는다 */
-var IN100_LATEST = "s240", IN100_SEASON = 240;
-/* 고를 수 있는 판 (public/in100/<id>.json) — 맨 앞이 최신. in100 화면 '판 고르기'에 나온다 (2026-11-10 시즌 240) */
-var IN100_SNAPS = [{ id: "s240", season: 240 }, { id: "s239", season: 239 }];
+var IN100_LATEST = "s241", IN100_SEASON = 241;
+/* 고를 수 있는 판 (public/in100/<id>.json) — 맨 앞이 최신. in100 화면 '판 고르기'에 나온다 (2026-11-10 시즌 240 · 11-18 시즌 241) */
+var IN100_SNAPS = [{ id: "s241", season: 241 }, { id: "s240", season: 240 }, { id: "s239", season: 239 }];
 function in100SeenGet() { try { return localStorage.getItem("in100Seen") || ""; } catch (e) { return ""; } }
 function in100SeenSet() { try { localStorage.setItem("in100Seen", IN100_LATEST); } catch (e) {} }
 /* 왕관 단추 — bar = 폰 맨 위 헤더용(작게). ring = NEW 딱지 둘레 색(놓인 바탕색) */
