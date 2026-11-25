@@ -3130,6 +3130,11 @@ function Bar(p){var h=p.h||6;var mx=p.max||200;return(<div style={{width:p.w||"1
    능력치는 네 개를 한 줄에 늘어놓으면 타자 인내가 밀려 잘려서 파·정 / 선·인 두 줄로 놓는다. */
 var LINEUP_COLS = "minmax(0,30px) minmax(0,68px) minmax(56px,1fr) minmax(0,84px) minmax(0,88px) minmax(0,62px) minmax(0,54px) minmax(0,196px) minmax(0,62px) minmax(0,92px)";
 var LINEUP_GAP = 14;
+/* 폰 줄 — 순번 · 카드 · 가운데 · 점수. 점수 칸이 46px 이면 "406.0" 같은 점수(Oswald 20px 47 ~ 48px, 글꼴을 못 받으면 51.6px)의
+   끝자리가 잘렸다(그라데이션 글자는 칸 밖이 안 보임) → 52px. 늘어난 6px 은 칸 사이 간격(6 → 4px, 세 곳)에서 가져와
+   가운데 칸 폭은 그대로 — 줄바꿈이 늘지 않게 (2026-11-25) */
+var LINEUP_COLS_MOB = "28px 56px 1fr 52px";
+var LINEUP_GAP_MOB = 4;
 /* 능력치 칸 — 타자는 2열(파 정 / 선 인), 투수는 1열이라 변·구 막대가 넓게 보인다.
    max 는 막대 길이의 기준. 라인업에서 가장 높은 값을 주면 선수 사이 차이가 또렷해진다.
    mini 는 좁은 화면용 — 막대 없이 숫자만 */
@@ -5500,8 +5505,8 @@ function cardSetScore(pl, teamName) {
 var TRAIN_POINTS = {"골든글러브":75,"시그니처":75,"라이브":75,"올스타":90,"국가대표":66,"임팩트":54};
 /* 훈재분 계산기의 "내 훈재분" 입력칸 — 점수에 들어가는 능력치만 받는다 */
 var TRAIN_MY_STATS = {"타자":["파워","정확","선구","인내"],"투수":["변화","구위"],
-  /* v1.1 (2026-10-21): 제구가 점수에 들어가고 선발 · 불펜 가중치가 다르다 */
-  "선발":["변화","구위","제구","구속"],"불펜":["변화","구위","제구","구속"]};
+  /* v1.1 (2026-10-21): 제구가 점수에 들어가고 선발 · 불펜 가중치가 다르다 · 칸 차례는 게임 순서 구속 · 변화 · 구위 · 제구 (2026-11-25) */
+  "선발":["구속","변화","구위","제구"],"불펜":["구속","변화","구위","제구"]};
 /* 이 포지션 칸에 값을 넣었는가. 타자↔투수를 오가도 반대쪽 입력값은 그대로 남아 있으므로
    지금 포지션의 칸만 본다 — 전부 보면 빈 투수 칸으로 "내 점수 0 · 상위 100%" 가 떴다 */
 function hasTrainInput(dist, pos) {
@@ -7390,7 +7395,7 @@ function LineupPage(p) {
           onDrop={function(e) { e.preventDefault(); if (dragSlot !== null && dragSlot !== idx) swapOrder(dragSlot, idx); }}
           onDragEnd={function() { setDragSlot(null); setDragOverSlot(null); }}
           onClick={function() { setSelId(isSel ? null : pl.id); }} className="lu-row"
-          style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : LINEUP_COLS, alignItems: "center", gap: mob ? 6 : LINEUP_GAP, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
+          style={{ display: "grid", gridTemplateColumns: mob ? LINEUP_COLS_MOB : LINEUP_COLS, alignItems: "center", gap: mob ? LINEUP_GAP_MOB : LINEUP_GAP, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acc)", fontFamily: "var(--h)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             {idx > 0 && (<span className="lu-arrow" title={"타순 바꾸기"} onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx-1); }} style={{ fontSize: 12, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
             <span>{idx + 1}</span>
@@ -7549,22 +7554,22 @@ function LineupPage(p) {
     var isSel = selId === pl.id;
     return (
       <React.Fragment key={pl.id}>
-        <div {...rowDrag} onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? "28px 56px 1fr 46px" : LINEUP_COLS, alignItems: "center", gap: mob ? 6 : LINEUP_GAP, padding: "8px 10px", background: rowOver ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: spRow ? "grab" : "pointer", borderLeft: rowOver ? "3px solid var(--acc)" : isSel ? "3px solid var(--acp)" : "3px solid transparent", opacity: rowFrom ? 0.4 : 1 }}>
+        <div {...rowDrag} onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? LINEUP_COLS_MOB : LINEUP_COLS, alignItems: "center", gap: mob ? LINEUP_GAP_MOB : LINEUP_GAP, padding: "8px 10px", background: rowOver ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: spRow ? "grab" : "pointer", borderLeft: rowOver ? "3px solid var(--acc)" : isSel ? "3px solid var(--acp)" : "3px solid transparent", opacity: rowFrom ? 0.4 : 1 }}>
           {pitNo(slot, idx, true)}
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name,pl.team); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
             {mob && (<div style={{ marginTop: 3, display: "flex", flexDirection: "column", gap: 2 }}>
-              <StatBox mini={true} cols={4} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"], ["속", calc.speed || 0, VEL_COLOR]]} />
+              <StatBox mini={true} cols={4} items={[["속", calc.speed || 0, VEL_COLOR], ["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"]]} />
               <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
                 {[1,2,3].map(function(k){ var nm = pl["skill" + k]; if(!nm) return null;
                   var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
                   return (<MiniSk key={k} name={nm} lv={effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), cardLvType(pl), k, pcat, (sdState["pts_" + slot] || []))} />); })}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <span title={ctlMissing(pl) ? CTL_MISS_TIP : undefined}><MiniLine label="훈" value={ctlMissing(pl) ? (<React.Fragment>{(pl.trainC||0) + "·" + (pl.trainS||0) + "·"}<span style={{ color: CTL_MISS_COLOR, fontWeight: 800 }}>{"?"}</span>{"·" + (velMissing(pl, sdState) ? "?" : (pl.trainVel||0))}</React.Fragment>) : [pl.trainC||0, pl.trainS||0, pl.trainCtl||0, velMissing(pl, sdState) ? "?" : (pl.trainVel||0)].join("·")} /></span>
-                <MiniLine label="특" value={[pl.specChange||0, pl.specStuff||0, pl.specControl||0, pl.specVel||0].join("·")} />
+                <span title={ctlMissing(pl) ? CTL_MISS_TIP : undefined}><MiniLine label="훈" value={ctlMissing(pl) ? (<React.Fragment>{(velMissing(pl, sdState) ? "?" : (pl.trainVel||0)) + "·" + (pl.trainC||0) + "·" + (pl.trainS||0) + "·"}<span style={{ color: CTL_MISS_COLOR, fontWeight: 800 }}>{"?"}</span></React.Fragment>) : [velMissing(pl, sdState) ? "?" : (pl.trainVel||0), pl.trainC||0, pl.trainS||0, pl.trainCtl||0].join("·")} /></span>
+                <MiniLine label="특" value={[pl.specVel||0, pl.specChange||0, pl.specStuff||0, pl.specControl||0].join("·")} />
                 <MiniLine label="스" value={calc.skillScore || 0} bold={true} />
                 <span style={{ display: "inline-flex", gap: 4, fontSize: 11, fontFamily: "var(--m)" }}>
                   <PotVal label="장" grade={pl.pot1} /><PotVal label="침" grade={pl.pot2} />
@@ -7576,12 +7581,12 @@ function LineupPage(p) {
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
             <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, false)}</div>
-            <StatBox barH={8} max={pitBarMax} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"], ["속", calc.speed || 0, VEL_COLOR]]} />
-            <div title={ctlMissing(pl) ? "훈련 (변·구·제·속) — " + CTL_MISS_TIP : velMissing(pl, sdState) ? "훈련 (변·구·제·속) — " + VEL_MISS_TIP : "훈련 (변·구·제·속)"} style={{ minWidth: 0, cursor: (ctlMissing(pl) || velMissing(pl, sdState)) ? "help" : undefined }}>
-              <NumBox items={[[pl.trainC || 0, "#AB47BC"], [pl.trainS || 0, "#FF7043"], ctlMissing(pl) ? ["?", CTL_MISS_COLOR] : [pl.trainCtl || 0, "#26A69A"], velMissing(pl, sdState) ? ["?", CTL_MISS_COLOR] : [pl.trainVel || 0, VEL_COLOR]]} />
+            <StatBox barH={8} max={pitBarMax} items={[["속", calc.speed || 0, VEL_COLOR], ["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"]]} />
+            <div title={ctlMissing(pl) ? "훈련 (속·변·구·제) — " + CTL_MISS_TIP : velMissing(pl, sdState) ? "훈련 (속·변·구·제) — " + VEL_MISS_TIP : "훈련 (속·변·구·제)"} style={{ minWidth: 0, cursor: (ctlMissing(pl) || velMissing(pl, sdState)) ? "help" : undefined }}>
+              <NumBox items={[velMissing(pl, sdState) ? ["?", CTL_MISS_COLOR] : [pl.trainVel || 0, VEL_COLOR], [pl.trainC || 0, "#AB47BC"], [pl.trainS || 0, "#FF7043"], ctlMissing(pl) ? ["?", CTL_MISS_COLOR] : [pl.trainCtl || 0, "#26A69A"]]} />
             </div>
-            <div title={"특훈 (변·구·제·속)"} style={{ minWidth: 0 }}>
-              <NumBox items={[[pl.specChange || 0, "#AB47BC"], [pl.specStuff || 0, "#FF7043"], [pl.specControl || 0, "#26A69A"], [pl.specVel || 0, VEL_COLOR]]} />
+            <div title={"특훈 (속·변·구·제)"} style={{ minWidth: 0 }}>
+              <NumBox items={[[pl.specVel || 0, VEL_COLOR], [pl.specChange || 0, "#AB47BC"], [pl.specStuff || 0, "#FF7043"], [pl.specControl || 0, "#26A69A"]]} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }}>
               {[1,2,3].map(function(k){
@@ -7632,8 +7637,8 @@ function LineupPage(p) {
             {RP_ALL.indexOf(slot) >= 0 && rpPickBox(slot)}
             <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"강화"}</div><select value={pl.enhance||""} onChange={function(e){updatePl(pl.id,"enhance",e.target.value);}} style={{ padding: "3px 4px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>{["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e){return(<option key={e} value={e} style={{background:"#1e293b",color:"#e2e8f0"}}>{e}</option>);})}</select></div>
             {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 15, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
-            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}<span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "trainCtl", pl.trainCtl, ctlMissing(pl) ? CTL_MISS_COLOR : "#26A69A")}<span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "trainVel", pl.trainVel, velMissing(pl, sdState) ? CTL_MISS_COLOR : VEL_COLOR)}{(ctlMissing(pl) || velMissing(pl, sdState)) && (<span title={ctlMissing(pl) ? CTL_MISS_TIP : VEL_MISS_TIP} style={{ fontSize: 11, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", cursor: "help" }}>{"미입력"}</span>)}</div></div>
-            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}<span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "specControl", pl.specControl, "#26A69A", 15)}<span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "specVel", pl.specVel, VEL_COLOR, 15)}</div></div>
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "trainVel", pl.trainVel, velMissing(pl, sdState) ? CTL_MISS_COLOR : VEL_COLOR)}<span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}<span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "trainCtl", pl.trainCtl, ctlMissing(pl) ? CTL_MISS_COLOR : "#26A69A")}{(ctlMissing(pl) || velMissing(pl, sdState)) && (<span title={ctlMissing(pl) ? CTL_MISS_TIP : VEL_MISS_TIP} style={{ fontSize: 11, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", cursor: "help" }}>{"미입력"}</span>)}</div></div>
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "specVel", pl.specVel, VEL_COLOR, 15)}<span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}<span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "specControl", pl.specControl, "#26A69A", 15)}</div></div>
             
             <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"장타억제"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:12,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"침착"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:12,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
             <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
@@ -7803,15 +7808,15 @@ function LineupPage(p) {
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="선발 로테이션" icon="🔥" count={spPl.length + "/5"} color="#AB47BC" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="선발" stat="변·구·제·속" />)}{lSP.map(function(x, i) { return pitRow(x.slot, x.pl, i); })}</div>
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="선발" stat="속·변·구·제" />)}{lSP.map(function(x, i) { return pitRow(x.slot, x.pl, i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="중계진" icon="💪" count={rpPl.length + "/" + rpSlotsNow.length} color="#42A5F5" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="중계" stat="변·구·제·속" />)}{rpAp.seq.map(function(s, i) { return pitRow(s, pick(s), i); })}</div>
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="중계" stat="속·변·구·제" />)}{rpAp.seq.map(function(s, i) { return pitRow(s, pick(s), i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="마무리" icon="🔒" count={cpPl.length + "/1"} color="#EF5350" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="마무리" stat="변·구·제·속" />)}{pitRow("CP", lCP.pl, 0)}</div>
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="마무리" stat="속·변·구·제" />)}{pitRow("CP", lCP.pl, 0)}</div>
       </div>
 
       {/* 후보선수 */}
@@ -7919,6 +7924,7 @@ var POS_TRAIN = {
 };
 var RS_OPTS = ["0","1","2","3","4","5","6"];
 
+var PT_RKEY = { "파워": 0, "정확": 1, "선구": 2, "인내": 3, "변화": 0, "구위": 1, "제구": 2, "구속": 3 };
 function PosTrainRow(rp) {
   var pos = rp.pos; var pt = POS_TRAIN[pos]; var d = rp.d; var upd = rp.upd; var colors = rp.colors; var stats = rp.stats; var idx = rp.idx;
   var slots = rp.slots || 6;
@@ -7943,7 +7949,9 @@ function PosTrainRow(rp) {
       {stats.map(function(stat, i) {
         var arr = pt[stat] || [];
         var base = lv < arr.length ? arr[lv] : (arr[arr.length - 1] || 0);
-        var reset = d["r" + i] || 0;
+        /* 재설정 저장 칸은 능력치 이름으로 — 화면 차례(게임 순서 구속 · 변화 · 구위 · 제구)와 상관없이 r0 변화 · r1 구위 · r2 제구 (타자 r0 ~ r3 = 파 · 정 · 선 · 인) */
+        var ri = PT_RKEY[stat] !== undefined ? PT_RKEY[stat] : i;
+        var reset = d["r" + ri] || 0;
         /* 구속은 재설정이 없다 (2026-11-20 — in100 3시즌 Lv20 값이 늘 같음) → 레벨 값만 */
         if (stat === "구속") return (
           <div key={stat} title={"구속은 재설정이 없어요 — 레벨 값만 들어가요"} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -7954,7 +7962,7 @@ function PosTrainRow(rp) {
           <div key={stat} style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "center" }}>
             <span style={{ fontSize: 12, color: colors[i], fontFamily: "var(--m)", fontWeight: 800 }}>{base}</span>
             <span style={{ fontSize: 11, color: "var(--td)" }}>{"+"}</span>
-            <select value={String(reset)} onChange={function(e) { upd(pos, "r" + i, parseInt(e.target.value)); }} style={{ width: 34, padding: "4px 1px", textAlign: "center", background: "#1e293b", border: "1px solid " + colors[i] + "88", borderRadius: 4, color: colors[i], fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
+            <select value={String(reset)} onChange={function(e) { upd(pos, "r" + ri, parseInt(e.target.value)); }} style={{ width: 34, padding: "4px 1px", textAlign: "center", background: "#1e293b", border: "1px solid " + colors[i] + "88", borderRadius: 4, color: colors[i], fontSize: 13, fontFamily: "var(--m)", fontWeight: 700, outline: "none", cursor: "pointer" }}>
               {RS_OPTS.map(function(v) { return (<option key={v} value={v}>{v}</option>); })}
             </select>
             <span style={{ fontSize: 11, color: "var(--td)" }}>{"="}</span>
@@ -8013,9 +8021,9 @@ function PosTrainPage(p) {
   var setSdState = p.setSdState;
   var groups = [
     { label: "타자", cat: "타자", poss: ["C","1B","2B","3B","SS","LF","CF","RF","DH"], stats: ["파워","정확","선구","인내"], colors: ["#EF5350","#42A5F5","#66BB6A","#FFA726"] },
-    { label: "선발", cat: "선발", poss: ["SP1","SP2","SP3","SP4","SP5"], stats: ["변화","구위","제구","구속"], colors: ["#AB47BC","#FF7043","#26A69A",VEL_COLOR] },
-    { label: "중계", cat: "중계", poss: RP_ALL, stats: ["변화","구위","제구","구속"], colors: ["#AB47BC","#FF7043","#26A69A",VEL_COLOR], note: "RP7 · RP8 은 중계 7 · 8명일 때 써요" },
-    { label: "마무리", cat: "마무리", poss: ["CP"], stats: ["변화","구위","제구","구속"], colors: ["#AB47BC","#FF7043","#26A69A",VEL_COLOR] },
+    { label: "선발", cat: "선발", poss: ["SP1","SP2","SP3","SP4","SP5"], stats: ["구속","변화","구위","제구"], colors: [VEL_COLOR,"#AB47BC","#FF7043","#26A69A"] },
+    { label: "중계", cat: "중계", poss: RP_ALL, stats: ["구속","변화","구위","제구"], colors: [VEL_COLOR,"#AB47BC","#FF7043","#26A69A"], note: "RP7 · RP8 은 중계 7 · 8명일 때 써요" },
+    { label: "마무리", cat: "마무리", poss: ["CP"], stats: ["구속","변화","구위","제구"], colors: [VEL_COLOR,"#AB47BC","#FF7043","#26A69A"] },
   ];
   /* Init posTrain in sdState if missing */
   var ptKey = function(pos) { return "pt_" + pos; };
@@ -9056,7 +9064,7 @@ function LockerRoomPage(p) {
         style={{ marginLeft: "auto", flexShrink: 0, padding: "2px 8px", fontSize: 11, fontWeight: 700, borderRadius: 6, border: "1px solid var(--acc)", background: "var(--ta)", color: "var(--acc)", cursor: "pointer", fontFamily: "inherit" }}>{"바꾸기"}</button>
     </div>);
   };
-  var LEAD_ORDER = ["p", "a", "e", "n", "run", "c", "s", "ctl", "vel", "sta", "def"];
+  var LEAD_ORDER = ["p", "a", "e", "n", "run", "vel", "c", "s", "ctl", "sta", "def"];   /* 투수는 게임 순서 — 구속 · 변화 · 구위 · 제구 (2026-11-25) */
   var gainTxt = function (g) { return LEAD_ORDER.filter(function (k) { return g[k]; }).map(function (k) { return LEAD_SHORT[k] + "+" + g[k]; }).join(" "); };
   /* 리더 한 명의 상자 — 열린 줄(레벨 5 · 10 · 15 · 20)과 이 덱에서 받는 선수 */
   var leaderBox = function (src, side, lv, color) {
@@ -9084,7 +9092,7 @@ function LockerRoomPage(p) {
   };
   /* 레벨 표에 그 레벨 값이 있으면 개인 보너스는 표 값(직접 입력 대신) */
   var SELF_KEYS_BAT = [["p", "#EF5350"], ["a", "#42A5F5"], ["e", "#66BB6A"], ["n", "#FFA726"], ["run", "var(--td)"], ["def", "var(--td)"]];
-  var SELF_KEYS_PIT = [["c", "#AB47BC"], ["s", "#FF7043"], ["ctl", "#26A69A"], ["vel", VEL_COLOR], ["sta", "var(--td)"], ["def", "var(--td)"]];
+  var SELF_KEYS_PIT = [["vel", VEL_COLOR], ["c", "#AB47BC"], ["s", "#FF7043"], ["ctl", "#26A69A"], ["sta", "var(--td)"], ["def", "var(--td)"]];   /* 게임 순서 — 구속 · 변화 · 구위 · 제구 (2026-11-25) */
   var selfChips = function (b, keys) { return (<div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700 }}>{keys.map(function (k) { return (<span key={k[0]} style={{ color: k[1] }}>{LEAD_SHORT[k[0]] + " +" + (b[k[0]] || 0)}</span>); })}</div>); };
   var capSide = batCap && batCap.role !== "타자" ? "투수" : "타자";
   var capSelf = leaderSelfBonus(capSide === "타자" ? "주장(타자)" : "주장(투수)", capLv);
@@ -9234,10 +9242,10 @@ function LockerRoomPage(p) {
               </React.Fragment>
             ) : (
               <React.Fragment>
+                {miniStat("속", VEL_COLOR, "capBatVel", sdState.capBatVel)}
                 {miniStat("변", "#AB47BC", "capBatC", sdState.capBatC)}
                 {miniStat("구", "#FF7043", "capBatS", sdState.capBatS)}
                 {miniStat("제", "#26A69A", "capBatCtl", sdState.capBatCtl)}
-                {miniStat("속", VEL_COLOR, "capBatVel", sdState.capBatVel)}
               </React.Fragment>
             )}
           </div></React.Fragment>)}
@@ -9265,10 +9273,10 @@ function LockerRoomPage(p) {
           {pitSelf ? (<React.Fragment><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"투수 주장 능력치 보너스 — 레벨 " + capPitLv + " 표 값"}</div>{selfChips(pitSelf, SELF_KEYS_PIT)}</React.Fragment>) : (<React.Fragment>
           <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)" + (capPitLv > 0 ? " · 이 레벨은 표 값이 아직 없어 직접 넣어요" : "")}</div>
           <div style={{ display: "flex", gap: 6 }}>
+            {miniStat("속", VEL_COLOR, "capPitVel", sdState.capPitVel)}
             {miniStat("변", "#AB47BC", "capPitC", sdState.capPitC)}
             {miniStat("구", "#FF7043", "capPitS", sdState.capPitS)}
             {miniStat("제", "#26A69A", "capPitCtl", sdState.capPitCtl)}
-            {miniStat("속", VEL_COLOR, "capPitVel", sdState.capPitVel)}
           </div></React.Fragment>)}
           {leaderBox(leadView.srcPit, "투수", capPitLv, "#CE93D8")}
         </div>
@@ -9282,7 +9290,7 @@ function LockerRoomPage(p) {
           <span style={{ fontSize: 11, color: "var(--td)", marginLeft: 4 }}>{"(모든 선수 적용)"}</span>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {[{k:"uniP",l:"파워",c:"#EF5350"},{k:"uniA",l:"정확",c:"#42A5F5"},{k:"uniE",l:"선구",c:"#66BB6A"},{k:"uniN",l:"인내",c:"#FFA726"},{k:"uniC",l:"변화",c:"#AB47BC"},{k:"uniS",l:"구위",c:"#FF7043"},{k:"uniCtl",l:"제구",c:"#26A69A"},{k:"uniVel",l:"구속",c:VEL_COLOR}].map(function(s) {
+          {[{k:"uniP",l:"파워",c:"#EF5350"},{k:"uniA",l:"정확",c:"#42A5F5"},{k:"uniE",l:"선구",c:"#66BB6A"},{k:"uniN",l:"인내",c:"#FFA726"},{k:"uniVel",l:"구속",c:VEL_COLOR},{k:"uniC",l:"변화",c:"#AB47BC"},{k:"uniS",l:"구위",c:"#FF7043"},{k:"uniCtl",l:"제구",c:"#26A69A"}].map(function(s) {
             return (
               <div key={s.k} style={{ background: "var(--inner)", borderRadius: 6, padding: "8px 10px", border: "1px solid " + s.c + "22", textAlign: "center" }}>
                 <div style={{ fontSize: 11, color: s.c, fontWeight: 700, marginBottom: 4 }}>{s.l}</div>
@@ -11580,12 +11588,12 @@ function MyPlayersPage(p) {
               {isBat ? (
                 <React.Fragment><span style={{ color: "#EF5350" }}>{"+" + (pl.trainP||0)}</span>{" "}<span style={{ color: "#42A5F5" }}>{"+" + (pl.trainA||0)}</span>{" "}<span style={{ color: "#66BB6A" }}>{"+" + (pl.trainE||0)}</span>{" "}<span style={{ color: "#FFA726" }}>{"+" + (pl.trainN||0)}</span></React.Fragment>
               ) : (
-                <React.Fragment><span style={{ color: "#AB47BC" }}>{"+" + (pl.trainC||0)}</span>{" "}<span style={{ color: "#FF7043" }}>{"+" + (pl.trainS||0)}</span>{" "}{ctlMissing(pl) ? <span title={CTL_MISS_TIP} style={{ color: CTL_MISS_COLOR, fontWeight: 800, cursor: "help" }}>{"+?"}</span> : <span style={{ color: "#26A69A" }}>{"+" + (pl.trainCtl||0)}</span>}{" "}{velMissing(pl, sdState) ? <span title={VEL_MISS_TIP} style={{ color: CTL_MISS_COLOR, fontWeight: 800, cursor: "help" }}>{"+?"}</span> : <span style={{ color: VEL_COLOR }}>{"+" + (pl.trainVel||0)}</span>}</React.Fragment>
+                <React.Fragment>{velMissing(pl, sdState) ? <span title={VEL_MISS_TIP} style={{ color: CTL_MISS_COLOR, fontWeight: 800, cursor: "help" }}>{"+?"}</span> : <span style={{ color: VEL_COLOR }}>{"+" + (pl.trainVel||0)}</span>}{" "}<span style={{ color: "#AB47BC" }}>{"+" + (pl.trainC||0)}</span>{" "}<span style={{ color: "#FF7043" }}>{"+" + (pl.trainS||0)}</span>{" "}{ctlMissing(pl) ? <span title={CTL_MISS_TIP} style={{ color: CTL_MISS_COLOR, fontWeight: 800, cursor: "help" }}>{"+?"}</span> : <span style={{ color: "#26A69A" }}>{"+" + (pl.trainCtl||0)}</span>}</React.Fragment>
               )}
             </div>
             {/* Spec */}
             <div style={{ fontSize: 14, fontFamily: "var(--m)", color: "var(--t2)" }}>
-              {isBat ? ((pl.specPower||0) + "/" + (pl.specAccuracy||0) + "/" + (pl.specEye||0) + "/" + (pl.specPatience||0)) : ((pl.specChange||0) + "/" + (pl.specStuff||0) + "/" + (pl.specControl||0) + "/" + (pl.specVel||0))}
+              {isBat ? ((pl.specPower||0) + "/" + (pl.specAccuracy||0) + "/" + (pl.specEye||0) + "/" + (pl.specPatience||0)) : ((pl.specVel||0) + "/" + (pl.specChange||0) + "/" + (pl.specStuff||0) + "/" + (pl.specControl||0))}
             </div>
             {/* Skills - all 3 visible */}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -11676,9 +11684,9 @@ function MyPlayersPage(p) {
                     </React.Fragment>
                   ) : (
                     <React.Fragment>
-                      <span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}
+                      <span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "trainVel", pl.trainVel, velMissing(pl, sdState) ? CTL_MISS_COLOR : VEL_COLOR)}<span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}
                       <span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}
-                      <span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "trainCtl", pl.trainCtl, ctlMissing(pl) ? CTL_MISS_COLOR : "#26A69A")}<span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "trainVel", pl.trainVel, velMissing(pl, sdState) ? CTL_MISS_COLOR : VEL_COLOR)}
+                      <span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "trainCtl", pl.trainCtl, ctlMissing(pl) ? CTL_MISS_COLOR : "#26A69A")}
                       {(ctlMissing(pl) || velMissing(pl, sdState)) && (<span title={ctlMissing(pl) ? CTL_MISS_TIP : VEL_MISS_TIP} style={{ fontSize: 11, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", cursor: "help" }}>{"미입력"}</span>)}
                     </React.Fragment>
                   )}
@@ -11697,9 +11705,9 @@ function MyPlayersPage(p) {
                     </React.Fragment>
                   ) : (
                     <React.Fragment>
-                      <span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}
+                      <span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "specVel", pl.specVel, VEL_COLOR, 15)}<span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}
                       <span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}
-                      <span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "specControl", pl.specControl, "#26A69A", 15)}<span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "specVel", pl.specVel, VEL_COLOR, 15)}
+                      <span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "specControl", pl.specControl, "#26A69A", 15)}
                     </React.Fragment>
                   )}
                 </div>
@@ -12126,7 +12134,7 @@ function MyPlayersPage(p) {
               <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 8 }}>
                 {(cdForm.role === "타자"
                   ? [["파워","power"],["정확","accuracy"],["선구","eye"],["인내","patience"],["주루","running"],["수비","defense"],["발사각","launchAngle"],["흰존","whiteZone"],["콜존","coldZone"]]
-                  : [["변화","change"],["구위","stuff"],["구속","speed"],["제구","control"],["지구력","stamina"],["수비","defense"]]
+                  : [["구속","speed"],["변화","change"],["구위","stuff"],["제구","control"],["지구력","stamina"],["수비","defense"]]
                 ).map(function(f) {
                   return (<Inp key={f[1]} label={f[0]} type="number" value={cdForm[f[1]] || 0}
                     onChange={function(v){ cdUf(f[1], parseInt(v) || 0); }} />);
