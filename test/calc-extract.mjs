@@ -2243,7 +2243,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
     if (isBat) { bp += b.p || 0; ba += b.a || 0; be += b.e || 0; bn += b.n || 0; S.run += b.run || 0; S.def += b.def || 0; }
     else { pc += b.c || 0; ps += b.s || 0; S.ctl += b.ctl || 0; S.vel += b.vel || 0; S.sta += b.sta || 0; S.def += b.def || 0; }
   };
-  if (pl.id === sdState.capBatId) {
+  if (pl.id === sdState.capBatId && leaderOwn(pl, sdState)) {   /* 타팀 주장은 셈하지 않음 (2026-11-25) */
     var selfB = leaderSelfBonus(isBat ? "주장(타자)" : "주장(투수)", sdState.capLv);
     if (selfB) addB(selfB);
     else if (isBat) { bp += sdState.capBatP || 0; ba += sdState.capBatA || 0; be += sdState.capBatE || 0; bn += sdState.capBatN || 0; }
@@ -2251,7 +2251,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   }
   /* 투수조장은 투수만 */
   /* 같은 투수를 주장 · 투수 주장 둘 다로 고른 덱(운영 1벌)은 예전처럼 개인 보너스를 둘 다 받는다 — 영향력은 한 번만(leaderState) */
-  if (!isBat && pl.id === sdState.capPitId) {
+  if (!isBat && pl.id === sdState.capPitId && leaderOwn(pl, sdState)) {
     var selfP = leaderSelfBonus("투수조장", sdState.capPitLv);
     if (selfP) addB(selfP);
     else { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; S.ctl += sdState.capPitCtl || 0; S.vel += sdState.capPitVel || 0; }
@@ -2385,17 +2385,28 @@ function leaderGains(isBat, mine, srcs) {
 /* 라인업의 리더 최종 능력치 — computeLineupSetDeck 이 sdState._lead 로 한 번 구해 둔다. 레벨 5 미만 · 라인업 밖 리더는 없음.
    타자 주장의 타순은 지금 타순(batOrder) 기준 — 주장이 다른 타순 묶음(1~2 · 3~5 · 6~9번)으로 가면 세트덱 보너스가 달라져 리더 값도 바뀐다.
    베스트 라인업은 주장을 묶음마다 세워 다시 센다(bestLineup 의 leadRefine, 2026-11-25) */
+/* 주장 · 투수 주장은 자팀 선수만 맡는다(게임 규칙, 2026-11-25 사용자). 타팀 카드가 리더로 남아 있으면(예전에 저장한 덱)
+   개인 보너스 · 영향력을 셈하지 않는다 — 그 선수는 리더가 아닌 것으로 본다. 덱 구단을 모르거나 선수 구단이 비어 있으면(직접 등록 등) 막지 않는다 */
+function leaderOwn(pl, sd) {
+  if (!pl) return false;
+  var team = teamKey(sd && sd.teamName);
+  if (!KBO_LEAGUE[team]) return true;
+  var t = teamKey(pl.team);
+  return !t || t === team;
+}
 function leaderState(pick, sd, tsp) {
   if (!sd || (!sd.capBatId && !sd.capPitId)) return null;
   var slots = BAT_SLOTS.concat(SP_SLOTS, rpSlotsOf(sd.bpcIdx), ["CP"]);
   var order = (sd.batOrder && sd.batOrder.length === 9) ? sd.batOrder : BAT_SLOTS;
   var find = function (id) { for (var i = 0; i < slots.length; i++) { var pl = pick(slots[i]); if (pl && pl.id === id) return { pl: pl, slot: slots[i] }; } return null; };
   var out = { ids: {}, bat: null, pit: [], velRow: false };
-  if (sd.capBatId) out.ids[sd.capBatId] = 1;
-  if (sd.capPitId) out.ids[sd.capPitId] = 1;
+  /* 리더끼리는 안 받는다 — 자팀 리더만 리더로 본다(타팀이면 그 선수는 다른 리더의 영향력을 받는다) */
+  var own = function (id) { var f = id ? find(id) : null; return !!f && leaderOwn(f.pl, sd); };
+  if (own(sd.capBatId)) out.ids[sd.capBatId] = 1;
+  if (own(sd.capPitId)) out.ids[sd.capPitId] = 1;
   var add = function (id, lv, onlyPit) {
     if (!id || lv < 5) return;
-    var f = find(id); if (!f) return;
+    var f = find(id); if (!f || !leaderOwn(f.pl, sd)) return;
     var isBat = f.pl.role === "타자";
     if (onlyPit && isBat) return;
     var lu = lineupLu(f.pl);
@@ -3597,4 +3608,4 @@ function __setSeed(a){ SEED_PLAYERS.length = 0; (a||[]).forEach(function(p){ SEE
 function __setSkillData(d){ SKILL_DATA = d || DEFAULT_SKILLS; }
 export { dexAll, findCard, setCustomPlayers, isCustomCard, CUSTOM_MAX, mergePl, __setLiveWeights, __setGlobalPotm, __setSeed, __setSkillData, resolveSkills, DEFAULT_SKILLS, getEnhVal, getPotScoreByType, awkTypesFor, POT_GRADES_AWK, POT_TYPES_AWK_BAT, POT_TYPES_AWK_PIT, potmKey, isPotmFor, getPotmBonus, potmEffect, applyPotmPot, deckPl, getPotmInfo, potmSummary, POTM_LIVE_STAT, POTM_OLSTAR, POTM_SPECIAL_STAT, maxSkillLv, autoSkillLv, effSkillLv, isLvManual, hasPtSkill, ptSkillCount, PT_GROUP_SIZE, PT_GROUPS, PT_MAX_SAME, skillCatOf, normPlayerSkills, normPlayerList, parseHotColdZone, zonesFromRow, canonPlayerName, playerNameGroup, choseong, isChoQuery, dexHay, dexScore, buildDexIndex, dexFitsSlot, dexRank, dexSearch, PLAYER_RENAME, PLAYER_RENAME_BY_TEAM, PLAYER_NAME_GROUPS, canonSkillName, buildDist, compressDist, TRAIN_POINTS, TRAIN_MY_STATS, hasTrainInput, getPercentile, PEAK_SKILLS, PEAK_TRAIN, PEAK_SPEC, PEAK_POT, PEAK_AWK, peakPl, peakSkillSum, peakBuffState, buffName, skillPickable, natSkillMismatch, buildSkillDist, pctFromDist, histFromDist, skillDistKey, slotGroupOf, isWinGroupSlot, rpGroupOf, batMult, BAT_MULT, strMult, strRanks, STR_MULT, RP_WEIGHTS, getRPWeight, rpAppearance, rpOrderMove, rpOrderOf, rpTactic, rpChaseTactic, rpTacKey, rpTacNorm, rpTacLabel, spMult, rpBudget, SP_MULT, skillSlotHint, skillRoleOf, SKILL_ROLE_FIX, SKILL_POS_LIMIT, SKILL_FIXED_BY_POS, SKILL_ALIAS, variantAllowed, pickPaegi, isNatOnlySkill, skillAllowedAt, skillBaseName, DEFAULT_MAJOR, LIVE_SYN_TYPES, liveSynCount, calcSDBonus, sdPick, calcBat, calcPit, getSkillScore, launchAngleReq, launchAngleBonus, launchAngleSkillAdj, launchAngleGain, zonePenalty, ORDER_SKILLS, skillTableName, orderAdjust, orderPl, getW, makeDeckWriter, toDeckFormat, deckLosesAllPlayers, canonJson, normDeck, deckSnap, classifyDeckSave, classifyKeySave, deckShrinkNote, pushAudit, SET_POINTS, FA_SET_PENALTY, cardSetScore, computeLineupSetDeck, detectTeamBuffs, KBO_LEAGUE, KBO_TEAMS, teamKey, sdSideOf, isSelTeam, sdLeagueOf, miTxt, statKey, entryStatKey, statDist, miRanked, matchOne, buildIndex, suggestDeckTeam, FA_CARDS, WILDCARD_CARDS, isOtherTeam, applyTeamFlags, teamFlagStatAdj, SPEC_TRIALS, specTrialsOf, specDistKey, WILDCARD_SET_PENALTY, cardSetPenalty, parseCardCode, OLSTAR_SET_POINTS, NO_AWAKEN_CARDS, awakenScore, betterPot, SD_BAT_ALL, SD_PIT_ALL, SD_RULES, sdWho, SD_ROWS, SD_YEAR_ROWS, SD_TIE_SIDE, optimizeSetDeck, LAB_TIERS, distValueAt, labCat, labScale, labPl, PREBUILT_DIST, PREBUILT_SKILL_DIST, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_GG_BASE, LAB_GG_OWN_BONUS, LAB_FA_MAX, LAB_GG_STEP, LAB_GG_ANTI_MAX, LAB_OS_ANTI_MAX, LAB_OS_BASE, LAB_OS_OWN_BONUS, LAB_OS_STEP, LAB_BPC_IDX, LAB_SET_POINT, LAB_SLOTS, LAB_PRESET, SHARE_GRADE, shareGrade, sharePot, shareEnh, shareSkillCmp, shareSkillPct, shareTrainScore, shareTrainPct, sqName, labCard, labDeckSlots, LAB_BENCH_N, LAB_USAGE_AT, LAB_USAGE, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labAutoBench, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, labFaLimit, labGgLimit, isOldOlstar, cardLvType, OLSTAR_SET_POINTS_OLD, OLSTAR_OLD_YEAR, labSdState, LAB_STD_SD, LAB_STD_FIELDS, labStdCtx, labStdPl, labStdRaw, labStdScore, LAB_STD_HOME, labStdGet, labSeatOrder, labBestOrder, labLimits, labYears, labRun, lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT };
 export { velWeighted, velMissing, VEL_COLOR, VEL_MISS_TIP, pitWFill };
-export { LEADER_TABLE, LEADER_STEPS, LEADER_SELF_BONUS, LEADER_MAX_LV, LEADER_RECV_SLOTS, leaderGains, leaderLv, leaderSelfBonus, leaderState, velCounts };
+export { LEADER_TABLE, LEADER_STEPS, LEADER_SELF_BONUS, LEADER_MAX_LV, LEADER_RECV_SLOTS, leaderGains, leaderLv, leaderSelfBonus, leaderState, leaderOwn, velCounts };

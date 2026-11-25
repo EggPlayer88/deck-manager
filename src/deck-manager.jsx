@@ -1184,17 +1184,28 @@ function leaderGains(isBat, mine, srcs) {
 /* 라인업의 리더 최종 능력치 — computeLineupSetDeck 이 sdState._lead 로 한 번 구해 둔다. 레벨 5 미만 · 라인업 밖 리더는 없음.
    타자 주장의 타순은 지금 타순(batOrder) 기준 — 주장이 다른 타순 묶음(1~2 · 3~5 · 6~9번)으로 가면 세트덱 보너스가 달라져 리더 값도 바뀐다.
    베스트 라인업은 주장을 묶음마다 세워 다시 센다(bestLineup 의 leadRefine, 2026-11-25) */
+/* 주장 · 투수 주장은 자팀 선수만 맡는다(게임 규칙, 2026-11-25 사용자). 타팀 카드가 리더로 남아 있으면(예전에 저장한 덱)
+   개인 보너스 · 영향력을 셈하지 않는다 — 그 선수는 리더가 아닌 것으로 본다. 덱 구단을 모르거나 선수 구단이 비어 있으면(직접 등록 등) 막지 않는다 */
+function leaderOwn(pl, sd) {
+  if (!pl) return false;
+  var team = teamKey(sd && sd.teamName);
+  if (!KBO_LEAGUE[team]) return true;
+  var t = teamKey(pl.team);
+  return !t || t === team;
+}
 function leaderState(pick, sd, tsp) {
   if (!sd || (!sd.capBatId && !sd.capPitId)) return null;
   var slots = BAT_SLOTS.concat(SP_SLOTS, rpSlotsOf(sd.bpcIdx), ["CP"]);
   var order = (sd.batOrder && sd.batOrder.length === 9) ? sd.batOrder : BAT_SLOTS;
   var find = function (id) { for (var i = 0; i < slots.length; i++) { var pl = pick(slots[i]); if (pl && pl.id === id) return { pl: pl, slot: slots[i] }; } return null; };
   var out = { ids: {}, bat: null, pit: [], velRow: false };
-  if (sd.capBatId) out.ids[sd.capBatId] = 1;
-  if (sd.capPitId) out.ids[sd.capPitId] = 1;
+  /* 리더끼리는 안 받는다 — 자팀 리더만 리더로 본다(타팀이면 그 선수는 다른 리더의 영향력을 받는다) */
+  var own = function (id) { var f = id ? find(id) : null; return !!f && leaderOwn(f.pl, sd); };
+  if (own(sd.capBatId)) out.ids[sd.capBatId] = 1;
+  if (own(sd.capPitId)) out.ids[sd.capPitId] = 1;
   var add = function (id, lv, onlyPit) {
     if (!id || lv < 5) return;
-    var f = find(id); if (!f) return;
+    var f = find(id); if (!f || !leaderOwn(f.pl, sd)) return;
     var isBat = f.pl.role === "타자";
     if (onlyPit && isBat) return;
     var lu = lineupLu(f.pl);
@@ -1644,7 +1655,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
     if (isBat) { bp += b.p || 0; ba += b.a || 0; be += b.e || 0; bn += b.n || 0; S.run += b.run || 0; S.def += b.def || 0; }
     else { pc += b.c || 0; ps += b.s || 0; S.ctl += b.ctl || 0; S.vel += b.vel || 0; S.sta += b.sta || 0; S.def += b.def || 0; }
   };
-  if (pl.id === sdState.capBatId) {
+  if (pl.id === sdState.capBatId && leaderOwn(pl, sdState)) {   /* 타팀 주장은 셈하지 않음 (2026-11-25) */
     var selfB = leaderSelfBonus(isBat ? "주장(타자)" : "주장(투수)", sdState.capLv);
     if (selfB) addB(selfB);
     else if (isBat) { bp += sdState.capBatP || 0; ba += sdState.capBatA || 0; be += sdState.capBatE || 0; bn += sdState.capBatN || 0; }
@@ -1652,7 +1663,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   }
   /* 투수조장은 투수만 */
   /* 같은 투수를 주장 · 투수 주장 둘 다로 고른 덱(운영 1벌)은 예전처럼 개인 보너스를 둘 다 받는다 — 영향력은 한 번만(leaderState) */
-  if (!isBat && pl.id === sdState.capPitId) {
+  if (!isBat && pl.id === sdState.capPitId && leaderOwn(pl, sdState)) {
     var selfP = leaderSelfBonus("투수조장", sdState.capPitLv);
     if (selfP) addB(selfP);
     else { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; S.ctl += sdState.capPitCtl || 0; S.vel += sdState.capPitVel || 0; }
@@ -8964,6 +8975,11 @@ function LockerRoomPage(p) {
   var batCapId = sdState.capBatId || "";
   var pitCapId = sdState.capPitId || "";
   var lineupAll = lineupBats.concat(lineupPits);
+  /* 주장 · 투수 주장은 자팀 선수만 (게임 규칙 — 타팀 골글 · FA · 와일드카드 같은 타팀 카드는 못 맡는다, 2026-11-25 사용자).
+     덱 구단을 모르거나 선수 구단이 비어 있으면(직접 등록 등) 막지 않는다 */
+  var capTeam = teamKey(sdState.teamName);
+  var capOwn = function (pl) { if (!pl) return false; if (!KBO_LEAGUE[capTeam]) return true; var t = teamKey((mergePl(pl) || pl).team); return !t || t === capTeam; };
+  var capCands = lineupAll.filter(capOwn), pitCands = lineupPits.filter(capOwn);
   var batCap = byId(batCapId);
   var pitCap = byId(pitCapId);
 
@@ -9005,13 +9021,17 @@ function LockerRoomPage(p) {
           if (!cand.length) return null;
           var rows = cand.map(function (pl) { return { id: pl.id, name: pl.name, t: totalWith(key, pl.id) }; });
           var none = totalWith(key, "");
-          var best = null; rows.forEach(function (r) { if (!best || r.t > best.t + 1e-9) best = r; });
-          var ties = rows.filter(function (r) { return Math.abs(r.t - best.t) < 0.05; }).length;
+          var top = -Infinity; rows.forEach(function (r) { if (r.t > top) top = r.t; });
+          var tops = rows.filter(function (r) { return top - r.t < 0.05; });   /* 같은 TOTAL 1등 (0.05 안) */
           var curId = sdState[key] || "";
           var cur = rows.filter(function (r) { return r.id === curId; })[0] || { id: curId, name: "", t: curId ? null : none };
-          return { best: ties === 1 && best.t > none + 0.05 ? best : null, cur: cur, flat: rows.length > 1 && ties === rows.length };
+          var flat = rows.length > 1 && tops.length === rows.length;
+          if (flat || !(top > none + 0.05)) return { best: null, cur: cur, flat: flat, more: 0 };
+          /* 1등이 여럿이면 지금 리더가 그 안에 있을 때 지금 리더, 아니면 목록에서 먼저 나오는 사람 */
+          var best = tops.filter(function (r) { return r.id === curId; })[0] || tops[0];
+          return { best: best, cur: cur, flat: false, more: tops.length - 1 };
         };
-        setCapRec({ bat: one("capBatId", lineupAll, sdState.capPitId), pit: one("capPitId", lineupPits, sdState.capBatId) });
+        setCapRec({ bat: one("capBatId", capCands, sdState.capPitId), pit: one("capPitId", pitCands, sdState.capBatId) });
       } catch (e) { setCapRec(null); }
     }, 350);
     return function () { clearTimeout(timer); };
@@ -9026,7 +9046,7 @@ function LockerRoomPage(p) {
     if (r.best.id === r.cur.id) return (<div style={Object.assign({}, line, { color: "var(--td)" })}><span style={{ color: "var(--acc)" }}>{"⭐"}</span>{"지금 " + who + "이 TOTAL 최고예요"}</div>);
     var d = r.cur.t === null ? null : Math.round(r.best.t * 10) / 10 - Math.round(r.cur.t * 10) / 10;
     return (<div style={line}>
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><span style={{ color: "var(--acc)", fontWeight: 700 }}>{"⭐ 추천 "}</span><b style={{ color: "var(--t1)" }}>{r.best.name}</b>{d === null ? "" : " · TOTAL +" + d.toFixed(1)}</span>
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><span style={{ color: "var(--acc)", fontWeight: 700 }}>{"⭐ 추천 "}</span><b style={{ color: "var(--t1)" }}>{r.best.name}</b>{r.more > 0 ? " 외 " + r.more + "명" : ""}{d === null ? "" : " · TOTAL " + (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(1)}</span>
       <button type="button" onClick={function () { upd(key, r.best.id); }} title={r.best.name + " 을(를) " + who + "으로 바꿔요"}
         style={{ marginLeft: "auto", flexShrink: 0, padding: "2px 8px", fontSize: 11, fontWeight: 700, borderRadius: 6, border: "1px solid var(--acc)", background: "var(--ta)", color: "var(--acc)", cursor: "pointer", fontFamily: "inherit" }}>{"바꾸기"}</button>
     </div>);
@@ -9185,8 +9205,10 @@ function LockerRoomPage(p) {
           </div>
           <select value={batCapId} onChange={function(e) { upd("capBatId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
-            {lineupAll.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + " · " + (pl.role === "타자" ? (pl.subPosition || "타자") : (pl.position || "투수")) + (recBest("bat") === pl.id ? "  ⭐ 추천" : "")}</option>); })}
+            {capCands.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + " · " + (pl.role === "타자" ? (pl.subPosition || "타자") : (pl.position || "투수")) + (recBest("bat") === pl.id ? "  ⭐ 추천" : "")}</option>); })}
+            {batCap && !capOwn(batCap) && (<option key={batCap.id} value={batCap.id}>{batCap.name + " · 타팀 — 주장 불가"}</option>)}
           </select>
+          {batCap && !capOwn(batCap) && (<div role="alert" style={{ fontSize: 11.5, color: "var(--vf-warn)", margin: "-2px 0 8px", lineHeight: 1.5 }}>{"⚠ " + batCap.name + " 은(는) 타팀 카드라 주장을 맡을 수 없어요 — 자팀 선수로 다시 골라 주세요"}</div>)}
           {recHint(capRec && capRec.bat, "주장", "capBatId")}
           {batCap && (<div style={{ padding: "6px 8px", background: "var(--ta)", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={batCap.cardType} /><span style={{ fontWeight: 700, fontSize: 14, color: "var(--t1)" }}>{batCap.name}</span><span style={{ fontSize: 16, marginLeft: "auto" }}>{"👑"}</span></div>
@@ -9223,8 +9245,10 @@ function LockerRoomPage(p) {
           </div>
           <select value={pitCapId} onChange={function(e) { upd("capPitId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
-            {lineupPits.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "") + (recBest("pit") === pl.id ? "  ⭐ 추천" : "")}</option>); })}
+            {pitCands.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "") + (recBest("pit") === pl.id ? "  ⭐ 추천" : "")}</option>); })}
+            {pitCap && !capOwn(pitCap) && (<option key={pitCap.id} value={pitCap.id}>{pitCap.name + " · 타팀 — 투수 주장 불가"}</option>)}
           </select>
+          {pitCap && !capOwn(pitCap) && (<div role="alert" style={{ fontSize: 11.5, color: "var(--vf-warn)", margin: "-2px 0 8px", lineHeight: 1.5 }}>{"⚠ " + pitCap.name + " 은(는) 타팀 카드라 투수 주장을 맡을 수 없어요 — 자팀 투수로 다시 골라 주세요"}</div>)}
           {recHint(capRec && capRec.pit, "투수 주장", "capPitId")}
           {pitCap && (<div style={{ padding: "6px 8px", background: "rgba(206,147,216,0.06)", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pitCap.cardType} /><span style={{ fontWeight: 700, fontSize: 14, color: "var(--t1)" }}>{pitCap.name}</span><span style={{ fontSize: 16, marginLeft: "auto" }}>{"👑"}</span></div>

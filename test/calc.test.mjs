@@ -3592,6 +3592,13 @@ __setScoreVer('v11');
   eq('투수 주장 제구 +3', ctlOf({ pt_SP3: { level: 0 }, capPitId: 'pz', capPitCtl: 3 }), 3);
   eq('주장(투수일 때) 제구 +2', ctlOf({ pt_SP3: { level: 0 }, capBatId: 'pz', capBatCtl: 2 }), 2);
   eq('다른 선수가 주장이면 안 오른다', ctlOf({ pt_SP3: { level: 0 }, capPitId: 'other', capPitCtl: 3 }), 0);
+  /* 11-25 — 리더는 자팀 선수만: 타팀 카드가 주장 · 투수 주장으로 남아 있으면 개인 보너스 없음 (덱 구단을 모르거나 선수 구단이 비면 셈) */
+  const ctlOfP = (p, sd) => calcSDBonus(p, 'SP3', Object.assign({ teamName: '기아', pt_SP3: { level: 0 } }, sd), 0).ctl;
+  eq('타팀 투수 주장 → 제구 보너스 없음', ctlOfP(Object.assign({}, pz, { team: '두산' }), { capPitId: 'pz', capPitCtl: 3 }), 0);
+  eq('타팀 주장(투수) → 보너스 없음', ctlOfP(Object.assign({}, pz, { team: '두산' }), { capBatId: 'pz', capBatCtl: 2 }), 0);
+  eq('자팀 투수 주장 → 제구 +3', ctlOfP(Object.assign({}, pz, { team: '기아' }), { capPitId: 'pz', capPitCtl: 3 }), 3);
+  eq('KIA 표기도 기아로', ctlOfP(Object.assign({}, pz, { team: 'KIA' }), { capPitId: 'pz', capPitCtl: 3 }), 3);
+  eq('덱 구단을 모르면 막지 않음', calcSDBonus(Object.assign({}, pz, { team: '두산' }), 'SP3', { teamName: '', pt_SP3: { level: 0 }, capPitId: 'pz', capPitCtl: 3 }, 0).ctl, 3);
   eq('CP 20레벨 제구 +6', ctlOf({}, 'CP'), 6);
   eq('타자에게는 제구 칸이 없다', calcSDBonus({ id: 'bz', role: '타자', cardType: '시즌', power: 100 }, 'C', { teamName: '기아', uniCtl: 5 }, 0).ctl === undefined ? 1 : 0, 1);
   eq('보너스 제구 7 → 선발 점수 +1.75', calcPit(pz, {}, { c: 0, s: 0, ctl: 7 }).total - calcPit(pz, {}, { c: 0, s: 0, ctl: 0 }).total, 1.75, 1e-9);
@@ -4332,6 +4339,14 @@ __setScoreVer('v11');
   const R2 = Object.assign({}, P.SP2, { trainC: 10, trainS: 10, trainCtl: 5 });
   eqs('… 랭챌 구간 · 훈련 미입력이 구속 훈련도 본다', L_rtm(R2, 'SP2', r.sd).join(','), '구속');
   eqs('… 리더 레벨 0 이면 구속 훈련은 안 본다', L_rtm(R2, 'SP2', run({ capPitId: 'L', capPitLv: 0 }).sd).join(','), '');
+  /* 11-25 — 리더는 자팀 선수만: 타팀 리더는 영향력도 없고, 그 선수는 다른(자팀) 리더의 영향력을 받는다 */
+  r = run({ teamName: '두산', capPitId: 'L', capPitLv: 10 });
+  eq('타팀 투수 주장(덱 두산 · L 한화) → 영향력 없음', r.sd._lead === null ? 1 : 0, 1);
+  { const keep = P.SP1; P.SP1 = Object.assign({}, keep, { team: '두산' });
+    r = run({ capPitId: 'L', capPitLv: 10, capBatId: 'L2', capLv: 5 });
+    eq('… 타팀 투수 주장 L 은 리더가 아님 — 자팀 주장 L2 만 리더', r.sd._lead && r.sd._lead.pit.length === 1 && r.sd._lead.pit[0].id === 'L2' && !r.sd._lead.ids.L ? 1 : 0, 1);
+    eq('… 다른 투수는 L2 의 영향력만 받는다', r.b(P.SP2, 'SP2').lead !== null ? 1 : 0, 1);
+    P.SP1 = keep; }
   /* 타자 주장 — 타자 표 */
   r = run({ capBatId: 'B', capLv: 5 });
   eqs('타자 주장 Lv5 — 인내 30 차 → 인내 +2 · 주루 +1 · 정확 +1', gs(r.b(P['1B'], '1B').lead), 'a1 n2 run1');
