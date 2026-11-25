@@ -832,6 +832,7 @@ function TeamSpread(p) {
 /* ── 페이지 ── */
 export default function In100Page(p) {
   var t = p.tools, mob = p.mobile, snap = p.snap;
+  TUSE["투수"][0] = p.velUse ? 1 : 0;   /* 구속 — 가중치가 0 보다 크면 훈재분 칸 (2026-11-20) */
   var myTeam = p.myTeam || "";
   var decksAll = (snap && snap.decks) || [];
   var counts = {}; decksAll.forEach(function (d) { counts[d.team] = (counts[d.team] || 0) + 1; });

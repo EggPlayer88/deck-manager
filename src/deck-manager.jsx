@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { downloadSquadImage as downloadSquadTemplate } from "./squad-share.js";
 import KboPromoBanner from "./KboPromoBanner.jsx";
 /* 클럽 라운지 — 화면은 club-lounge.jsx, 서버 일은 club-api.js. 이 파일은 덱 계산(카드 표기·점수)만 넘겨 준다 */
-import ClubLoungePage, { CLUB_IMPACT_SHORT } from "./club-lounge.jsx";
+import ClubLoungePage, { CLUB_IMPACT_SHORT, CLUB_SCORE_TAG } from "./club-lounge.jsx";
 /* 개발자에게 커피 — 메뉴 구석의 작은 버튼과 선물코드 창 (coffee-gift.jsx) */
 import CoffeeModal, { CoffeeLink } from "./coffee-gift.jsx";
 import { autoPublish as clubAutoPublish, addComment as clubAddComment, loadAlerts as clubLoadAlerts } from "./club-api.js";
@@ -10,10 +10,14 @@ import { autoPublish as clubAutoPublish, addComment as clubAddComment, loadAlert
 import FeedbackPage from "./feedback-board.jsx";
 import HelpGuide from "./help-guide.jsx";
 import In100Page from "./in100.jsx";
+/* 게임 계정 인증 · 덱 최신화 — 화면은 account-verify.jsx, 서버 일은 verify-api.js, 도착한 덱 얹기 계산은 verify-apply.js (2026-11) */
+import VerifyModal, { VerifyMenuButton } from "./account-verify.jsx";
+import { loadAlerts as verifyLoadAlerts, closeRefresh as verifyCloseRefresh } from "./verify-api.js";
+import { mergeIntoDeck as verifyMerge, asNewDeck as verifyNewDeck, deckApplied as verifyDeckApplied } from "./verify-apply.js";
 /* in100 홍보 — 새 판(시즌)을 올리면 IN100_LATEST 를 그 판 id 로 바꾼다 → 왕관 단추 · 메뉴의 NEW 가 다시 붙는다 */
-var IN100_LATEST = "s241", IN100_SEASON = 241;
-/* 고를 수 있는 판 (public/in100/<id>.json) — 맨 앞이 최신. in100 화면 '판 고르기'에 나온다 (2026-11-10 시즌 240 · 11-18 시즌 241) */
-var IN100_SNAPS = [{ id: "s241", season: 241 }, { id: "s240", season: 240 }, { id: "s239", season: 239 }];
+var IN100_LATEST = "s242", IN100_SEASON = 242;
+/* 고를 수 있는 판 (public/in100/<id>.json) — 맨 앞이 최신. in100 화면 '판 고르기'에 나온다 (2026-11-10 시즌 240 · 11-18 시즌 241 · 11-24 시즌 242) */
+var IN100_SNAPS = [{ id: "s242", season: 242 }, { id: "s241", season: 241 }, { id: "s240", season: 240 }, { id: "s239", season: 239 }];
 function in100SeenGet() { try { return localStorage.getItem("in100Seen") || ""; } catch (e) { return ""; } }
 function in100SeenSet() { try { localStorage.setItem("in100Seen", IN100_LATEST); } catch (e) {} }
 /* 왕관 단추 — bar = 폰 맨 위 헤더용(작게). ring = NEW 딱지 둘레 색(놓인 바탕색) */
@@ -270,9 +274,9 @@ function mergePl(userPl) {
   return normPlayerSkills(Object.assign({}, seed, {
     id: userPl.id, dbId: userPl.dbId,
     trainP: userPl.trainP||0, trainA: userPl.trainA||0, trainE: userPl.trainE||0, trainN: userPl.trainN||0,
-    trainC: userPl.trainC||0, trainS: userPl.trainS||0, trainCtl: userPl.trainCtl||0,
+    trainC: userPl.trainC||0, trainS: userPl.trainS||0, trainCtl: userPl.trainCtl||0, trainVel: userPl.trainVel||0,
     specPower: userPl.specPower||0, specAccuracy: userPl.specAccuracy||0, specEye: userPl.specEye||0, specPatience: userPl.specPatience||0,
-    specChange: userPl.specChange||0, specStuff: userPl.specStuff||0, specControl: userPl.specControl||0,
+    specChange: userPl.specChange||0, specStuff: userPl.specStuff||0, specControl: userPl.specControl||0, specVel: userPl.specVel||0,
     /* 값이 없는 기존 선수는 저장된 레벨을 지키기 위해 수동으로 본다.
        신규 선수는 생성 시 sLvManual:false 로 만들어져 자동이 된다. */
     /* 흰존·콜존은 최종적으로 도감(DB)에 들어갈 값이다.
@@ -307,14 +311,17 @@ function mergePl(userPl) {
 /* 인내: 260814 시트 반영분. 강화 수치는 아직 미입력(전부 0) — 사용자 제공 예정
    제구(2026-10-21): 강화는 게임 '강화 능력치 표'에서 정확과 한 칸(정확(제구))이라 정확 줄과 같다.
    각성은 투수 표에서 2 · 5 · 8레벨에 오르고, 오르는 양은 같은 카드의 변화(1 · 4 · 7레벨)와 같다 (국대 · 시그 · 임팩트 · 골글 캡처로 확인) */
+/* 구속(2026-11-20) — 게임 '강화 능력치 표'(카드 종류 × 별 14가지)에서 강화는 파워와 한 칸(파워(구속))이라 1 ~ 10강이 파워 줄과 같다.
+   각성은 골글 각성 표에서 3 · 4 · 8레벨에 오르고, 오르는 양은 같은 카드의 인내(보조 능력치)와 같다 — in100 투수 3,643장 구속과 모두 맞음.
+   다른 능력치처럼 카드 종류마다 5성(임팩트는 4성) 표 하나다 */
 var ENHANCE = {
-  "시즌":{"파워":[0,0,0,0,7,9,11,13,15,18],"정확":[0,0,0,0,7,9,11,13,16,18],"선구":[0,0,0,0,7,9,11,14,16,18],"인내":[0,0,0,0,7,9,11,13,15,17],"변화":[0,0,0,0,7,9,11,13,15,17],"구위":[0,0,0,0,7,9,11,14,16,18],"제구":[0,0,0,0,7,9,11,13,16,18]},
-  "라이브":{"파워":[0,0,0,0,10,14,16,18,20,24],"정확":[0,0,0,0,10,12,16,18,22,24],"선구":[0,0,0,0,10,12,14,18,20,22],"인내":[0,0,0,0,10,12,14,16,18,20],"변화":[0,0,0,0,10,12,14,16,18,20],"구위":[0,0,0,0,10,12,14,18,20,22],"제구":[0,0,0,0,10,12,16,18,22,24]},
-  "임팩트":{"파워":[0,0,0,0,5,8,9,10,11,14,14,14,15,15,15,16,16,16,17],"정확":[0,0,0,0,5,6,9,10,13,14,15,15,15,16,16,16,17,17,17],"선구":[0,0,0,0,5,6,7,10,11,12,12,13,13,13,14,14,14,15,15],"인내":[0,0,0,0,5,6,7,8,9,10,10,10,10,11,11,11,11,12,12],"변화":[0,0,0,0,5,6,7,8,9,10,11,11,11,12,12,12,13,13,13],"구위":[0,0,0,0,5,6,7,10,11,12,12,12,13,13,13,14,14,14,15],"제구":[0,0,0,0,5,6,9,10,13,14,14,15,15,15,16,16,16,17,17]},
-  "시그니처":{"파워":[0,0,0,0,10,14,16,18,20,24,24,24,25,25,25,27,27,27,29],"정확":[0,0,0,0,10,12,16,18,22,24,25,25,25,27,27,27,29,29,29],"선구":[0,0,0,0,10,12,14,18,20,22,22,23,23,23,25,25,25,27,27],"인내":[0,0,0,0,10,12,14,16,18,20,20,20,21,22,22,22,22,24,24],"변화":[0,0,0,0,10,12,14,16,18,20,21,21,21,23,23,23,25,25,25],"구위":[0,0,0,0,10,12,14,18,20,22,22,22,23,23,23,25,25,25,27],"제구":[0,0,0,0,10,12,16,18,22,24,24,25,25,25,27,27,27,29,29]},
-  "골든글러브":{"파워":[0,0,0,0,10,14,16,18,20,25,25,25,27,27,27,29,29,29,31],"정확":[0,0,0,0,10,12,16,18,22,25,27,27,27,29,29,29,31,31,31],"선구":[0,0,0,0,10,12,14,18,20,23,23,25,25,25,27,27,27,29,29],"인내":[0,0,0,0,10,12,14,16,18,21,21,21,23,25,25,25,25,27,27],"변화":[0,0,0,0,10,12,14,16,18,21,23,23,23,25,25,25,27,27,27],"구위":[0,0,0,0,10,12,14,18,20,23,23,23,25,25,25,27,27,27,29],"제구":[0,0,0,0,10,12,16,18,22,25,25,27,27,27,29,29,29,31,31]},
-  "국가대표":{"파워":[0,0,0,0,10,14,16,18,20,24,24,24,25,25,25,26,26,26,28],"정확":[0,0,0,0,10,12,16,18,22,24,25,25,25,26,26,26,28,28,28],"선구":[0,0,0,0,10,12,14,18,20,22,22,23,23,23,24,24,24,26,26],"인내":[0,0,0,0,10,12,14,16,18,20,20,20,21,22,22,22,22,24,24],"변화":[0,0,0,0,10,12,14,16,18,20,21,21,21,22,22,22,24,24,24],"구위":[0,0,0,0,10,12,14,18,20,22,22,22,23,23,23,24,24,24,26],"제구":[0,0,0,0,10,12,16,18,22,24,24,25,25,25,26,26,26,28,28]},
-  "올스타":{"파워":[0,0,0,0,10,14,16,18,20,24],"정확":[0,0,0,0,10,12,16,18,22,24],"선구":[0,0,0,0,10,12,14,18,20,22],"인내":[0,0,0,0,10,12,14,16,18,20],"변화":[0,0,0,0,10,12,14,16,18,20],"구위":[0,0,0,0,10,12,14,18,20,22],"제구":[0,0,0,0,10,12,16,18,22,24]},
+  "시즌":{"파워":[0,0,0,0,7,9,11,13,15,18],"정확":[0,0,0,0,7,9,11,13,16,18],"선구":[0,0,0,0,7,9,11,14,16,18],"인내":[0,0,0,0,7,9,11,13,15,17],"변화":[0,0,0,0,7,9,11,13,15,17],"구위":[0,0,0,0,7,9,11,14,16,18],"제구":[0,0,0,0,7,9,11,13,16,18],"구속":[0,0,0,0,7,9,11,13,15,18]},
+  "라이브":{"파워":[0,0,0,0,10,14,16,18,20,24],"정확":[0,0,0,0,10,12,16,18,22,24],"선구":[0,0,0,0,10,12,14,18,20,22],"인내":[0,0,0,0,10,12,14,16,18,20],"변화":[0,0,0,0,10,12,14,16,18,20],"구위":[0,0,0,0,10,12,14,18,20,22],"제구":[0,0,0,0,10,12,16,18,22,24],"구속":[0,0,0,0,10,14,16,18,20,24]},
+  "임팩트":{"파워":[0,0,0,0,5,8,9,10,11,14,14,14,15,15,15,16,16,16,17],"정확":[0,0,0,0,5,6,9,10,13,14,15,15,15,16,16,16,17,17,17],"선구":[0,0,0,0,5,6,7,10,11,12,12,13,13,13,14,14,14,15,15],"인내":[0,0,0,0,5,6,7,8,9,10,10,10,10,11,11,11,11,12,12],"변화":[0,0,0,0,5,6,7,8,9,10,11,11,11,12,12,12,13,13,13],"구위":[0,0,0,0,5,6,7,10,11,12,12,12,13,13,13,14,14,14,15],"제구":[0,0,0,0,5,6,9,10,13,14,14,15,15,15,16,16,16,17,17],"구속":[0,0,0,0,5,8,9,10,11,14,14,14,14,15,15,15,15,16,16]},
+  "시그니처":{"파워":[0,0,0,0,10,14,16,18,20,24,24,24,25,25,25,27,27,27,29],"정확":[0,0,0,0,10,12,16,18,22,24,25,25,25,27,27,27,29,29,29],"선구":[0,0,0,0,10,12,14,18,20,22,22,23,23,23,25,25,25,27,27],"인내":[0,0,0,0,10,12,14,16,18,20,20,20,21,22,22,22,22,24,24],"변화":[0,0,0,0,10,12,14,16,18,20,21,21,21,23,23,23,25,25,25],"구위":[0,0,0,0,10,12,14,18,20,22,22,22,23,23,23,25,25,25,27],"제구":[0,0,0,0,10,12,16,18,22,24,24,25,25,25,27,27,27,29,29],"구속":[0,0,0,0,10,14,16,18,20,24,24,24,25,26,26,26,26,28,28]},
+  "골든글러브":{"파워":[0,0,0,0,10,14,16,18,20,25,25,25,27,27,27,29,29,29,31],"정확":[0,0,0,0,10,12,16,18,22,25,27,27,27,29,29,29,31,31,31],"선구":[0,0,0,0,10,12,14,18,20,23,23,25,25,25,27,27,27,29,29],"인내":[0,0,0,0,10,12,14,16,18,21,21,21,23,25,25,25,25,27,27],"변화":[0,0,0,0,10,12,14,16,18,21,23,23,23,25,25,25,27,27,27],"구위":[0,0,0,0,10,12,14,18,20,23,23,23,25,25,25,27,27,27,29],"제구":[0,0,0,0,10,12,16,18,22,25,25,27,27,27,29,29,29,31,31],"구속":[0,0,0,0,10,14,16,18,20,25,25,25,27,29,29,29,29,31,31]},
+  "국가대표":{"파워":[0,0,0,0,10,14,16,18,20,24,24,24,25,25,25,26,26,26,28],"정확":[0,0,0,0,10,12,16,18,22,24,25,25,25,26,26,26,28,28,28],"선구":[0,0,0,0,10,12,14,18,20,22,22,23,23,23,24,24,24,26,26],"인내":[0,0,0,0,10,12,14,16,18,20,20,20,21,22,22,22,22,24,24],"변화":[0,0,0,0,10,12,14,16,18,20,21,21,21,22,22,22,24,24,24],"구위":[0,0,0,0,10,12,14,18,20,22,22,22,23,23,23,24,24,24,26],"제구":[0,0,0,0,10,12,16,18,22,24,24,25,25,25,26,26,26,28,28],"구속":[0,0,0,0,10,14,16,18,20,24,24,24,25,26,26,26,26,28,28]},
+  "올스타":{"파워":[0,0,0,0,10,14,16,18,20,24],"정확":[0,0,0,0,10,12,16,18,22,24],"선구":[0,0,0,0,10,12,14,18,20,22],"인내":[0,0,0,0,10,12,14,16,18,20],"변화":[0,0,0,0,10,12,14,16,18,20],"구위":[0,0,0,0,10,12,14,18,20,22],"제구":[0,0,0,0,10,12,16,18,22,24],"구속":[0,0,0,0,10,14,16,18,20,24]},
 };
 var ENHANCE_LEVELS = ["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"];
 function getEnhVal(ct, stat, enh) { var t = ENHANCE[ct]; if (!t||!t[stat]) return 0; var i = ENHANCE_LEVELS.indexOf(enh); if (i<0) return 0; var ai=i+4; var a=t[stat]; return ai>=a.length?(a[a.length-1]||0):(a[ai]||0); }
@@ -377,31 +384,41 @@ function withScoreVer(ver, fn) {
   var prev = SCORE_VER; SCORE_VER = ver;
   try { return fn(); } finally { SCORE_VER = prev; }
 }
+/* 덱 요약본(클럽 · 연구소 실험본)에 싣는 점수 기준 표시 — 신버전 안에서도 같은 덱의 점수가 크게 달라지는 업데이트가 있으면 올린다 (club-lounge.jsx CLUB_SCORE_TAG).
+   2026-11-21 타자 타순 가중치 v2: "v11" → "v11b" */
+function scoreTag() { return SCORE_VER === "v10" ? "v10" : CLUB_SCORE_TAG; }
 /* 투수 능력치 가중치 — v1.1: 합 2.40 은 그대로 두고 제구에 0.25 를 나눴다. 선발 · 불펜이 다르다.
    v10: 변화 · 구위만 (관리자 가중치 getW 그대로), 제구 0 */
+/* 구속 vel (2026-11-20) — 칸만 만들어 두었다(0). 관리자 '스킬 관리 → 신버전 → 능력치 가중치'에서 값을 넣으면 그때부터 모든 점수(TOTAL · 데이터센터 · 덱 연구소)에 들어간다.
+   0 이면 점수가 예전과 글자 하나까지 같다 (x + 0 = x) */
 var PIT_W_V11 = {
-  "선발":   { c: 1.00, s: 1.15, ctl: 0.25 },
-  "중계":   { c: 0.90, s: 1.25, ctl: 0.25 },
-  "마무리": { c: 0.90, s: 1.25, ctl: 0.25 }
+  "선발":   { c: 1.00, s: 1.15, ctl: 0.25, vel: 0 },
+  "중계":   { c: 0.90, s: 1.25, ctl: 0.25, vel: 0 },
+  "마무리": { c: 0.90, s: 1.25, ctl: 0.25, vel: 0 }
 };
 /* 코드 기본값 — 관리자 저장본(applyV11)이 없거나 낡았을 때 돌아올 값 */
 var PIT_W_V11_CODE = PIT_W_V11;
 function getPW(cat) {
-  if (SCORE_VER === "v10") { var w = getW(); return { c: w.c, s: w.s, ctl: 0 }; }
+  if (SCORE_VER === "v10") { var w = getW(); return { c: w.c, s: w.s, ctl: 0, vel: 0 }; }
   return PIT_W_V11[cat] || PIT_W_V11["선발"];
 }
 /* 투수의 점수 역할 — 카드 보직 (calcPit 과 같은 기준: 선발 · 중계 · 마무리) */
 function pitCatOf(pl) { return pl && pl.position === "선발" ? "선발" : pl && pl.position === "마무리" ? "마무리" : "중계"; }
 /* 투수 분포 · 고점 표의 칸 — v1.1 은 선발(pit) · 불펜(rp) 가중치가 달라 따로 굽는다. 구버전 표는 pit 하나뿐 */
 function pitDistRole(pl) { return SCORE_VER !== "v10" && pitCatOf(pl) !== "선발" ? "rp" : "pit"; }
-/* 투수 능력치 묶음 점수 — 변화 · 구위 · 제구 (훈련 · 특훈 · 기본 능력치 비교용) */
+/* 투수 능력치 묶음 점수 — 변화 · 구위 · 제구 · 구속 (훈련 · 특훈 · 기본 능력치 비교용) */
 /* 제구 미입력 — 변화 · 구위 훈련은 넣었는데 제구 훈련이 0 인 투수 (2026-10-21 사용자 요청).
    훈련은 가장 낮은 칸을 수비로 옮기고 나머지를 다섯 칸에 다시 나누므로 제구 훈련이 0 으로 남는 일은 사실상 없다 —
    0 이면 제구 칸이 생기기 전(v1.1 이전)에 넣은 선수라 아직 안 채운 것이다. 특훈은 제구 0 이 흔해서 보지 않는다 */
 var CTL_MISS_COLOR = "#FFA726";
 var CTL_MISS_TIP = "제구 훈련을 아직 안 넣었어요. 2026년 10월부터 제구가 점수에 들어가서 칸이 새로 생겼어요 — 넣으면 점수와 상위 %가 정확해져요 (특훈에 제구가 있으면 같이 넣어 주세요)";
 function ctlMissing(pl) { return !!pl && pl.role === "투수" && !((pl.trainCtl || 0) > 0) && ((pl.trainC || 0) + (pl.trainS || 0)) > 0; }
-function pitStatScore(cat, c, s, ctl) { var w = getPW(cat); return (c || 0) * w.c + (s || 0) * w.s + (ctl || 0) * w.ctl; }
+function pitStatScore(cat, c, s, ctl, vel) { var w = getPW(cat); return (c || 0) * w.c + (s || 0) * w.s + (ctl || 0) * w.ctl + (vel || 0) * (w.vel || 0); }
+/* 구속 (2026-11-20) — 칸은 다 만들었고 가중치는 0. 가중치가 0 보다 크면(velWeighted) 그때부터 '구속 미입력'을 알리고 랭챌 구간도 구속 훈련을 본다 */
+var VEL_COLOR = "#29B6F6";
+function velWeighted() { return SCORE_VER !== "v10" && ["선발", "중계", "마무리"].some(function (k) { return ((PIT_W_V11[k] || {}).vel || 0) > 0; }); }
+var VEL_MISS_TIP = "구속 훈련을 아직 안 넣었어요. 구속이 점수에 들어가서 칸이 새로 생겼어요 — 넣으면 점수와 상위 %가 정확해져요 (특훈에 구속이 있으면 같이 넣어 주세요)";
+function velMissing(pl, sd) { return !!pl && pl.role === "투수" && velCounts(sd) && !((pl.trainVel || 0) > 0) && ((pl.trainC || 0) + (pl.trainS || 0)) > 0; }
 
 /* ================================================================
    STORAGE
@@ -551,19 +568,22 @@ var SKILLS_V11_CODE = SKILLS_V11;
 function v11WeightsOk(w) {
   return !!w && ["선발", "불펜"].every(function (k) {
     var x = w[k];
-    return !!x && [x.c, x.s, x.ctl].every(function (v) { return typeof v === "number" && isFinite(v) && v >= 0 && v <= 5; });
+    /* 구속 vel 은 2026-11-20 에 생긴 칸 — 없는 옛 저장본도 받는다(0 으로, pitWFill) */
+    return !!x && [x.c, x.s, x.ctl].concat(x.vel === undefined ? [] : [x.vel]).every(function (v) { return typeof v === "number" && isFinite(v) && v >= 0 && v <= 5; });
   });
 }
 function v11Saved(sk) {
   var t = sk && sk.v11;
   return !!(t && t["타자"] && t["선발"] && t["중계"] && t["마무리"] && (t._v || 0) >= V11_TABLE_VERSION) ? t : null;
 }
+/* 구속 칸이 없는 옛 저장본(2026-11-20 전)은 구속 0 으로 채운다 — 없으면 점수에 NaN 이 섞인다 */
+function pitWFill(x) { return x && typeof x.vel === "number" ? x : Object.assign({}, x, { vel: 0 }); }
 function applyV11(sk) {
   var t = v11Saved(sk);
   SKILLS_V11 = t || SKILLS_V11_CODE;
   if (!SKILLS_V11._major) SKILLS_V11._major = MAJOR_V11;
   var w = t ? t.weights : null;
-  PIT_W_V11 = v11WeightsOk(w) ? { "선발": w["선발"], "중계": w["불펜"], "마무리": w["불펜"] } : PIT_W_V11_CODE;
+  PIT_W_V11 = v11WeightsOk(w) ? { "선발": pitWFill(w["선발"]), "중계": pitWFill(w["불펜"]), "마무리": pitWFill(w["불펜"]) } : PIT_W_V11_CODE;
 }
 /* 관리자 화면이 고칠 사본 — 저장본이 없으면 코드 표에서 시작한다. 코드 표는 건드리지 않는다 */
 function v11EditCopy(sk) {
@@ -571,6 +591,7 @@ function v11EditCopy(sk) {
   c._v = V11_TABLE_VERSION;
   if (!c._major) c._major = JSON.parse(JSON.stringify(MAJOR_V11));
   if (!v11WeightsOk(c.weights)) c.weights = { "선발": Object.assign({}, PIT_W_V11_CODE["선발"]), "불펜": Object.assign({}, PIT_W_V11_CODE["중계"]) };
+  ["선발", "불펜"].forEach(function (k) { if (typeof c.weights[k].vel !== "number") c.weights[k].vel = 0; });
   return c;
 }
 /* 지금 점수 기준의 스킬표 — v10 은 관리자 저장본(SKILL_DATA), v11 은 위 표 */
@@ -612,19 +633,26 @@ function v11RoleSkill(cat, name) {
    커트 = 그 점수 덱의 60% 가 그 등수 안(곡선 + 0.25σ), 안정권 = 80%(곡선 + 0.84σ), 주변 자료가 곡선보다 높은 in200 ~ in700 은 +10, 10점 단위 올림.
    +16 표보다 in10 −46 · in30 −56 · in50 −26 · in100 +14 · in200 +4 · in300 −26 · in500 +14 · in700 −36 · in1000 −46 · in2000 −6 · in3000 +44
    (도구 data/rank_cut_1108 · 랭챌_새컷안_20261108.xlsx) */
-var RANK_TIER_VERSION = 1;
+/* 2026-11-21 — 타자 타순 가중치 v2(능력치별 타순 가중치 · 줄마다 합 10, 강함 순위 배율 없음)로 같은 덱의 TOTAL 이 내려가 그만큼 표를 내렸다. 11-08 표의 모양은 그대로.
+   저장 덱 3,256벌(11-16 백업 · 라인업 다 찬 덱): TOTAL 평균 −91 · 중앙 −100, 커트 근처(±100) 덱의 변화 중앙이 in10 · in30 −125 · in50 ~ in700 −117 ~ −108 · in1000 ~ in3000 −105.
+   구간마다 '① 그 중앙만큼 내린 값'과 '② 커트 위 저장 덱 수가 예전과 같아지는 값'의 가운데를 10점 단위로 —
+   in10 −130 · in30 −120 · in50 ~ in700 −110 · in1000 ~ in3000 −100 (안정권도 같은 폭).
+   이 표로 저장 덱의 구간은 좋아짐 133 · 그대로 1,069 · 나빠짐 85 (표를 그대로 두면 나빠짐 970).
+   11-08 표: 9310 · 9200/9230 · 9140/9170 · 9030/9070 · 8920/8960 · 8840/8880 · 8730/8770 · 8650/8690 · 8550/8600 · 8370/8420 · 8250/8310
+   (도구 data/batter_weights/site — batw_impact.mjs · rank_tiers_proposal.json) */
+var RANK_TIER_VERSION = 2;   /* 2 (2026-11-25) — 타자 타순 가중치 v2 로 표를 −100 ~ −130 내렸다. 그 전(판 1)에 관리자가 저장한 표는 옛 눈금이라 안 쓰고 코드 표를 쓴다 */
 var RANK_TIERS_CODE = [
-  { n: "in10", cut: 9310, safe: 0 },
-  { n: "in30", cut: 9200, safe: 9230 },
-  { n: "in50", cut: 9140, safe: 9170 },
-  { n: "in100", cut: 9030, safe: 9070 },
-  { n: "in200", cut: 8920, safe: 8960 },
-  { n: "in300", cut: 8840, safe: 8880 },
-  { n: "in500", cut: 8730, safe: 8770 },
-  { n: "in700", cut: 8650, safe: 8690 },
-  { n: "in1000", cut: 8550, safe: 8600 },
-  { n: "in2000", cut: 8370, safe: 8420 },
-  { n: "in3000", cut: 8250, safe: 8310 }
+  { n: "in10", cut: 9180, safe: 0 },
+  { n: "in30", cut: 9080, safe: 9110 },
+  { n: "in50", cut: 9030, safe: 9060 },
+  { n: "in100", cut: 8920, safe: 8960 },
+  { n: "in200", cut: 8810, safe: 8850 },
+  { n: "in300", cut: 8730, safe: 8770 },
+  { n: "in500", cut: 8620, safe: 8660 },
+  { n: "in700", cut: 8540, safe: 8580 },
+  { n: "in1000", cut: 8450, safe: 8500 },
+  { n: "in2000", cut: 8270, safe: 8320 },
+  { n: "in3000", cut: 8150, safe: 8210 }
 ];
 /* 타자 점수(포특 · 스킬 포함)별 OPS 컷 — 같은 그림. 타자 점수는 이번 업데이트로 거의 안 바뀌어
    (라인업 타자 21,042명: 신버전 − 구버전 중앙값 0 · 평균 −0.2) 신 · 구버전 같은 표로 쓴다 */
@@ -690,9 +718,10 @@ var RANK_TRAIN_PIT = [["trainC", "변화"], ["trainS", "구위"], ["trainCtl", "
 var RANK_TRAIN_FREE_SLOTS = { RP1: 1, RP2: 1, RP3: 1, RP4: 1, RP5: 1, RP6: 1, RP7: 1, RP8: 1, CP: 1 };
 var RANK_TRAIN_FREE_TYPES = { "국가대표": 1, "라이브": 1, "올스타": 1 };
 function rankTrainFree(pl, slot) { return !!pl && pl.role === "투수" && !!RANK_TRAIN_FREE_TYPES[pl.cardType] && !!RANK_TRAIN_FREE_SLOTS[slot]; }
-function rankTrainMissing(pl, slot) {
+function rankTrainMissing(pl, slot, sd) {
   if (!pl) return [];
-  var keys = pl.role === "투수" ? RANK_TRAIN_PIT : RANK_TRAIN_BAT;
+  /* 구속 훈련은 구속이 점수에 들어갈 때만 본다 — 구속 가중치가 있거나 투수 리더 레벨 5 이상(velCounts, 2026-11-21) */
+  var keys = pl.role === "투수" ? (velCounts(sd) ? RANK_TRAIN_PIT.concat([["trainVel", "구속"]]) : RANK_TRAIN_PIT) : RANK_TRAIN_BAT;
   var miss = keys.filter(function (k) { return !((Number(pl[k[0]]) || 0) > 0); }).map(function (k) { return k[1]; });
   if (miss.length === keys.length && rankTrainFree(pl, slot)) return [];
   return miss;
@@ -1096,30 +1125,105 @@ function calcBat(pl,lu,sdB){
   t+=zonePenalty(pl);
   t+=launchAngleGain(pl.launchAngle,fP,ss);
   /* 국대에이스(타자): 종합점수에만 반영 */
-  if(sdB&&sdB._sdState){var nb2=sdB._sdState.natBat||sdB._sdState._autoNatBat||"없음";if(nb2==="5렙"){t+=1*w.p+1*w.a;}if(nb2==="6렙"){t+=2*w.p+2*w.a;}}
+  var nbv=0;
+  if(sdB&&sdB._sdState){var nb2=sdB._sdState.natBat||sdB._sdState._autoNatBat||"없음";if(nb2==="5렙"){t+=1*w.p+1*w.a;nbv=1;}if(nb2==="6렙"){t+=2*w.p+2*w.a;nbv=2;}}
   /* 잠재력 점수 */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA);
   /* 각성 잠재력 (C~S). 종류를 고르지 않았거나 라이브·올스타면 0 */
   t += awakenScore(pl);
   return{power:fP,accuracy:fA,eye:fE,patience:fN,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100,
     laReq:launchAngleReq(pl.launchAngle),laBonus:launchAngleBonus(pl.launchAngle),laAdj:launchAngleSkillAdj(ss),
-    laGain:launchAngleGain(pl.launchAngle,fP,ss),zonePen:zonePenalty(pl)};
+    laGain:launchAngleGain(pl.launchAngle,fP,ss),zonePen:zonePenalty(pl),
+    /* 타순 가중치 v2 (batShare) 가 쓰는 능력치 점수 — 파 · 정 · 선 · 인 × 능력치 가중치. 국대에이스(파워 · 정확 +1 · +2)도 능력치로 친다 */
+    ab:[(fP+nbv)*w.p,(fA+nbv)*w.a,fE*w.e,fN*(w.n||0)]};
 }
 
-/* 팀버프가 투수에게 올려 주는 능력치 (레벨별 변화 c · 제구 ctl · 구위 s). 구속은 점수 0 이라 뺐다.
+/* 팀버프가 투수에게 올려 주는 능력치 (레벨별 변화 c · 제구 ctl · 구위 s · 구속 vel). 구속은 2026-11-20 에 넣었다(가중치 0 인 동안은 점수 그대로).
    포수리드 2026-10-21 사용자 확인: 5렙 구속 · 변화 · 제구 +1 / 6렙 모두 +1 / 7렙 구속 +2 / 8렙 구속 · 변화 +2 / 9렙 구속 · 변화 · 제구 +2 / 10렙 모두 +2
    국대에이스: 5렙 변 · 구 +1, 6렙 +2 (제구 없음). v10 은 제구 가중치가 0 이라 예전 점수 그대로다 */
-var CATCH_LEAD_PIT = { "5렙": { c: 1, ctl: 1, s: 0 }, "6렙": { c: 1, ctl: 1, s: 1 }, "7렙": { c: 1, ctl: 1, s: 1 },
-  "8렙": { c: 2, ctl: 1, s: 1 }, "9렙": { c: 2, ctl: 2, s: 1 }, "10렙": { c: 2, ctl: 2, s: 2 } };
-var NAT_ACE_PIT = { "5렙": { c: 1, ctl: 0, s: 1 }, "6렙": { c: 2, ctl: 0, s: 2 } };
+var CATCH_LEAD_PIT = { "5렙": { c: 1, ctl: 1, s: 0, vel: 1 }, "6렙": { c: 1, ctl: 1, s: 1, vel: 1 }, "7렙": { c: 1, ctl: 1, s: 1, vel: 2 },
+  "8렙": { c: 2, ctl: 1, s: 1, vel: 2 }, "9렙": { c: 2, ctl: 2, s: 1, vel: 2 }, "10렙": { c: 2, ctl: 2, s: 2, vel: 2 } };
+var NAT_ACE_PIT = { "5렙": { c: 1, ctl: 0, s: 1, vel: 0 }, "6렙": { c: 2, ctl: 0, s: 2, vel: 0 } };
+
+/* ═══ 라커룸 리더 영향력 (2026-11-19 게임 업데이트 · 11-21 반영) ═══
+   리더 = 주장(타자 · 투수 누구나, capBatId · 레벨 capLv) · 투수 주장(게임의 투수조장, 투수만, capPitId · 레벨 capPitLv). 레벨 0 ~ 21(11-24 사용자 — 개인 보너스 표가 세 표 모두 21렙까지), 처음 0. 21렙도 영향력은 Lv20 줄까지(25 · 30 줄은 모름).
+   리더 레벨 5 · 10 · 15 · 20 마다 한 줄씩 열린다. 줄마다 능력치 하나(cmp)를 리더와 견줘, 받는 선수가 리더보다
+   6 · 11 · 16 · 21 이상 낮으면 gain 의 능력치가 차례로 +1 (같은 능력치가 두 번 있으면 +2).
+   주장이 타자면 타자 표 → 라인업 타자들이 받는다. 주장이 투수 · 투수 주장은 투수 표 → 라인업 투수들이 받는다(둘 다면 두 리더 몫을 다 받는다).
+   리더 값 = 그 리더의 최종 능력치(라인업 화면 값 — 강화 · 훈련 · 특훈 · 세트덱 · 시너지 · 유니폼 · 개인 보너스 · 포특 · POTM · FA).
+   받는 선수 값 = 리더 버프만 뺀 최종 능력치(유니폼 포함) — 11-21 사용자 판단, 레벨 15 · 20 덱으로 검증 남음. 문턱은 '이상'으로 둔다(검증 남음).
+   리더끼리는 서로의 영향력을 받지 않는다 — Y 덱(11-19, 주장 폰세 Lv10 · 투수조장 류현진 Lv10) 투수 10명 라커룸 6칸이 이 규칙으로 모두 맞았다.
+   후보는 받지 않는 것으로 둔다(점수 · 화면에 안 쓰임). 키: 타자 p a e n run def / 투수 c s ctl vel sta def */
+var LEADER_MAX_LV = 21;
+var LEADER_STEPS = [6, 11, 16, 21];
+var LEADER_TABLE = {
+  "타자": [{ lv: 5, cmp: "n", gain: ["n", "run", "n", "a"] }, { lv: 10, cmp: "e", gain: ["run", "e", "def", "p"] },
+           { lv: 15, cmp: "a", gain: ["def", "a", "p", "n"] }, { lv: 20, cmp: "p", gain: ["e", "p", "a", "e"] }],
+  "투수": [{ lv: 5, cmp: "vel", gain: ["vel", "sta", "vel", "c"] }, { lv: 10, cmp: "ctl", gain: ["sta", "ctl", "def", "s"] },
+           { lv: 15, cmp: "c", gain: ["def", "c", "s", "vel"] }, { lv: 20, cmp: "s", gain: ["ctl", "s", "c", "ctl"] }]
+};
+/* 리더 본인의 레벨별 개인 보너스 — 그 레벨의 합계. 값이 있는 레벨만 쓰고, 없는 레벨은 예전처럼 라커룸에 직접 넣은 값(capBat* · capPit*).
+   자료는 data/locker_leader/리더레벨_개인보너스.json(게임 화면 · in100 · LD 수집, 몇 레벨은 앞뒤 레벨로 맞춘 추정 — 정리 md)에 모으고 build_leader_bonus.py 로 이 표에 옮긴다. 11-24 세 표 모두 1 ~ 21렙 */
+var LEADER_SELF_BONUS = { "주장(타자)": {1: { p: 0, a: 0, e: 0, n: 0, run: 0, def: 1 }, 2: { p: 0, a: 1, e: 0, n: 0, run: 0, def: 1 }, 3: { p: 0, a: 1, e: 0, n: 0, run: 1, def: 1 }, 4: { p: 0, a: 1, e: 1, n: 0, run: 1, def: 1 }, 5: { p: 0, a: 1, e: 1, n: 1, run: 1, def: 1 }, 6: { p: 1, a: 1, e: 1, n: 1, run: 1, def: 1 }, 7: { p: 1, a: 2, e: 1, n: 1, run: 1, def: 2 }, 8: { p: 1, a: 2, e: 2, n: 1, run: 1, def: 2 }, 9: { p: 1, a: 2, e: 2, n: 2, run: 1, def: 2 }, 10: { p: 2, a: 2, e: 2, n: 2, run: 2, def: 2 }, 11: { p: 2, a: 2, e: 2, n: 2, run: 2, def: 3 }, 12: { p: 2, a: 3, e: 2, n: 2, run: 2, def: 3 }, 13: { p: 2, a: 3, e: 2, n: 2, run: 3, def: 3 }, 14: { p: 2, a: 3, e: 3, n: 2, run: 3, def: 3 }, 15: { p: 3, a: 3, e: 4, n: 3, run: 4, def: 3 }, 16: { p: 4, a: 3, e: 4, n: 3, run: 4, def: 4 }, 17: { p: 4, a: 4, e: 5, n: 3, run: 4, def: 4 }, 18: { p: 5, a: 4, e: 6, n: 3, run: 5, def: 4 }, 19: { p: 6, a: 5, e: 6, n: 3, run: 5, def: 5 }, 20: { p: 7, a: 7, e: 7, n: 4, run: 6, def: 5 }, 21: { p: 7, a: 8, e: 7, n: 5, run: 6, def: 5 }}, "주장(투수)": {1: { c: 0, s: 0, ctl: 0, vel: 0, sta: 0, def: 1 }, 2: { c: 1, s: 0, ctl: 0, vel: 0, sta: 0, def: 1 }, 3: { c: 1, s: 0, ctl: 0, vel: 0, sta: 1, def: 1 }, 4: { c: 1, s: 0, ctl: 1, vel: 0, sta: 1, def: 1 }, 5: { c: 1, s: 0, ctl: 1, vel: 1, sta: 1, def: 1 }, 6: { c: 1, s: 1, ctl: 1, vel: 1, sta: 1, def: 1 }, 7: { c: 2, s: 1, ctl: 1, vel: 1, sta: 1, def: 2 }, 8: { c: 2, s: 1, ctl: 2, vel: 1, sta: 1, def: 2 }, 9: { c: 2, s: 1, ctl: 2, vel: 2, sta: 1, def: 2 }, 10: { c: 2, s: 2, ctl: 2, vel: 2, sta: 2, def: 2 }, 11: { c: 2, s: 2, ctl: 2, vel: 3, sta: 2, def: 2 }, 12: { c: 2, s: 2, ctl: 3, vel: 3, sta: 2, def: 2 }, 13: { c: 2, s: 2, ctl: 3, vel: 3, sta: 3, def: 2 }, 14: { c: 3, s: 2, ctl: 3, vel: 3, sta: 3, def: 2 }, 15: { c: 4, s: 2, ctl: 4, vel: 3, sta: 4, def: 3 }, 16: { c: 4, s: 3, ctl: 4, vel: 3, sta: 4, def: 4 }, 17: { c: 4, s: 4, ctl: 4, vel: 4, sta: 4, def: 4 }, 18: { c: 4, s: 5, ctl: 4, vel: 5, sta: 5, def: 4 }, 19: { c: 5, s: 5, ctl: 5, vel: 5, sta: 5, def: 5 }, 20: { c: 6, s: 6, ctl: 6, vel: 6, sta: 6, def: 6 }, 21: { c: 6, s: 6, ctl: 7, vel: 7, sta: 6, def: 6 }}, "투수조장": {1: { c: 0, s: 0, ctl: 0, vel: 0, sta: 0, def: 1 }, 2: { c: 1, s: 0, ctl: 0, vel: 0, sta: 0, def: 1 }, 3: { c: 1, s: 0, ctl: 0, vel: 0, sta: 1, def: 1 }, 4: { c: 1, s: 0, ctl: 1, vel: 0, sta: 1, def: 1 }, 5: { c: 1, s: 0, ctl: 1, vel: 1, sta: 1, def: 1 }, 6: { c: 1, s: 1, ctl: 1, vel: 1, sta: 1, def: 1 }, 7: { c: 2, s: 1, ctl: 1, vel: 1, sta: 1, def: 2 }, 8: { c: 2, s: 1, ctl: 2, vel: 1, sta: 1, def: 2 }, 9: { c: 2, s: 1, ctl: 2, vel: 2, sta: 1, def: 2 }, 10: { c: 2, s: 2, ctl: 2, vel: 2, sta: 2, def: 2 }, 11: { c: 2, s: 2, ctl: 2, vel: 3, sta: 2, def: 2 }, 12: { c: 2, s: 3, ctl: 2, vel: 3, sta: 2, def: 2 }, 13: { c: 2, s: 3, ctl: 2, vel: 3, sta: 3, def: 2 }, 14: { c: 3, s: 3, ctl: 2, vel: 3, sta: 3, def: 2 }, 15: { c: 4, s: 3, ctl: 3, vel: 3, sta: 4, def: 3 }, 16: { c: 4, s: 3, ctl: 4, vel: 4, sta: 4, def: 3 }, 17: { c: 5, s: 3, ctl: 4, vel: 4, sta: 5, def: 3 }, 18: { c: 5, s: 4, ctl: 5, vel: 4, sta: 5, def: 4 }, 19: { c: 6, s: 5, ctl: 6, vel: 4, sta: 5, def: 4 }, 20: { c: 7, s: 7, ctl: 7, vel: 5, sta: 6, def: 4 }, 21: { c: 7, s: 7, ctl: 8, vel: 6, sta: 6, def: 4 }} };
+var LEADER_RECV_SLOTS = { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, LF: 1, CF: 1, RF: 1, DH: 1,
+  SP1: 1, SP2: 1, SP3: 1, SP4: 1, SP5: 1, RP1: 1, RP2: 1, RP3: 1, RP4: 1, RP5: 1, RP6: 1, RP7: 1, RP8: 1, CP: 1 };
+function leaderLv(v) { var n = parseInt(v, 10); return n > 0 ? Math.min(n, LEADER_MAX_LV) : 0; }
+function leaderSelfBonus(kind, lv) { var t = LEADER_SELF_BONUS[kind], k = leaderLv(lv); return (k && t && t[k]) || null; }
+/* 받는 선수 하나가 리더들(srcs)에게서 받는 몫 — mine 은 리더 버프 뺀 그 선수 능력치 */
+function leaderGains(isBat, mine, srcs) {
+  var g = {}, rows = LEADER_TABLE[isBat ? "타자" : "투수"];
+  (srcs || []).forEach(function (src) {
+    rows.forEach(function (r) {
+      if (src.lv < r.lv) return;
+      var d = (src.v[r.cmp] || 0) - (mine[r.cmp] || 0);
+      for (var k = 0; k < LEADER_STEPS.length; k++) if (d >= LEADER_STEPS[k]) g[r.gain[k]] = (g[r.gain[k]] || 0) + 1;
+    });
+  });
+  return g;
+}
+/* 라인업의 리더 최종 능력치 — computeLineupSetDeck 이 sdState._lead 로 한 번 구해 둔다. 레벨 5 미만 · 라인업 밖 리더는 없음.
+   타자 주장의 타순은 지금 타순(batOrder) 기준 — 주장이 다른 타순 묶음(1~2 · 3~5 · 6~9번)으로 가면 세트덱 보너스가 달라져 리더 값도 바뀐다.
+   베스트 라인업은 주장을 묶음마다 세워 다시 센다(bestLineup 의 leadRefine, 2026-11-25) */
+function leaderState(pick, sd, tsp) {
+  if (!sd || (!sd.capBatId && !sd.capPitId)) return null;
+  var slots = BAT_SLOTS.concat(SP_SLOTS, rpSlotsOf(sd.bpcIdx), ["CP"]);
+  var order = (sd.batOrder && sd.batOrder.length === 9) ? sd.batOrder : BAT_SLOTS;
+  var find = function (id) { for (var i = 0; i < slots.length; i++) { var pl = pick(slots[i]); if (pl && pl.id === id) return { pl: pl, slot: slots[i] }; } return null; };
+  var out = { ids: {}, bat: null, pit: [], velRow: false };
+  if (sd.capBatId) out.ids[sd.capBatId] = 1;
+  if (sd.capPitId) out.ids[sd.capPitId] = 1;
+  var add = function (id, lv, onlyPit) {
+    if (!id || lv < 5) return;
+    var f = find(id); if (!f) return;
+    var isBat = f.pl.role === "타자";
+    if (onlyPit && isBat) return;
+    var lu = lineupLu(f.pl);
+    if (isBat) {
+      var bi = order.indexOf(f.slot);
+      var b = calcBat(f.pl, lu, calcSDBonus(f.pl, f.slot, sd, tsp, bi >= 0 ? bi : undefined));
+      out.bat = { id: id, lv: lv, v: { p: b.power, a: b.accuracy, e: b.eye, n: b.patience } };
+    } else {
+      var c = calcPit(f.pl, lu, calcSDBonus(f.pl, f.slot, sd, tsp));
+      out.pit.push({ id: id, lv: lv, v: { c: c.change, s: c.stuff, ctl: c.control, vel: c.speed } });
+      out.velRow = true;
+    }
+  };
+  add(sd.capBatId, leaderLv(sd.capLv), false);
+  if (sd.capPitId !== sd.capBatId) add(sd.capPitId, leaderLv(sd.capPitLv), true);
+  return (out.bat || out.pit.length) ? out : null;
+}
+/* 구속이 점수에 영향을 주는가 — 구속 가중치가 있거나, 투수 리더가 레벨 5 이상이라 구속을 견주는 줄이 열렸을 때 */
+function velCounts(sd) { return velWeighted() || !!(sd && sd._lead && sd._lead.velRow); }
 function calcPit(pl,lu,sdB){
-  if(!pl||!lu)return{change:0,stuff:0,control:0,total:0,skillScore:0};
+  if(!pl||!lu)return{change:0,stuff:0,control:0,speed:0,total:0,skillScore:0};
   var sb=sdB||{c:0,s:0};
   var faAdjP=teamFlagStatAdj(pl);
   var fC=(pl.change||0)+getEnhVal(pl.cardType,"변화",lu.enhance||"")+(lu.trainC||0)+(pl.specChange||0)+sb.c+faAdjP;
   var fS=(pl.stuff||0)+getEnhVal(pl.cardType,"구위",lu.enhance||"")+(lu.trainS||0)+(pl.specStuff||0)+sb.s+faAdjP;
   /* 제구 — v1.1 부터 점수에 들어간다(선발 · 불펜 0.25). 강화 · 훈련 · 특훈 · 세트덱 · 시너지 · 유니폼 · 주장 · 포지션 특훈 · POTM 이 다 오르게 한다 */
   var fCtl=(pl.control||0)+getEnhVal(pl.cardType,"제구",lu.enhance||"")+(lu.trainCtl||0)+(pl.specControl||0)+(sb.ctl||0)+faAdjP;
+  /* 구속 (2026-11-20) — 제구와 같은 길로 오른다(기본 · 강화 · 각성 · 훈련 · 특훈 · 세트덱 · 시너지 · 유니폼 · 주장 · 포지션 특훈 · POTM · FA). 점수엔 가중치 vel(지금 0)만큼 */
+  var fVel=(pl.speed||0)+getEnhVal(pl.cardType,"구속",lu.enhance||"")+(lu.trainVel||0)+(pl.specVel||0)+(sb.vel||0)+faAdjP;
   var pt=pl.position==="선발"?"선발":pl.position==="마무리"?"마무리":"중계";
   var w=getPW(pt);
   var ptsP=(sb.ptSkills)||[];
@@ -1128,26 +1232,28 @@ function calcPit(pl,lu,sdB){
         :getSkillScore(lu.skill1,effSkillLv(lu.skill1,lu.s1Lv,mnP,cardLvType(pl),1,pt,ptsP),pt)
         +getSkillScore(lu.skill2,effSkillLv(lu.skill2,lu.s2Lv,mnP,cardLvType(pl),2,pt,ptsP),pt)
         +getSkillScore(lu.skill3,effSkillLv(lu.skill3,lu.s3Lv,mnP,cardLvType(pl),3,pt,ptsP),pt);
-  var t=fC*w.c+fS*w.s+fCtl*w.ctl+ss;
+  var wv=w.vel||0;
+  var t=fC*w.c+fS*w.s+fCtl*w.ctl+fVel*wv+ss;
   /* 중계 전술(RP_TAC_STAT — 승리조 적극 +1 · 분업 +3 · 추격조 적극 +2, 구버전은 1 · 2 · 1): 인게임 덱 화면 수치에는 안 보이는 상승이라 화면 능력치(fC · fS)에는 넣지 않고
      종합점수에만 반영한다 — 모든 능력치가 그만큼 오른 것과 같은 점수 (calcSDBonus 의 tac).
      제구도 같이 오른다 (2026-10-21 사용자 확인) — 합 가중치가 2.40 이라 v10 · v11 이 같은 값이다 */
-  if(sb.tac) t+=sb.tac*(w.c+w.s+w.ctl);
+  /* 구속도 같이 오르는 것으로 둔다(2026-11-20, 가중치 0 — 넣을 때 게임 확인) */
+  if(sb.tac) t+=sb.tac*(w.c+w.s+w.ctl+wv);
   /* 260814 시트: 좌완 가산 — v1.1 에서 없앤다 (2026-10-21 사용자 결정). 구버전 점수에만 남는다 */
   if(pl.hand==="좌"&&SCORE_VER==="v10") t+=1;
   /* 국대에이스(투수)+포수리드 팀버프 — 라인업에서 각 투수 점수에 얹는다 (라인업 밖 단독 점수에는 없다).
      포수리드는 v1.1 산정근거의 '아군 강화 팀버프 0.9배'를 곱한다. 국대에이스는 0.9배 제외(근거 그대로). 구버전은 예전 그대로 (2026-10-22) */
   if(sdB&&sdB._sdState){
     var np2=sdB._sdState.natPit||sdB._sdState._autoNatPit||"없음";
-    var nb=NAT_ACE_PIT[np2]; if(nb){t+=nb.c*w.c+nb.ctl*w.ctl+nb.s*w.s;}
+    var nb=NAT_ACE_PIT[np2]; if(nb){t+=nb.c*w.c+nb.ctl*w.ctl+nb.s*w.s+(nb.vel||0)*wv;}
     var cl2=sdB._sdState.catchLead||sdB._sdState._autoCatch||"없음";
-    var cb=CATCH_LEAD_PIT[cl2]; if(cb){t+=(cb.c*w.c+cb.ctl*w.ctl+cb.s*w.s)*(SCORE_VER==="v10"?1:0.9);}
+    var cb=CATCH_LEAD_PIT[cl2]; if(cb){t+=(cb.c*w.c+cb.ctl*w.ctl+cb.s*w.s+(cb.vel||0)*wv)*(SCORE_VER==="v10"?1:0.9);}
   }
   /* 잠재력 점수 — 장타억제 · 침착은 선발 / 불펜(중계 · 마무리) 표가 따로다 (pt, 2026-11-08) */
   t += getPotScoreByType(pl.pot1, pl.potType1 || (pl.role === "타자" ? "풀스윙" : "장타억제"), SKILL_DATA, pt) + getPotScoreByType(pl.pot2, pl.potType2 || (pl.role === "타자" ? "클러치" : "침착"), SKILL_DATA, pt);
   /* 각성 잠재력 (C~S). 종류를 고르지 않았거나 라이브·올스타면 0 */
   t += awakenScore(pl);
-  return{change:fC,stuff:fS,control:fCtl,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
+  return{change:fC,stuff:fS,control:fCtl,speed:fVel,total:Math.round(t*100)/100,skillScore:Math.round(ss*100)/100};
 }
 
 /* Set deck bonus calculator for a single player */
@@ -1231,7 +1337,11 @@ function computeLineupSetDeck(pickRaw, sdState) {
     /* 팀 버프 스킬 자동 감지 (detectTeamBuffs) — 세트덱 패널도 이 값을 그대로 보여 준다 */
     var buffs = detectTeamBuffs(allSlotsForSyn, pick, sdState);
     sdState._autoNatBat = buffs.natBat; sdState._autoNatPit = buffs.natPit; sdState._autoCatch = buffs.catchLead;
-      return calcSetPoint() + (sdState.liveSetPo || 0);
+      var tsp = calcSetPoint() + (sdState.liveSetPo || 0);
+      /* 라커룸 리더 영향력 — 리더 최종 능력치를 한 번 구해 둔다(calcSDBonus 가 받는 선수마다 견준다). 리더 계산 중엔 비워 둔다 */
+      sdState._lead = null;
+      sdState._lead = leaderState(pick, sdState, tsp);
+      return tsp;
 }
 
 /* 예전에는 선택이 없던 구간들이다. 95·125 는 자동 적용이었고,
@@ -1502,7 +1612,7 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
   bn += (sdState.uniN || 0);
   pc += (sdState.uniC || 0);
   ps += (sdState.uniS || 0);
-  if (!isBat) S.ctl += (sdState.uniCtl || 0);
+  if (!isBat) { S.ctl += (sdState.uniCtl || 0); S.vel += (sdState.uniVel || 0); }
 
   /* 포지션 특훈 (POS_TRAIN 테이블 참조) */
   var ptData = sdState["pt_" + slot];
@@ -1522,17 +1632,31 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
       var ptS = ptEntry["구위"]; ps += (ptS && ptLv < ptS.length ? ptS[ptLv] : 0) + (ptData ? ptData.r1 || 0 : 0);
       /* 제구 — 자리마다 레벨별로 오른다(2026-10-21 캡처), 재설정도 된다(r2) */
       var ptK = ptEntry["제구"]; S.ctl += (ptK && ptLv < ptK.length ? ptK[ptLv] : 0) + (ptData ? ptData.r2 || 0 : 0);
+      /* 구속 — 자리마다 레벨별로 오른다(2026-11-20, 10-21 사진). 재설정은 없다 */
+      var ptV = ptEntry["구속"]; S.vel += (ptV && ptLv < ptV.length ? ptV[ptLv] : 0);
     }
   }
 
   /* 주장 보너스 (라커룸에서 설정) */
   /* 주장(capBatId)은 타자·투수 누구나 지정할 수 있다. 고른 선수의 역할에 맞는 능력치가 오른다. */
+  /* 레벨별 개인 보너스 표(LEADER_SELF_BONUS)에 그 레벨 값이 있으면 그 값, 없으면 직접 넣은 값 (2026-11-21) */
+  var addB = function (b) {
+    if (isBat) { bp += b.p || 0; ba += b.a || 0; be += b.e || 0; bn += b.n || 0; S.run += b.run || 0; S.def += b.def || 0; }
+    else { pc += b.c || 0; ps += b.s || 0; S.ctl += b.ctl || 0; S.vel += b.vel || 0; S.sta += b.sta || 0; S.def += b.def || 0; }
+  };
   if (pl.id === sdState.capBatId) {
-    if (isBat) { bp += sdState.capBatP || 0; ba += sdState.capBatA || 0; be += sdState.capBatE || 0; bn += sdState.capBatN || 0; }
-    else { pc += sdState.capBatC || 0; ps += sdState.capBatS || 0; S.ctl += sdState.capBatCtl || 0; }
+    var selfB = leaderSelfBonus(isBat ? "주장(타자)" : "주장(투수)", sdState.capLv);
+    if (selfB) addB(selfB);
+    else if (isBat) { bp += sdState.capBatP || 0; ba += sdState.capBatA || 0; be += sdState.capBatE || 0; bn += sdState.capBatN || 0; }
+    else { pc += sdState.capBatC || 0; ps += sdState.capBatS || 0; S.ctl += sdState.capBatCtl || 0; S.vel += sdState.capBatVel || 0; }
   }
   /* 투수조장은 투수만 */
-  if (!isBat && pl.id === sdState.capPitId) { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; S.ctl += sdState.capPitCtl || 0; }
+  /* 같은 투수를 주장 · 투수 주장 둘 다로 고른 덱(운영 1벌)은 예전처럼 개인 보너스를 둘 다 받는다 — 영향력은 한 번만(leaderState) */
+  if (!isBat && pl.id === sdState.capPitId) {
+    var selfP = leaderSelfBonus("투수조장", sdState.capPitLv);
+    if (selfP) addB(selfP);
+    else { pc += sdState.capPitC || 0; ps += sdState.capPitS || 0; S.ctl += sdState.capPitCtl || 0; S.vel += sdState.capPitVel || 0; }
+  }
 
   /* 중계 전술 능력치 보너스 — 인게임 덱 화면의 수치로는 안 보이지만 경기에서는 실제로 오른다.
      승리조 · 추격조 전술을 따로 고른다 (2026-10-19, rpTactic · rpChaseTactic).
@@ -1557,10 +1681,31 @@ function calcSDBonus(pl, slot, sdState, totalSP, batOrderIdx) {
     else { pc += potmB; ps += potmB; S.vel += potmB; S.ctl += potmB; S.sta += potmB; S.def += potmB; }
   }
 
+  /* 라커룸 리더 영향력 (2026-11-21) — computeLineupSetDeck 이 구해 둔 리더 값(sdState._lead)과
+     이 선수의 '리더 버프 뺀' 능력치(위까지 더한 값 = 유니폼 포함)를 견준다. 리더 본인 · 후보는 받지 않는다 */
+  var leadG = null, leadMine = null, LD = sdState._lead;
+  if (LD && LEADER_RECV_SLOTS[slot] && !LD.ids[pl.id]) {
+    var srcs = isBat ? (LD.bat ? [LD.bat] : []) : LD.pit;
+    if (srcs.length) {
+      var lu0 = lineupLu(pl), en0 = lu0.enhance || "", fa0 = teamFlagStatAdj(pl);
+      leadMine = isBat
+        ? { p: (pl.power||0)+getEnhVal(ct,"파워",en0)+(lu0.trainP||0)+(pl.specPower||0)+bp+fa0,
+            a: (pl.accuracy||0)+getEnhVal(ct,"정확",en0)+(lu0.trainA||0)+(pl.specAccuracy||0)+ba+fa0,
+            e: (pl.eye||0)+getEnhVal(ct,"선구",en0)+(lu0.trainE||0)+(pl.specEye||0)+be+fa0,
+            n: (pl.patience||0)+getEnhVal(ct,"인내",en0)+(lu0.trainN||0)+(pl.specPatience||0)+bn+fa0 }
+        : { c: (pl.change||0)+getEnhVal(ct,"변화",en0)+(lu0.trainC||0)+(pl.specChange||0)+pc+fa0,
+            s: (pl.stuff||0)+getEnhVal(ct,"구위",en0)+(lu0.trainS||0)+(pl.specStuff||0)+ps+fa0,
+            ctl: (pl.control||0)+getEnhVal(ct,"제구",en0)+(lu0.trainCtl||0)+(pl.specControl||0)+S.ctl+fa0,
+            vel: (pl.speed||0)+getEnhVal(ct,"구속",en0)+(lu0.trainVel||0)+(pl.specVel||0)+S.vel+fa0 };
+      leadG = leaderGains(isBat, leadMine, srcs);
+      addB(leadG);
+    }
+  }
+
   var ptSkillList = (sdState["pts_" + slot] || []).filter(function(x){ return !!x; });
-  /* run · def · vel · sta 는 점수에 안 쓰고 효과만 담는다. ctl(제구)은 v1.1 부터 calcPit 이 점수에 쓴다 */
-  return isBat ? {p:bp,a:ba,e:be,n:bn,run:S.run,def:S.def,ptSkills:ptSkillList,_sdState:sdState}
-               : {c:pc,s:ps,tac:tacB,vel:S.vel,ctl:S.ctl,sta:S.sta,def:S.def,ptSkills:ptSkillList,_sdState:sdState};
+  /* run · def · sta 는 점수에 안 쓰고 효과만 담는다. ctl(제구)은 v1.1 부터, vel(구속)은 2026-11-20 부터 calcPit 이 점수에 쓴다(구속 가중치 지금 0) */
+  return isBat ? {p:bp,a:ba,e:be,n:bn,run:S.run,def:S.def,ptSkills:ptSkillList,_sdState:sdState,lead:leadG,leadMine:leadMine}
+               : {c:pc,s:ps,tac:tacB,vel:S.vel,ctl:S.ctl,sta:S.sta,def:S.def,ptSkills:ptSkillList,_sdState:sdState,lead:leadG,leadMine:leadMine};
 }
 
 /* ================================================================
@@ -2600,7 +2745,7 @@ function shareTrainScore(pl) {
   var w = getW();
   return pl.role === "타자"
     ? (pl.trainP || 0) * w.p + (pl.trainA || 0) * w.a + (pl.trainE || 0) * w.e + (pl.trainN || 0) * (w.n || 0)
-    : pitStatScore(pitCatOf(pl), pl.trainC, pl.trainS, pl.trainCtl);
+    : pitStatScore(pitCatOf(pl), pl.trainC, pl.trainS, pl.trainCtl, pl.trainVel);
 }
 function shareTrainPct(pl) {
   var arr = PREBUILT_DIST["train_" + (pl.role === "타자" ? "bat" : pitDistRole(pl)) + "_" + (pl.cardType || "")];
@@ -2681,7 +2826,7 @@ function drawShareCanvas(d) {
   y += 26;
   x.textAlign = "left"; x.font = F(22, 500); x.fillStyle = SHARE_COL.t2;
   x.fillText("마운드", PAD, y); y += 34;
-  head(y, "자리", ["변화", "구위", "제구", ""]); y += 46;
+  head(y, "자리", ["변화", "구위", "제구", "구속"]); y += 46;
   d.pits.forEach(function(p) { line(y, p.left, p); y += ROW; });
 
   /* 세트덱 33구간 — 구간 번호 아래 고른 쪽을 색으로. 한 줄에 다 들어간다 */
@@ -3096,7 +3241,8 @@ function PlayerSelector(p) {
       if (sortBy === "변화") { sa = a.change || 0; sb = b.change || 0; }
       else if (sortBy === "구위") { sa = a.stuff || 0; sb = b.stuff || 0; }
       else if (sortBy === "제구") { sa = a.control || 0; sb = b.control || 0; }
-      else { sa = pitStatScore(pitCatOf(a), a.change, a.stuff, a.control); sb = pitStatScore(pitCatOf(b), b.change, b.stuff, b.control); }
+      else if (sortBy === "구속") { sa = a.speed || 0; sb = b.speed || 0; }
+      else { sa = pitStatScore(pitCatOf(a), a.change, a.stuff, a.control, a.speed); sb = pitStatScore(pitCatOf(b), b.change, b.stuff, b.control, b.speed); }
     }
     return sb - sa;
   });
@@ -3106,7 +3252,7 @@ function PlayerSelector(p) {
   var hasMore = total > showLimit;
 
   var teams = ["기아","키움","삼성","LG","KT","한화","SSG","롯데","NC","두산"];
-  var sortOpts = (isBatSlot || isBench) ? ["종합","파워","정확"] : ["종합","변화","구위","제구"];
+  var sortOpts = (isBatSlot || isBench) ? ["종합","파워","정확"] : ["종합","변화","구위","제구","구속"];
   var filterBtnStyle = function(active) {
     return { padding: "4px 8px", fontSize: 12, fontWeight: active ? 700 : 400, background: active ? "var(--ta)" : "transparent", border: active ? "1px solid var(--acc)" : "1px solid var(--bd)", borderRadius: 4, color: active ? "var(--acc)" : "var(--td)", cursor: "pointer" };
   };
@@ -3133,10 +3279,10 @@ function PlayerSelector(p) {
             <button onClick={function(){setTeamF("");setShowLimit(30);}} style={filterBtnStyle(!teamF)}>{"전체"}</button>
             {teams.map(function(t) { return (<button key={t} onClick={function(){setTeamF(teamF===t?"":t);setShowLimit(30);}} style={filterBtnStyle(teamF===t)}>{t}</button>); })}
           </div>
-          {/* Sort */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 11, color: "var(--td)" }}>{"정렬"}</span>
-            {sortOpts.map(function(s) { return (<button key={s} onClick={function(){setSortBy(s);}} style={filterBtnStyle(sortBy===s)}>{s + "순"}</button>); })}
+          {/* Sort — 투수는 단추가 5개(구속 추가)라 '순'을 빼 한 줄에 둔다(원문은 title). 그래도 좁으면 단추째로 다음 줄 (2026-11-24) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: "var(--td)", whiteSpace: "nowrap" }}>{"정렬"}</span>
+            {sortOpts.map(function(s) { return (<button key={s} onClick={function(){setSortBy(s);}} title={s + "순으로 정렬"} style={Object.assign(filterBtnStyle(sortBy===s), { whiteSpace: "nowrap" })}>{s}</button>); })}
             {teamF && (<span style={{ marginLeft: "auto", fontSize: 11, color: "var(--acc)" }}>{"골든글러브는 항상 표시"}</span>)}
           </div>
         </div>
@@ -3156,8 +3302,8 @@ function PlayerSelector(p) {
               var ts = Math.round((pl.power||0)*w.p + (pl.accuracy||0)*w.a + (pl.eye||0)*w.e);
               statLine = (pl.team ? pl.team+" · " : "") + pl.hand + "타 · 파" + (pl.power||0) + " 정" + (pl.accuracy||0) + " 선" + (pl.eye||0) + " → " + ts;
             } else {
-              var ts2 = Math.round(pitStatScore(pitCatOf(pl), pl.change, pl.stuff, pl.control));
-              statLine = (pl.team ? pl.team+" · " : "") + pl.hand + "투 · 변" + (pl.change||0) + " 구" + (pl.stuff||0) + " 제" + (pl.control||0) + " → " + ts2;
+              var ts2 = Math.round(pitStatScore(pitCatOf(pl), pl.change, pl.stuff, pl.control, pl.speed));
+              statLine = (pl.team ? pl.team+" · " : "") + pl.hand + "투 · 변" + (pl.change||0) + " 구" + (pl.stuff||0) + " 제" + (pl.control||0) + " 속" + (pl.speed||0) + " → " + ts2;
             }
             return (
               <div key={pl.id} onClick={function() { onSelect(pl.id); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 18px", borderBottom: "1px solid var(--bd)", cursor: "pointer", background: idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
@@ -3506,7 +3652,7 @@ function PlayerDBPage(p){
           filtered.map(function(pl){var isBat=pl.role==="타자";var isA=editing===pl.id;return(
             <div key={pl.id} onClick={function(){editP(pl);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",background:isA?"var(--ta)":"transparent",borderBottom:"1px solid var(--bd)",cursor:"pointer",borderLeft:isA?"3px solid var(--acc)":"3px solid transparent"}}>
               <div style={{width:36,height:48,borderRadius:4,background:"var(--inner)",border:"1px solid var(--bd)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:16,opacity:0.4}}>{"⚾"}</span><span style={{fontSize:7,color:"var(--td)",fontWeight:700}}>{pl.subPosition}</span></div>
-              <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:4}}><Badge type={pl.cardType}/><span style={{fontWeight:700,color:"var(--t1)",fontSize:15}}>{pl.name}</span></div><div style={{fontSize:11,color:"var(--td)",marginTop:2}}>{isBat?(pl.hand+"타 · 파"+pl.power+" 정"+pl.accuracy+" 선"+pl.eye):(pl.hand+"투 · 변"+pl.change+" 구"+pl.stuff+" 제"+(pl.control||0))}</div></div>
+              <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:4}}><Badge type={pl.cardType}/><span style={{fontWeight:700,color:"var(--t1)",fontSize:15}}>{pl.name}</span></div><div style={{fontSize:11,color:"var(--td)",marginTop:2}}>{isBat?(pl.hand+"타 · 파"+pl.power+" 정"+pl.accuracy+" 선"+pl.eye):(pl.hand+"투 · 변"+pl.change+" 구"+pl.stuff+" 제"+(pl.control||0)+" 속"+(pl.speed||0))}</div></div>
               <div style={{fontSize:12,color:"var(--td)"}}>{pl.year}</div>
             </div>
           );})}
@@ -4062,6 +4208,7 @@ var CP_MULT = 0.85;
    중계 몫 = 10 - 선발합 - 마무리 가 된다 (값은 위 불펜 가중치 칸).
    적극·분업을 켜면 선발이 깎이고 그만큼 중계가 커진다. 그래서 전술을 켠다고
    무조건 점수가 오르지 않는다 — 선발이 좋은 덱은 오히려 손해를 볼 수 있다. */
+/* ▼ 구버전(v10) 점수에만 쓰는 타자 배율 — 신버전은 아래 '타순 가중치 v2' (2026-11-21) ▼ */
 /* 타순 가중치 — 자리의 값어치. 3~4번이 정점이고 6번부터 내려간다. 합 9.00 */
 var BAT_MULT = [1.100, 1.100, 1.150, 1.150, 1.000, 0.900, 0.900, 0.850, 0.850];
 /* 강함 가중치 — 그 라인업 안에서 점수가 높은 순서(1~9위)로 곱한다. 합 10.00
@@ -4082,6 +4229,37 @@ function strRanks(scores) {
   return out;
 }
 function batMult(orderIdx) { return BAT_MULT[orderIdx] !== undefined ? BAT_MULT[orderIdx] : BAT_MULT[BAT_MULT.length - 1]; }
+/* ═══ 타순 가중치 v2 (2026-11-21 · 신버전 v1.1 점수) ═══
+   타자 몫 = 파워 점수 × 파워의 타순 가중치 + 정확 … + 선구 … + 인내 … + 그 밖의 점수(스킬 · 잠재 · 발사각 · 감점 등) × 타순 가중치.
+   능력치 점수 = 능력치 × 능력치 가중치 (calcBat 의 ab). 강함 순위 배율은 쓰지 않는다 — 센 타자를 어디에 두느냐는 타순 가중치만으로 정해진다.
+   값은 랭킹챌린지 실측에 맞춘 경기 모형에서, 덱마다 가장 좋은 타순으로 세웠을 때 '그 타순 타자의 능력치 1 · 점수 1점이 팀 득점을 얼마나 올리나'를 잰 것
+   (타석 수 × 타석 하나의 가치 — 1번은 타석이 많고, 2 ~ 4번은 주자가 많아 타석 하나의 가치가 높다 — 둘이 거의 상쇄돼 1 ~ 4번이 비슷하다).
+   출루(선구 · 인내 · 정확)는 앞 타순, 장타(파워)는 3 · 4번이 가장 높다. 줄마다 합 10.00 — 투수 가중치 합 10 과 같은 눈금 (사용자 확정 2026-11-20 · 21).
+   근거 · 계산 자료: data/batter_weights (타순가중치_확정본_20261120.xlsx · kbosim_rc/rc_best_basis.py) */
+var BAT_ORDER_W = {
+  p:   [1.14, 1.16, 1.19, 1.21, 1.16, 1.10, 1.06, 1.01, 0.97],   /* 파워 */
+  a:   [1.20, 1.20, 1.20, 1.19, 1.13, 1.05, 1.02, 1.01, 1.00],   /* 정확 */
+  e:   [1.27, 1.25, 1.21, 1.16, 1.09, 1.00, 0.99, 1.00, 1.03],   /* 선구 */
+  n:   [1.22, 1.21, 1.20, 1.18, 1.11, 1.04, 1.02, 1.01, 1.01],   /* 인내 */
+  etc: [1.18, 1.19, 1.20, 1.19, 1.13, 1.07, 1.04, 1.01, 0.99]    /* 그 밖의 점수 — 스킬 · 잠재 · 발사각 · 감점 */
+};
+var BAT_ORDER_KEYS = ["p", "a", "e", "n", "etc"];
+var BAT_ORDER_LABEL = { p: "파워", a: "정확", e: "선구", n: "인내", etc: "그 밖" };
+function batOrderW(key, k) { var a = BAT_ORDER_W[key]; return a[k] !== undefined ? a[k] : a[a.length - 1]; }
+/* calcBat 결과(c)가 k 번째 타순(0부터)에 설 때 총점에 들어가는 몫을 나눠 준다.
+   ab: 능력치 점수 넷 · etc: 그 밖의 점수 · parts: 다섯 갈래의 몫 · share: 합 · w: 대표 가중치(= 몫 ÷ 선수 점수 — 화면의 ×1.19) */
+function batShare(c, k) {
+  var ab = (c && c.ab) || [0, 0, 0, 0], tot = (c && c.total) || 0;
+  var etc = tot - (ab[0] + ab[1] + ab[2] + ab[3]);
+  var parts = [ab[0] * batOrderW("p", k), ab[1] * batOrderW("a", k), ab[2] * batOrderW("e", k), ab[3] * batOrderW("n", k), etc * batOrderW("etc", k)];
+  var share = parts[0] + parts[1] + parts[2] + parts[3] + parts[4];
+  return { ab: ab, etc: etc, parts: parts, share: share, w: tot > 0 ? share / tot : batOrderW("etc", k) };
+}
+function batShareOf(c, k) {
+  var ab = (c && c.ab) || [0, 0, 0, 0], tot = (c && c.total) || 0;
+  return ab[0] * batOrderW("p", k) + ab[1] * batOrderW("a", k) + ab[2] * batOrderW("e", k) + ab[3] * batOrderW("n", k) + (tot - (ab[0] + ab[1] + ab[2] + ab[3])) * batOrderW("etc", k);
+}
+/* ═══ 타순 가중치 v2 끝 ═══ */
 var PIT_TOTAL = 10;
 /* 중계 전술 — 2026-10-19 부터 승리조 · 추격조를 따로 고른다 (사용자 지정 2026-10-15).
    저장 값: isWinSplit(승리조 분업) · rpWinActive(승리조 적극) · rpChaseActive(추격조 적극).
@@ -4221,7 +4399,7 @@ function getRPWeight(bpcIdx, slot, tactic, order) {
 function lineupLu(pl) {
   return { enhance: pl.enhance || "9각성",
     trainP: pl.trainP || 0, trainA: pl.trainA || 0, trainE: pl.trainE || 0,
-    trainN: pl.trainN || 0, trainC: pl.trainC || 0, trainS: pl.trainS || 0, trainCtl: pl.trainCtl || 0,
+    trainN: pl.trainN || 0, trainC: pl.trainC || 0, trainS: pl.trainS || 0, trainCtl: pl.trainCtl || 0, trainVel: pl.trainVel || 0,
     skill1: pl.skill1 || "", s1Lv: pl.s1Lv || 0,
     skill2: pl.skill2 || "", s2Lv: pl.s2Lv || 0,
     skill3: pl.skill3 || "", s3Lv: pl.s3Lv || 0,
@@ -4250,14 +4428,20 @@ function lineupBat(pl, slot, sd, o) {
 function lineupPit(pl, slot, sd, o) {
   return calcPit(pl, lineupLu(pl), calcSDBonus(pl, slot, sd, o.totalSP));
 }
-/* 자리의 값(타순) x 선수의 값(그 라인업 안에서의 강함 순위) 을 타자 아홉에 걸고,
-   투수는 전술별 예산으로 나눈 배율을 건다. 마무리는 늘 0.8 */
+/* 타자 아홉은 타순 가중치 v2(batShareOf — 능력치별 타순 가중치)로 걸고, 투수는 전술별 예산으로 나눈 배율을 건다.
+   구버전(v10) 점수는 예전 그대로 — 자리의 값(타순) x 선수의 값(그 라인업 안에서의 강함 순위). 마무리는 늘 CP_MULT.
+   o.batOld — 신버전 점수에 예전(타순 가중치 v2 이전) 타순 x 강함 순위 배율을 건 값. 점수 하락 안내가 '예전 방식 TOTAL'을 보여 줄 때만 쓴다 */
 function calcLineupTotal(pk, sd, o) {
   var bats = o.batOrder.map(function(s) { return { slot: s, pl: pk(s) }; });
-  var sc = bats.map(function(x) { return x.pl ? lineupBat(x.pl, x.slot, sd, o).total : 0; });
-  var ranks = strRanks(sc);
+  var cs = bats.map(function(x) { return x.pl ? lineupBat(x.pl, x.slot, sd, o) : null; });
   var t = 0;
-  bats.forEach(function(x, i) { if (x.pl) t += sc[i] * batMult(i) * strMult(ranks[i]); });
+  if (SCORE_VER === "v10" || o.batOld) {
+    var sc = cs.map(function(c) { return c ? c.total : 0; });
+    var ranks = strRanks(sc);
+    bats.forEach(function(x, i) { if (x.pl) t += sc[i] * batMult(i) * strMult(ranks[i]); });
+  } else {
+    bats.forEach(function(x, i) { if (x.pl) t += batShareOf(cs[i], i); });
+  }
   /* 선발 배율은 자리 번호가 아니라 그 라인업 안에서의 강함 순위로 준다.
      꼭 이겨야 하는 경기에 센 선발을 붙일 수 있는 게임이라 1선발과 5선발의 값이 다른 것인데,
      SP1 자리에 늘 가장 센 선발이 있는 것은 아니다 (2026-09-23 사용자 지정) */
@@ -4284,21 +4468,51 @@ function calcLineupTotal(pk, sd, o) {
    아니면 같은 배율 타순끼리는 지금 자리에 있던 선수를 그대로 둬서 덜 바뀌게 한다. */
 /* 같은 점수일 때 덜 바뀌는 쪽을 고르는 아주 작은 덤 — 점수의 가장 작은 눈금(타자 1e-6 · 투수 1e-5)보다 훨씬 작다 */
 var BL_EPS = 1e-8;
-/* 타자 한 명이 1 ~ 9번 타순에 설 때의 점수 (lineupBat — 다른 타순은 빈 칸으로 둔다) */
+/* 타자 한 명이 1 ~ 9번 타순에 설 때의 값 (lineupBat — 다른 타순은 빈 칸으로 둔다).
+   신버전: 총점에 들어가는 몫(batShareOf — 타순 가중치 v2 까지 곱한 값) · 구버전(v10): 선수 점수 */
 function batOrderRow(pl, s, sd, o) {
   var n = o.batOrder.length, row = [];
   for (var k = 0; k < n; k++) {
     if (!pl) { row.push(0); continue; }
     var at = []; for (var j = 0; j < n; j++) at.push(j === k ? s : "_" + j);
-    row.push(lineupBat(pl, s, sd, Object.assign({}, o, { batOrder: at })).total);
+    var c = lineupBat(pl, s, sd, Object.assign({}, o, { batOrder: at }));
+    row.push(SCORE_VER === "v10" ? c.total : batShareOf(c, k));
   }
   return row;
+}
+/* 신버전 타순 고르기 — S[i][k] 는 i 번째 타자가 k 번 타순에 설 때 총점에 들어가는 몫(배율까지 곱한 값)이라
+   합이 가장 큰 배치를 찾는 배정 문제다. 타순 부분집합 DP 로 정확히 푼다 (9명 = 512 × 9, 9! 전수와 같은 답 — 시험).
+   합이 같으면 지금 타순(cur)을 더 많이 지키는 쪽 (BL_EPS) */
+function bestOrderAssign(S, cur) {
+  var n = S.length, i, k;
+  if (!n) return { total: 0, pos: [] };
+  var okCur = !!cur && cur.length === n && cur.every(function (x, ii) { return x >= 0 && x < n && cur.indexOf(x) === ii; });
+  var full = (1 << n) - 1, f = new Array(full + 1), pick = new Array(full + 1), bits = new Array(full + 1);
+  f[0] = 0; bits[0] = 0;
+  for (var m = 1; m <= full; m++) {
+    bits[m] = bits[m >> 1] + (m & 1);
+    i = bits[m] - 1;
+    var bv = -Infinity, bk = -1;
+    for (k = 0; k < n; k++) {
+      if (!(m & (1 << k))) continue;
+      var v = f[m ^ (1 << k)] + S[i][k] + (okCur && cur[i] === k ? BL_EPS : 0);
+      if (v > bv) { bv = v; bk = k; }
+    }
+    f[m] = bv; pick[m] = bk;
+  }
+  var pos = new Array(n), mm = full;
+  for (i = n - 1; i >= 0; i--) { pos[i] = pick[mm]; mm ^= (1 << pos[i]); }
+  var tot = function (p) { var t = 0; for (var ii = 0; ii < n; ii++) t += S[ii][p[ii]]; return t; };
+  if (okCur && tot(cur) >= tot(pos) - 1e-9) return { total: tot(cur), pos: cur.slice() };
+  return { total: tot(pos), pos: pos };
 }
 /* 타순 고르기의 알맹이. S[i][k] — i 번째 타자가 k 번째 타순에 설 때 점수. cur[i] — 지금 타순(같은 점수면 지킨다).
    반환 { total: 타자 몫 합(배율 곱한 값), pos: [i 번째 타자의 타순] } */
 function bestOrderCore(S, cur) {
   var n = S.length, i, k, c;
   if (!n) return { total: 0, pos: [] };
+  /* 신버전 — S 가 이미 몫이라 강함 순위 배율이 없다. 아래 묶음 탐색은 구버전(v10) 배율 구조용 */
+  if (SCORE_VER !== "v10") return bestOrderAssign(S, cur);
   var BM = [], SM = [];
   for (k = 0; k < n; k++) { BM.push(batMult(k)); SM.push(strMult(k)); }
   /* ② 타순 묶음 — 모든 선수의 점수가 같은 타순끼리. 묶음 안 타순은 배율 높은 순(같으면 앞 타순) */
@@ -4403,7 +4617,10 @@ var BL_SLOTS27 = BAT_SLOTS.concat(SP_SLOTS, RP_SLOTS, ["CP"], BL_BN);
 function bestBatting(pool, sd, o, curOrder, extra, need) {
   var EPS = BL_EPS, n = BAT_SLOTS.length, rows = {}, mxs = {}, j, z;
   var rowOf = function (i, s) { var key = i + "|" + s; return rows[key] || (rows[key] = batOrderRow(pool[i].pl, s, sd, o)); };
-  var mxOf = function (i, s) { var key = i + "|" + s; if (mxs[key] === undefined) { var r = rowOf(i, s), m = r[0]; for (var k = 1; k < r.length; k++) if (r[k] > m) m = r[k]; mxs[key] = m; } return mxs[key]; };
+  /* 신버전은 줄(rowOf)이 몫이다 — 몫 ÷ 타순 가중치(그 밖) 의 가장 큰 값을 그 선수의 크기로 삼으면
+     몫[k] ≤ 크기 × 가중치[k] 라서, 큰 크기부터 큰 가중치에 짝지은 합이 실제 최고보다 낮을 수 없다 (bound) */
+  var v11 = SCORE_VER !== "v10";
+  var mxOf = function (i, s) { var key = i + "|" + s; if (mxs[key] === undefined) { var r = rowOf(i, s), m = -Infinity; for (var k = 0; k < r.length; k++) { var x = v11 ? r[k] / batOrderW("etc", k) : r[k]; if (x > m) m = x; } mxs[key] = m; } return mxs[key]; };
   var zero = []; for (z = 0; z < n; z++) zero.push(0);
   var cand = BAT_SLOTS.map(function (s) {
     var out = []; pool.forEach(function (x, i) { if (s === "DH" || x.sub === s || x.cur === s) out.push(i); });
@@ -4415,7 +4632,7 @@ function bestBatting(pool, sd, o, curOrder, extra, need) {
   var seq = [cIdx].concat(BAT_SLOTS.map(function (_, jj) { return jj; }).filter(function (jj) { return jj !== cIdx && jj !== dIdx; })
     .sort(function (a, b) { return cand[a].length - cand[b].length; })).concat([dIdx]);
   var bms = BAT_MULT.slice(0, n).sort(function (x, y) { return y - x; }), sms = STR_MULT.slice(0, n).sort(function (x, y) { return y - x; });
-  var PROD = bms.map(function (x, r) { return x * (sms[r] !== undefined ? sms[r] : 0); });
+  var PROD = v11 ? BAT_ORDER_W.etc.slice(0, n).sort(function (x, y) { return y - x; }) : bms.map(function (x, r) { return x * (sms[r] !== undefined ? sms[r] : 0); });
   var curK = BAT_SLOTS.map(function (s) { return curOrder.indexOf(s); });
   var at = []; for (j = 0; j < n; j++) at.push(undefined);
   var used = {}, starts = {}, nstarts = {}, best = null;
@@ -4532,6 +4749,31 @@ function bestLineup(players, lm, sdState) {
   var F = 0; bnS.forEach(function (s) { var pl = mp(lm[s]); if (pl && pl.role === "타자") F = Math.max(F, natLv(pl, s)); });
   var levels = [F];
   if (!sd0.natBat) pool.forEach(function (x) { [x.sub || "DH", "DH", x.cur || "DH"].forEach(function (s) { var lv = natLv(x.pl, s); if (lv > F && levels.indexOf(lv) < 0) levels.push(lv); }); });
+  /* 타자 주장(리더 레벨 5 이상) — 주장의 능력치는 주장이 선 타순 묶음(1~2 · 3~5 · 6~9번)의 세트덱 보너스를 따르고,
+     다른 타자가 받는 영향력(6 · 11 · 16 · 21 문턱)도 그 값으로 정해진다. 타순 DP 의 줄(S)은 지금 리더 값으로 고정이라 이 얽힘을 못 본다.
+     → 주장을 1 ~ 9번 자리마다 세워 리더 값을 다시 센 줄로 DP 를 돌리고(주장은 그 자리에 고정), 실제 TOTAL 이 가장 높은 타순 (2026-11-25).
+       묶음만이 아니라 자리에 따라 붙는 것도 있어 아홉 번 센다 — 주장 레벨 5 이상인 덱에만 */
+  var LEAD_GROUPS = [[0], [1], [2], [3], [4], [5], [6], [7], [8]];
+  var leadRefine = function (lmX, order0) {
+    var capId = base.capBatId; if (!capId || leaderLv(base.capLv) < 5) return null;
+    var cs = null; BAT_SLOTS.forEach(function (s) { if (lmX[s] === capId) cs = s; });
+    if (!cs || !order0 || order0.length !== BAT_SLOTS.length || order0.indexOf(cs) < 0) return null;
+    var pkX = function (s) { return mp(lmX[s]); };
+    if (!pkX(cs) || pkX(cs).role !== "타자") return null;
+    var curK = BAT_SLOTS.map(function (s) { return order0.indexOf(s); });
+    var best = null;
+    LEAD_GROUPS.forEach(function (g) {
+      var o0 = order0.slice(), ci = o0.indexOf(cs);
+      if (g.indexOf(ci) < 0) { var tmp = o0[g[0]]; o0[g[0]] = cs; o0[ci] = tmp; }
+      var ev = evalWith(lmX, { batOrder: o0 }, keep), oX = lineupOpts(ev.sd, keep.sp);
+      var S = BAT_SLOTS.map(function (s) { var row = batOrderRow(pkX(s), s, ev.sd, oX); return s === cs ? row.map(function (v, k) { return g.indexOf(k) >= 0 ? v : -1e9; }) : row; });
+      var r = bestOrderCore(S, curK), ord = new Array(BAT_SLOTS.length);
+      BAT_SLOTS.forEach(function (s, i) { ord[r.pos[i]] = s; });
+      var tot = evalWith(lmX, { batOrder: ord }, keep).total;
+      if (!best || tot > best.total + 1e-9) best = { order: ord, total: tot };
+    });
+    return best;
+  };
   var plan = null;
   levels.forEach(function (L) {
     var sdL = Object.assign({}, sd0, { _autoNatBat: L ? L + "렙" : "없음" });
@@ -4547,8 +4789,14 @@ function bestLineup(players, lm, sdState) {
     var sdNew = { batOrder: bat.order };
     var ex = evalWith(nlm, sdNew, keep);
     var cand = { lm: nlm, sd: sdNew, after: ex.total, order: bat.order };
+    var rf = leadRefine(nlm, bat.order);
+    if (rf && rf.total > cand.after + 1e-9) cand = { lm: nlm, sd: { batOrder: rf.order }, after: rf.total, order: rf.order };
     if (!plan || cand.after > plan.after + 1e-9) plan = cand;
   });
+  /* 타자 주장(레벨 5 이상) — 위 탐색은 지금 리더 값으로 세서 주장을 뺀 라인업을 고를 수도 있다(빼면 영향력도 사라지는데 못 봄).
+     지금 선수 그대로 타순만 다듬은 안도 후보로 넣는다 (2026-11-25) */
+  var rfNow = leadRefine(lm, curOrder);
+  if (rfNow && (!plan || rfNow.total > plan.after + 1e-9)) plan = { lm: Object.assign({}, lm), sd: { batOrder: rfNow.order }, after: rfNow.total, order: rfNow.order };
   if (!plan) return { ok: false, why: "none" };
   /* 새 배치가 지금보다 낮게 나오면 지금 그대로 (지금 배치도 후보 안에 있어 생기면 안 되는 일) */
   var nowKeep = evalWith(lm, null, keep).total;
@@ -5242,7 +5490,7 @@ var TRAIN_POINTS = {"골든글러브":75,"시그니처":75,"라이브":75,"올�
 /* 훈재분 계산기의 "내 훈재분" 입력칸 — 점수에 들어가는 능력치만 받는다 */
 var TRAIN_MY_STATS = {"타자":["파워","정확","선구","인내"],"투수":["변화","구위"],
   /* v1.1 (2026-10-21): 제구가 점수에 들어가고 선발 · 불펜 가중치가 다르다 */
-  "선발":["변화","구위","제구"],"불펜":["변화","구위","제구"]};
+  "선발":["변화","구위","제구","구속"],"불펜":["변화","구위","제구","구속"]};
 /* 이 포지션 칸에 값을 넣었는가. 타자↔투수를 오가도 반대쪽 입력값은 그대로 남아 있으므로
    지금 포지션의 칸만 본다 — 전부 보면 빈 투수 칸으로 "내 점수 0 · 상위 100%" 가 떴다 */
 function hasTrainInput(dist, pos) {
@@ -5886,7 +6134,7 @@ function SetDeckPanel(p) {
           </div>
           <button onClick={function(){
             /* 자동 최적화 (optimizeSetDeck) — 구간마다 좌/우 총점을 견주고, 연도 구간은 연도덱 설정을 따른다.
-               총점은 라인업 화면과 같은 식으로 계산한다 (타순 x 강함, 선발·중계·마무리 배율) */
+               총점은 라인업 화면과 같은 식으로 계산한다 (타자 타순 가중치, 선발·중계·마무리 배율) */
             var years = function(role) {
               var fixed = sdState[role === "bat" ? "yearBatYr" : "yearPitYr"];
               if (fixed) return [String(fixed)];
@@ -5990,7 +6238,7 @@ function RankTierTile(p) {
   var head = (<span style={{ fontSize: 10.5, color: "var(--td)", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{(p.peak ? "고점 · " : "") + "랭챌 예상 ›"}</span>);
   if (miss.length) {
     return (
-      <button onClick={p.onOpen} title={"라인업 선수 " + miss.length + "명의 훈련(타자 파 · 정 · 선 · 인 / 투수 변 · 구 · 제)이 비어 있어요. 훈련은 0일 수 없어서 다 넣어야 예상 구간이 보여요 (불펜 국가대표 · 라이브 · 올스타는 훈련을 안 찍었으면 셋 다 0 이어도 괜찮아요). 누르면 누가 비었는지 보여요"}
+      <button onClick={p.onOpen} title={"훈련이 빈 선수 " + miss.length + "명 — " + miss.map(function (x) { return x.name + "(" + x.miss.join(" · ") + ")"; }).join(", ") + ". 훈련은 0일 수 없어서 다 넣어야 예상 구간이 보여요 (불펜 국가대표 · 라이브 · 올스타는 훈련을 안 찍었으면 다 0 이어도 괜찮아요). 누르면 누가 비었는지 보여요"}
         style={box("var(--inner)", rankHexA(CTL_MISS_COLOR, 0.55), true)}>
         {head}
         <span style={{ fontSize: mob ? 13 : 14, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", lineHeight: 1.35 }}>{"훈련 미입력 " + miss.length + "명"}</span>
@@ -6133,6 +6381,180 @@ function RankRecBox(p) {
 
 /* 랭챌 예상 구간표 — 내 덱 자리 · 커트 경쟁선 / 안정권 · 타자 OPS 참고 · 관리자 고치기. 신버전 점수로만 본다 (구버전 표는 10-22 뺐다).
    훈련이 빈 선수가 있으면(miss) 내 덱 구간 대신 빈 선수 목록을 보여 준다 (표는 참고로 그대로, 내 덱 줄 강조 없음) */
+/* 타순별 가중치 표 (파 · 정 · 선 · 인 · 그 밖 × 1 ~ 9번) — 풀이 창 · 점수 하락 안내 창이 같이 쓴다. hi: 도드라지게 할 타순(0 ~ 8, 없으면 -1) */
+var BAT_ORDER_COL = { p: "#EF5350", a: "#42A5F5", e: "#66BB6A", n: "#FFA726", etc: "var(--t2)" };
+function BatOrderWTable(p) {
+  var mob = p.mobile, k = p.hi === undefined ? -1 : p.hi;
+  var tGrid = (mob ? "34px" : "46px") + " repeat(9, 1fr)";
+  var cell = function (on) { return { fontFamily: "var(--m)", fontVariantNumeric: "tabular-nums", textAlign: "center", padding: mob ? "4px 0" : "5px 0", fontSize: mob ? 10.5 : 12, borderRadius: 4,
+    background: on ? "var(--ta)" : "transparent", color: on ? "var(--acc)" : "var(--t2)", fontWeight: on ? 800 : 500 }; };
+  return (
+    <div style={{ borderRadius: 10, border: "1px solid var(--bd)", padding: mob ? "6px 4px" : "8px 8px", marginBottom: 10, overflowX: "auto" }}>
+      <div style={{ minWidth: mob ? 300 : 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: tGrid, alignItems: "center", marginBottom: 2 }}>
+          <span />{[0, 1, 2, 3, 4, 5, 6, 7, 8].map(function (j) { return (<span key={j} style={Object.assign(cell(j === k), { fontFamily: "inherit", fontWeight: 700, color: j === k ? "var(--acc)" : "var(--td)" })}>{(j + 1) + "번"}</span>); })}
+        </div>
+        {BAT_ORDER_KEYS.map(function (key) { return (
+          <div key={key} style={{ display: "grid", gridTemplateColumns: tGrid, alignItems: "center" }}>
+            <b style={{ fontSize: mob ? 11 : 12, color: BAT_ORDER_COL[key], paddingLeft: 2 }}>{BAT_ORDER_LABEL[key]}</b>
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(function (j) { return (<span key={j} style={cell(j === k)}>{batOrderW(key, j).toFixed(2)}</span>); })}
+          </div>); })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ 타순 가중치 v2 — 점수 하락 안내 (2026-11-21 사용자 요청) ═══
+   타순 가중치가 바뀌며 같은 덱의 TOTAL 이 100점쯤 내려간다 — 놀라지 않게 라인업 TOTAL 칸 아래에 이 덱의 '예전 방식 → 지금'을 보여 준다.
+   배포 뒤 2주(BATW_NOTE_UNTIL)만 뜨고, × 로 닫으면 이 브라우저에서는 다시 안 뜬다(저장소가 막힌 브라우저는 이번에만 닫힌다). 고점판독 중에는 안 띄운다.
+   예전 방식 TOTAL = 신버전 점수에 예전 타순 x 강함 순위 배율 (calcLineupTotal 의 o.batOld). 기간이 지나면 이 묶음과 o.batOld 는 지워도 된다 */
+var BATW_NOTE_UNTIL = Date.parse("2026-12-09T00:00:00+09:00");   /* 배포한 날(2026-11-25) + 14일 */
+var BATW_NOTE_KEY = "batw-note-hide";
+function batwNoteShown() { if (!(Date.now() < BATW_NOTE_UNTIL)) return false; try { return localStorage.getItem(BATW_NOTE_KEY) !== "1"; } catch (e) { return true; } }
+function batwNoteHide() { try { localStorage.setItem(BATW_NOTE_KEY, "1"); } catch (e) {} }
+/* 차이 — 화면에 보이는 두 숫자(소수 한 자리)끼리 뺀다. 그냥 빼면 8464.0 → 8350.0 (−113.9) 처럼 0.1 어긋날 수 있다 (2026-11-25) */
+function batwDiffText(prev, now) { var d = Math.round(now * 10) / 10 - Math.round(prev * 10) / 10; return (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(1); }
+/* 안내 줄 — p: { mobile, prev(예전 방식 TOTAL), now, onMore, onClose } */
+function BatWtNotice(p) {
+  var mob = p.mobile, down = p.now < p.prev;
+  return (
+    <div role="status" style={{ display: "flex", alignItems: mob ? "flex-start" : "center", gap: mob ? 8 : 12, marginBottom: 14, padding: mob ? "10px 12px" : "10px 16px", borderRadius: 12,
+      border: "1px solid rgba(255,213,79,0.4)", background: "linear-gradient(135deg,rgba(255,213,79,0.10),rgba(255,143,0,0.05)),var(--card)" }}>
+      <span aria-hidden="true" style={{ fontSize: mob ? 16 : 18, lineHeight: 1.2 }}>{"⚖️"}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: mob ? 13 : 13.5, fontWeight: 800, color: "var(--t1)" }}>{down ? "타순 가중치가 바뀌어 TOTAL 이 내려갔어요" : "타순 가중치가 바뀌어 TOTAL 이 달라졌어요"}</div>
+        <div style={{ fontSize: mob ? 11.5 : 12, color: "var(--td)", marginTop: 2, lineHeight: 1.5 }}>
+          {"이 덱 — 예전 방식 "}<b style={{ fontFamily: "var(--m)", color: "var(--t2)" }}>{p.prev.toFixed(1)}</b>{" → 지금 "}<b style={{ fontFamily: "var(--m)", color: "var(--t1)" }}>{p.now.toFixed(1)}</b>
+          <b style={{ fontFamily: "var(--m)", color: down ? "#FF8A65" : "#4ade80" }}>{" (" + batwDiffText(p.prev, p.now) + ")"}</b>
+          {" · 대부분의 덱이 100점 안팎 내려가고, 랭챌 예상 구간표도 그만큼 내렸어요"}
+        </div>
+      </div>
+      <button onClick={p.onMore} style={{ flexShrink: 0, padding: mob ? "5px 10px" : "6px 12px", fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+        border: "1px solid var(--acc)", background: "var(--ta)", color: "var(--acc)", whiteSpace: "nowrap" }}>{"자세히"}</button>
+      <button onClick={p.onClose} aria-label="안내 닫기" title={"닫으면 이 브라우저에서는 다시 안 떠요"} style={{ flexShrink: 0, background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 16, padding: 2 }}>{"✕"}</button>
+    </div>
+  );
+}
+/* 안내 창 — p: { mobile, prev, now, onClose } */
+function BatWtNoticeModal(p) {
+  var mob = p.mobile, down = p.now < p.prev;
+  return (
+    <div onClick={p.onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 220, display: "flex", alignItems: "center", justifyContent: "center", padding: mob ? 10 : 16 }}>
+      <div onClick={function (e) { e.stopPropagation(); }} role="dialog" aria-label="타순 가중치가 바뀌었어요"
+        style={{ background: "linear-gradient(var(--card),var(--card)),var(--bg)", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+        <div style={{ padding: "14px 18px 12px", borderBottom: "1px solid var(--bd)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"⚖️ 타순 가중치가 바뀌었어요"}</div>
+              <div style={{ fontSize: 12, color: "var(--td)", marginTop: 3, lineHeight: 1.45 }}>{"타자 점수가 TOTAL SCORE 에 들어가는 방식이 달라졌어요 · 선수 점수는 그대로예요"}</div>
+            </div>
+            <button onClick={p.onClose} aria-label="닫기" style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18, padding: 2 }}>{"✕"}</button>
+          </div>
+        </div>
+        <div style={{ padding: mob ? "12px 12px 14px" : "12px 18px 16px" }}>
+          <div style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid var(--bd)", background: "var(--inner)", marginBottom: 12, display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "var(--td)" }}>{"이 덱 TOTAL — 예전 방식 "}<b style={{ fontFamily: "var(--m)", color: "var(--t2)", fontSize: 14 }}>{p.prev.toFixed(1)}</b>{" → 지금 "}<b style={{ fontFamily: "var(--m)", color: "var(--t1)", fontSize: 16 }}>{p.now.toFixed(1)}</b></span>
+            <b style={{ fontFamily: "var(--m)", fontSize: 15, color: down ? "#FF8A65" : "#4ade80" }}>{batwDiffText(p.prev, p.now)}</b>
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--t2)", lineHeight: 1.6, marginBottom: 12 }}>
+            <div>{"· 예전: 선수 점수 × 타순 배율 × 라인업 안 강함 순위 배율"}</div>
+            <div>{"· 지금: 능력치(파워 · 정확 · 선구 · 인내)마다 타순별 가중치가 따로 있고, 스킬 · 잠재 같은 나머지 점수에도 타순 가중치가 하나 있어요. 강함 순위 배율은 없어졌어요"}</div>
+            <div>{"· 랭킹챌린지 실제 기록에 맞춘 경기 계산으로 타순마다 타자의 값어치를 다시 잰 결과예요. 예전 방식은 타순에 따른 차이를 실제보다 훨씬 크게 쳤어요"}</div>
+          </div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--t1)", marginBottom: 5 }}>{"점수는 이렇게 달라져요"}</div>
+          <div style={{ fontSize: 12.5, color: "var(--t2)", lineHeight: 1.6, marginBottom: 12 }}>
+            <div>{"· 같은 덱의 TOTAL 이 대부분 100점 안팎(상위 덱은 120점쯤) 내려가요. 덱마다 타순 배치에 따라 조금씩 다르지만, 다 같이 내려가서 덱끼리의 순서는 거의 그대로예요"}</div>
+            <div>{"· 랭챌 예상 구간표도 같은 폭으로 내려서, 예상 구간은 대부분 그대로예요"}</div>
+            <div>{"· 선수 한 명 한 명의 점수와 '구버전' 점수는 바뀌지 않았어요"}</div>
+            <div>{"· 타순을 바꿔서 얻거나 잃는 점수는 예전보다 훨씬 작아졌어요"}</div>
+          </div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--t1)", marginBottom: 5 }}>{"타순별 가중치 표"}<span style={{ fontWeight: 500, color: "var(--td)", fontSize: 11.5 }}>{"  줄마다 합 10"}</span></div>
+          <BatOrderWTable mobile={mob} hi={-1} />
+          <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.55 }}>
+            <div>{"· 타자 줄의 ×1.19 같은 숫자를 누르면 그 선수의 계산을 볼 수 있어요."}</div>
+            <div>{"· 더 자세한 설명은 고객센터 → 업데이트 내역 · 사용설명서 '점수 계산'에 있어요."}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+/* ═══ 점수 하락 안내 끝 ═══ */
+
+/* ═══ 타순 가중치 풀이 창 (2026-11-21 사용자 지정) ═══
+   타자 줄의 ×1.19 를 누르면 뜬다 — 이 선수의 몫이 어떻게 나왔는지(능력치 점수 × 그 능력치의 타순 가중치 + 그 밖의 점수 × 타순 가중치)와 타순별 가중치 표.
+   p: { mobile, idx(타순 0 ~ 8), name, calc(calcBat 결과), onClose } */
+function BatWeightModal(p) {
+  var mob = p.mobile, k = p.idx, sh = batShare(p.calc, k), w = getW();
+  var tot = (p.calc && p.calc.total) || 0;
+  var abW = [w.p, w.a, w.e, w.n || 0];
+  var COL = BAT_ORDER_COL;
+  var num = { fontFamily: "var(--m)", fontVariantNumeric: "tabular-nums", textAlign: "right" };
+  var f1 = function (v) { return v.toFixed(1); }, f2 = function (v) { return v.toFixed(2); };
+  var fw = function (v) { var t = v.toFixed(3); return t.charAt(t.length - 1) === "0" ? t.slice(0, -1) : t; };
+  var grid = mob ? "1fr 58px 50px 58px" : "1fr 74px 62px 70px";
+  var rows = BAT_ORDER_KEYS.map(function (key, i) {
+    var isEtc = key === "etc", pts = isEtc ? sh.etc : sh.ab[i];
+    /* 능력치 점수 = 능력치 × 능력치 가중치 (국대에이스가 붙으면 화면 능력치보다 그만큼 높다) */
+    var sub = isEtc ? "스킬 · 잠재 · 발사각 · 감점" : (abW[i] ? String(Math.round(pts / abW[i] * 10) / 10) : "0") + " × " + f2(abW[i]);
+    return { key: key, label: isEtc ? "그 밖의 점수" : BAT_ORDER_LABEL[key], sub: sub, pts: pts, ow: batOrderW(key, k), part: sh.parts[i] };
+  });
+  return (
+    <div onClick={p.onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 220, display: "flex", alignItems: "center", justifyContent: "center", padding: mob ? 10 : 16 }}>
+      <div onClick={function (e) { e.stopPropagation(); }} role="dialog" aria-label="타순 가중치"
+        style={{ background: "linear-gradient(var(--card),var(--card)),var(--bg)", borderRadius: 14, border: "1px solid var(--bd)", maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+        <div style={{ padding: "14px 18px 12px", borderBottom: "1px solid var(--bd)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "var(--t1)", fontFamily: "var(--h)" }}>{"⚖️ 타순 가중치"}</div>
+              <div style={{ fontSize: 12, color: "var(--td)", marginTop: 3, lineHeight: 1.45 }}>{(k + 1) + "번 타순 · " + (p.name || "") + " — 이 선수 점수가 TOTAL 에 얼마로 들어가는지예요"}</div>
+            </div>
+            <button onClick={p.onClose} aria-label="닫기" style={{ background: "none", border: "none", color: "var(--td)", cursor: "pointer", fontSize: 18, padding: 2 }}>{"✕"}</button>
+          </div>
+        </div>
+        <div style={{ padding: mob ? "12px 12px 14px" : "12px 18px 16px" }}>
+          {/* 한 줄 요약 — 화면에 보이는 한 숫자 */}
+          <div style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid var(--bd)", background: "var(--inner)", marginBottom: 10, display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "var(--td)" }}>{"선수 점수 "}<b style={{ fontFamily: "var(--m)", color: "var(--t1)", fontSize: 14 }}>{f1(tot)}</b>
+              <span style={{ fontFamily: "var(--m)", color: "var(--acc)", fontWeight: 800, fontSize: 15 }}>{"  ×" + fw(sh.w)}</span></span>
+            <span style={{ fontSize: 12, color: "var(--td)" }}>{"TOTAL 에 "}<b style={{ fontFamily: "var(--m)", color: "var(--t1)", fontSize: 16 }}>{f1(sh.share)}</b></span>
+          </div>
+          {/* 계산 풀이 */}
+          <div style={{ borderRadius: 10, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 6 }}>
+            <div style={{ display: "grid", gridTemplateColumns: grid, alignItems: "center", padding: "7px 12px", fontSize: 11.5, fontWeight: 700, color: "var(--td)", background: "var(--inner)" }}>
+              <span>{"갈래"}</span><span style={{ textAlign: "right" }}>{"점수"}</span><span style={{ textAlign: "right" }}>{(k + 1) + "번"}</span><span style={{ textAlign: "right" }}>{"몫"}</span>
+            </div>
+            {rows.map(function (r) { return (
+              <div key={r.key} style={{ display: "grid", gridTemplateColumns: grid, alignItems: "center", padding: "6px 12px", borderTop: "1px solid var(--bd)", fontSize: 13 }}>
+                <span style={{ minWidth: 0 }}><b style={{ color: COL[r.key] }}>{r.label}</b>
+                  <span style={{ display: "block", fontSize: 10.5, color: "var(--td)", fontFamily: r.key === "etc" ? "inherit" : "var(--m)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sub}</span></span>
+                <span style={Object.assign({}, num, { color: "var(--t2)" })}>{f1(r.pts)}</span>
+                <span style={Object.assign({}, num, { color: "var(--acc)", fontWeight: 700 })}>{"×" + f2(r.ow)}</span>
+                <span style={Object.assign({}, num, { color: "var(--t1)", fontWeight: 700 })}>{f1(r.part)}</span>
+              </div>); })}
+            <div style={{ display: "grid", gridTemplateColumns: grid, alignItems: "center", padding: "7px 12px", borderTop: "1px solid var(--bd)", fontSize: 13, background: "var(--inner)", fontWeight: 800 }}>
+              <span style={{ color: "var(--t1)" }}>{"합"}</span>
+              <span style={Object.assign({}, num, { color: "var(--t1)" })}>{f1(tot)}</span>
+              <span style={Object.assign({}, num, { color: "var(--acc)" })}>{"×" + fw(sh.w)}</span>
+              <span style={Object.assign({}, num, { color: "var(--t1)" })}>{f1(sh.share)}</span>
+            </div>
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.5, marginBottom: 12 }}>{"선수 줄의 ×" + fw(sh.w) + " 는 몫 ÷ 선수 점수예요. 능력치마다 타순 가중치가 달라서, 같은 타순이어도 선수의 능력치 구성에 따라 조금씩 달라요."}</div>
+          {/* 타순별 가중치 표 */}
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--t1)", marginBottom: 5 }}>{"타순별 가중치 표"}<span style={{ fontWeight: 500, color: "var(--td)", fontSize: 11.5 }}>{"  줄마다 합 10"}</span></div>
+          <BatOrderWTable mobile={mob} hi={k} />
+          <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.55 }}>
+            <div>{"· 1번은 타석이 가장 많고, 2 ~ 4번은 주자가 많아 타석 하나의 가치가 높아요. 둘이 거의 상쇄돼 1 ~ 4번이 비슷해요."}</div>
+            <div>{"· 출루(선구 · 인내 · 정확)는 앞 타순, 장타(파워)는 3 · 4번에서 값이 커요."}</div>
+            <div>{"· 랭킹챌린지 실측에 맞춘 경기 계산에서 나온 값이에요. 줄마다 합 10 은 투수 가중치 합 10 과 같은 눈금이에요."}</div>
+            <div>{"· 구버전 점수는 예전 방식(타순 × 강함 순위) 그대로예요."}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RankTierModal(p) {
   var mob = p.mobile;
   var _ops = useState(false); var opsOpen = _ops[0]; var setOpsOpen = _ops[1];
@@ -6291,6 +6713,7 @@ function RankTierModal(p) {
           <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6, marginTop: 10 }}>
             <div>{"· 커트 경쟁선은 그 점수 덱의 60% 쯤이 그 등수 안에 드는 점수, 안정권은 80% 쯤이 드는 점수예요."}</div>
             <div>{"· 신버전 점수 기준이에요. 시즌 239 in100 덱 · 실제 랭챌 기록 · 여기 적힌 실제 등수를 모아 다시 맞췄어요 (11월 8일). 풀갱을 다 못 한 기록도 넣고, 최상위권 일부가 정지로 빠진 시즌이라 그만큼 보수적으로 잡았어요."}</div>
+            <div>{"· 11월 25일: 타자 타순 가중치가 바뀌어 같은 덱의 TOTAL 이 100 ~ 130점쯤 내려가서, 표도 그만큼 내렸어요 (예상 구간은 거의 그대로예요)."}</div>
             <div>{"· 실제 등수는 시즌 · 플레이 · 운에 따라 달라요. in10 은 표본이 적어 커트만 적었어요."}</div>
             {saved && (<div>{"· 관리자가 " + day(saved.at) + " 에 고친 표예요."}</div>)}
           </div>
@@ -6420,7 +6843,7 @@ function BestLineupModal(p) {
       <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.6, marginTop: 10 }}>
         <div>{"· 지금 주전과 '내 선수'에 넣어 둔 타자 중에서 골라요. 후보 칸과 투수는 그대로예요."}</div>
         <div>{"· 수비 자리는 그 포지션 선수만, 같은 선수(다른 카드) 둘은 함께 주전으로 세우지 않아요. 골든글러브는 라인업에 5장(자팀 골글이 있으면 6장)까지만 — 넘으면 역시너지예요."}</div>
-        <div>{"· 점수에 들어가는 걸 다 셌어요 — 타순 스킬 · 세트덱 타순 · 외야 구간 · 자리마다 다른 포지션 특훈(능력치 · 스킬 보너스) · 타순 × 강함 배율 · 포수리드 · 국대에이스. 셋포 · 시너지는 지금 값 그대로 두고 셌어요 (시너지는 후보로 맞추면 돼요)."}</div>
+        <div>{"· 점수에 들어가는 걸 다 셌어요 — 타순 스킬 · 세트덱 타순 · 외야 구간 · 자리마다 다른 포지션 특훈(능력치 · 스킬 보너스) · 타순 가중치 · 포수리드 · 국대에이스. 셋포 · 시너지는 지금 값 그대로 두고 셌어요 (시너지는 후보로 맞추면 돼요)."}</div>
         {!v.same && (<div>{"· 바꾼 뒤에도 '↩ 되돌리기'로 지금 타선으로 돌아올 수 있어요."}</div>)}
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
@@ -6442,6 +6865,11 @@ function LineupPage(p) {
   /* 고점판독기 — 켜면 라인업 선수 전원을 고점 값으로 바꿔 보여 준다. 저장된 값은 그대로다 */
   var _peak = useState(false); var peakOn = _peak[0]; var setPeakOn = _peak[1];
   var _rankOpen = useState(false); var rankOpen = _rankOpen[0]; var setRankOpen = _rankOpen[1];
+  /* 타순 가중치 풀이 창 — 누른 타자의 자리 · 타순 ({ slot, idx }) */
+  var _wtOpen = useState(null); var wtOpen = _wtOpen[0]; var setWtOpen = _wtOpen[1];
+  /* 점수 하락 안내(타순 가중치 v2) — 줄을 띄울지 · '자세히' 창 */
+  var _batwNote = useState(function () { return batwNoteShown(); }); var batwNote = _batwNote[0]; var setBatwNote = _batwNote[1];
+  var _batwMore = useState(false); var batwMore = _batwMore[0]; var setBatwMore = _batwMore[1];
   /* 베스트 라인업 — 미리 보기 창에 띄울 계획 · 계산 중 표시 */
   var _bl = useState(null); var blView = _bl[0]; var setBlView = _bl[1];
   var _blBusy = useState(false); var blBusy = _blBusy[0]; var setBlBusy = _blBusy[1];
@@ -6795,18 +7223,14 @@ function LineupPage(p) {
   }).filter(function(v){return v!==null;});
   var allPitTrainScores = allPitSlots.map(function(x){
     if(!x.pl) return null;
-    return pitStatScore(pitCatOf(x.pl), x.pl.trainC, x.pl.trainS, x.pl.trainCtl);
+    return pitStatScore(pitCatOf(x.pl), x.pl.trainC, x.pl.trainS, x.pl.trainCtl, x.pl.trainVel);
   }).filter(function(v){return v!==null;});
 
-  var pitBarMax = barMaxOf(allPitSlots.map(function(x) { if (!x.pl) return 0; var c = calcPitSD(x.pl, x.slot); return Math.max(c.change, c.stuff, c.control || 0); }));
+  var pitBarMax = barMaxOf(allPitSlots.map(function(x) { if (!x.pl) return 0; var c = calcPitSD(x.pl, x.slot); return Math.max(c.change, c.stuff, c.control || 0, c.speed || 0); }));
 
   /* Calculate total score */
-  /* 라인업에 선 타자들의 강함 순위 — 배치가 바뀌면 여기부터 다시 계산된다.
-     빈 자리는 0점으로 두어 항상 꼴찌가 되게 한다. */
-  var batRanks = React.useMemo(function() {
-    return strRanks(lBats.map(function(x) { return x.pl ? calcBatSD(x.pl, x.slot).total : 0; }));
-  }, [lBats, sdState, players]);
-  /* 선발도 마찬가지 — 배율은 자리가 아니라 강함 순위를 따른다 */
+  /* 타자는 타순 가중치 v2(batShare — 능력치별 타순 가중치)라 강함 순위를 쓰지 않는다 (2026-11-21) */
+  /* 선발 배율은 자리가 아니라 강함 순위를 따른다 */
   var spRanks = React.useMemo(function() {
     return strRanks(lSP.map(function(x) { return x.pl ? calcPitSD(x.pl, x.slot).total : -1e9; }));
   }, [lSP, sdState, players]);
@@ -6819,8 +7243,9 @@ function LineupPage(p) {
      고점판독 중에는 고점 표가 새 기준으로만 있어 띄우지 않는다 */
   /* 중계 6명이 아닌 덱(4 · 5 · 7 · 8명)은 예전 계산에 없던 구성이라 구버전 점수를 띄우지 않는다 (2026-10-29 · 11-10) */
   var oldTotal = peakOn || rpSlotsNow.length !== 6 ? null : withScoreVer("v10", function () { return calcTotalWith(pick, sdCalc); });
-  /* 제구 미입력 투수 수 — 실제 선수 기준 (고점판독 중에는 고점 사본이라 띄우지 않는다) */
-  var ctlMissN = peakOn ? 0 : SP_SLOTS.concat(rpSlotsNow).concat(["CP"]).filter(function (s) { return ctlMissing(realPick(s)); }).length;
+  /* 점수 하락 안내 — 이 덱의 '예전 방식' TOTAL (신버전 점수 + 예전 타순 x 강함 순위 배율). 안내가 떠 있을 때만 센다. 차이가 없으면(타자가 없는 덱 등) 안 띄운다 */
+  var batwPrev = batwNote && !peakOn ? calcLineupTotal(pick, sdCalc, Object.assign({}, luOpts, { batOld: true })) : null;
+  if (batwPrev !== null && Math.abs(totalScore - batwPrev) < 0.05) batwPrev = null;
   /* 랭챌 예상 구간 — 라인업 21명이 다 차고, 모두 훈련(타자 파 · 정 · 선 · 인 / 투수 변 · 구 · 제)이 들어가 있을 때만 구간을 보여 준다.
      훈련은 0일 수 없어 0 이면 안 넣은 것 — 비어 있으면 TOTAL 이 낮게 나와 구간이 틀린다 (2026-10-22 사용자 지정: 인내가 빈 덱이 많다).
      포특 · 라커룸 · 특훈은 0 이 정상일 수 있어 보지 않는다. 불펜 국가대표 · 라이브 · 올스타는 훈련 셋이 모두 0 이면 '안 찍음'으로 통과 (rankTrainMissing 에 자리를 넘긴다, 10-23 · 11-04).
@@ -6830,8 +7255,13 @@ function LineupPage(p) {
   var rankRows = rankTiersOf(p.skills || SKILL_DATA);
   var lineupSlots = BAT_SLOTS.concat(SP_SLOTS, rpSlotsNow, ["CP"]);
   var lineupFull = lineupSlots.every(function (s) { return !!pick(s); });
-  var rankMiss = lineupFull ? lineupSlots.map(function (s) { var pl = realPick(s); return { slot: s, name: pl ? pl.name : "", miss: rankTrainMissing(pl, s) }; })
-    .filter(function (x) { return x.miss.length > 0; }) : [];
+  /* 훈련 미입력 — 알림 하나로 (2026-11-21 사용자 지정: 훈련 · 제구 · 구속 미입력을 합침). 라인업이 다 차면 '랭챌 예상' 칸이,
+     덜 찼으면 TOTAL 아래가 '훈련 미입력 N명'을 띄운다. 마우스를 올리면 누가 어느 칸이 비었는지 */
+  var trainMissAll = lineupSlots.map(function (s) { var pl = realPick(s); return { slot: s, name: pl ? pl.name : "", miss: pl ? rankTrainMissing(pl, s, sdState) : [] }; })
+    .filter(function (x) { return x.miss.length > 0; });
+  var rankMiss = lineupFull ? trainMissAll : [];
+  var trainMissN = !peakOn && !lineupFull ? trainMissAll.length : 0;
+  var trainMissTip = trainMissAll.map(function (x) { return x.name + "(" + x.miss.join(" · ") + ")"; }).join(", ");
   /* 현실 총점은 내 덱 그대로의 선수와 버프로 */
   var realTotal = peakOn ? calcTotalWith(realPick, sdState) : totalScore;
   /* 내 실제 등수 — 이 덱의 기록(최근 것부터, 서버 sd_state.rankRec[덱id]). 적는 순간의 실제 TOTAL(고점판독 중이어도 실제 덱) · 예상 구간을 함께 남긴다 */
@@ -6895,26 +7325,33 @@ function LineupPage(p) {
   /* Batter row */
   /* 이 자리가 총점에 곱해지는 배율. 선수 점수는 본연의 값이라 배치를 바꿔도 그대로이므로,
      실제로 총점에 얼마로 들어가는지는 따로 적어준다. */
-  var slotWeight = function(slot, idx, isBat) {
-    if (isBat) return batMult(idx) * strMult(batRanks[idx]);
+  var slotWeight = function(slot, idx, isBat, calc) {
+    /* 타자 — 대표 가중치(몫 ÷ 선수 점수). 능력치마다 타순 가중치가 달라 선수 구성에 따라 조금씩 다르다 */
+    if (isBat) return batShare(calc, idx).w;
     if (slot === "CP") return CP_MULT;
     if (RP_ALL.indexOf(slot) >= 0) return getRPWeight(bpcIdx, slot, rpTacKey(sdState), rpOrd);
     return spMult(rpTactic(sdState), spRanks[idx]);
   };
   var fmtWt = function(w) { var t = w.toFixed(3); return t.charAt(t.length - 1) === "0" ? t.slice(0, -1) : t; };
-  var wtTag = function(slot, idx, isBat, total, center) {
-    var w = slotWeight(slot, idx, isBat);
+  var wtTag = function(slot, idx, isBat, total, center, calc) {
+    var w = slotWeight(slot, idx, isBat, calc);
     if (!w) return null;
-    var why = isBat
-      ? "타순 " + fmtWt(batMult(idx)) + " x 강함 " + fmtWt(strMult(batRanks[idx]))
-        + " (이 라인업에서 " + (batRanks[idx] + 1) + "번째로 강함) = " + fmtWt(w)
-      : SP_SLOTS.indexOf(slot) >= 0
+    if (isBat) {
+      /* 한 숫자로 보여 주고(지금처럼), 마우스를 올리면 타순별 가중치 한 줄 · 누르면 계산 풀이 창 (2026-11-21 사용자 지정) */
+      var sh = batShare(calc, idx);
+      var whyB = (idx + 1) + "번 타순 가중치 — " + BAT_ORDER_KEYS.map(function (k) { return BAT_ORDER_LABEL[k] + " " + batOrderW(k, idx).toFixed(2); }).join(" · ")
+        + ". 이 선수의 능력치 · 스킬 구성으로 합치면 ×" + fmtWt(w) + " — 총점에는 " + total.toFixed(1) + " x " + fmtWt(w) + " = " + sh.share.toFixed(1) + " 로 들어갑니다. 누르면 계산을 자세히 볼 수 있어요.";
+      return (<div title={whyB} role="button" aria-label={"타순 가중치 계산 보기"} onClick={function (e) { e.stopPropagation(); setWtOpen({ slot: slot, idx: idx }); }}
+        style={{ fontSize: 11, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, textAlign: center ? "center" : "inherit", cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 }}>
+        {"×" + fmtWt(w)}</div>);
+    }
+    var why = SP_SLOTS.indexOf(slot) >= 0
         ? "선발 중 " + (spRanks[idx] + 1) + "번째로 강해서 배율 " + fmtWt(w)
-          + " (가장 센 선발 " + fmtWt(spMult(rpTactic(sdState), 0))
-          + " · 가장 약한 선발 " + fmtWt(spMult(rpTactic(sdState), SP_SLOTS.length - 1)) + ")"
-        : RP_ALL.indexOf(slot) >= 0
-          ? rpTagOf(slot).full + " 등판이라 배율 " + fmtWt(w) + " (배율은 자리가 아니라 등판 차례에 붙습니다. 포지션 특훈은 " + slot + " 자리 것)"
-          : "이 자리의 배율은 " + fmtWt(w);
+        + " (가장 센 선발 " + fmtWt(spMult(rpTactic(sdState), 0))
+        + " · 가장 약한 선발 " + fmtWt(spMult(rpTactic(sdState), SP_SLOTS.length - 1)) + ")"
+      : RP_ALL.indexOf(slot) >= 0
+        ? rpTagOf(slot).full + " 등판이라 배율 " + fmtWt(w) + " (배율은 자리가 아니라 등판 차례에 붙습니다. 포지션 특훈은 " + slot + " 자리 것)"
+        : "이 자리의 배율은 " + fmtWt(w);
     return (<div title={why + ". 총점에는 " + total.toFixed(1) + " x " + fmtWt(w) + " = " + (total * w).toFixed(1) + " 로 들어갑니다."}
       style={{ fontSize: 11, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, textAlign: center ? "center" : "inherit", cursor: "help" }}>
       {"×" + fmtWt(w)}</div>);
@@ -6970,9 +7407,9 @@ function LineupPage(p) {
               </div>
             </div>)}
           </div>
-          {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} />{wtTag(slot, idx, true, calc.total, true)}</div>) : null}
+          {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} />{wtTag(slot, idx, true, calc.total, true, calc)}</div>) : null}
           {!mob && (<React.Fragment>
-            <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} />{wtTag(slot, idx, true, calc.total, false)}</div>
+            <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} />{wtTag(slot, idx, true, calc.total, false, calc)}</div>
             <StatBox max={batBarMax} items={[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]]} />
             <div title={"훈련 (파·정 / 선·인)"} style={{ minWidth: 0 }}>
               <NumBox items={[[pl.trainP || 0, "#EF5350"], [pl.trainA || 0, "#42A5F5"], [pl.trainE || 0, "#66BB6A"], [pl.trainN || 0, "#FFA726"]]} />
@@ -7108,15 +7545,15 @@ function LineupPage(p) {
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
             {mob && (<div style={{ marginTop: 3, display: "flex", flexDirection: "column", gap: 2 }}>
-              <StatBox mini={true} cols={4} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"]]} />
+              <StatBox mini={true} cols={4} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"], ["속", calc.speed || 0, VEL_COLOR]]} />
               <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
                 {[1,2,3].map(function(k){ var nm = pl["skill" + k]; if(!nm) return null;
                   var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
                   return (<MiniSk key={k} name={nm} lv={effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), cardLvType(pl), k, pcat, (sdState["pts_" + slot] || []))} />); })}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <span title={ctlMissing(pl) ? CTL_MISS_TIP : undefined}><MiniLine label="훈" value={ctlMissing(pl) ? (<React.Fragment>{(pl.trainC||0) + "·" + (pl.trainS||0) + "·"}<span style={{ color: CTL_MISS_COLOR, fontWeight: 800 }}>{"?"}</span></React.Fragment>) : [pl.trainC||0, pl.trainS||0, pl.trainCtl||0].join("·")} /></span>
-                <MiniLine label="특" value={[pl.specChange||0, pl.specStuff||0, pl.specControl||0].join("·")} />
+                <span title={ctlMissing(pl) ? CTL_MISS_TIP : undefined}><MiniLine label="훈" value={ctlMissing(pl) ? (<React.Fragment>{(pl.trainC||0) + "·" + (pl.trainS||0) + "·"}<span style={{ color: CTL_MISS_COLOR, fontWeight: 800 }}>{"?"}</span>{"·" + (velMissing(pl, sdState) ? "?" : (pl.trainVel||0))}</React.Fragment>) : [pl.trainC||0, pl.trainS||0, pl.trainCtl||0, velMissing(pl, sdState) ? "?" : (pl.trainVel||0)].join("·")} /></span>
+                <MiniLine label="특" value={[pl.specChange||0, pl.specStuff||0, pl.specControl||0, pl.specVel||0].join("·")} />
                 <MiniLine label="스" value={calc.skillScore || 0} bold={true} />
                 <span style={{ display: "inline-flex", gap: 4, fontSize: 11, fontFamily: "var(--m)" }}>
                   <PotVal label="장" grade={pl.pot1} /><PotVal label="침" grade={pl.pot2} />
@@ -7128,12 +7565,12 @@ function LineupPage(p) {
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
             <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, false)}</div>
-            <StatBox barH={8} max={pitBarMax} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"]]} />
-            <div title={ctlMissing(pl) ? "훈련 (변·구·제) — " + CTL_MISS_TIP : "훈련 (변·구·제)"} style={{ minWidth: 0, cursor: ctlMissing(pl) ? "help" : undefined }}>
-              <NumBox items={[[pl.trainC || 0, "#AB47BC"], [pl.trainS || 0, "#FF7043"], ctlMissing(pl) ? ["?", CTL_MISS_COLOR] : [pl.trainCtl || 0, "#26A69A"]]} />
+            <StatBox barH={8} max={pitBarMax} items={[["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"], ["속", calc.speed || 0, VEL_COLOR]]} />
+            <div title={ctlMissing(pl) ? "훈련 (변·구·제·속) — " + CTL_MISS_TIP : velMissing(pl, sdState) ? "훈련 (변·구·제·속) — " + VEL_MISS_TIP : "훈련 (변·구·제·속)"} style={{ minWidth: 0, cursor: (ctlMissing(pl) || velMissing(pl, sdState)) ? "help" : undefined }}>
+              <NumBox items={[[pl.trainC || 0, "#AB47BC"], [pl.trainS || 0, "#FF7043"], ctlMissing(pl) ? ["?", CTL_MISS_COLOR] : [pl.trainCtl || 0, "#26A69A"], velMissing(pl, sdState) ? ["?", CTL_MISS_COLOR] : [pl.trainVel || 0, VEL_COLOR]]} />
             </div>
-            <div title={"특훈 (변·구·제)"} style={{ minWidth: 0 }}>
-              <NumBox items={[[pl.specChange || 0, "#AB47BC"], [pl.specStuff || 0, "#FF7043"], [pl.specControl || 0, "#26A69A"]]} />
+            <div title={"특훈 (변·구·제·속)"} style={{ minWidth: 0 }}>
+              <NumBox items={[[pl.specChange || 0, "#AB47BC"], [pl.specStuff || 0, "#FF7043"], [pl.specControl || 0, "#26A69A"], [pl.specVel || 0, VEL_COLOR]]} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }}>
               {[1,2,3].map(function(k){
@@ -7184,8 +7621,8 @@ function LineupPage(p) {
             {RP_ALL.indexOf(slot) >= 0 && rpPickBox(slot)}
             <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"강화"}</div><select value={pl.enhance||""} onChange={function(e){updatePl(pl.id,"enhance",e.target.value);}} style={{ padding: "3px 4px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", outline: "none" }}>{["5강","6강","7강","8강","9강","10강","1각성","2각성","3각성","4각성","5각성","6각성","7각성","8각성","9각성"].map(function(e){return(<option key={e} value={e} style={{background:"#1e293b",color:"#e2e8f0"}}>{e}</option>);})}</select></div>
             {pl.cardType==="임팩트"&&pl.impactType&&(<div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"종류"}</div><span style={{ fontSize: 15, color: "#7D3C98", fontWeight: 700 }}>{pl.impactType}</span></div>)}
-            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}<span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "trainCtl", pl.trainCtl, ctlMissing(pl) ? CTL_MISS_COLOR : "#26A69A")}{ctlMissing(pl) && (<span title={CTL_MISS_TIP} style={{ fontSize: 11, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", cursor: "help" }}>{"미입력"}</span>)}</div></div>
-            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}<span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "specControl", pl.specControl, "#26A69A", 15)}</div></div>
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"훈련"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}<span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "trainCtl", pl.trainCtl, ctlMissing(pl) ? CTL_MISS_COLOR : "#26A69A")}<span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "trainVel", pl.trainVel, velMissing(pl, sdState) ? CTL_MISS_COLOR : VEL_COLOR)}{(ctlMissing(pl) || velMissing(pl, sdState)) && (<span title={ctlMissing(pl) ? CTL_MISS_TIP : VEL_MISS_TIP} style={{ fontSize: 11, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", cursor: "help" }}>{"미입력"}</span>)}</div></div>
+            <div><div style={{ fontSize: 14, color: "var(--td)", marginBottom: 4 }}>{"특훈(0~15)"}</div><div style={{ display: "flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}<span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}<span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "specControl", pl.specControl, "#26A69A", 15)}<span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "specVel", pl.specVel, VEL_COLOR, 15)}</div></div>
             
             <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 3 }}>{"잠재력"}</div><div style={{ display: "flex", gap: 3 }}><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType1||"장타억제"} onChange={function(e){updatePl(pl.id,"potType1",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot1||""} onChange={function(e){updatePl(pl.id,"pot1",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:12,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><select value={pl.potType2||"침착"} onChange={function(e){updatePl(pl.id,"potType2",e.target.value);}} style={{padding:"1px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#FFD54F",fontSize:8,outline:"none",width:52,marginBottom:1}}>{POT_TYPES_PIT.map(function(t){return(<option key={t} value={t}>{t}</option>);})}</select><select value={pl.pot2||""} onChange={function(e){updatePl(pl.id,"pot2",e.target.value);}} style={{padding:"2px 2px",background:"#1e293b",border:"1px solid #334155",borderRadius:3,color:"#e2e8f0",fontSize:12,outline:"none",width:52}}><option value="">-</option>{POT_GRADES.map(function(g){return (<option key={g} value={g}>{g}</option>);})}</select></div></div></div>
             <div><div style={{ fontSize: 11, color: "var(--td)", marginBottom: 3 }}>{"스킬 ("+getSkillCat(pl)+")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{skillInput(pl,1)}{skillInput(pl,2)}{skillInput(pl,3)}</div></div>
@@ -7212,7 +7649,7 @@ function LineupPage(p) {
       var pl = pick(sl); if (!pl) return null;
       var c = calcPitSD(pl, sl);
       var pcat = skillCatOf(pl);
-      return { left: sl, name: pl.name, ct: pl.cardType, vals: [c.change, c.stuff, c.control || 0, ""],
+      return { left: sl, name: pl.name, ct: pl.cardType, vals: [c.change, c.stuff, c.control || 0, c.speed || 0],
         sk: c.skillScore, skPct: shareSkillPct(pl, pcat, sl, sdState["pts_" + sl]),
         enh: shareEnh(pl),
         tr: Math.round(shareTrainScore(pl) * 10) / 10, trPct: shareTrainPct(pl),
@@ -7275,9 +7712,9 @@ function LineupPage(p) {
             {mob && (<div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>{shareBtn}{peakBtn}</div>)}
           </div>
           <p title={"가중치 — 파워 " + wNow.p + " / 정확 " + wNow.a + " / 선구 " + wNow.e + " / 인내 " + wNow.n
-              + " · 선발 변화 " + wSp.c + " / 구위 " + wSp.s + " / 제구 " + wSp.ctl + " · 불펜 변화 " + wRp.c + " / 구위 " + wRp.s + " / 제구 " + wRp.ctl}
+              + " · 선발 변화 " + wSp.c + " / 구위 " + wSp.s + " / 제구 " + wSp.ctl + " / 구속 " + (wSp.vel || 0) + " · 불펜 변화 " + wRp.c + " / 구위 " + wRp.s + " / 제구 " + wRp.ctl + " / 구속 " + (wRp.vel || 0)}
             style={{ margin: "2px 0 0", fontSize: 12, color: "var(--td)" }}>{"가중치: 파 " + wNow.p + " / 정 " + wNow.a + " / 선 " + wNow.e + " / 인 " + wNow.n
-              + " · 선발 변 " + wSp.c + " / 구 " + wSp.s + " / 제 " + wSp.ctl + " · 불펜 변 " + wRp.c + " / 구 " + wRp.s + " / 제 " + wRp.ctl}</p>
+              + " · 선발 변 " + wSp.c + " / 구 " + wSp.s + " / 제 " + wSp.ctl + (velWeighted() ? " / 속 " + (wSp.vel || 0) : "") + " · 불펜 변 " + wRp.c + " / 구 " + wRp.s + " / 제 " + wRp.ctl + (velWeighted() ? " / 속 " + (wRp.vel || 0) : "")}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: mob ? 10 : 16, width: mob ? "100%" : undefined }}>
           {!mob && p.onIn100 && <In100Btn isNew={p.in100New} onClick={p.onIn100} />}
@@ -7289,15 +7726,20 @@ function LineupPage(p) {
             <GS val={totalScore.toFixed(1)} size={mob ? 28 : 36} grad="linear-gradient(135deg,#FFD54F,#FF8F00,#F44336)" />
             {oldTotal !== null && (<div title={"구버전 점수 — 같은 덱을 제구 반영 업데이트(2026년 10월) 전 계산으로 센 점수예요. 비교할 수 있게 당분간 같이 보여 드려요."}
               style={{ fontSize: 12, color: "var(--td)", fontFamily: "var(--m)", marginTop: 1, cursor: "help" }}>{"구버전 " + oldTotal.toFixed(1)}</div>)}
-            {ctlMissN > 0 && (<div title={"투수 " + ctlMissN + "명의 제구 훈련이 비어 있어 TOTAL 이 실제보다 낮게 나와요. 주황색 '?' 가 있는 투수를 눌러 제구를 넣어 주세요."}
-              style={{ fontSize: 12, color: CTL_MISS_COLOR, fontWeight: 700, marginTop: 2, cursor: "help" }}>{"제구 미입력 " + ctlMissN + "명"}</div>)}
+            {trainMissN > 0 && (<div title={"훈련이 빈 선수 — " + trainMissTip + ". 훈련은 0일 수 없어서 비어 있으면 TOTAL 이 실제보다 낮게 나와요. 주황색 '?' 가 있는 칸을 넣어 주세요."}
+              style={{ fontSize: 12, color: CTL_MISS_COLOR, fontWeight: 700, marginTop: 2, cursor: "help" }}>{"훈련 미입력 " + trainMissN + "명"}</div>)}
             {peakOn && (<div style={{ fontSize: 12, color: "var(--td)", fontFamily: "var(--m)" }}>{"현실 " + realTotal.toFixed(1) + " "}<span style={{ color: "#4ade80", fontWeight: 700 }}>{(totalScore >= realTotal ? "+" : "") + (totalScore - realTotal).toFixed(1)}</span></div>)}
           </div>
           {mob && rankTile}
         </div>
       </div>
+      {batwPrev !== null && (<BatWtNotice mobile={mob} prev={batwPrev} now={totalScore}
+        onMore={function () { setBatwMore(true); }} onClose={function () { batwNoteHide(); setBatwNote(false); setBatwMore(false); }} />)}
+      {batwMore && batwPrev !== null && (<BatWtNoticeModal mobile={mob} prev={batwPrev} now={totalScore} onClose={function () { setBatwMore(false); }} />)}
       {blView && (<BestLineupModal mobile={mob} view={blView} lm={lm} plOf={function (id) { var x = byId(id); return x ? (mergePl(x) || x) : null; }}
         onApply={applyBest} onClose={function () { setBlView(null); }} />)}
+      {wtOpen && (function () { var x = lBats[wtOpen.idx]; if (!x || !x.pl || x.slot !== wtOpen.slot) return null;
+        return (<BatWeightModal mobile={mob} idx={wtOpen.idx} name={x.pl.name} calc={calcBatSD(x.pl, x.slot)} onClose={function () { setWtOpen(null); }} />); })()}
       {rankOpen && lineupFull && (<RankTierModal mobile={mob} rows={rankRows} score={totalScore} peak={peakOn} miss={rankMiss}
         rec={rankRec} real={realTotal} onSaveRec={saveRankRec} onDelRec={delRankRec}
         skills={p.skills} saveSkills={p.saveSkills} isAdmin={p.isAdmin} onClose={function () { setRankOpen(false); }} />)}
@@ -7350,15 +7792,15 @@ function LineupPage(p) {
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="선발 로테이션" icon="🔥" count={spPl.length + "/5"} color="#AB47BC" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="선발" stat="변화·구위·제구" />)}{lSP.map(function(x, i) { return pitRow(x.slot, x.pl, i); })}</div>
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="선발" stat="변·구·제·속" />)}{lSP.map(function(x, i) { return pitRow(x.slot, x.pl, i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="중계진" icon="💪" count={rpPl.length + "/" + rpSlotsNow.length} color="#42A5F5" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="중계" stat="변화·구위·제구" />)}{rpAp.seq.map(function(s, i) { return pitRow(s, pick(s), i); })}</div>
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="중계" stat="변·구·제·속" />)}{rpAp.seq.map(function(s, i) { return pitRow(s, pick(s), i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
         <SH title="마무리" icon="🔒" count={cpPl.length + "/1"} color="#EF5350" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="마무리" stat="변화·구위·제구" />)}{pitRow("CP", lCP.pl, 0)}</div>
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="마무리" stat="변·구·제·속" />)}{pitRow("CP", lCP.pl, 0)}</div>
       </div>
 
       {/* 후보선수 */}
@@ -7416,8 +7858,13 @@ function LineupPage(p) {
       <SetDeckPanel open={sdOpen} onClose={function() { setSdOpen(false); }} mobile={mob}
         setPoint={setPoint} liveSetPo={sdState.liveSetPo || 0}
         sdState={sdState} setSdState={setSdState} players={players} lineupMap={lm}
-        /* 자동 최적화가 쓰는 총점 — 화면에 보이는 총점과 같은 식이어야 한다 (타순 x 강함, 선발·중계 배율) */
-        totalScoreOf={function(sd) { return calcTotalWith(realPick, sd); }}
+        /* 자동 최적화가 쓰는 총점 — 화면에 보이는 총점과 같은 식이어야 한다 (타자 타순 가중치, 선발·중계 배율) */
+        totalScoreOf={function(sd) {
+          /* 리더 영향력 (2026-11-25) — 리더 본인 능력치가 세트덱 구간에 따라 바뀌어, 받는 선수의 영향력도 달라진다.
+             리더 레벨이 5 이상이면 후보 설정마다 리더 값(_lead)을 다시 센다 (지금 설정의 리더 값으로 세면 손해 보는 구간을 고른다) */
+          if (sd && ((sd.capBatId && leaderLv(sd.capLv) >= 5) || (sd.capPitId && leaderLv(sd.capPitLv) >= 5))) { var s2 = Object.assign({}, sd); computeLineupSetDeck(realPick, s2); return calcTotalWith(realPick, s2); }
+          return calcTotalWith(realPick, sd);
+        }}
         lineupPlayers={BAT_SLOTS.concat(SP_SLOTS, rpSlotsNow, ["CP"]).map(function(s) { return { slot: s, pl: realPick(s) }; })} />
 
       {/* Player Selector Popup */}
@@ -7431,7 +7878,8 @@ function LineupPage(p) {
 
 /* Position training: cumulative stat gains per level (from Excel)
    투수 자리 제구(2026-10-21): 게임 '포지션별 능력치표' 캡처에서 옮겼다 — 같은 캡처의 변화 · 구위가 14자리 모두 이 표와 같았다.
-   RP7 · RP8 자리는 반영 보류 (표는 RP5 와 같다) */
+   RP7 · RP8 자리는 반영 보류 (표는 RP5 와 같다)
+   투수 자리 구속(2026-11-20): 같은 사진(10-21 MYBOX 9, 14장)의 구속 칸 — 구속은 재설정이 없다(in100 3시즌 Lv20 값이 늘 같음) */
 var POS_TRAIN = {
   "C":  {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,3,3,4,4,4,5,5,7],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,6,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,4,4,6,6,7,7]},
   "1B": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,3,3,4,4,4,4,5,6,6,8],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,5,6,6,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,4,5,5,6,7,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,4,4,4,5,5,6,6]},
@@ -7442,21 +7890,21 @@ var POS_TRAIN = {
   "CF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,2,2,2,3,3,4],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,5,5,5,6,6],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,3,3,4,4,5,5]},
   "RF": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,2,2,2,3,3,3,4,4,5],"정확":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,6,6,6],"선구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,4,4,5,5,5,6,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,3,3,4,4,5,5]},
   "DH": {mx:20,"파워":[0,0,0,0,0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,7],"정확":[0,1,1,1,1,1,1,1,2,2,3,3,3,3,4,5,5,6,7,7,7],"선구":[0,0,0,0,1,1,1,1,1,1,1,1,2,3,3,3,5,5,5,7,7],"인내":[0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,4,6,6,7,7]},
-  "SP1":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,5,5,5,6,6,8,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,3,4,4,4,5,6]},
-  "SP2":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,2,3,3,3,4,4,4,6,6]},
-  "SP3":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,3,3,3,3,3,3,4,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,4,6,6,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,4,5,5,5,6,7]},
-  "SP4":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,3,4,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,4,5,5,6,6]},
-  "SP5":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,4,4,4,4,6,6,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,4,4,6,6,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,3,5,5,5,6,6]},
-  "RP1":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,4,4,6],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,5,5,5,6,7,8,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,4,5,5,6,6]},
-  "RP2":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,6,7],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,4,4,5,6,6,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,2,3,3,3,4,4,5,6,6]},
-  "RP3":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,4,4,4,5,5,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,4,5,5,5,6,6]},
-  "RP4":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,5,5,6,6,7,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,7,7]},
-  "RP5":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
-  "RP6":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
+  "SP1":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,5,5,5,6,6,8,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,3,4,4,4,5,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,6,6,6,6]},
+  "SP2":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,3,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,2,3,3,3,4,4,4,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,3,3,3,4,5,5,6,7,7,7]},
+  "SP3":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,3,3,3,3,3,3,4,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,4,6,6,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,4,5,5,5,6,7],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,6,6,6]},
+  "SP4":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,3,4,4,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,4,5,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,4,4,5,5,5,6]},
+  "SP5":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,4,4,4,4,6,6,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,4,4,6,6,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,3,5,5,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,2,3,3,4,4,5,5,6,6]},
+  "RP1":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,4,4,6],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,5,5,5,6,7,8,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,4,5,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,3,3,3,3,4,5,6,6,7,7]},
+  "RP2":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,6,7],"구위":[0,0,1,1,1,1,1,2,2,2,3,3,3,3,4,4,5,6,6,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,2,3,3,3,4,4,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,3,3,3,4,4,6,6,6,7]},
+  "RP3":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,2,4,4,4,5,5,7,7],"제구":[0,0,0,0,1,1,1,1,1,1,2,2,3,3,3,4,5,5,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,2,3,3,4,4,6,6,6,6]},
+  "RP4":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,2,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,3,3,4,5,5,6,6,7,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,7,7],"구속":[0,1,1,1,1,1,1,1,2,2,3,3,3,3,3,4,4,6,6,6,6]},
+  "RP5":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,5,5]},
+  "RP6":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,5,5]},
   /* RP7 · RP8 — 중계 7 · 8명 (2026-10-29). 인게임 표(10-21 사진)에서 변화 · 구위 · 제구 모두 RP5 · RP6 과 같은 값 */
-  "RP7":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
-  "RP8":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6]},
-  "CP": {mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,6,7,8,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,5,5,5,6,6]},
+  "RP7":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,5,5]},
+  "RP8":{mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,3,3,3,5,5,6],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,5,5,6,7],"제구":[0,0,0,0,1,1,1,1,1,1,1,2,3,3,3,3,5,5,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,2,2,2,2,3,4,4,5,5,5,5]},
+  "CP": {mx:20,"변화":[0,0,0,0,0,0,1,1,1,1,2,3,3,3,3,4,4,4,5,5,7],"구위":[0,0,1,1,1,1,1,2,2,2,2,2,2,3,4,4,4,6,7,8,8],"제구":[0,0,0,0,1,1,1,1,1,1,1,1,3,3,3,3,5,5,5,6,6],"구속":[0,1,1,1,1,1,1,1,2,2,3,3,3,3,4,5,5,6,6,7,7]},
 };
 var RS_OPTS = ["0","1","2","3","4","5","6"];
 
@@ -7485,6 +7933,12 @@ function PosTrainRow(rp) {
         var arr = pt[stat] || [];
         var base = lv < arr.length ? arr[lv] : (arr[arr.length - 1] || 0);
         var reset = d["r" + i] || 0;
+        /* 구속은 재설정이 없다 (2026-11-20 — in100 3시즌 Lv20 값이 늘 같음) → 레벨 값만 */
+        if (stat === "구속") return (
+          <div key={stat} title={"구속은 재설정이 없어요 — 레벨 값만 들어가요"} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 13, color: colors[i], fontFamily: "var(--m)", fontWeight: 800 }}>{base}</span>
+          </div>
+        );
         return (
           <div key={stat} style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "center" }}>
             <span style={{ fontSize: 12, color: colors[i], fontFamily: "var(--m)", fontWeight: 800 }}>{base}</span>
@@ -7548,9 +8002,9 @@ function PosTrainPage(p) {
   var setSdState = p.setSdState;
   var groups = [
     { label: "타자", cat: "타자", poss: ["C","1B","2B","3B","SS","LF","CF","RF","DH"], stats: ["파워","정확","선구","인내"], colors: ["#EF5350","#42A5F5","#66BB6A","#FFA726"] },
-    { label: "선발", cat: "선발", poss: ["SP1","SP2","SP3","SP4","SP5"], stats: ["변화","구위","제구"], colors: ["#AB47BC","#FF7043","#26A69A"] },
-    { label: "중계", cat: "중계", poss: RP_ALL, stats: ["변화","구위","제구"], colors: ["#AB47BC","#FF7043","#26A69A"], note: "RP7 · RP8 은 중계 7 · 8명일 때 써요" },
-    { label: "마무리", cat: "마무리", poss: ["CP"], stats: ["변화","구위","제구"], colors: ["#AB47BC","#FF7043","#26A69A"] },
+    { label: "선발", cat: "선발", poss: ["SP1","SP2","SP3","SP4","SP5"], stats: ["변화","구위","제구","구속"], colors: ["#AB47BC","#FF7043","#26A69A",VEL_COLOR] },
+    { label: "중계", cat: "중계", poss: RP_ALL, stats: ["변화","구위","제구","구속"], colors: ["#AB47BC","#FF7043","#26A69A",VEL_COLOR], note: "RP7 · RP8 은 중계 7 · 8명일 때 써요" },
+    { label: "마무리", cat: "마무리", poss: ["CP"], stats: ["변화","구위","제구","구속"], colors: ["#AB47BC","#FF7043","#26A69A",VEL_COLOR] },
   ];
   /* Init posTrain in sdState if missing */
   var ptKey = function(pos) { return "pt_" + pos; };
@@ -7604,7 +8058,7 @@ function PosTrainPage(p) {
             <div style={{ display: "grid", gridTemplateColumns: (mob ? "54px 44px " : "70px 56px ") + grp.stats.map(function() { return "minmax(74px,1fr)"; }).join(" "), gap: 6, padding: "6px 14px", borderBottom: "1px solid var(--bd)", fontSize: 11, fontWeight: 700, color: "var(--td)", minWidth: "max-content" }}>
               <div>{"포지션"}</div>
               <div style={{ textAlign: "center" }}>{"레벨"}</div>
-              {grp.stats.map(function(s, i) { return (<div key={s} style={{ textAlign: "center", color: grp.colors[i], whiteSpace: "nowrap" }}>{s + (mob ? "" : " (기본+재설정)")}</div>); })}
+              {grp.stats.map(function(s, i) { return (<div key={s} style={{ textAlign: "center", color: grp.colors[i], whiteSpace: "nowrap" }}>{s + (mob ? "" : s === "구속" ? " (재설정 없음)" : " (기본+재설정)")}</div>); })}
             </div>
             {grp.poss.map(function(pos, idx) {
               /* 스킬 목록 · 메이저 구분은 지금 점수 기준의 표(신버전)에서 (2026-10-22) */
@@ -7673,6 +8127,7 @@ function PolicyModal(p) {
           <li>{"서비스 이용 데이터: 구성한 덱 정보, 선수 카드 정보, 강화 수치, 스킬 설정 등 게임과 관련된 데이터"}</li>
           <li>{"랭킹챌린지 등수를 직접 적은 경우: 그 등수 · 풀갱 여부 · 적을 때의 덱 점수와 날짜. 다른 이용자에게는 보이지 않고, 예상 구간을 실제 등수에 맞게 고치는 통계에만 씁니다. 언제든 고치거나 지울 수 있습니다."}</li>
           <li>{"고객센터 이용 시: 작성한 글의 닉네임 · 제목 · 내용 · 첨부 사진, 그리고 오류 제보의 '기기 정보 같이 보내기'를 켜 둔 경우 기기 정보(브라우저 · 운영체제 · 화면 크기 · 화면 모드 · 사이트 버전). 이 칸은 처음에 켜져 있으며 글쓰기 화면에서 끌 수 있습니다"}</li>
+          <li>{"게임 계정 인증 · 덱 최신화를 신청한 경우: 게임 닉네임 · 구단 · 인증 캡처 1장, 그리고 운영자가 게임 안에서 그 닉네임의 프로필로 읽은 덱 정보(카드 · 훈련 · 강화 · 스킬 · 잠재 · 세트덱 설정 등)와 지난 시즌 랭킹챌린지 기록. 게임 비밀번호 같은 계정 정보는 받지 않습니다. 캡처는 운영자만 보고 심사 30일 뒤 지웁니다."}</li>
           <li>{"자동 수집: 브라우저 종류, 접속 시간, 쿠키 식별자 (일반적인 웹 로그)"}</li>
         </ul>
 
@@ -7684,6 +8139,7 @@ function PolicyModal(p) {
           <li>{"서비스 품질 개선을 위한 통계적 분석"}</li>
           <li>{"부정 이용 방지 및 보안 관리"}</li>
           <li>{"고객센터에 남긴 문의 · 오류 제보 · 건의의 확인과 답변"}</li>
+          <li>{"게임 계정 인증(본인 확인)과, 신청한 이용자의 게임 속 덱을 사이트 덱으로 옮겨 주는 '덱 최신화'"}</li>
         </ul>
 
         <h3 style={{ color: "#FFD54F", fontSize: 17, marginTop: 24, marginBottom: 10 }}>{"4. 제3자 서비스 사용"}</h3>
@@ -7877,7 +8333,7 @@ function LoginPage(p) {
 
   /* ── 기능 카드 데이터 ── */
   var features = [
-    { icon: "⚾", title: "라인업 구성", desc: "보유한 선수 카드를 자리마다 배치하고 타순은 끌어서 바꿀 수 있으며, 선발 · 중계 · 마무리와 불펜 전술(승리조 · 추격조)을 자유롭게 편성할 수 있습니다. 타순 · 강함 순위에 따른 배율이 실시간으로 계산됩니다." },
+    { icon: "⚾", title: "라인업 구성", desc: "보유한 선수 카드를 자리마다 배치하고 타순은 끌어서 바꿀 수 있으며, 선발 · 중계 · 마무리와 불펜 전술(승리조 · 추격조)을 자유롭게 편성할 수 있습니다. 타순 가중치와 투수 배율이 실시간으로 계산됩니다." },
     { icon: "👥", title: "선수 관리", desc: "보유 중인 모든 선수 카드를 한 곳에서 관리합니다. 이름으로 검색하면 기본 정보가 자동으로 채워지고, 강화 · 훈련 · 특훈 · 스킬 레벨 · 잠재력 등급을 세부적으로 입력할 수 있습니다." },
     { icon: "💪", title: "강화 계산", desc: "카드 종류(골든글러브 · 시그니처 · 임팩트 · 국가대표 · 라이브 · 올스타 · 시즌)와 강화 단계에 따라 자동으로 능력치 상승분이 계산됩니다. 5강부터 9각성까지 모든 단계의 수치가 내장되어 있어 정확한 전력 측정이 가능합니다." },
     { icon: "⭐", title: "잠재력 점수", desc: "C부터 SR+까지 12개 등급의 잠재력을 풀스윙·클러치·장타억제·침착 등 종류별로 구분하여 점수화합니다. 투수 장타억제·침착은 선발과 불펜(중계·마무리) 점수가 따로입니다. 잠재력만으로도 카드 간 우열을 판단할 수 있습니다." },
@@ -8309,11 +8765,15 @@ function AccountMenu(p){
   var google=p.authType==="google";
   var tip="계정 · 화면 모드 · 로그아웃";
   var BTN={display:"block",width:"100%",padding:"9px 10px",fontSize:13,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:6,cursor:"pointer",fontFamily:"inherit"};
+  /* 게임 계정 인증 — 도착한 덱(관리자는 심사 · 대기열)이 있으면 계정 단추에 빨간 점 */
+  var va=p.verifyAlerts||{};
+  var vDot=google&&!!p.onVerify&&((va.arrived||0)+(p.isAdmin?(va.review||0)+(va.queue||0):0))>0;
   return(
     <div style={{position:"relative",flexShrink:0}}>
       <button onClick={function(){setOpen(!open);}} title={tip} aria-label={tip} aria-expanded={open}
-        style={{marginLeft:2,padding:2,background:"var(--inner)",border:"1px solid "+(open?"var(--acc)":"var(--bd)"),borderRadius:"50%",cursor:"pointer",lineHeight:0,display:"flex"}}>
+        style={{position:"relative",marginLeft:2,padding:2,background:"var(--inner)",border:"1px solid "+(open?"var(--acc)":"var(--bd)"),borderRadius:"50%",cursor:"pointer",lineHeight:0,display:"flex"}}>
         <AcctAvatar user={p.user} authType={p.authType} size={24}/>
+        {vDot&&(<span aria-hidden="true" style={{position:"absolute",top:-2,right:-2,width:9,height:9,borderRadius:"50%",background:"#FF5A5A",boxShadow:"0 0 0 2px var(--side)"}}/>)}
       </button>
       {open&&(<React.Fragment>
         <div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,zIndex:299}}/>
@@ -8325,6 +8785,7 @@ function AccountMenu(p){
               <div style={{fontSize:10,color:"var(--td)"}}>{(google?"Google 계정":"게스트")+(p.isAdmin?" · 👑 관리자":"")}</div>
             </div>
           </div>
+          {google&&p.onVerify&&(<VerifyMenuButton alerts={va} isAdmin={p.isAdmin} round={6} style={{padding:"9px 10px",fontSize:13}} onClick={function(){setOpen(false);p.onVerify();}}/>)}
           <button onClick={p.toggleTheme} style={Object.assign({},BTN,{color:"var(--t2)",marginBottom:6})}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
           <button onClick={function(){setOpen(false);p.logout();}} style={Object.assign({},BTN,{color:"var(--t1)"})}>{"로그아웃"}</button>
           <div style={{marginTop:8,fontSize:10,lineHeight:1.5,color:"var(--td)"}}>{google?"다른 구글 계정으로 바꾸려면 로그아웃 뒤 다시 로그인하세요. 덱은 이 계정에 그대로 남아요.":"게스트로 넣은 선수 · 라인업은 저장되지 않아요."}</div>
@@ -8354,7 +8815,11 @@ function Nav(p){
     if(t.id==="board"&&p.boardDot){t.dot=true;t.dotTitle=p.boardDotTitle||"확인할 것이 있어요";}
     /* in100 새 판 — 데이터센터 메뉴에 NEW (누르면 in100 탭으로 바로, App 의 navTo) */
     if(t.id==="datacenter"&&p.in100New){t.isNew=true;t.newTitle="NEW — in100 덱 정보 (시즌 "+IN100_SEASON+")";}});
-  var anyDot=tabs.some(function(t){return t.dot;});
+  /* 게임 계정 인증 단추(메뉴 아래쪽) — 도착한 덱 · 관리자 심사가 있으면 빨간 점. 구글 로그인만 */
+  var va=p.verifyAlerts||{};
+  var showVerify=p.authType==="google"&&!!p.onVerify;
+  var verifyDot=showVerify&&((va.arrived||0)+(p.isAdmin?(va.review||0)+(va.queue||0):0))>0;
+  var anyDot=tabs.some(function(t){return t.dot;})||verifyDot;
   var deckProps={decks:p.decks||[],curDeckId:p.curDeckId,onSwitch:p.onSwitchDeck,onAdd:p.onAddDeck,onDelete:p.onDeleteDeck,onChangeTeam:p.onChangeTeam};
 
   if(p.mobile){return(
@@ -8364,7 +8829,7 @@ function Nav(p){
         <DeckDropdown {...deckProps}/>
         {p.onIn100 && <In100Btn bar isNew={p.in100New} ring="var(--side)" onClick={p.onIn100} />}
         <CoffeeLink kind="bar" onClick={p.onCoffee}/>
-        <AccountMenu user={p.user} authType={p.authType} isAdmin={p.isAdmin} theme={p.theme} toggleTheme={p.toggleTheme} logout={p.logout}/>
+        <AccountMenu user={p.user} authType={p.authType} isAdmin={p.isAdmin} theme={p.theme} toggleTheme={p.toggleTheme} logout={p.logout} verifyAlerts={p.verifyAlerts} onVerify={p.onVerify}/>
       </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"var(--side)",borderTop:"1px solid var(--bd)",display:"flex",padding:"6px 0 8px",paddingBottom:"calc(8px + env(safe-area-inset-bottom, 0px))"}}>
         {tabs.map(function(t){
@@ -8391,7 +8856,7 @@ function Nav(p){
         })}
         <div style={{marginTop:"auto",padding:"12px 16px",borderTop:"1px solid var(--bd)"}}>
           {p.isAdmin&&(<div style={{fontSize:11,color:"var(--acc)",marginBottom:8,padding:"4px 0"}}>{"👑 관리자"}</div>)}
-
+          {showVerify&&(<VerifyMenuButton alerts={va} isAdmin={p.isAdmin} onClick={function(){setOpen(false);p.onVerify();}}/>)}
           <button onClick={p.toggleTheme} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:6}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
           <button onClick={p.logout} style={{width:"100%",padding:7,fontSize:12,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
           <CoffeeLink kind="side" onClick={function(){setOpen(false);p.onCoffee();}}/>
@@ -8427,6 +8892,7 @@ function Nav(p){
           <div><div style={{fontSize:12,fontWeight:700,color:"var(--t1)"}}>{p.user}</div><div style={{fontSize:9,color:"var(--td)"}}>{p.authType==="google"?"Google 계정":"게스트"}</div></div>
         </div>
 
+        {showVerify&&(<VerifyMenuButton compact alerts={va} isAdmin={p.isAdmin} onClick={p.onVerify}/>)}
         <button onClick={p.toggleTheme} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--t2)",cursor:"pointer",marginBottom:4}}>{p.theme==="light"?"🌙 다크 모드":"☀️ 라이트 모드"}</button>
         <button onClick={p.logout} style={{width:"100%",padding:5,fontSize:11,background:"var(--inner)",border:"1px solid var(--bd)",borderRadius:4,color:"var(--td)",cursor:"pointer"}}>{"로그아웃"}</button>
         <CoffeeLink kind="side" onClick={p.onCoffee}/>
@@ -8455,7 +8921,7 @@ function EnhancePage(p){
               <th style={{padding:"8px 10px",textAlign:"left",color:"var(--td)",borderBottom:"1px solid var(--bd)",fontWeight:600}}>{"능력치"}</th>
               {hdrs.map(function(h){return(<th key={h} style={{padding:"8px 6px",textAlign:"center",color:"var(--td)",borderBottom:"1px solid var(--bd)",fontWeight:600,fontFamily:"var(--m)",fontSize:12,whiteSpace:"nowrap"}}>{h}</th>);})}
             </tr></thead>
-            <tbody>{stats.map(function(st,si){var arr=table[st];var sc={"파워":"#EF5350","정확":"#42A5F5","선구":"#66BB6A","변화":"#AB47BC","구위":"#FF7043","제구":"#26A69A"};return(
+            <tbody>{stats.map(function(st,si){var arr=table[st];var sc={"파워":"#EF5350","정확":"#42A5F5","선구":"#66BB6A","변화":"#AB47BC","구위":"#FF7043","제구":"#26A69A","구속":VEL_COLOR};return(
               <tr key={st}><td style={{padding:"6px 10px",color:sc[st]||"var(--t1)",fontWeight:700,borderBottom:"1px solid var(--bd)"}}>{st}</td>
               {hdrs.map(function(h,hi){return(<td key={h} style={{padding:"6px",textAlign:"center",fontFamily:"var(--m)",color:"var(--t1)",borderBottom:"1px solid var(--bd)",background:si%2===0?"var(--re)":"transparent"}}>{arr[hi+4]||0}</td>);})}</tr>
             );})}</tbody>
@@ -8500,6 +8966,101 @@ function LockerRoomPage(p) {
   var lineupAll = lineupBats.concat(lineupPits);
   var batCap = byId(batCapId);
   var pitCap = byId(pitCapId);
+
+  /* ── 리더 영향력 (2026-11-21) — 리더 레벨 · 열린 줄 · 이 덱에서 받는 선수 ── */
+  var capLv = leaderLv(sdState.capLv), capPitLv = leaderLv(sdState.capPitLv);
+  var LV_OPTS = []; for (var lvI = 0; lvI <= LEADER_MAX_LV; lvI++) LV_OPTS.push(lvI);
+  var LEAD_SHORT = { p: "파", a: "정", e: "선", n: "인", run: "주", def: "수", c: "변", s: "구", ctl: "제", vel: "속", sta: "지" };
+  var LEAD_NAME = { p: "파워", a: "정확", e: "선구", n: "인내", c: "변화", s: "구위", ctl: "제구", vel: "구속" };
+  var leadView = (function () {
+    var out = { srcBat: null, srcPit: null, rows: [] };
+    var pk = function (s) { var raw = byId(lm[s]); return raw ? deckPl(mergePl(raw) || raw, sdState) : null; };
+    var sdC = Object.assign({}, sdState);
+    var tsp = computeLineupSetDeck(pk, sdC);
+    var LD = sdC._lead; if (!LD) return out;
+    var order = (sdC.batOrder && sdC.batOrder.length === 9) ? sdC.batOrder : BAT_SLOTS;
+    var srcOf = function (id) { if (LD.bat && LD.bat.id === id) return LD.bat; for (var i = 0; i < LD.pit.length; i++) if (LD.pit[i].id === id) return LD.pit[i]; return null; };
+    out.srcBat = srcOf(batCapId); out.srcPit = pitCapId && pitCapId !== batCapId ? srcOf(pitCapId) : null;
+    BAT_SLOTS.concat(PIT_SLOTS).forEach(function (s) {
+      var pl = pk(s); if (!pl) return;
+      var bi = order.indexOf(s);
+      var b = calcSDBonus(pl, s, sdC, tsp, bi >= 0 ? bi : undefined);
+      if (b.leadMine) out.rows.push({ name: pl.name, slot: s, isBat: pl.role === "타자", mine: b.leadMine });
+    });
+    return out;
+  })();
+  /* ── 주장 · 투수 주장 추천 (2026-11-25 사용자 요청) ──
+     고를 수 있는 선수마다 그 선수를 리더로 세운 TOTAL 을 세어, 가장 높은 한 명에 ⭐ 추천.
+     리더 레벨 · 개인 보너스(레벨 표 값 또는 직접 넣은 값) · 다른 리더는 지금 그대로 두고 그 칸만 바꿔 센다.
+     한 선수가 주장과 투수 주장을 같이 맡는 조합은 추천하지 않는다(게임에선 따로 고른다).
+     라커룸 값이 바뀔 때마다 바로 세면 입력이 버벅여서 잠깐(0.35초) 뒤에 센다 */
+  var _capRec = useState(null); var capRec = _capRec[0]; var setCapRec = _capRec[1];
+  React.useEffect(function () {
+    var timer = setTimeout(function () {
+      try {
+        var pk = function (s) { var raw = byId(lm[s]); return raw ? deckPl(mergePl(raw) || raw, sdState) : null; };
+        var totalWith = function (key, id) { var sd2 = Object.assign({}, sdState); sd2[key] = id; var tsp = computeLineupSetDeck(pk, sd2); return calcLineupTotal(pk, sd2, lineupOpts(sd2, tsp)); };
+        var one = function (key, list, other) {
+          var cand = list.filter(function (pl) { return !other || pl.id !== other; });
+          if (!cand.length) return null;
+          var rows = cand.map(function (pl) { return { id: pl.id, name: pl.name, t: totalWith(key, pl.id) }; });
+          var none = totalWith(key, "");
+          var best = null; rows.forEach(function (r) { if (!best || r.t > best.t + 1e-9) best = r; });
+          var ties = rows.filter(function (r) { return Math.abs(r.t - best.t) < 0.05; }).length;
+          var curId = sdState[key] || "";
+          var cur = rows.filter(function (r) { return r.id === curId; })[0] || { id: curId, name: "", t: curId ? null : none };
+          return { best: ties === 1 && best.t > none + 0.05 ? best : null, cur: cur, flat: rows.length > 1 && ties === rows.length };
+        };
+        setCapRec({ bat: one("capBatId", lineupAll, sdState.capPitId), pit: one("capPitId", lineupPits, sdState.capBatId) });
+      } catch (e) { setCapRec(null); }
+    }, 350);
+    return function () { clearTimeout(timer); };
+  }, [players, lm, sdState]);
+  var recBest = function (side) { var r = capRec && capRec[side]; return r && r.best ? r.best.id : ""; };
+  /* 고르기 아래 한 줄 — 추천 선수 · 지금보다 오르는 TOTAL · 바꾸기 */
+  var recHint = function (r, who, key) {
+    if (!r) return null;
+    var line = { display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--t2)", margin: "-2px 0 8px", minHeight: 20 };
+    if (r.flat) return (<div style={Object.assign({}, line, { color: "var(--td)" })}>{"누구를 " + who + "으로 해도 TOTAL 이 같아요"}</div>);
+    if (!r.best) return null;
+    if (r.best.id === r.cur.id) return (<div style={Object.assign({}, line, { color: "var(--td)" })}><span style={{ color: "var(--acc)" }}>{"⭐"}</span>{"지금 " + who + "이 TOTAL 최고예요"}</div>);
+    var d = r.cur.t === null ? null : Math.round(r.best.t * 10) / 10 - Math.round(r.cur.t * 10) / 10;
+    return (<div style={line}>
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><span style={{ color: "var(--acc)", fontWeight: 700 }}>{"⭐ 추천 "}</span><b style={{ color: "var(--t1)" }}>{r.best.name}</b>{d === null ? "" : " · TOTAL +" + d.toFixed(1)}</span>
+      <button type="button" onClick={function () { upd(key, r.best.id); }} title={r.best.name + " 을(를) " + who + "으로 바꿔요"}
+        style={{ marginLeft: "auto", flexShrink: 0, padding: "2px 8px", fontSize: 11, fontWeight: 700, borderRadius: 6, border: "1px solid var(--acc)", background: "var(--ta)", color: "var(--acc)", cursor: "pointer", fontFamily: "inherit" }}>{"바꾸기"}</button>
+    </div>);
+  };
+  var LEAD_ORDER = ["p", "a", "e", "n", "run", "c", "s", "ctl", "vel", "sta", "def"];
+  var gainTxt = function (g) { return LEAD_ORDER.filter(function (k) { return g[k]; }).map(function (k) { return LEAD_SHORT[k] + "+" + g[k]; }).join(" "); };
+  /* 리더 한 명의 상자 — 열린 줄(레벨 5 · 10 · 15 · 20)과 이 덱에서 받는 선수 */
+  var leaderBox = function (src, side, lv, color) {
+    var recv = src ? leadView.rows.filter(function (r) { return r.isBat === (side === "타자"); }).map(function (r) {
+      return { name: r.name, slot: r.slot, g: leaderGains(side === "타자", r.mine, [src]) }; }).filter(function (r) { return Object.keys(r.g).length > 0; }) : [];
+    return (<div style={{ marginTop: 8, padding: "6px 8px", background: "var(--inner)", borderRadius: 6, fontSize: 12, color: "var(--t2)", lineHeight: 1.6 }}>
+      {LEADER_TABLE[side].map(function (r) { var on = lv >= r.lv; return (<div key={r.lv} style={{ opacity: on ? 1 : 0.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+        title={"Lv" + r.lv + " — 받는 선수의 " + LEAD_NAME[r.cmp] + "이 리더보다 6 · 11 · 16 · 21 이상 낮으면 " + r.gain.map(function (k) { return LEAD_SHORT[k]; }).join(" · ") + " 가 차례로 +1"}>
+        <b style={{ color: on ? color : "var(--td)", fontFamily: "var(--m)" }}>{"Lv" + r.lv}</b>{" " + LEAD_NAME[r.cmp] + " 비교 → " + r.gain.map(function (k) { return LEAD_SHORT[k]; }).join(" · ")}</div>); })}
+      <div style={{ marginTop: 4, color: "var(--td)" }}>{lv < 5 ? "리더 레벨 5부터 같은 쪽 선수에게 영향력이 붙어요" : !src ? "리더가 라인업에 없어요" : recv.length ? "받는 선수 " + recv.length + "명" : "받는 선수 없음 — 모두 리더와 차이가 6 미만이에요"}</div>
+      {recv.map(function (r) { return (<div key={r.slot} style={{ display: "flex", gap: 6 }}><span style={{ color: "var(--td)", fontFamily: "var(--m)", minWidth: 30 }}>{r.slot}</span><span style={{ color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span><span style={{ marginLeft: "auto", fontFamily: "var(--m)", color: color, whiteSpace: "nowrap" }}>{gainTxt(r.g)}</span></div>); })}
+    </div>);
+  };
+  var lvSelect = function (key, lv) {
+    return (<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+      <span style={{ fontSize: 12, color: "var(--td)" }}>{"리더 레벨"}</span>
+      <select value={String(lv)} onChange={function (e) { upd(key, parseInt(e.target.value, 10) || 0); }} style={{ padding: "3px 6px", fontSize: 13, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", fontFamily: "var(--m)", fontWeight: 700, outline: "none" }}>
+        {LV_OPTS.map(function (v) { return (<option key={v} value={v}>{v}</option>); })}
+      </select>
+      <span style={{ fontSize: 11, color: "var(--td)" }}>{lv >= 5 ? "영향력 " + Math.floor(lv / 5) + "줄" : "영향력은 5부터"}</span>
+    </div>);
+  };
+  /* 레벨 표에 그 레벨 값이 있으면 개인 보너스는 표 값(직접 입력 대신) */
+  var SELF_KEYS_BAT = [["p", "#EF5350"], ["a", "#42A5F5"], ["e", "#66BB6A"], ["n", "#FFA726"], ["run", "var(--td)"], ["def", "var(--td)"]];
+  var SELF_KEYS_PIT = [["c", "#AB47BC"], ["s", "#FF7043"], ["ctl", "#26A69A"], ["vel", VEL_COLOR], ["sta", "var(--td)"], ["def", "var(--td)"]];
+  var selfChips = function (b, keys) { return (<div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 12, fontFamily: "var(--m)", fontWeight: 700 }}>{keys.map(function (k) { return (<span key={k[0]} style={{ color: k[1] }}>{LEAD_SHORT[k[0]] + " +" + (b[k[0]] || 0)}</span>); })}</div>); };
+  var capSide = batCap && batCap.role !== "타자" ? "투수" : "타자";
+  var capSelf = leaderSelfBonus(capSide === "타자" ? "주장(타자)" : "주장(투수)", capLv);
+  var pitSelf = leaderSelfBonus("투수조장", capPitLv);
 
   var miniStat = function(label, color, key, val) {
     return (
@@ -8624,12 +9185,15 @@ function LockerRoomPage(p) {
           </div>
           <select value={batCapId} onChange={function(e) { upd("capBatId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
-            {lineupAll.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + " · " + (pl.role === "타자" ? (pl.subPosition || "타자") : (pl.position || "투수"))}</option>); })}
+            {lineupAll.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + " · " + (pl.role === "타자" ? (pl.subPosition || "타자") : (pl.position || "투수")) + (recBest("bat") === pl.id ? "  ⭐ 추천" : "")}</option>); })}
           </select>
+          {recHint(capRec && capRec.bat, "주장", "capBatId")}
           {batCap && (<div style={{ padding: "6px 8px", background: "var(--ta)", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={batCap.cardType} /><span style={{ fontWeight: 700, fontSize: 14, color: "var(--t1)" }}>{batCap.name}</span><span style={{ fontSize: 16, marginLeft: "auto" }}>{"👑"}</span></div>
           </div>)}
-          <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)"}</div>
+          {lvSelect("capLv", capLv)}
+          {capSelf ? (<React.Fragment><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 — 레벨 " + capLv + " 표 값"}</div>{selfChips(capSelf, capSide === "타자" ? SELF_KEYS_BAT : SELF_KEYS_PIT)}</React.Fragment>) : (<React.Fragment>
+          <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)" + (capLv > 0 ? " · 이 레벨은 표 값이 아직 없어 직접 넣어요" : "")}</div>
           <div style={{ display: "flex", gap: 6 }}>
             {(!batCap || batCap.role === "타자") ? (
               <React.Fragment>
@@ -8643,9 +9207,11 @@ function LockerRoomPage(p) {
                 {miniStat("변", "#AB47BC", "capBatC", sdState.capBatC)}
                 {miniStat("구", "#FF7043", "capBatS", sdState.capBatS)}
                 {miniStat("제", "#26A69A", "capBatCtl", sdState.capBatCtl)}
+                {miniStat("속", VEL_COLOR, "capBatVel", sdState.capBatVel)}
               </React.Fragment>
             )}
-          </div>
+          </div></React.Fragment>)}
+          {leaderBox(leadView.srcBat, capSide, capLv, "#FFD54F")}
         </div>
 
         {/* 투수 주장 */}
@@ -8653,20 +9219,26 @@ function LockerRoomPage(p) {
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
             <span style={{ fontSize: 16 }}>{"👑"}</span>
             <span style={{ fontSize: 15, fontWeight: 800, color: "var(--acp)", fontFamily: "var(--h)" }}>{"투수 주장"}</span>
+            <span style={{ fontSize: 11, color: "var(--td)" }}>{"게임의 투수조장"}</span>
           </div>
           <select value={pitCapId} onChange={function(e) { upd("capPitId", e.target.value); }} style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0", outline: "none", marginBottom: 8, boxSizing: "border-box" }}>
             <option value="">{"선택 안 함"}</option>
-            {lineupPits.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "")}</option>); })}
+            {lineupPits.map(function(pl) { return (<option key={pl.id} value={pl.id}>{pl.name + (pl.subPosition ? " (" + pl.subPosition + ")" : "") + (recBest("pit") === pl.id ? "  ⭐ 추천" : "")}</option>); })}
           </select>
+          {recHint(capRec && capRec.pit, "투수 주장", "capPitId")}
           {pitCap && (<div style={{ padding: "6px 8px", background: "rgba(206,147,216,0.06)", borderRadius: 6, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Badge type={pitCap.cardType} /><span style={{ fontWeight: 700, fontSize: 14, color: "var(--t1)" }}>{pitCap.name}</span><span style={{ fontSize: 16, marginLeft: "auto" }}>{"👑"}</span></div>
           </div>)}
-          <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)"}</div>
+          {lvSelect("capPitLv", capPitLv)}
+          {pitSelf ? (<React.Fragment><div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"투수 주장 능력치 보너스 — 레벨 " + capPitLv + " 표 값"}</div>{selfChips(pitSelf, SELF_KEYS_PIT)}</React.Fragment>) : (<React.Fragment>
+          <div style={{ fontSize: 12, color: "var(--td)", marginBottom: 4 }}>{"주장 능력치 보너스 (주장 본인에게만 적용)" + (capPitLv > 0 ? " · 이 레벨은 표 값이 아직 없어 직접 넣어요" : "")}</div>
           <div style={{ display: "flex", gap: 6 }}>
             {miniStat("변", "#AB47BC", "capPitC", sdState.capPitC)}
             {miniStat("구", "#FF7043", "capPitS", sdState.capPitS)}
             {miniStat("제", "#26A69A", "capPitCtl", sdState.capPitCtl)}
-          </div>
+            {miniStat("속", VEL_COLOR, "capPitVel", sdState.capPitVel)}
+          </div></React.Fragment>)}
+          {leaderBox(leadView.srcPit, "투수", capPitLv, "#CE93D8")}
         </div>
       </div>
 
@@ -8678,7 +9250,7 @@ function LockerRoomPage(p) {
           <span style={{ fontSize: 11, color: "var(--td)", marginLeft: 4 }}>{"(모든 선수 적용)"}</span>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {[{k:"uniP",l:"파워",c:"#EF5350"},{k:"uniA",l:"정확",c:"#42A5F5"},{k:"uniE",l:"선구",c:"#66BB6A"},{k:"uniN",l:"인내",c:"#FFA726"},{k:"uniC",l:"변화",c:"#AB47BC"},{k:"uniS",l:"구위",c:"#FF7043"},{k:"uniCtl",l:"제구",c:"#26A69A"}].map(function(s) {
+          {[{k:"uniP",l:"파워",c:"#EF5350"},{k:"uniA",l:"정확",c:"#42A5F5"},{k:"uniE",l:"선구",c:"#66BB6A"},{k:"uniN",l:"인내",c:"#FFA726"},{k:"uniC",l:"변화",c:"#AB47BC"},{k:"uniS",l:"구위",c:"#FF7043"},{k:"uniCtl",l:"제구",c:"#26A69A"},{k:"uniVel",l:"구속",c:VEL_COLOR}].map(function(s) {
             return (
               <div key={s.k} style={{ background: "var(--inner)", borderRadius: 6, padding: "8px 10px", border: "1px solid " + s.c + "22", textAlign: "center" }}>
                 <div style={{ fontSize: 11, color: s.c, fontWeight: 700, marginBottom: 4 }}>{s.l}</div>
@@ -9171,7 +9743,7 @@ function dexScore(sp, w) {
   return sp.role === "타자"
     ? ((sp.power || 0) + e("파워")) * w.p + ((sp.accuracy || 0) + e("정확")) * w.a
       + ((sp.eye || 0) + e("선구")) * w.e + ((sp.patience || 0) + e("인내")) * w.n
-    : pitStatScore(pitCatOf(sp), (sp.change || 0) + e("변화"), (sp.stuff || 0) + e("구위"), (sp.control || 0) + e("제구"));
+    : pitStatScore(pitCatOf(sp), (sp.change || 0) + e("변화"), (sp.stuff || 0) + e("구위"), (sp.control || 0) + e("제구"), (sp.speed || 0) + e("구속"));
 }
 /* 검색 인덱스. 창을 열 때 한 번만 만든다. */
 function buildDexIndex(list, w) {
@@ -9741,7 +10313,7 @@ function LabPage(p) {
       if (!changes.length) throw new Error("바꾼 자리가 없습니다. 카드를 바꾼 뒤 보내 주세요.");
       /* 바꾸기 전 점수도 연구소 잣대(세 티어)로 다시 센다 — 내 덱 요약본의 TOTAL 과는 잣대가 달라 견줄 수 없다 */
       /* 점수 기준(sv)이 다른 옛 덱이면 그 점수를 쓰지 않고 지금 기준으로 다시 센다 — 제구 반영(v1.1) 전후 점수를 빼면 안 된다 */
-      var before = base.src === "lab" && base.scores && base.sv === SCORE_VER ? base.scores : clubLabDeck(base.team, base.slots, "").scores;
+      var before = base.src === "lab" && base.scores && base.sv === scoreTag() ? base.scores : clubLabDeck(base.team, base.slots, "").scores;
       return p.onSuggest(suggest.post, sugTxt.trim(), { changes: changes, before: before, after: deck.scores, deck: deck })
         .then(function () { setSuggest(null); });
     });
@@ -10508,8 +11080,8 @@ function MyPlayersPage(p) {
       year: src.year || "", team: src.team || "", liveType: src.liveType || "",
       impactType: src.impactType || "", hand: src.hand || "우", stars: src.stars || 4,
       sLvManual: false,
-      trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0, trainCtl: 0,
-      specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0, specControl: 0,
+      trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0, trainCtl: 0, trainVel: 0,
+      specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0, specControl: 0, specVel: 0,
       skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
       enhance: "9각성", pot1: "", pot2: "", isFa: false, isWildcard: false };
     ["power","accuracy","eye","patience","running","defense","launchAngle","whiteZone","coldZone",
@@ -10621,11 +11193,11 @@ function MyPlayersPage(p) {
     await saveDeckSnapshot(curDeckId, "시트 가져오기 전", snapData, p.userId);
     setSnap({ ts: Date.now(), label: "시트 가져오기 전", data: snapData });
     var byId = {}; dexAll().forEach(function(sp) { byId[sp.id] = sp; });
-    /* 덱보정관리기 시트에는 제구가 아직 없다 (2026-10-21) — 같은 카드(도감 번호)면 이용자가 넣어 둔 제구 훈련 · 특훈을 지키고, 없으면 이름으로 찾는다 */
+    /* 덱보정관리기 시트에는 제구 · 구속이 아직 없다 (2026-10-21 · 11-20) — 같은 카드(도감 번호)면 이용자가 넣어 둔 제구 · 구속 훈련 · 특훈을 지키고, 없으면 이름으로 찾는다 */
     var keepCtl = {}, keepCtlByName = {};
     players.forEach(function(pl) {
-      if (!pl.trainCtl && !pl.specControl) return;
-      var v = { trainCtl: pl.trainCtl || 0, specControl: pl.specControl || 0 };
+      if (!pl.trainCtl && !pl.specControl && !pl.trainVel && !pl.specVel) return;
+      var v = { trainCtl: pl.trainCtl || 0, specControl: pl.specControl || 0, trainVel: pl.trainVel || 0, specVel: pl.specVel || 0 };
       if (pl.dbId) keepCtl[pl.dbId] = v;
       keepCtlByName[pl.name] = v;
     });
@@ -10690,7 +11262,7 @@ function MyPlayersPage(p) {
         if (nm && isNatOnlySkill(nm, natCat) && np["s" + k + "Lv"] > 6) np["s" + k + "Lv"] = 6;
       });
       var kc = (dbId && keepCtl[dbId]) || keepCtlByName[np.name];
-      if (kc && !isBat) { np.trainCtl = kc.trainCtl; np.specControl = kc.specControl; }
+      if (kc && !isBat) { np.trainCtl = kc.trainCtl; np.specControl = kc.specControl; np.trainVel = kc.trainVel; np.specVel = kc.specVel; }
       made.push(np);
       nameToId[en.name] = np.id;
     });
@@ -10924,7 +11496,7 @@ function MyPlayersPage(p) {
   /* 줄 점수 — 정렬 '점수순'도 이 값으로 */
   var rowCalcOf = function(pl) {
     var isBat = pl.role === "타자";
-    var lu = { enhance: pl.enhance || "9각성", trainP: pl.trainP||0, trainA: pl.trainA||0, trainE: pl.trainE||0, trainN: pl.trainN||0, trainC: pl.trainC||0, trainS: pl.trainS||0, trainCtl: pl.trainCtl||0, skill1: pl.skill1||"", s1Lv: pl.s1Lv||0, skill2: pl.skill2||"", s2Lv: pl.s2Lv||0, skill3: pl.skill3||"", s3Lv: pl.s3Lv||0 };
+    var lu = { enhance: pl.enhance || "9각성", trainP: pl.trainP||0, trainA: pl.trainA||0, trainE: pl.trainE||0, trainN: pl.trainN||0, trainC: pl.trainC||0, trainS: pl.trainS||0, trainCtl: pl.trainCtl||0, trainVel: pl.trainVel||0, skill1: pl.skill1||"", s1Lv: pl.s1Lv||0, skill2: pl.skill2||"", s2Lv: pl.s2Lv||0, skill3: pl.skill3||"", s3Lv: pl.s3Lv||0 };
     /* 라인업과 동일한 세트덱·특훈 보너스를 넘긴다.
        그래야 배지 레벨과 발사각 달성 여부가 라인업 판정과 어긋나지 않는다. */
     var sdbMy = sdBonusFor(pl);
@@ -10976,12 +11548,12 @@ function MyPlayersPage(p) {
               {isBat ? (
                 <React.Fragment><span style={{ color: "#EF5350" }}>{"+" + (pl.trainP||0)}</span>{" "}<span style={{ color: "#42A5F5" }}>{"+" + (pl.trainA||0)}</span>{" "}<span style={{ color: "#66BB6A" }}>{"+" + (pl.trainE||0)}</span>{" "}<span style={{ color: "#FFA726" }}>{"+" + (pl.trainN||0)}</span></React.Fragment>
               ) : (
-                <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "#AB47BC" }}>{"+" + (pl.trainC||0)}</span><span style={{ color: "#FF7043", marginLeft: 4 }}>{"+" + (pl.trainS||0)}</span>{ctlMissing(pl) ? <span title={CTL_MISS_TIP} style={{ color: CTL_MISS_COLOR, marginLeft: 4, fontWeight: 800, cursor: "help" }}>{"+?"}</span> : <span style={{ color: "#26A69A", marginLeft: 4 }}>{"+" + (pl.trainCtl||0)}</span>}</span>
+                <React.Fragment><span style={{ color: "#AB47BC" }}>{"+" + (pl.trainC||0)}</span>{" "}<span style={{ color: "#FF7043" }}>{"+" + (pl.trainS||0)}</span>{" "}{ctlMissing(pl) ? <span title={CTL_MISS_TIP} style={{ color: CTL_MISS_COLOR, fontWeight: 800, cursor: "help" }}>{"+?"}</span> : <span style={{ color: "#26A69A" }}>{"+" + (pl.trainCtl||0)}</span>}{" "}{velMissing(pl, sdState) ? <span title={VEL_MISS_TIP} style={{ color: CTL_MISS_COLOR, fontWeight: 800, cursor: "help" }}>{"+?"}</span> : <span style={{ color: VEL_COLOR }}>{"+" + (pl.trainVel||0)}</span>}</React.Fragment>
               )}
             </div>
             {/* Spec */}
             <div style={{ fontSize: 14, fontFamily: "var(--m)", color: "var(--t2)" }}>
-              {isBat ? ((pl.specPower||0) + "/" + (pl.specAccuracy||0) + "/" + (pl.specEye||0) + "/" + (pl.specPatience||0)) : ((pl.specChange||0) + "/" + (pl.specStuff||0) + "/" + (pl.specControl||0))}
+              {isBat ? ((pl.specPower||0) + "/" + (pl.specAccuracy||0) + "/" + (pl.specEye||0) + "/" + (pl.specPatience||0)) : ((pl.specChange||0) + "/" + (pl.specStuff||0) + "/" + (pl.specControl||0) + "/" + (pl.specVel||0))}
             </div>
             {/* Skills - all 3 visible */}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -11074,8 +11646,8 @@ function MyPlayersPage(p) {
                     <React.Fragment>
                       <span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "trainC", pl.trainC, "#AB47BC")}
                       <span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "trainS", pl.trainS, "#FF7043")}
-                      <span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "trainCtl", pl.trainCtl, ctlMissing(pl) ? CTL_MISS_COLOR : "#26A69A")}
-                      {ctlMissing(pl) && (<span title={CTL_MISS_TIP} style={{ fontSize: 11, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", cursor: "help" }}>{"미입력"}</span>)}
+                      <span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "trainCtl", pl.trainCtl, ctlMissing(pl) ? CTL_MISS_COLOR : "#26A69A")}<span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "trainVel", pl.trainVel, velMissing(pl, sdState) ? CTL_MISS_COLOR : VEL_COLOR)}
+                      {(ctlMissing(pl) || velMissing(pl, sdState)) && (<span title={ctlMissing(pl) ? CTL_MISS_TIP : VEL_MISS_TIP} style={{ fontSize: 11, fontWeight: 800, color: CTL_MISS_COLOR, whiteSpace: "nowrap", cursor: "help" }}>{"미입력"}</span>)}
                     </React.Fragment>
                   )}
                 </div>
@@ -11095,7 +11667,7 @@ function MyPlayersPage(p) {
                     <React.Fragment>
                       <span style={{ fontSize: 13, color: "#AB47BC" }}>{"변"}</span>{miniIn(pl.id, "specChange", pl.specChange, "#AB47BC", 15)}
                       <span style={{ fontSize: 13, color: "#FF7043" }}>{"구"}</span>{miniIn(pl.id, "specStuff", pl.specStuff, "#FF7043", 15)}
-                      <span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "specControl", pl.specControl, "#26A69A", 15)}
+                      <span style={{ fontSize: 13, color: "#26A69A" }}>{"제"}</span>{miniIn(pl.id, "specControl", pl.specControl, "#26A69A", 15)}<span style={{ fontSize: 13, color: VEL_COLOR }}>{"속"}</span>{miniIn(pl.id, "specVel", pl.specVel, VEL_COLOR, 15)}
                     </React.Fragment>
                   )}
                 </div>
@@ -11374,8 +11946,8 @@ function MyPlayersPage(p) {
             hand: src.hand || "우",
             stars: src.stars || 5,
             sLvManual: false,  /* 신규 선수는 스킬 레벨 자동 */
-            trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0, trainCtl: 0,
-            specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0, specControl: 0,
+            trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0, trainCtl: 0, trainVel: 0,
+            specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0, specControl: 0, specVel: 0,
             skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
             enhance: "9각성", pot1: "", pot2: "", isFa: false, isWildcard: false };
           var newList = [np].concat(players);   /* 새로 넣은 선수는 맨 위 (2026-11-13) */
@@ -11455,7 +12027,7 @@ function MyPlayersPage(p) {
                           {sp.cardType === "라이브" && sp.liveType && (<span style={{ fontSize: 11, color: "#34d399", marginLeft: 2 }}>{"(" + sp.liveType + ")"}</span>)}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--td)", marginTop: 2 }}>
-                          {isBat ? (sp.team + " · " + sp.hand + "타 · 파" + (sp.power||0) + " 정" + (sp.accuracy||0) + " 선" + (sp.eye||0)) : (sp.team + " · " + sp.hand + "투 · 변" + (sp.change||0) + " 구" + (sp.stuff||0) + " 제" + (sp.control||0))}
+                          {isBat ? (sp.team + " · " + sp.hand + "타 · 파" + (sp.power||0) + " 정" + (sp.accuracy||0) + " 선" + (sp.eye||0)) : (sp.team + " · " + sp.hand + "투 · 변" + (sp.change||0) + " 구" + (sp.stuff||0) + " 제" + (sp.control||0) + " 속" + (sp.speed||0))}
                         </div>
                       </div>
                       {already ? (<span style={{ fontSize: 11, color: "var(--acc)", flexShrink: 0 }}>{"등록됨"}</span>)
@@ -11658,10 +12230,12 @@ function SkillManagePage(p) {
     copy.weights[key] = parseFloat(val) || 0;
     saveSK(copy);
   };
-  /* 신버전 투수 가중치 — 선발 · 불펜(중계 · 마무리)의 변화 c · 구위 s · 제구 ctl */
+  /* 신버전 투수 가중치 — 선발 · 불펜(중계 · 마무리)의 변화 c · 구위 s · 제구 ctl · 구속 vel(2026-11-20, 처음 0) */
+  /* 0 ~ 5 로 자른다 — 범위를 벗어난 값이 하나라도 저장되면 v11WeightsOk 가 가중치 묶음을 통째로 버려(코드 기본값으로) 다음 고침 때 다른 칸까지 덮인다 (2026-11-24) */
+  var pitW05 = function(v) { var x = parseFloat(v); return isFinite(x) ? Math.max(0, Math.min(5, x)) : 0; };
   var updPitW = function(grp, key, val) {
     var nt = cloneT();
-    nt.weights[grp][key] = parseFloat(val) || 0;
+    nt.weights[grp][key] = pitW05(val);
     saveT(nt);
   };
   /* 260814 시트 · v1.1 표는 레벨별 최종점수(숫자) 형식이다 */
@@ -11718,7 +12292,7 @@ function SkillManagePage(p) {
   };
 
   /* 신버전 CSV — 카테고리,스킬명,레벨,점수 + 가중치 줄 (타자 공통 넷 · 선발/불펜 변화 · 구위 · 제구) */
-  var V11_W_ROWS = [["선발","c","선발변화"],["선발","s","선발구위"],["선발","ctl","선발제구"],["불펜","c","불펜변화"],["불펜","s","불펜구위"],["불펜","ctl","불펜제구"]];
+  var V11_W_ROWS = [["선발","c","선발변화"],["선발","s","선발구위"],["선발","ctl","선발제구"],["불펜","c","불펜변화"],["불펜","s","불펜구위"],["불펜","ctl","불펜제구"],["선발","vel","선발구속"],["불펜","vel","불펜구속"]];
   var doExport = function() {
     if (isNew) {
       var rows1 = ["카테고리,스킬명,레벨,점수"];
@@ -11728,7 +12302,7 @@ function SkillManagePage(p) {
         });
       });
       rows1.push(""); rows1.push("가중치,파워,,,"+w.p); rows1.push("가중치,정확,,,"+w.a); rows1.push("가중치,선구,,,"+w.e); rows1.push("가중치,인내,,,"+(w.n||0));
-      V11_W_ROWS.forEach(function(r) { rows1.push("가중치,"+r[2]+",,,"+T.weights[r[0]][r[1]]); });
+      V11_W_ROWS.forEach(function(r) { rows1.push("가중치,"+r[2]+",,,"+(T.weights[r[0]][r[1]] || 0)); });
       setCsvText(rows1.join("\n")); setShowCSV(true);
       return;
     }
@@ -11755,7 +12329,7 @@ function SkillManagePage(p) {
         if (cols.length < 4 || cols[0] === "카테고리") return;
         if (cols[0] === "가중치") {
           if (wMap1[cols[1]]) { if (!copy1.weights) copy1.weights = {}; copy1.weights[wMap1[cols[1]]] = parseFloat(cols[4]) || 0; }
-          else if (pMap[cols[1]]) { nt.weights[pMap[cols[1]][0]][pMap[cols[1]][1]] = parseFloat(cols[4]) || 0; }
+          else if (pMap[cols[1]]) { nt.weights[pMap[cols[1]][0]][pMap[cols[1]][1]] = pitW05(cols[4]); }
           return;
         }
         var c = cols[0], nm = cols[1], li = (parseInt(cols[2], 10) || 0) - 5;
@@ -11833,7 +12407,7 @@ function SkillManagePage(p) {
       <input type="number" step="0.001" value={value} onChange={function(e){onChange(e.target.value);}} style={{ width: 56, padding: "4px 2px", textAlign: "center", background: "var(--inner)", border: "1px solid "+color+"44", borderRadius: 4, color: color, fontSize: 16, fontFamily: "var(--m)", fontWeight: 800, outline: "none" }} /></div>);
   };
   var BAT_W = [{k:"p",l:"파워",cl:"#EF5350"},{k:"a",l:"정확",cl:"#42A5F5"},{k:"e",l:"선구",cl:"#66BB6A"},{k:"n",l:"인내",cl:"#FFA726"}];
-  var PIT_W = [{k:"c",l:"변화",cl:"#AB47BC"},{k:"s",l:"구위",cl:"#FF7043"},{k:"ctl",l:"제구",cl:"#26A69A"}];
+  var PIT_W = [{k:"c",l:"변화",cl:"#AB47BC"},{k:"s",l:"구위",cl:"#FF7043"},{k:"ctl",l:"제구",cl:"#26A69A"},{k:"vel",l:"구속",cl:VEL_COLOR}];
   var wGroup = function(title, sub, boxes) {
     return (<div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t2)", marginBottom: 4 }}>{title}{sub && (<span style={{ fontSize: 11, fontWeight: 500, color: "var(--td)", marginLeft: 6 }}>{sub}</span>)}</div>
@@ -11866,7 +12440,7 @@ function SkillManagePage(p) {
       {isNew ? (
         <div style={{ fontSize: 12, color: "var(--t2)", background: "rgba(255,213,79,0.07)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 6, padding: "8px 10px", marginBottom: 12, lineHeight: 1.6 }}>
           <b style={{ color: "var(--acc)" }}>{"신버전"}</b>{" — 랭킹챌린지 스킬점수표 v1.1 (제구 반영). 지금 사이트의 모든 점수(TOTAL · 데이터센터 · 덱 연구소)가 이 표와 가중치로 계산돼요. 고치면 모든 이용자에게 바로 적용돼요."}
-          <div style={{ marginTop: 3, color: "var(--td)" }}>{(hasSaved ? "· 지금 이 표는 관리자가 고친 저장본이에요 ('기본값 복원'을 누르면 v1.1 원본으로 돌아가요)." : "· 지금은 v1.1 원본 그대로예요.") + " 표나 투수 가중치를 크게 바꾸면 데이터센터 '상위 %' 분포는 다시 계산해야 맞아요."}</div>
+          <div style={{ marginTop: 3, color: "var(--td)" }}>{(hasSaved ? "· 지금 이 표는 관리자가 고친 저장본이에요 ('기본값 복원'을 누르면 v1.1 원본으로 돌아가요)." : "· 지금은 v1.1 원본 그대로예요.") + " 표나 투수 가중치를 크게 바꾸면 데이터센터 '상위 %' 분포는 다시 계산해야 맞아요. 구속 가중치(처음 0)를 넣으면 TOTAL 에 바로 들어가요 — 상위 % 분포 · 고점판독 표 · 랭챌 예상 구간은 다시 구워야 맞아요."}</div>
         </div>
       ) : (
         <div style={{ fontSize: 12, color: "var(--t2)", background: "rgba(100,116,139,0.10)", border: "1px solid rgba(100,116,139,0.35)", borderRadius: 6, padding: "8px 10px", marginBottom: 12, lineHeight: 1.6 }}>
@@ -11889,7 +12463,7 @@ function SkillManagePage(p) {
           <div style={{ display: "flex", gap: mob ? 12 : 22, flexWrap: "wrap" }}>
             {wGroup("타자", "신 · 구 공통", BAT_W.map(function(it){ return wBox(it.k, it.l, it.cl, w[it.k] || 0, function(v){ updWeight(it.k, v); }); }))}
             {[["선발","선발"],["불펜","불펜 (중계 · 마무리)"]].map(function(g){
-              var x = T.weights[g[0]]; var sum = Math.round(((x.c||0) + (x.s||0) + (x.ctl||0)) * 1000) / 1000;
+              var x = T.weights[g[0]]; var sum = Math.round(((x.c||0) + (x.s||0) + (x.ctl||0) + (x.vel||0)) * 1000) / 1000;
               return (<React.Fragment key={g[0]}>{wGroup(g[1], "합 " + sum.toFixed(2), PIT_W.map(function(it){ return wBox(g[0] + it.k, it.l, it.cl, x[it.k] || 0, function(v){ updPitW(g[0], it.k, v); }); }))}</React.Fragment>);
             })}
           </div>
@@ -12011,15 +12585,15 @@ function DataCenterPage(p) {
       [[x.skill1, x.s1Lv], [x.skill2, x.s2Lv], [x.skill3, x.s3Lv]].forEach(function (q, i) { if (q[0]) ss += getSkillScore(q[0], effSkillLv(q[0], q[1], mn, lt, i + 1, cat, []), cat); });
       cards[sl] = { id: slots[sl], sk: [base(x.skill1), base(x.skill2), base(x.skill3)], lv: [x.s1Lv || 0, x.s2Lv || 0, x.s3Lv || 0], ss: (x.skill1 || x.skill2 || x.skill3) ? Math.round(ss * 10) / 10 : null };
       /* 내 카드 훈재분 · 특훈 — 훈재분 계산기 · 라인업 분석과 같은 식 (훈련을 안 넣었으면 비움) */
-      var trIn = x.role === "타자" ? (x.trainP || x.trainA || x.trainE || x.trainN) : (x.trainC || x.trainS || x.trainCtl);
+      var trIn = x.role === "타자" ? (x.trainP || x.trainA || x.trainE || x.trainN) : (x.trainC || x.trainS || x.trainCtl || x.trainVel);
       if (trIn) {
         cards[sl].tr = Math.round(shareTrainScore(x) * 10) / 10; cards[sl].trp = shareTrainPct(x);
-        cards[sl].t6 = x.role === "타자" ? [x.trainP || 0, x.trainA || 0, x.trainE || 0, x.trainN || 0, null, null] : [null, x.trainC || 0, x.trainS || 0, x.trainCtl || 0, null, null];
+        cards[sl].t6 = x.role === "타자" ? [x.trainP || 0, x.trainA || 0, x.trainE || 0, x.trainN || 0, null, null] : [x.trainVel || null, x.trainC || 0, x.trainS || 0, x.trainCtl || 0, null, null];
       }
       var nSp = specTrialsOf(x);
       if (nSp) {
         var w9 = getW(), isB9 = x.role === "타자";
-        var xs = isB9 ? (x.specPower || 0) * w9.p + (x.specAccuracy || 0) * w9.a + (x.specEye || 0) * w9.e + (x.specPatience || 0) * (w9.n || 0) : pitStatScore(pitCatOf(x), x.specChange, x.specStuff, x.specControl);
+        var xs = isB9 ? (x.specPower || 0) * w9.p + (x.specAccuracy || 0) * w9.a + (x.specEye || 0) * w9.e + (x.specPatience || 0) * (w9.n || 0) : pitStatScore(pitCatOf(x), x.specChange, x.specStuff, x.specControl, x.specVel);
         if (xs > 0) {
           var dsp = PREBUILT_DIST[specDistKey(x, isB9)], base9 = isB9 ? nSp * w9.p : nSp * getPW(pitCatOf(x)).s;
           cards[sl].xs = Math.round(xs * 10) / 10; cards[sl].xsp = dsp ? (xs < base9 - 0.01 ? 100 : getPercentile(dsp, Math.round(xs * 100) / 100)) : null;
@@ -12043,7 +12617,7 @@ function DataCenterPage(p) {
       {dcTab==="skill" && <SkillCalculator mobile={mob} skills={skills} />}
       {dcTab==="train" && <TrainSimulator mobile={mob} skills={skills} />}
       {dcTab==="top" && !in100Snap && <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"36px 20px",textAlign:"center",color:"var(--td)",fontSize:13}}>{in100Err || "in100 자료를 불러오는 중…"}</div>}
-      {dcTab==="top" && in100Snap && <In100Page key={in100Snap.id} snaps={IN100_SNAPS} onSnap={setIn100Id} mobile={mob} snap={in100Snap} tools={in100Tools} myTeam={sdState.teamName||""} mySd={sdState} mySlots={in100My.slots} ownSet={in100My.own} myCards={in100My.cards}
+      {dcTab==="top" && in100Snap && <In100Page key={in100Snap.id} snaps={IN100_SNAPS} onSnap={setIn100Id} mobile={mob} velUse={velWeighted()} snap={in100Snap} tools={in100Tools} myTeam={sdState.teamName||""} mySd={sdState} mySlots={in100My.slots} ownSet={in100My.own} myCards={in100My.cards}
         onLab={p.onOpenLab ? function(d){ var bn = d.bench || {}; var arr = Array.isArray(bn) ? bn : Object.keys(bn).sort().map(function(k){ return bn[k]; });
           p.onOpenLab({ team: d.team, slots: d.slots, bench: arr, src: "in100", rank: d.rank }); } : null} />}
     </div>
@@ -12125,7 +12699,7 @@ function buildDist(skills, N) {
         for(var r2=0;r2<rem;r2++) newDist[freeList[Math.floor(Math.random()*freeList.length)]]++;
         var sc = isBatR
           ? (newDist["파워"]||0)*w2.p+(newDist["정확"]||0)*w2.a+(newDist["선구"]||0)*w2.e+(newDist["인내"]||0)*(w2.n||0)
-          : pitStatScore(pcat, newDist["변화"], newDist["구위"], newDist["제구"]);
+          : pitStatScore(pcat, newDist["변화"], newDist["구위"], newDist["제구"], newDist["구속"]);
         scores.push(Math.round(sc*100)/100);
       }
       scores.sort(function(a,b){return a-b;});
@@ -12184,7 +12758,7 @@ function buildDist(skills, N) {
         }
         var sc = isBatR
           ? (pts["파워"]||0)*w3.p+(pts["정확"]||0)*w3.a+(pts["선구"]||0)*w3.e+(pts["인내"]||0)*(w3.n||0)
-          : pitStatScore(pcat2, pts["변화"], pts["구위"], pts["제구"]);
+          : pitStatScore(pcat2, pts["변화"], pts["구위"], pts["제구"], pts["구속"]);
         scores.push(Math.round(sc*100)/100);
       }
       scores.sort(function(a,b){return a-b;});
@@ -12277,9 +12851,9 @@ function LineupAnalysis(p) {
     return out.join(String.fromCharCode(10));
   };
   var trainBat = function(pl) { return (pl.trainP||0)*w.p+(pl.trainA||0)*w.a+(pl.trainE||0)*w.e+(pl.trainN||0)*(w.n||0); };
-  var trainPit = function(pl) { return pitStatScore(pitCatOf(pl), pl.trainC, pl.trainS, pl.trainCtl); };
+  var trainPit = function(pl) { return pitStatScore(pitCatOf(pl), pl.trainC, pl.trainS, pl.trainCtl, pl.trainVel); };
   var specBat = function(pl) { return (pl.specPower||0)*w.p+(pl.specAccuracy||0)*w.a+(pl.specEye||0)*w.e+(pl.specPatience||0)*(w.n||0); };
-  var specPit = function(pl) { return pitStatScore(pitCatOf(pl), pl.specChange, pl.specStuff, pl.specControl); };
+  var specPit = function(pl) { return pitStatScore(pitCatOf(pl), pl.specChange, pl.specStuff, pl.specControl, pl.specVel); };
 
 
   /* warn — 제구 미입력 투수의 훈련 %: 실제보다 낮게 나오니 주황으로 칠하고 옆에 적는다 */
@@ -12294,7 +12868,7 @@ function LineupAnalysis(p) {
         <span style={{fontSize:13,fontWeight:800,color:barColor,minWidth:50,flexShrink:0,textAlign:"right"}}>
           {top===null?"계산중":("상위 "+top+"%")}
         </span>
-        {warn && (<span title={CTL_MISS_TIP} style={{fontSize:11,fontWeight:800,color:CTL_MISS_COLOR,whiteSpace:"nowrap",flexShrink:0,cursor:"help"}}>{"제구 미입력"}</span>)}
+        {warn && (<span title={warn === "구속 미입력" ? VEL_MISS_TIP : CTL_MISS_TIP} style={{fontSize:11,fontWeight:800,color:CTL_MISS_COLOR,whiteSpace:"nowrap",flexShrink:0,cursor:"help"}}>{typeof warn === "string" ? warn : "제구 미입력"}</span>)}
       </div>
     );
   };
@@ -12358,7 +12932,7 @@ function LineupAnalysis(p) {
           <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
             <span style={{fontSize:12,color:"var(--td)",width:36,flexShrink:0}}>훈련</span>
             <span style={{fontSize:12,color:"var(--t2)",fontFamily:"var(--m)",width:36,flexShrink:0}}>{trSc.toFixed(1)}</span>
-            {pctBar(trPct, "#42A5F5", !isBat && ctlMissing(pl))}
+            {pctBar(trPct, "#42A5F5", !isBat && (ctlMissing(pl) ? "제구 미입력" : velMissing(pl, sdState) ? "구속 미입력" : ""))}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
             <span style={{fontSize:12,color:"var(--td)",width:36,flexShrink:0}}>특훈</span>
@@ -12383,8 +12957,8 @@ function LineupAnalysis(p) {
           <span style={{fontSize:14,fontWeight:800,color:"var(--t1)",whiteSpace:"nowrap"}}>{role==="타자"?"⚾ 타자 라인업":"⚾ 투수 라인업"}</span>
           <span style={{fontSize:12,color:"var(--td)",whiteSpace:"nowrap"}}>{"("+( role==="타자"?batPlayers.length:pitPlayers.length)+"명)"}</span>
           {/* 제구 미입력 — 폰은 제목이 쪼개지지 않게 한 줄 아래로 */}
-          {role!=="타자" && (function(){ var n = pitPlayers.filter(function(x){ return ctlMissing(x.pl); }).length;
-            return n > 0 ? (<span title={"이 투수들은 " + CTL_MISS_TIP} style={{fontSize:12,fontWeight:700,color:CTL_MISS_COLOR,cursor:"help",flexBasis:mob?"100%":"auto"}}>{(mob ? "" : "· ") + "제구 미입력 " + n + "명 — 훈련 % 가 실제보다 낮게 나와요"}</span>) : null; })()}
+          {role!=="타자" && (function(){ var n = pitPlayers.filter(function(x){ return ctlMissing(x.pl) || velMissing(x.pl, sdState); }).length;
+            return n > 0 ? (<span title={"이 투수들은 " + CTL_MISS_TIP} style={{fontSize:12,fontWeight:700,color:CTL_MISS_COLOR,cursor:"help",flexBasis:mob?"100%":"auto"}}>{(mob ? "" : "· ") + (velWeighted() ? "제구 · 구속 미입력 " : "제구 미입력 ") + n + "명 — 훈련 % 가 실제보다 낮게 나와요"}</span>) : null; })()}
         </div>
         {(role==="타자"?batPlayers:pitPlayers).length === 0 ? (
           <div style={{padding:24,textAlign:"center",fontSize:13,color:"var(--td)"}}>{"라인업에 등록된 선수가 없습니다"}</div>
@@ -13010,7 +13584,7 @@ var PEAK_SKILLS = {
   "마무리|올스타25|우|-":["마당쇠(불펜)","저니맨","패기(시그/올스타불펜)"],
   "마무리|올스타25|좌|-":["마당쇠(불펜)","저니맨","패기(시그/올스타불펜)"]
 };
-/* 훈련: 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위, 제구] — 투수는 선발(pit) · 불펜(rp) 따로.
+/* 훈련: 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위, 제구(, 구속)] — 투수는 선발(pit) · 불펜(rp) 따로. 구속 가중치를 정하면 넷째 칸(구속)까지 다시 굽는다(data/peak_train_v11.mjs).
    상위 0.1% 점수(정확 계산)에서 가장 흔한 배분 (2026-10-25 다시 뽑음 — 그 전 값은 0.1~0.2% 사이에서 가장 흔한 배분이라 실제로는 0.2% 언저리였다) */
 var PEAK_TRAIN = {"bat_골든글러브":[20,18,14,9],"bat_시그니처":[22,18,11,10],"bat_라이브":[20,18,14,9],"bat_올스타":[25,21,12,12],"bat_국가대표":[18,17,11,7],"bat_임팩트":[18,12,7,7],"pit_골든글러브":[17,22,11],"pit_시그니처":[21,20,9],"pit_라이브":[17,22,11],"pit_올스타":[23,23,12],"pit_국가대표":[19,17,8],"pit_임팩트":[12,18,7],"rp_골든글러브":[16,23,9],"rp_시그니처":[19,22,8],"rp_라이브":[16,23,9],"rp_올스타":[19,26,13],"rp_국가대표":[14,21,8],"rp_임팩트":[10,19,8]};
 /* 특훈 (기본 보너스 = 특훈 횟수 포함 — 골글·시그·임팩트 +3, 국대 +4, FA +5, 와일드카드 +6): 타자 [파워, 정확, 선구, 인내] / 투수 [변화, 구위, 제구].
@@ -13059,8 +13633,8 @@ function peakPl(pl, slot) {
       if (tr[0] * w.p + tr[1] * w.a + tr[2] * w.e + tr[3] * (w.n || 0) > (pl.trainP || 0) * w.p + (pl.trainA || 0) * w.a + (pl.trainE || 0) * w.e + (pl.trainN || 0) * (w.n || 0)) {
         out.trainP = tr[0]; out.trainA = tr[1]; out.trainE = tr[2]; out.trainN = tr[3];
       }
-    } else if (tr[0] * pw.c + tr[1] * pw.s + (tr[2] || 0) * pw.ctl > (pl.trainC || 0) * pw.c + (pl.trainS || 0) * pw.s + (pl.trainCtl || 0) * pw.ctl) {
-      out.trainC = tr[0]; out.trainS = tr[1]; out.trainCtl = tr[2] || 0;
+    } else if (tr[0] * pw.c + tr[1] * pw.s + (tr[2] || 0) * pw.ctl + (tr[3] || 0) * (pw.vel || 0) > (pl.trainC || 0) * pw.c + (pl.trainS || 0) * pw.s + (pl.trainCtl || 0) * pw.ctl + (pl.trainVel || 0) * (pw.vel || 0)) {
+      out.trainC = tr[0]; out.trainS = tr[1]; out.trainCtl = tr[2] || 0; out.trainVel = tr.length > 3 ? tr[3] : (pl.trainVel || 0);
     }
   }
   /* 특훈 표 키는 특훈 분포 키에서 "spec_" 를 뗀 것 — bat_국가대표 · bat_fa_시그니처 · bat_wc_국가대표 */
@@ -13070,8 +13644,8 @@ function peakPl(pl, slot) {
       if (sp[0] * w.p + sp[1] * w.a + sp[2] * w.e + sp[3] * (w.n || 0) > (pl.specPower || 0) * w.p + (pl.specAccuracy || 0) * w.a + (pl.specEye || 0) * w.e + (pl.specPatience || 0) * (w.n || 0)) {
         out.specPower = sp[0]; out.specAccuracy = sp[1]; out.specEye = sp[2]; out.specPatience = sp[3];
       }
-    } else if (sp[0] * pw.c + sp[1] * pw.s + (sp[2] || 0) * pw.ctl > (pl.specChange || 0) * pw.c + (pl.specStuff || 0) * pw.s + (pl.specControl || 0) * pw.ctl) {
-      out.specChange = sp[0]; out.specStuff = sp[1]; out.specControl = sp[2] || 0;
+    } else if (sp[0] * pw.c + sp[1] * pw.s + (sp[2] || 0) * pw.ctl + (sp[3] || 0) * (pw.vel || 0) > (pl.specChange || 0) * pw.c + (pl.specStuff || 0) * pw.s + (pl.specControl || 0) * pw.ctl + (pl.specVel || 0) * (pw.vel || 0)) {
+      out.specChange = sp[0]; out.specStuff = sp[1]; out.specControl = sp[2] || 0; out.specVel = sp.length > 3 ? sp[3] : (pl.specVel || 0);
     }
   }
   /* 잠재력 — 칸마다 그 종류의 고점 등급과 내 등급 중 좋은 쪽.
@@ -13100,6 +13674,8 @@ function peakBuffState(real, probe) {
   ["_autoNatBat", "_autoNatPit", "_autoCatch"].forEach(function (k) {
     if ((parseInt(probe[k], 10) || 0) > (parseInt(real[k], 10) || 0)) out[k] = probe[k];
   });
+  /* 리더 영향력은 고점 라인업(probe)의 리더 값으로 (2026-11-21) */
+  out._lead = probe._lead;
   return out;
 }
 
@@ -13157,22 +13733,22 @@ function labPl(pl, slot, top) {
   if (sv !== null) out.labSkillScore = Math.round(sv * 100) / 100;
   /* 훈련 재분배 */
   var trK = "train_" + (isBat ? "bat" : pitDistRole(pl)) + "_" + ct;
-  var trV = isBat ? [pk.trainP || 0, pk.trainA || 0, pk.trainE || 0, pk.trainN || 0] : [pk.trainC || 0, pk.trainS || 0, pk.trainCtl || 0];
+  var trV = isBat ? [pk.trainP || 0, pk.trainA || 0, pk.trainE || 0, pk.trainN || 0] : [pk.trainC || 0, pk.trainS || 0, pk.trainCtl || 0, pk.trainVel || 0];
   var pw = getPW(pitCatOf(pl));
-  var trW = isBat ? [w.p, w.a, w.e, w.n || 0] : [pw.c, pw.s, pw.ctl];
+  var trW = isBat ? [w.p, w.a, w.e, w.n || 0] : [pw.c, pw.s, pw.ctl, pw.vel || 0];
   var tr = labScale(trV, trW, distValueAt(PREBUILT_DIST[trK], top));
   if (tr) {
     if (isBat) { out.trainP = tr[0]; out.trainA = tr[1]; out.trainE = tr[2]; out.trainN = tr[3]; }
-    else { out.trainC = tr[0]; out.trainS = tr[1]; out.trainCtl = tr[2]; }
+    else { out.trainC = tr[0]; out.trainS = tr[1]; out.trainCtl = tr[2]; out.trainVel = tr[3]; }
   }
   /* 특훈 — 분포 키는 specDistKey 가 FA·와일드카드까지 갈라 준다 */
   var spK = specDistKey(pl, isBat);
   var spV = isBat ? [pk.specPower || 0, pk.specAccuracy || 0, pk.specEye || 0, pk.specPatience || 0]
-                  : [pk.specChange || 0, pk.specStuff || 0, pk.specControl || 0];
+                  : [pk.specChange || 0, pk.specStuff || 0, pk.specControl || 0, pk.specVel || 0];
   var sp = labScale(spV, trW, distValueAt(PREBUILT_DIST[spK], top));
   if (sp) {
     if (isBat) { out.specPower = sp[0]; out.specAccuracy = sp[1]; out.specEye = sp[2]; out.specPatience = sp[3]; }
-    else { out.specChange = sp[0]; out.specStuff = sp[1]; out.specControl = sp[2]; }
+    else { out.specChange = sp[0]; out.specStuff = sp[1]; out.specControl = sp[2]; out.specVel = sp[3]; }
   }
   return out;
 }
@@ -13216,8 +13792,8 @@ var LAB_SLOTS = BAT_SLOTS.concat(SP_SLOTS).concat(["CP"]).concat(RP_SLOTS);
 function labCard(row, teamName) {
   if (!row) return null;
   var o = Object.assign({}, row, { dbId: row.id, enhance: "9각성", sLvManual: false,
-    trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0, trainCtl: 0,
-    specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0, specControl: 0,
+    trainP: 0, trainA: 0, trainE: 0, trainN: 0, trainC: 0, trainS: 0, trainCtl: 0, trainVel: 0,
+    specPower: 0, specAccuracy: 0, specEye: 0, specPatience: 0, specChange: 0, specStuff: 0, specControl: 0, specVel: 0,
     skill1: "", s1Lv: 0, skill2: "", s2Lv: 0, skill3: "", s3Lv: 0,
     isFa: false, isWildcard: false });
   if (o.cardType !== "골든글러브" && isOtherTeam(o, teamName)) {
@@ -13256,8 +13832,8 @@ var LAB_STD_SD = {
 };
 /* 고점(peakPl)이 채우는 칸 — 스킬·훈련·특훈·잠재력 */
 var LAB_STD_FIELDS = ["sLvManual", "skill1", "s1Lv", "skill2", "s2Lv", "skill3", "s3Lv",
-  "trainP", "trainA", "trainE", "trainN", "trainC", "trainS", "trainCtl",
-  "specPower", "specAccuracy", "specEye", "specPatience", "specChange", "specStuff", "specControl",
+  "trainP", "trainA", "trainE", "trainN", "trainC", "trainS", "trainCtl", "trainVel",
+  "specPower", "specAccuracy", "specEye", "specPatience", "specChange", "specStuff", "specControl", "specVel",
   "potType1", "pot1", "potType2", "pot2", "potType3", "pot3"];
 /* 표준 점수 계산 묶음 — 팀마다 하나. ov 는 고점 덧칠, base 는 카드별 기준 자리 점수, off 는 자리 차이 */
 /* opt.noFa — 타팀 카드를 FA 로 안 친다(10-26 이전 잣대). 후보 자동배정이 쓴다 */
@@ -13326,6 +13902,8 @@ function labSeatOrder() {
 /* 점수가 가장 높은 타순. 세트덱에 타순을 보는 구간이 있어 한 번에 끝나지 않는다 —
    배치가 굳을 때까지 되풀이하고, 혹시 번갈아 나오면 가장 높은 판을 남긴다 */
 function labBestOrder(pk, sd, totalSP) {
+  /* 신버전 — 타순 가중치 v2 는 선수마다 타순별 몫이 달라 '큰 점수를 큰 배율에'로는 안 된다. 최고 점수 타순(bestBatOrder)으로 정확히 고른다 */
+  if (SCORE_VER !== "v10") return bestBatOrder(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: BAT_SLOTS.slice() }), totalSP)).order;
   var seats = labSeatOrder();
   var order = BAT_SLOTS.slice(), best = order, bestScore = -Infinity;
   for (var pass = 0; pass < 4; pass++) {
@@ -13390,7 +13968,7 @@ function labRun(cards, teamName, extra, opt) {
   /* 역시너지 — 모든 선수 모든 능력치가 깎인다. 유니폼 효과와 같은 자리에 음수로 넣는다
      (calcSDBonus 가 uni* 를 그대로 더하므로 따로 손댈 곳이 없다) */
   var anti = lim.anti ? { uniP: -lim.anti, uniA: -lim.anti, uniE: -lim.anti,
-    uniN: -lim.anti, uniC: -lim.anti, uniS: -lim.anti, uniCtl: -lim.anti } : null;
+    uniN: -lim.anti, uniC: -lim.anti, uniS: -lim.anti, uniCtl: -lim.anti, uniVel: -lim.anti } : null;
   /* 실제 덱 조건 (10-26 사용자) — opt.real = labRealCounts(라인업 + 후보). 카드 시너지(임팩 5 · 시그 5 · 라이브류 7)는
      장수가 모자라면 빼고, 국대에이스는 후보에 국대 타자 · 중계에 국대 투수가 있으면 6렙(없으면 없음). 포수리드는 늘 6렙.
      opt.real 을 안 주면 예전처럼 모두 받는다 */
@@ -13459,8 +14037,8 @@ function clubLabDeck(team, slots, name) {
     if (r) { cards[sl] = labCard(r, team); view[sl] = clubView(r); ids[sl] = id; }
   });
   var res = Object.keys(cards).length ? labRun(cards, team) : null;
-  /* sv: 이 점수를 센 기준 (제구 반영 v1.1 = "v11"). 클럽 화면이 옛 기준 점수를 가려 보이고, 서버가 주간 기준점을 다시 잡는 데 쓴다 */
-  return { v: 1, src: "lab", team: team, name: name || "", slots: ids, view: view, sv: SCORE_VER,
+  /* sv: 이 점수를 센 기준 (scoreTag — 제구 반영 "v11" · 타순 가중치 v2 부터 "v11b"). 클럽 화면이 옛 기준 점수를 가려 보이고, 서버가 주간 기준점을 다시 잡는 데 쓴다 */
+  return { v: 1, src: "lab", team: team, name: name || "", slots: ids, view: view, sv: scoreTag(),
     scores: res ? res.tiers.map(function (t) { return Math.round(t.total * 10) / 10; }) : null };
 }
 /* 지금 내 덱(라인업) → 클럽 요약본. 점수는 라인업 화면과 같은 길로 센다 (LineupPage 의 realPick·totalScore).
@@ -13483,7 +14061,7 @@ function clubDeckSummary(players, lm, sdState, name) {
   memo = {};   /* 세트덱 자동값이 들어간 뒤의 sd 로 다시 뽑는다 — 라인업 화면과 같은 순서 */
   var total = filled ? calcLineupTotal(realPick, sd, lineupOpts(sd, totalSP)) : 0;
   var setPoint = totalSP - (sd.liveSetPo || 0);
-  return { deck: { v: 1, src: "deck", team: teamKey(sd.teamName), name: name || "", slots: slots, view: view, total: total, setPoint: setPoint, sv: SCORE_VER },
+  return { deck: { v: 1, src: "deck", team: teamKey(sd.teamName), name: name || "", slots: slots, view: view, total: total, setPoint: setPoint, sv: scoreTag() },
     total: total, setPoint: setPoint, filled: filled };
 }
 
@@ -13760,7 +14338,7 @@ function TrainSimulator(p) {
   var pwT = getPW(pos === "불펜" ? "중계" : "선발");
   var statScore = function(dist) {
     if (isBat) return (dist["파워"]||0)*w.p+(dist["정확"]||0)*w.a+(dist["선구"]||0)*w.e+(dist["인내"]||0)*(w.n||0);
-    return (dist["변화"]||0)*pwT.c+(dist["구위"]||0)*pwT.s+(dist["제구"]||0)*pwT.ctl;
+    return (dist["변화"]||0)*pwT.c+(dist["구위"]||0)*pwT.s+(dist["제구"]||0)*pwT.ctl+(dist["구속"]||0)*(pwT.vel||0);
   };
 
   var runSim = function() {
@@ -13854,14 +14432,14 @@ function TrainSimulator(p) {
             {WILDCARD_CARDS[cardType] && (<span>{" · 와일드카드도 같음"}</span>)}</div>
           <div>{"• 고정 능력치: "}<span style={{color:"#EF5350",fontWeight:700}}>{fixStats.join(", ")}</span>{" (최저값 배치)"}</div>
           <div>{"• 재배치 능력치: "}<span style={{color:"#66BB6A",fontWeight:700}}>{freeStats.join(", ")}</span></div>
-          <div>{"• 점수 계산: "+(isBat?"파워×"+w.p+" + 정확×"+w.a+" + 선구×"+w.e+" + 인내×"+(w.n||0):"변화×"+pwT.c+" + 구위×"+pwT.s+" + 제구×"+pwT.ctl)}</div>
+          <div>{"• 점수 계산: "+(isBat?"파워×"+w.p+" + 정확×"+w.a+" + 선구×"+w.e+" + 인내×"+(w.n||0):"변화×"+pwT.c+" + 구위×"+pwT.s+" + 제구×"+pwT.ctl+((pwT.vel||0)>0?" + 구속×"+pwT.vel:""))}</div>
         </div>
         <div style={{marginBottom:12}}>
           <div style={{fontSize:13,fontWeight:700,color:"var(--td)",marginBottom:4}}>{"내 훈재분 수치 입력 (선택사항)"}</div>
           <div style={{fontSize:11,color:"var(--td)",marginBottom:8}}>{TRAIN_MY_STATS[pos].join("/")+"만 입력하면 됩니다"}</div>
           <div style={{display:"flex",gap:10}}>
             {TRAIN_MY_STATS[pos].map(function(s){
-              var clr = isBat?(s==="파워"?"#EF5350":s==="정확"?"#42A5F5":s==="선구"?"#66BB6A":"#FFA726"):(s==="변화"?"#AB47BC":s==="제구"?"#26A69A":"#FF7043");
+              var clr = isBat?(s==="파워"?"#EF5350":s==="정확"?"#42A5F5":s==="선구"?"#66BB6A":"#FFA726"):(s==="변화"?"#AB47BC":s==="제구"?"#26A69A":s==="구속"?VEL_COLOR:"#FF7043");
               return (<div key={s} style={{flex:1,textAlign:"center"}}>
                 <div style={{fontSize:12,fontWeight:700,color:clr,marginBottom:4}}>{s}</div>
                 <input type="number" min="0" max={totalPts} value={myDist[s]||""} placeholder="0"
@@ -14061,6 +14639,33 @@ export default function App(){
   var markBoardSeen=function(){ try{localStorage.setItem(boardSeenKey,String(Date.now()));}catch(e){} refreshBoardAlerts(true); };
   var boardDotN=boardAlerts?(boardAlerts.open||0)+(boardAlerts.answered||0):0;
   var boardDotTitle=boardAlerts?[boardAlerts.open?"새 제보 · 건의 "+boardAlerts.open+"개":"",boardAlerts.answered?"내 글에 답변 "+boardAlerts.answered+"개":""].filter(Boolean).join(" · "):"";
+  /* 게임 계정 인증 · 덱 최신화 — 계정 메뉴의 '🎮 계정 인증' 창 (account-verify.jsx).
+     알림(도착한 덱 · 관리자 심사 · 대기열)은 클럽 · 고객센터 점과 같은 방식: 앱을 열 때 · 메뉴를 옮길 때(15초 안에는 다시 안 물음) · 창을 닫을 때.
+     표가 아직 없으면(SQL 실행 전) 조용히 0 — 단추만 보이고 점은 안 뜬다 */
+  var _vo=useState(false);var verifyOpen=_vo[0];var setVerifyOpen=_vo[1];
+  var _voa=useState(false);var verifyToArrived=_voa[0];var setVerifyToArrived=_voa[1];
+  var _val=useState(null);var verifyAlerts=_val[0];var setVerifyAlerts=_val[1];
+  /* 반영 중 — 그동안은 '도착' 알림을 숨기고 두 번째 반영을 막는다 (같은 덱을 두 번 얹으면 되돌리기 사본이 덮이고 새 덱이 하나 더 생긴다) */
+  var _vap=useState(false);var verifyApplying=_vap[0];var setVerifyApplying=_vap[1];
+  var applyingRef=React.useRef(false);
+  /* 새 덱으로 받다가 서버 저장 확인을 못 한 요청 → 그때 만든 덱 id (다시 누르면 덱을 또 만들지 않고 그 덱에 넣는다, 2026-11-25) */
+  var verifyMadeRef=React.useRef({});
+  /* 이 브라우저 저장소에도 남긴다 — 새로 열어 다시 눌러도 같은 덱에 (저장소가 막힌 브라우저는 이번 화면에서만) */
+  var verifyMadeGet=function(id){ if(verifyMadeRef.current[id])return verifyMadeRef.current[id]; try{ var s=JSON.parse(localStorage.getItem("verify-made")||"{}"); return (s&&s[id])||null; }catch(e){ return null; } };
+  var verifyMadeSet=function(id,deckId){ if(deckId)verifyMadeRef.current[id]=deckId; else delete verifyMadeRef.current[id];
+    try{ var s=JSON.parse(localStorage.getItem("verify-made")||"{}")||{}; if(deckId)s[id]=deckId; else delete s[id]; localStorage.setItem("verify-made",JSON.stringify(s)); }catch(e){} };
+  var vAlertRef=React.useRef({seq:0,at:0});
+  var refreshVerifyAlerts=React.useCallback(function(force){
+    if(!isGoogle)return;
+    var r=vAlertRef.current;
+    if(force!==true&&Date.now()-r.at<15000)return;
+    r.at=Date.now();var my=++r.seq;
+    verifyLoadAlerts(isAdmin).then(function(a){ if(my===vAlertRef.current.seq)setVerifyAlerts(a); }).catch(function(){});
+  },[isGoogle,isAdmin,userId]);
+  useEffect(function(){ if(!isGoogle){vAlertRef.current.seq++;setVerifyAlerts(null);setVerifyOpen(false);return;} refreshVerifyAlerts(true); },[isGoogle,isAdmin,userId]);
+  useEffect(function(){ refreshVerifyAlerts(); },[tab]);
+  var openVerify=function(toArrived){ setVerifyToArrived(!!toArrived); setVerifyOpen(true); };
+  var closeVerify=function(){ setVerifyOpen(false); setVerifyToArrived(false); refreshVerifyAlerts(true); };
   var clubTools={
     summaryNow:clubSummaryNow,
     labDeck:function(team,slots,name){ return new Promise(function(res,rej){ setTimeout(function(){ try{res(clubLabDeck(team,slots,name));}catch(e){rej(e);} },20); }); },
@@ -14267,11 +14872,13 @@ export default function App(){
   },[]);
 
   /* ── 팀 선택 → 덱 생성 → 메인페이지 이동 ── */
-  var handleSelectTeam=async function(teamName){
+  var handleSelectTeam=async function(teamName){ await createDeck(teamName,decks); };
+  /* 덱 하나 만들어 그 덱으로 — base: 지금 덱 목록. 새 덱 id 를 돌려준다 */
+  var createDeck=async function(teamName,base){
     flushSd();
     var newId="dk_"+Date.now();
     var newDeck={deckId:newId,teamName:teamName};
-    var newList=decks.concat([newDeck]);
+    var newList=(base||decks).concat([newDeck]);
     /* 먼저 화면 전환 (await 전에 처리해야 중간 재렌더 없이 즉시 이동) */
     setDecks(newList);
     setCurDeckId(newId);
@@ -14282,6 +14889,7 @@ export default function App(){
       if(!row.deckList.some(function(d){return d&&d.deckId===newId;}))row.deckList.push(newDeck);
       row.deckCurrent=newId;
     });
+    return newId;
   };
 
   /* ── 덱 삭제 ── 목록에서만 뺀다. 덱 내용(decks 칸)은 서버에 남겨 둔다 — 잘못 지웠을 때 되살릴 수 있다 */
@@ -14326,6 +14934,106 @@ export default function App(){
     });
   };
 
+  /* ── 도착한 덱 반영 (게임 계정 인증 · 덱 최신화) ──
+     창을 먼저 닫는다 — 다른 덱으로 바꿔 읽는 동안 화면이 '로딩중'으로 바뀌어 창이 사라지기 때문이다.
+     덱을 바꾸거나 새로 만든 뒤에는 이 함수가 만들어질 때의 값이 옛것이라, 늘 liveRef 의 최신 값으로 읽는다.
+     저장은 시트 가져오기와 같은 평소 길(savePlayers · saveLineupMap · saveSdState) — user_settings 에 따로 쓰지 않는다.
+     덮어쓰기 전 상태는 되돌리기용 스냅샷으로 남긴다 (내 선수 → 되돌리기) */
+  var liveRef=React.useRef(null);
+  liveRef.current={store:store,sdState:sdState,curDeckId:curDeckId,decks:decks};
+  var waitDeck=function(id){ return new Promise(function(res,rej){ var t0=Date.now();
+    (function tick(){ var L=liveRef.current;
+      if(L.store.loadError)return rej(new Error("덱을 불러오지 못했어요 — 새로고침 뒤 다시 해 주세요"));
+      if(L.curDeckId===id&&!L.store.loading&&L.store.deckReady())return res();
+      if(Date.now()-t0>20000)return rej(new Error("덱을 여는 데 너무 오래 걸려요 — 잠시 뒤 다시 해 주세요"));
+      setTimeout(tick,120); })(); }); };
+  var applyArrived=async function(row,payload,deckId){
+    setVerifyOpen(false);setVerifyToArrived(false);
+    if(applyingRef.current)return;
+    applyingRef.current=true;setVerifyApplying(true);
+    setVerifyAlerts(function(a){return a?Object.assign({},a,{arrived:0}):a;});
+    try{
+      var team=teamKey(payload.team||row.team);
+      var stamp=Date.now(), target=deckId||null, teamMoved="", applied=null, snapOk=true;
+      /* 저장 경로가 선수를 정리해서 저장한다(normPlayerList — 자동 레벨 · 스킬 이름) — 서버 · 지금 덱과 견줄 때도 같게 정리해서 */
+      var normApplied=function(a){ return Object.assign({},a,{players:normPlayerList(a.players||[])}); };
+      var saveAll=function(d){ var L=liveRef.current;
+        var w=L.store.savePlayers(d.players,"game"); L.store.saveLineupMap(d.lineupMap);
+        setSdState(d.sdConfig); L.store.saveSdState(d.sdConfig); return w; };
+      if(target){
+        var ent=liveRef.current.decks.filter(function(d){return d.deckId===target;})[0];
+        if(!ent)throw new Error("받을 덱이 없어요 — 새 덱으로 받아 주세요");
+        if(liveRef.current.curDeckId!==target){ await handleSwitchDeck(target); }
+        await waitDeck(target);
+        var L=liveRef.current;
+        var cur={players:L.store.players,lineupMap:L.store.lineupMap,sdState:L.sdState};
+        applied=verifyMerge(cur,payload,stamp,canonCardId);
+        /* 이미 얹힌 덱(저장 확인을 못 해 다시 누른 경우)이면 되돌리기 사본을 다시 뜨지 않는다 — 덮이면 얹기 전 상태로 못 돌아간다 (2026-11-25) */
+        if(!verifyDeckApplied(normApplied(applied),{players:cur.players,lineupMap:cur.lineupMap,sdConfig:cur.sdState})){
+          snapOk=await saveDeckSnapshot(target,"덱 최신화 전",{players:cur.players,lineupMap:cur.lineupMap,sdState:cur.sdState},userId);
+        }
+        await saveAll(applied);
+        /* 덱 구단이 게임 구단과 다르면 게임 구단으로 (셋포 팀 · FA 판정이 덱 구단을 따른다) */
+        if(KBO_TEAMS.indexOf(team)>=0&&teamKey(ent.teamName)!==team){
+          teamMoved=teamKey(ent.teamName)||"없음";
+          var nl=liveRef.current.decks.map(function(d){return d.deckId===target?Object.assign({},d,{teamName:team}):d;});
+          setDecks(nl);
+          await changeDecks(nl,target,function(r){ r.deckList=r.deckList.map(function(d){return (d&&d.deckId===target)?Object.assign({},d,{teamName:team}):d;}); });
+        }
+      }else{
+        /* 지난번에 이 요청으로 만든 덱이 아직 있으면(저장 확인을 못 해 다시 누른 경우) 그 덱에 다시 넣는다 — 덱을 또 만들지 않게 (2026-11-25) */
+        var made=verifyMadeGet(row.id);
+        if(made&&liveRef.current.decks.some(function(d){return d.deckId===made;})){
+          target=made;
+          if(liveRef.current.curDeckId!==target){ await handleSwitchDeck(target); }
+        }else{
+          if(liveRef.current.decks.length>=DECK_MAX)throw new Error("덱이 "+DECK_MAX+"개라 새 덱을 만들 수 없어요");
+          target=await createDeck(KBO_TEAMS.indexOf(team)>=0?team:(row.team||"내 덱"),liveRef.current.decks);
+          verifyMadeSet(row.id,target);
+        }
+        await waitDeck(target);
+        applied=verifyNewDeck(payload,stamp);
+        await saveAll(applied);
+      }
+      var saved=await liveRef.current.store.flushNow(10000);
+      /* 서버에 정말 들어갔는지 — 저장이 늦었거나, 다른 기기와 부딪혀 '서버 내용 불러오기'를 골랐으면 얹은 내용이 없다.
+         그때는 '반영함'으로 닫지 않고 도착한 덱을 남겨 둔다 (다시 반영할 수 있게) */
+      var onServer=false;
+      if(saved){
+        try{
+          var srow=await loadUserData(userId);
+          var sdk=srow&&srow.decks&&srow.decks[target];
+          /* 라인업 칸만 보면 안 된다 — 같은 카드는 선수 번호가 그대로라 옛 훈련 · 강화가 서버에 남아도 칸은 같다. 선수의 게임 칸 · 덱 설정까지 견준다 (2026-11-25) */
+          onServer=verifyDeckApplied(normApplied(applied),sdk);
+        }catch(e){ onServer=false; }
+      }
+      if(!onServer){
+        refreshVerifyAlerts(true);
+        window.alert("덱을 넣었지만 서버 저장을 확인하지 못했어요.\n도착한 덱은 그대로 남겨 뒀어요 — 저장 표시를 확인한 뒤 필요하면 '살펴보기 → 반영'을 다시 눌러 주세요.");
+        return;
+      }
+      try{ await verifyCloseRefresh(row.id,true,target); }catch(e){ console.warn("[verify] 반영 표시 실패:",e&&e.message); }
+      verifyMadeSet(row.id,null);
+      refreshVerifyAlerts(true);
+      setTab("lineup");
+      window.alert((deckId?"게임 덱을 이 덱에 반영했어요."+(snapOk?"\n바뀌기 전 상태는 '내 선수 → 되돌리기'로 돌아갈 수 있어요.":"\n(이 브라우저에 되돌리기 사본을 남기지 못했어요)"):"게임 덱을 새 덱으로 만들었어요.")+
+        (teamMoved?"\n덱 구단도 게임 구단("+team+")으로 바꿨어요 (전: "+teamMoved+").":""));
+    }catch(e){
+      refreshVerifyAlerts(true);
+      window.alert("반영하지 못했어요 — "+((e&&e.message)||e));
+    }finally{
+      applyingRef.current=false;setVerifyApplying(false);
+    }
+  };
+  /* 창에 넘기는 덱 계산 — 점수는 라인업 화면과 같은 길(clubDeckSummary), 카드 이름은 클럽 덱 보기와 같은 줄임말 */
+  var verifyTools={
+    canon:canonCardId,
+    current:function(){ return {players:store.players,lineupMap:store.lineupMap,sdState:sdStateWithTeam}; },
+    summarize:function(players,lm,sd,team){ var r=clubDeckSummary(players,lm,Object.assign({},sd||{},{teamName:teamKey(team)||(sd&&sd.teamName)||""}),""); return {total:r.total,setPoint:r.setPoint,filled:r.filled}; },
+    label:function(pl){ var v=clubView(mergePl(pl)||pl); if(!v)return (pl&&pl.name)||""; var ct=shareCardName(v.ct);
+      return v.n+" "+(!v.l||v.l===ct?ct:(v.ct==="임팩트"?ct+" "+v.l:ct+v.l)); }
+  };
+
   /* ── 로그아웃 ── */
   var lo=async function(){
     /* 못 올린 변경이 있으면 올리고 나간다 — 로그아웃하면 세션이 없어져 더는 올릴 수 없다 */
@@ -14343,8 +15051,8 @@ export default function App(){
 
   var CSS=(<style>{"\
     @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');\
-    :root{--bg:#0d1117;--side:#0a0e14;--card:rgba(22,27,38,0.8);--inner:rgba(255,255,255,0.03);--bd:rgba(255,255,255,0.06);--re:rgba(255,255,255,0.015);--bar:rgba(255,255,255,0.06);--ta:rgba(255,213,79,0.06);--t1:#e6edf3;--t2:#8b949e;--td:rgba(255,255,255,0.35);--acc:#FFD54F;--acp:#CE93D8;--h:'Oswald',sans-serif;--m:'JetBrains Mono',monospace;}\
-    .light{--bg:#f8fafc;--side:#eef2f7;--card:rgba(255,255,255,0.98);--inner:rgba(0,0,0,0.025);--bd:rgba(0,0,0,0.10);--re:rgba(0,0,0,0.02);--bar:rgba(0,0,0,0.07);--ta:rgba(180,83,9,0.08);--t1:#1e293b;--t2:#475569;--td:rgba(0,0,0,0.45);--acc:#b45309;--acp:#7c3aed;}\
+    :root{--acc-ink:#1a1300;--vf-warn:#FFB74D;--vf-ok:#81C784;--vf-err:#FF8A80;--vf-red:#E57373;--vf-info:#4FC3F7;--vf-gold:#FFD54F;--bg:#0d1117;--side:#0a0e14;--card:rgba(22,27,38,0.8);--inner:rgba(255,255,255,0.03);--bd:rgba(255,255,255,0.06);--re:rgba(255,255,255,0.015);--bar:rgba(255,255,255,0.06);--ta:rgba(255,213,79,0.06);--t1:#e6edf3;--t2:#8b949e;--td:rgba(255,255,255,0.35);--acc:#FFD54F;--acp:#CE93D8;--h:'Oswald',sans-serif;--m:'JetBrains Mono',monospace;}\
+    .light{--acc-ink:#ffffff;--vf-warn:#b45309;--vf-ok:#2e7d32;--vf-err:#c62828;--vf-red:#c62828;--vf-info:#0277bd;--vf-gold:#b45309;--bg:#f8fafc;--side:#eef2f7;--card:rgba(255,255,255,0.98);--inner:rgba(0,0,0,0.025);--bd:rgba(0,0,0,0.10);--re:rgba(0,0,0,0.02);--bar:rgba(0,0,0,0.07);--ta:rgba(180,83,9,0.08);--t1:#1e293b;--t2:#475569;--td:rgba(0,0,0,0.45);--acc:#b45309;--acp:#7c3aed;}\
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}html{-webkit-text-size-adjust:100%;}body{margin:0;font-family:'Noto Sans KR',sans-serif;background:var(--bg);overflow-x:hidden;-webkit-font-smoothing:antialiased;}\
     ::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px;}\
     .light ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);}\
@@ -14449,9 +15157,22 @@ export default function App(){
         onAddDeck={function(){setShowTeamSelect("add");}}
         onDeleteDeck={handleDeleteDeck}
         onChangeTeam={function(){setTeamPick(true);}}
-        theme={theme} toggleTheme={toggleTheme} onCoffee={function(){setCoffeeOpen(true);}}/>
-      <div style={{flex:1,overflowY:"auto",minHeight:"100vh",paddingTop:mob?44:(tbl?50:0)}}>{pg}</div>
+        theme={theme} toggleTheme={toggleTheme} onCoffee={function(){setCoffeeOpen(true);}}
+        verifyAlerts={isGoogle?verifyAlerts:null} onVerify={isGoogle?function(){openVerify(false);}:null}/>
+      <div style={{flex:1,overflowY:"auto",minHeight:"100vh",paddingTop:mob?44:(tbl?50:0)}}>
+        {isGoogle&&verifyAlerts&&verifyAlerts.arrived>0&&!verifyOpen&&!verifyApplying&&(
+          <div role="status" style={{display:"flex",alignItems:"center",gap:8,margin:mob?"8px 10px 0":(tbl?"8px 14px 0 64px":"10px 18px 0"),padding:"8px 12px",borderRadius:10,border:"1px solid rgba(255,213,79,.45)",background:"rgba(255,213,79,.07)",fontSize:12.5,color:"var(--t1)"}}>
+            <span style={{flex:1,minWidth:0}}>{"📦 게임에서 읽어 온 덱이 도착했어요"}</span>
+            <button type="button" onClick={function(){openVerify(true);}} style={{padding:"6px 12px",fontSize:12,fontWeight:800,borderRadius:8,border:"none",background:"var(--acc)",color:"var(--acc-ink)",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",minHeight:32}}>{"살펴보기"}</button>
+          </div>
+        )}
+        {pg}
+      </div>
       <CoffeeModal open={coffeeOpen} onClose={function(){setCoffeeOpen(false);}} mobile={mob} canSend={authType==="google"} isAdmin={isAdmin}/>
+      {isGoogle&&(<VerifyModal open={verifyOpen} onClose={closeVerify} mobile={mob} isAdmin={isAdmin} alerts={verifyAlerts}
+        decks={decks} curDeckId={curDeckId} deckMax={DECK_MAX} team={curDeckObj?teamKey(curDeckObj.teamName):""} tools={verifyTools}
+        openArrived={verifyToArrived} onApply={applyArrived} onChanged={function(){refreshVerifyAlerts(true);}}
+        onOpenDeck={function(id){ setVerifyToArrived(true); handleSwitchDeck(id); }}/>)}
       {(needTeam||teamPick)&&curDeckObj&&(
         <TeamPickModal mobile={mob} forced={needTeam} current={needTeam?"":teamKey(curDeckObj.teamName)}
           players={store.players} lineupMap={store.lineupMap}

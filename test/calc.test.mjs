@@ -21,12 +21,23 @@ import {
   lineupLu, lineupOpts, lineupBat, lineupPit, calcLineupTotal, BAT_SLOTS, SP_SLOTS, RP_SLOTS, CP_MULT,
 } from './calc-extract.mjs';
 import { POS_TRAIN } from './calc-extract.mjs';
+import { LEADER_TABLE as L_TABLE, LEADER_STEPS as L_STEPS, LEADER_SELF_BONUS as L_SELF, leaderGains as L_gains, leaderLv as L_lv, computeLineupSetDeck as L_csd, calcSDBonus as L_sdb, calcPit as L_pit, lineupLu as L_lu, velCounts as L_vc, rankTrainMissing as L_rtm } from './calc-extract.mjs';
+import { LEADER_MAX_LV as L_MAX } from './calc-extract.mjs';
+import { velWeighted as V_velWeighted, velMissing as V_velMissing, getPW as V_getPW, getEnhVal as V_getEnhVal, calcSDBonus as V_calcSDBonus, calcPit as V_calcPit, pitStatScore as V_pitStatScore, CATCH_LEAD_PIT as V_CATCH, v11EditCopy as V_v11EditCopy, applyV11 as V_applyV11, v11WeightsOk as V_v11WeightsOk, rankTrainMissing as V_rankTrainMissing, lineupLu as V_lineupLu, __setSeed as V_setSeed, mergePl as V_mergePl, peakPl as V_peakPl, LAB_STD_FIELDS as V_LAB_STD_FIELDS } from './calc-extract.mjs';
 import { LAB_STD_SD, LAB_STD_HOME, labStdCtx, labStdPl, labStdScore, labStdGet, labDeckSlots, SKILL_TAIL_TOPS, PREBUILT_SKILL_TAIL, LAB_USAGE, LAB_USAGE_AT, LAB_BENCH_N, labUseGroup, labUsageList, labNextEmpty, labSetOf, labRealCounts, labPickWarn, labStdSdYear, labStdCtxYear, labStdYearGet, labAutoYears, labFaLimit, labGgLimit, isOldOlstar, cardLvType, OLSTAR_SET_POINTS_OLD, findCard } from './calc-extract.mjs';
 import { __setScoreVer, withScoreVer, getPW, PIT_W_V11, SKILLS_V11, MAJOR_V11, CATCH_LEAD_PIT, ctlMissing, applyV11, v11EditCopy, V11_TABLE_VERSION, SKILLS_V11_CODE } from './calc-extract.mjs';
 import { RANK_TIER_VERSION, RANK_TIERS_CODE, RANK_OPS, rankTierCheck, rankTiersOf, rankTierOf, rankTierColor, rankTrainMissing } from './calc-extract.mjs';
 import { RANK_REC_MAX, rankRecNum, rankRecOk, rankRecIdx, rankRecCmp, rankRecSame, rankRecMake, rankRecPut } from './calc-extract.mjs';
 import { bestBatOrder, bestOrderCore, bestLineup, bestLineupSig, BL_SLOTS27, BL_SD_KEYS, blGain } from './calc-extract.mjs';
 import { CARD_TYPES, myOrderPut, myOrderMove, myOrderRestore, MY_SORTS, myOrderSort, myLineupRank } from './calc-extract.mjs';
+import { BAT_ORDER_W, BAT_ORDER_KEYS, batOrderW, batShare, batShareOf, bestOrderAssign, batOrderRow as batOrderRow2, labBestOrder as labBestOrder2 } from './calc-extract.mjs';
+/* 타순 가중치 v2 확정본 (2026-11-20 · 21 사용자 확정, data/batter_weights/타순가중치_확정본_20261120.xlsx) — 시험이 소스와 따로 들고 있는 값 */
+const BATW2 = { p: [1.14, 1.16, 1.19, 1.21, 1.16, 1.10, 1.06, 1.01, 0.97], a: [1.20, 1.20, 1.20, 1.19, 1.13, 1.05, 1.02, 1.01, 1.00],
+  e: [1.27, 1.25, 1.21, 1.16, 1.09, 1.00, 0.99, 1.00, 1.03], n: [1.22, 1.21, 1.20, 1.18, 1.11, 1.04, 1.02, 1.01, 1.01], etc: [1.18, 1.19, 1.20, 1.19, 1.13, 1.07, 1.04, 1.01, 0.99] };
+/* calcBat 결과가 k 번 타순에 설 때의 몫 — 소스의 batShareOf 를 쓰지 않고 화면 능력치(파 · 정 · 선 · 인)와 능력치 가중치로 따로 센다 (nat = 국대에이스로 오른 파워 · 정확) */
+const batShareRef = (c, k, nat) => { const w2 = getW(), nb = nat || 0;
+  const ab = [(c.power + nb) * w2.p, (c.accuracy + nb) * w2.a, c.eye * w2.e, c.patience * w2.n], etc = c.total - (ab[0] + ab[1] + ab[2] + ab[3]);
+  return ab[0] * BATW2.p[k] + ab[1] * BATW2.a[k] + ab[2] * BATW2.e[k] + ab[3] * BATW2.n[k] + etc * BATW2.etc[k]; };
 
 /* 아래 시험들은 v1.1(제구 반영) 이전의 계산을 지킨다 — 구버전(v10) 기준으로 돈다.
    새 점수(v11) 시험은 이 파일 끝의 'v1.1 제구 반영' 칸에 있다 (2026-10-21) */
@@ -935,7 +946,7 @@ eq('RP4 는 3/1/2 에서 패전조', rpGroupOf("RP4", 6) === "패전조" ? 1 : 0
 eq('RP5 는 3/1/2 에서 롱릴리프', rpGroupOf("RP5", 6) === "롱릴리프" ? 1 : 0, 1);
 eq('CP 는 불펜조가 아님', rpGroupOf("CP", 6) === "" ? 1 : 0, 1);
 
-console.log('\n[타순 가중치] 자리의 값 — 3~4번이 정점, 6번부터 내려간다');
+console.log('\n[타순 가중치 · 구버전(v10) 점수] 자리의 값 — 3~4번이 정점, 6번부터 내려간다');
 eq('1~2번 1.100', batMult(0), 1.100);
 eq('3~4번 1.150', batMult(2), 1.150);
 eq('5번 1.000', batMult(4), 1.000);
@@ -945,7 +956,7 @@ eq('타순 가중치 합', Math.round(BAT_MULT.reduce(function(a,b){return a+b;}
 /* 5번이 1~2번보다 낮다 — 클린업을 3~4번으로 좁힌 결과다 */
 eq('5번 < 1번', batMult(4) < batMult(0) ? 1 : 0, 1);
 
-console.log('\n[강함 가중치] 라인업 안에서 점수 높은 순으로 곱한다');
+console.log('\n[강함 가중치 · 구버전(v10) 점수] 라인업 안에서 점수 높은 순으로 곱한다');
 eq('1~2위 1.350', strMult(0), 1.350);
 eq('3~5위 1.200', strMult(4), 1.200);
 eq('6~7위 1.000', strMult(6), 1.000);
@@ -3684,31 +3695,34 @@ __setScoreVer('v11');
   eq('OPS 표의 구간은 모두 구간표에 있다', RANK_OPS.every((o) => R.some((r) => r.n === o.n)) ? 1 : 0, 1);
   eqs('구간 11개 (in200 · in2000 더함)', R.map((r) => r.n).join(' '), 'in10 in30 in50 in100 in200 in300 in500 in700 in1000 in2000 in3000');
   /* 10-22 3차: 사용자 지정 — 신버전 기준 in200 커트 8900, 모든 구간 +100 (처음 옮긴 값에서) · 11-05: 모든 구간 +16
-     11-08 (사용자 지정): 실제 등수 자료로 다시 맞춘 표 — in100 · 실측 · '내 실제 등수', 시즌 239 정지 30명 보정, 커트 60% · 안정권 80% 선, 10점 단위 */
-  eqs('커트 (in10 ~ in3000)', R.map((r) => r.cut).join(' '), '9310 9200 9140 9030 8920 8840 8730 8650 8550 8370 8250');
-  eqs('안정권', R.map((r) => r.safe).join(' '), '0 9230 9170 9070 8960 8880 8770 8690 8600 8420 8310');
-  eqs('in200 커트 = 8920', String(R.find((r) => r.n === 'in200').cut), '8920');
+     11-08 (사용자 지정): 실제 등수 자료로 다시 맞춘 표 — in100 · 실측 · '내 실제 등수', 시즌 239 정지 30명 보정, 커트 60% · 안정권 80% 선, 10점 단위
+     11-21: 타자 타순 가중치 v2 로 같은 덱 TOTAL 이 내려간 만큼 — in10 −130 · in30 −120 · in50 ~ in700 −110 · in1000 ~ in3000 −100 (안정권도 같은 폭) */
+  eqs('커트 (in10 ~ in3000)', R.map((r) => r.cut).join(' '), '9180 9080 9030 8920 8810 8730 8620 8540 8450 8270 8150');
+  eqs('안정권', R.map((r) => r.safe).join(' '), '0 9110 9060 8960 8850 8770 8660 8580 8500 8320 8210');
+  eqs('11-08 표에서 내린 폭 (in10 ~ in3000)', R.map((r, i) => r.cut - [9310, 9200, 9140, 9030, 8920, 8840, 8730, 8650, 8550, 8370, 8250][i]).join(' '), '-130 -120 -110 -110 -110 -110 -110 -110 -100 -100 -100');
+  eqs('안정권 − 커트 간격은 11-08 표 그대로', R.map((r) => (r.safe ? r.safe - r.cut : 0)).join(' '), '0 30 30 40 40 40 40 40 50 50 60');
+  eqs('in200 커트 = 8810', String(R.find((r) => r.n === 'in200').cut), '8810');
   eq('안정권은 한 칸 위 커트보다 낮다 (안정권 덱이 위 구간으로 안 넘어감)', R.every((r, i) => i === 0 || !r.safe || r.safe < R[i - 1].cut) ? 1 : 0, 1);
-  let x = rankTierOf(8920, R);
-  eqs('8920 → in200 경쟁권 (커트와 같은 점수)', x.row.n + '/' + x.safe, 'in200/false');
+  let x = rankTierOf(8810, R);
+  eqs('8810 → in200 경쟁권 (커트와 같은 점수)', x.row.n + '/' + x.safe, 'in200/false');
   eqs('… in300 안정권 · 다음 in200 안정권 +40', R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in300/in200 안정권 40');
-  eqs('8919.9 → in300 안정권', (() => { const y = rankTierOf(8919.9, R); return y.row.n + '/' + y.safe; })(), 'in300/true');
-  x = rankTierOf(8824.5, R);
-  eqs('8824.5 → in500 안정권 · 다음 in300 커트', x.row.n + '/' + x.safe + '/' + x.next.label, 'in500/true/in300 커트');
+  eqs('8809.9 → in300 안정권', (() => { const y = rankTierOf(8809.9, R); return y.row.n + '/' + y.safe; })(), 'in300/true');
+  x = rankTierOf(8714.5, R);
+  eqs('8714.5 → in500 안정권 · 다음 in300 커트', x.row.n + '/' + x.safe + '/' + x.next.label, 'in500/true/in300 커트');
   eq('… 15.5점 남음', x.next.gap, 15.5, 0.01);
-  x = rankTierOf(8990, R);
-  eqs('8990 → in200 안정권 · 다음 in100 커트 +40', x.row.n + '/' + x.safe + '/' + x.next.label + ' ' + x.next.gap, 'in200/true/in100 커트 40');
-  x = rankTierOf(8390, R);
-  eqs('8390 → in2000 경쟁권 (8370 ~ 8420) · in3000 안정권', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n, 'in2000/false/in3000');
+  x = rankTierOf(8880, R);
+  eqs('8880 → in200 안정권 · 다음 in100 커트 +40', x.row.n + '/' + x.safe + '/' + x.next.label + ' ' + x.next.gap, 'in200/true/in100 커트 40');
+  x = rankTierOf(8290, R);
+  eqs('8290 → in2000 경쟁권 (8270 ~ 8320) · in3000 안정권', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n, 'in2000/false/in3000');
   eqs('… 다음 목표 in2000 안정권 +30', x.next.label + ' ' + x.next.gap, 'in2000 안정권 30');
-  x = rankTierOf(8670, R);
-  eqs('8670 → in700 경쟁권 · in1000 안정권 · 다음 in700 안정권 +20', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in700/false/in1000/in700 안정권 20');
-  eqs('8740 → in500 경쟁권 · in700 안정권', (() => { const y = rankTierOf(8740, R); return y.row.n + '/' + y.safe + '/' + R[y.safeAt].n; })(), 'in500/false/in700');
-  x = rankTierOf(9310, R);
-  eqs('9310 → in10 (안정권 칸 없음 → 경쟁권)', x.row.n + '/' + x.safe, 'in10/false');
+  x = rankTierOf(8560, R);
+  eqs('8560 → in700 경쟁권 · in1000 안정권 · 다음 in700 안정권 +20', x.row.n + '/' + x.safe + '/' + R[x.safeAt].n + '/' + x.next.label + ' ' + x.next.gap, 'in700/false/in1000/in700 안정권 20');
+  eqs('8630 → in500 경쟁권 · in700 안정권', (() => { const y = rankTierOf(8630, R); return y.row.n + '/' + y.safe + '/' + R[y.safeAt].n; })(), 'in500/false/in700');
+  x = rankTierOf(9180, R);
+  eqs('9180 → in10 (안정권 칸 없음 → 경쟁권)', x.row.n + '/' + x.safe, 'in10/false');
   eq('… 맨 위라 다음 목표 없음', x.next, null);
-  x = rankTierOf(8060, R);
-  eq('8060 → 맨 아래 커트도 못 넘음', x.i, -1);
+  x = rankTierOf(7960, R);
+  eq('7960 → 맨 아래 커트도 못 넘음', x.i, -1);
   eqs('… in3000 커트까지 190', x.next.label + ' ' + x.next.gap, 'in3000 커트 190');
   eq('… 안정권도 없음', x.safeAt, -1);
   /* 훈련이 다 들어갔는지 — 훈련은 0일 수 없다. 포특 · 라커룸 · 특훈 0 은 막지 않는다 (2026-10-22 사용자 지정) */
@@ -3750,6 +3764,9 @@ __setScoreVer('v11');
   eq('스킬 데이터가 없어도 코드 표', rankTiersOf(null) === R ? 1 : 0, 1);
   eq('온전한 저장본 → 그 표', rankTiersOf({ rankTiers: { _v: RANK_TIER_VERSION, rows: mine } }) === mine ? 1 : 0, 1);
   eq('판이 낮은 저장본 → 코드 표', rankTiersOf({ rankTiers: { _v: 0, rows: mine } }) === R ? 1 : 0, 1);
+  /* 11-25 — 판 2: 타순 가중치 v2 전(판 1)에 저장한 표는 옛 눈금이라 안 씀 */
+  eq('구간표 판 2', RANK_TIER_VERSION, 2);
+  eq('판 1 저장본(타순 가중치 v2 전 눈금) → 코드 표', rankTiersOf({ rankTiers: { _v: 1, rows: mine } }) === R ? 1 : 0, 1);
   const bad = mine.map((r) => Object.assign({}, r)); bad[3].cut = 9999;
   eq('커트 순서가 꼬인 저장본 → 코드 표', rankTiersOf({ rankTiers: { _v: RANK_TIER_VERSION, rows: bad } }) === R ? 1 : 0, 1);
   eqs('검사: 안정권이 커트보다 낮으면', rankTierCheck([{ n: 'a', cut: 100, safe: 90 }, { n: 'b', cut: 50, safe: 0 }]), 'a 안정권(90)이 커트(100)보다 낮아요');
@@ -3776,8 +3793,8 @@ __setScoreVer('v11');
   eqs('1위 → in10', R[rankRecIdx(1, R)].n, 'in10');
   eq('3001위 → 밖 (구간 수)', rankRecIdx(3001, R), R.length);
   const at = '2026-11-02T03:00:00.000Z';
-  const rr = rankRecMake(312, true, 8789.84, R, at);
-  eqs('기록 — 그때 TOTAL 은 0.1 단위 · 예상 구간 함께', JSON.stringify(rr), JSON.stringify({ r: 312, full: true, at, t: 8789.8, tier: 'in500', safe: true }));
+  const rr = rankRecMake(312, true, 8679.84, R, at);
+  eqs('기록 — 그때 TOTAL 은 0.1 단위 · 예상 구간 함께', JSON.stringify(rr), JSON.stringify({ r: 312, full: true, at, t: 8679.8, tier: 'in500', safe: true }));
   eq('예상 in500 안정권 · 실제 312위(in500 안) → 예상대로', rankRecCmp(rr, R), 0);
   eq('… 실제 280위(in300 안) → 예상보다 높음', rankRecCmp(Object.assign({}, rr, { r: 280 }), R), -1);
   eq('… 실제 820위(in1000 안) → 예상보다 낮음', rankRecCmp(Object.assign({}, rr, { r: 820 }), R), 1);
@@ -3785,13 +3802,13 @@ __setScoreVer('v11');
   eqs('맨 아래 커트도 못 넘은 덱 — 예상 구간 빈 글자 · 덜 함', low.tier + '/' + low.full + '/' + low.safe, '/false/false');
   eq('… 실제도 3000 밖 → 예상대로', rankRecCmp(low, R), 0);
   eq('… 실제 2500위면 → 예상보다 높음', rankRecCmp(Object.assign({}, low, { r: 2500 }), R), -1);
-  eq('같은 점수 (0.1 단위로 반올림해 견줌)', rankRecSame(rr, 8789.83) ? 1 : 0, 1);
+  eq('같은 점수 (0.1 단위로 반올림해 견줌)', rankRecSame(rr, 8679.83) ? 1 : 0, 1);
   eq('점수가 바뀌면 다름', rankRecSame(rr, 8786.4) ? 1 : 0, 0);
-  eq('기록이 없으면 다름', rankRecSame(null, 8789.8) ? 1 : 0, 0);
+  eq('기록이 없으면 다름', rankRecSame(null, 8679.8) ? 1 : 0, 0);
   /* 목록에 넣기 — 같은 점수면 맨 위를 바꾸고(고치기), 점수가 바뀐 뒤면 위에 쌓는다 */
   let L = rankRecPut([], rr);
   eq('빈 목록 + 기록 → 1개', L.length, 1);
-  L = rankRecPut(L, rankRecMake(298, true, 8789.8, R, at));
+  L = rankRecPut(L, rankRecMake(298, true, 8679.8, R, at));
   eqs('같은 점수로 다시 적기 → 바꿈 (여전히 1개 · 298위)', L.length + '/' + L[0].r, '1/298');
   L = rankRecPut(L, rankRecMake(250, true, 8786.4, R, at));
   eqs('점수가 바뀐 뒤 새로 적기 → 위에 쌓임 (2개 · 250 · 298)', L.length + '/' + L.map((x) => x.r).join(','), '2/250,298');
@@ -3859,7 +3876,7 @@ __setScoreVer('v11');
   /* 두 자리를 맞바꾼 36 가지 모두보다 높거나 같다 */
   const swapBeats = (R, order, bestT) => { let b = 0; for (let i = 0; i < 9; i++) for (let j = i + 1; j < 9; j++) { const a = order.slice(); const x = a[i]; a[i] = a[j]; a[j] = x; if (R.tot(a) > bestT + 1e-6) b++; } return b; };
   eq('두 자리 맞바꾸기 36 가지보다 높거나 같다', swapBeats(R1, r1.order, best1), 0);
-  /* 스킬 · 타순 구간이 없으면 센 타자를 큰 배율에 — 3 · 4번이 가장 센 둘(i · h), 8 · 9번이 가장 약한 둘(a · b) */
+  /* 스킬 · 타순 구간이 없으면 센 타자를 큰 가중치에 — 파워만 다른 덱이라 파워 가중치가 큰 3 · 4번이 가장 센 둘(i · h), 8 · 9번이 가장 약한 둘(a · b) */
   eq('가장 센 둘이 3 · 4번', ['h', 'i'].indexOf(P1[r1.order[2]].name) >= 0 && ['h', 'i'].indexOf(P1[r1.order[3]].name) >= 0 ? 1 : 0, 1);
   eq('가장 약한 둘이 8 · 9번', ['a', 'b'].indexOf(P1[r1.order[7]].name) >= 0 && ['a', 'b'].indexOf(P1[r1.order[8]].name) >= 0 ? 1 : 0, 1);
   eq('이미 최고 타순이면 그대로 (바뀐 곳 0)', bestBatOrder(R1.pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: r1.order }), 0)).moved, 0);
@@ -3876,16 +3893,16 @@ __setScoreVer('v11');
   const cold = lineupBat(P2.C, 'C', sd, lineupOpts(Object.assign({}, sd, { batOrder: SL }), 0)).total;
   eq('핵타선 타자는 3 ~ 5번에서 점수가 다르다 (타순O 값)', at >= 2 && at <= 4 ? (hot !== cold ? 1 : 0) : 1, 1);
   /* 9! 전수와 맞대기 — 점수표(81칸)로 362,880 가지를 다 세어 최고 TOTAL 이 같은지 (타순 스킬 · 세트덱 타순 구간이 섞인 덱 셋) */
+  /* 2026-11-21 타순 가중치 v2 — 몫은 선수 × 타순마다 따로(batShareRef), 강함 순위 배율은 없다 */
   const brute = (pk, sdx, o) => {
     const slots = o.batOrder.slice(), n = 9;
-    const S = slots.map((s) => { const pl = pk(s); return slots.map((_, k) => pl ? lineupBat(pl, s, sdx, Object.assign({}, o, { batOrder: slots.map((x, j) => (j === k ? s : '_' + j)) })).total : 0); });
-    const BMv = slots.map((_, k) => batMult(k)), SMv = slots.map((_, r) => strMult(r));
-    const perm = [], used = [], v = []; let best = -Infinity;
-    const rec = (k) => { if (k === n) { let t = 0; for (let a = 0; a < n; a++) { let r = 0; for (let j = 0; j < n; j++) if (v[j] > v[a] || (v[j] === v[a] && j < a)) r++; t += v[a] * BMv[a] * SMv[r]; } if (t > best) best = t; return; }
-      for (let i = 0; i < n; i++) { if (used[i]) continue; used[i] = 1; perm[k] = i; v[k] = S[i][k]; rec(k + 1); used[i] = 0; } };
-    rec(0); return best;
+    const S = slots.map((s) => { const pl = pk(s); return slots.map((_, k) => pl ? batShareRef(lineupBat(pl, s, sdx, Object.assign({}, o, { batOrder: slots.map((x, j) => (j === k ? s : '_' + j)) })), k) : 0); });
+    const used = []; let best = -Infinity;
+    const rec = (k, t) => { if (k === n) { if (t > best) best = t; return; }
+      for (let i = 0; i < n; i++) { if (used[i]) continue; used[i] = 1; rec(k + 1, t + S[i][k]); used[i] = 0; } };
+    rec(0, 0); return best;
   };
-  const batPart = (pk, sdx, order, sp) => { const o2 = lineupOpts(Object.assign({}, sdx, { batOrder: order }), sp || 0); const sc = order.map((s) => pk(s) ? lineupBat(pk(s), s, sdx, o2).total : 0); const rk = strRanks(sc); let t = 0; sc.forEach((x, i) => { t += x * batMult(i) * strMult(rk[i]); }); return t; };
+  const batPart = (pk, sdx, order, sp) => { const o2 = lineupOpts(Object.assign({}, sdx, { batOrder: order }), sp || 0); let t = 0; order.forEach((s, i) => { if (pk(s)) t += batShareRef(lineupBat(pk(s), s, sdx, o2), i); }); return t; };
   const sdOrd = Object.assign({}, sd, { s120: 'L', s140: 'L', s145: 'L', s115: 'L', liveSetPo: 0 });   /* 타순 구간이 있는 세트덱 */
   [[P1, sd], [P2, sd], [mkDeck({ C: { skill1: '컨택트히터(타순X)', s1Lv: 8, sLvManual: true }, '1B': { skill1: '공포의하위타선(타순X)', s1Lv: 9, sLvManual: true }, DH: { skill2: '클린업 트리오(타순X)', s2Lv: 9, sLvManual: true } }), sdOrd]].forEach(([P, sdx], idx) => {
     const pk = (s) => P[s] || null; const o = lineupOpts(sdx, 160);
@@ -4154,6 +4171,307 @@ console.log('\n[잠재력 선발 / 불펜] 장타억제 · 침착은 중계 · �
   eqs('같은 종류는 점수순', myOrderSort('type', L2, () => null, (pl) => ({ t1: 1, t2: 3, t3: 2 })[pl.id]).join(','), 't2,t3,t1');
   eqs('모르는 정렬이면 지금 순서', myOrderSort('?', L2, () => null, () => 0).join(','), 't1,t2,t3');
   eqs('정렬은 다른 탭 선수 자리를 안 건드림 (정렬 → 넣기)', ids(myOrderPut(P, myOrderSort('name', P.filter((x) => x.role === '타자').reverse(), () => null, () => 0))), 'b1,p1,b2,b3,p2,b4');
+}
+/* ═══ 구속 반영 (2026-11-20) — 칸 · 계산은 다 넣고 가중치는 0 ═══
+   가중치 0 이면 점수가 예전과 같고(운영 저장 덱 6,123벌 · 투수 51,517명 대조), 관리자가 구속 가중치를 넣으면 그때부터 점수에 들어간다 */
+console.log('\n[구속 반영 — 가중치 0 준비 · 넣으면 바로]');
+__setScoreVer('v11');
+{
+  const eqs = (label, got, want) => { if (got === want) { pass++; console.log(`  ok   ${label}  = ${got}`); } else { fail++; console.log(`  FAIL ${label}  got ${got}, want ${want}`); } };
+  eq('선발 · 중계 · 마무리 구속 가중치 0', ['선발', '중계', '마무리'].reduce((a, k) => a + V_getPW(k).vel, 0), 0);
+  eq('구버전도 구속 0', withScoreVer('v10', () => V_getPW('선발').vel), 0);
+  eq('가중치 0 이면 velWeighted 꺼짐', V_velWeighted() ? 1 : 0, 0);
+
+  /* 강화 · 각성 구속 — 게임 강화 능력치 표(구속 = 파워 칸) · 골글 각성 표(구속 = 인내 칸) · in100 3,643장 */
+  const ev = (ct, lv) => V_getEnhVal(ct, '구속', lv);
+  eq('골글 10강 구속 = 파워 25', ev('골든글러브', '10강'), V_getEnhVal('골든글러브', '파워', '10강'));
+  eq('골글 5강 10 · 9강 20', ev('골든글러브', '5강') * 100 + ev('골든글러브', '9강'), 1020);
+  eq('골글 2각성 25 · 3각성 27', ev('골든글러브', '2각성') * 100 + ev('골든글러브', '3각성'), 2527);
+  eq('골글 4각성 29 (파워는 27 — 각성은 인내 칸을 따른다)', ev('골든글러브', '4각성'), 29);
+  eq('골글 8각성 31 · 9각성 31', ev('골든글러브', '8각성') * 100 + ev('골든글러브', '9각성'), 3131);
+  eq('시그 6각성 26 (in100)', ev('시그니처', '6각성'), 26);
+  eq('시그 9각성 28 (파워 29)', ev('시그니처', '9각성'), 28);
+  eq('국대 9강 20 (in100 — 제구 22 와 다름)', ev('국가대표', '9강'), 20);
+  eq('국대 1각성 24 · 3각성 25 · 7각성 26 · 9각성 28', [1, 3, 7, 9].map((k) => ev('국가대표', k + '각성')).join('') === '24252628' ? 1 : 0, 1);
+  eq('임팩 10강 14 · 3각성 14 · 4각성 15 · 9각성 16', [ev('임팩트', '10강'), ev('임팩트', '3각성'), ev('임팩트', '4각성'), ev('임팩트', '9각성')].join('') === '14141516' ? 1 : 0, 1);
+  eq('올스타 10강 24', ev('올스타', '10강'), 24);
+  eq('라이브 9각성 = 10강 24 (각성 없음)', ev('라이브', '9각성'), 24);
+  eq('시즌 10강 18', ev('시즌', '10강'), 18);
+
+  /* 포지션 특훈 구속 — 10-21 사진 14장. 재설정 없음 */
+  const pz2 = { id: 'pz2', role: '투수', position: '선발', cardType: '시즌', change: 100, stuff: 100, control: 100, speed: 60, stars: 5 };
+  const velOf = (sd, slot) => V_calcSDBonus(pz2, slot, Object.assign({ teamName: '기아' }, sd), 0).vel;
+  const LV20 = { SP1: 6, SP2: 7, SP3: 6, SP4: 6, SP5: 6, RP1: 7, RP2: 7, RP3: 6, RP4: 6, RP5: 5, RP6: 5, RP7: 5, RP8: 5, CP: 7 };
+  const bad = Object.keys(LV20).filter((s) => velOf({}, s) !== LV20[s]);
+  eqs('포지션 특훈 Lv20 구속 14자리 (in100 과 같음)', bad.join(',') || '모두 맞음', '모두 맞음');
+  eq('SP2 12레벨 구속 3', velOf({ pt_SP2: { level: 12 } }, 'SP2'), 3);
+  eq('CP 14레벨 구속 4', velOf({ pt_CP: { level: 14 } }, 'CP'), 4);
+  eq('레벨 0 이면 0', velOf({ pt_SP1: { level: 0 } }, 'SP1'), 0);
+  eq('구속은 재설정이 없다 (r0 ~ r3 를 넣어도 Lv20 6)', velOf({ pt_SP1: { level: 20, r0: 3, r1: 3, r2: 3, r3: 3 } }, 'SP1'), 6);
+  eq('유니폼 구속 +2', velOf({ pt_SP3: { level: 0 }, uniVel: 2 }, 'SP3'), 2);
+  eq('투수 주장 구속 +3', velOf({ pt_SP3: { level: 0 }, capPitId: 'pz2', capPitVel: 3 }, 'SP3'), 3);
+  eq('주장(투수일 때) 구속 +2', velOf({ pt_SP3: { level: 0 }, capBatId: 'pz2', capBatVel: 2 }, 'SP3'), 2);
+  eq('다른 선수가 주장이면 안 오른다', velOf({ pt_SP3: { level: 0 }, capPitId: 'x', capPitVel: 3 }, 'SP3'), 0);
+
+  /* calcPit — 화면 값(speed) · 점수 */
+  const pv = { role: '투수', position: '선발', cardType: '골든글러브', change: 100, stuff: 110, control: 90, speed: 70, hand: '우' };
+  const pvs = Object.assign({}, pv, { specVel: 2 });
+  const lu = { enhance: '9각성', trainVel: 9 };
+  const bon = { c: 0, s: 0, ctl: 0, vel: 6 };
+  eq('구속 = 기본 70 + 9각성 31 + 훈련 9 + 특훈 2 + 보너스 6', V_calcPit(pvs, lu, bon).speed, 70 + 31 + 9 + 2 + 6);
+  eq('FA 시그면 구속도 -3 (9각성 28)', V_calcPit(Object.assign({}, pvs, { cardType: '시그니처', isFa: true }), lu, null).speed, 70 + 28 + 9 + 2 - 3);
+  eq('가중치 0 — 구속이 달라도 점수 같다', V_calcPit(pvs, lu, bon).total - V_calcPit(pv, { enhance: '9각성' }, { c: 0, s: 0, ctl: 0, vel: 0 }).total, 0, 1e-12);
+  eq('묶음 점수 — 가중치 0 이면 구속을 넣어도 같다', V_pitStatScore('선발', 10, 10, 10, 50) - V_pitStatScore('선발', 10, 10, 10), 0, 1e-12);
+  eq('포수리드 5렙 구속 1 · 7렙 2 · 10렙 2', V_CATCH['5렙'].vel * 100 + V_CATCH['7렙'].vel * 10 + V_CATCH['10렙'].vel, 122);
+
+  /* 가중치를 넣으면 — 관리자 저장본(applyV11) 길 */
+  const cp = V_v11EditCopy({});
+  eq('관리자 사본에 구속 칸(0)', cp.weights['선발'].vel + cp.weights['불펜'].vel, 0);
+  cp.weights['선발'].vel = 0.2; cp.weights['불펜'].vel = 0.3;
+  V_applyV11({ v11: cp });
+  eq('저장본 선발 구속 0.2', V_getPW('선발').vel, 0.2);
+  eq('저장본 불펜 0.3 → 마무리도 0.3', V_getPW('마무리').vel, 0.3);
+  eq('velWeighted 켜짐', V_velWeighted() ? 1 : 0, 1);
+  eq('점수 = (훈련 9 + 특훈 2 + 보너스 6) x 0.2 만큼 오른다', V_calcPit(pvs, lu, bon).total - V_calcPit(pv, { enhance: '9각성' }, { c: 0, s: 0, ctl: 0, vel: 0 }).total, 17 * 0.2, 0.006);
+  eq('전술 +2 = 2 x (2.40 + 0.2)', V_calcPit(pv, {}, { c: 0, s: 0, ctl: 0, tac: 2 }).total - V_calcPit(pv, {}, null).total, 2 * 2.6, 0.006);
+  eq('포수리드 10렙(선발) = (2 x 2.40 + 2 x 0.2) x 0.9', V_calcPit(pv, {}, { c: 0, s: 0, ctl: 0, _sdState: { catchLead: '10렙' } }).total - V_calcPit(pv, {}, null).total, (4.8 + 0.4) * 0.9, 0.006);
+  eq('구버전 점수는 그대로 (구속 0)', withScoreVer('v10', () => V_getPW('선발').vel), 0);
+  const noVel = { role: '투수', trainC: 20, trainS: 20, trainCtl: 10 };
+  eq('구속 미입력 — 가중치가 있을 때만', V_velMissing(noVel) ? 1 : 0, 1);
+  eqs('랭챌 구간 — 구속 훈련도 본다', V_rankTrainMissing(noVel, 'SP1').join(','), '구속');
+  eqs('랭챌 구간 — 구속 넣으면 통과', V_rankTrainMissing(Object.assign({}, noVel, { trainVel: 8 }), 'SP1').join(','), '');
+  /* 구속 칸이 없는 옛 저장본 → 0 (NaN 이 섞이면 TOTAL 이 사라진다) */
+  const old = JSON.parse(JSON.stringify(cp)); delete old.weights['선발'].vel; delete old.weights['불펜'].vel;
+  V_applyV11({ v11: old });
+  eq('구속 칸 없는 옛 저장본 → 구속 0', V_getPW('선발').vel, 0);
+  eq('그때 점수도 숫자', Number.isFinite(V_calcPit(pvs, lu, bon).total) ? 1 : 0, 1);
+  eq('구속 가중치가 숫자가 아니면 저장본을 안 쓴다', V_v11WeightsOk({ '선발': { c: 1, s: 1, ctl: 0, vel: 'x' }, '불펜': { c: 1, s: 1, ctl: 0 } }) ? 1 : 0, 0);
+  V_applyV11({});
+  eq('가중치 0 으로 돌아가면 미입력도 꺼짐', V_velMissing(noVel) ? 1 : 0, 0);
+  eqs('랭챌 구간 — 가중치 0 이면 구속은 안 본다', V_rankTrainMissing(noVel, 'SP1').join(','), '');
+
+  /* 선수 칸이 저장 · 라인업 · 고점 · 연구소를 따라간다 */
+  eq('라인업 입력에 구속 훈련', V_lineupLu({ trainVel: 5 }).trainVel, 5);
+  V_setSeed([{ id: 'tv1', role: '투수', position: '선발', cardType: '골든글러브', name: '구속시험', speed: 70, change: 1, stuff: 1, control: 1 }]);
+  const mp = V_mergePl({ id: 'u1', dbId: 'tv1', trainVel: 7, specVel: 3 });
+  eq('저장된 구속 훈련 · 특훈이 도감 카드와 합쳐져도 남는다', mp.trainVel * 10 + mp.specVel, 73);
+  eq('… 도감 기본 구속 70', mp.speed, 70);
+  const pk = V_peakPl({ role: '투수', position: '선발', cardType: '골든글러브', trainC: 1, trainS: 1, trainCtl: 1, trainVel: 9, hand: '우' }, 'SP1');
+  eq('고점판독 — 표에 구속 칸이 아직 없으면 내 구속 훈련 그대로', pk.trainVel, 9);
+  eq('연구소 표준 칸에 구속 훈련 · 특훈', (V_LAB_STD_FIELDS.indexOf('trainVel') >= 0 && V_LAB_STD_FIELDS.indexOf('specVel') >= 0) ? 1 : 0, 1);
+}
+/* ═══ 라커룸 리더 영향력 (2026-11-21) ═══
+   규칙: 리더 레벨 5 · 10 · 15 · 20 마다 한 줄, 받는 선수가 리더보다 6 · 11 · 16 · 21 이상 낮으면 차례로 +1. 리더끼리는 안 받는다 */
+console.log('\n[라커룸 리더 영향력]');
+__setScoreVer('v11');
+{
+  const eqs = (label, got, want) => { if (got === want) { pass++; console.log(`  ok   ${label}  = ${got}`); } else { fail++; console.log(`  FAIL ${label}  got ${got}, want ${want}`); } };
+  const gs = (g) => Object.keys(g || {}).sort().map((k) => k + g[k]).join(' ');
+  eq('문턱 6 · 11 · 16 · 21', L_STEPS.join('') === '6111621' ? 1 : 0, 1);
+  eqs('투수 Lv5 줄 — 구속 비교 → 구속 · 지구력 · 구속 · 변화', L_TABLE['투수'][0].cmp + ':' + L_TABLE['투수'][0].gain.join(','), 'vel:vel,sta,vel,c');
+  eqs('투수 Lv20 줄 — 구위 비교 → 제구 · 구위 · 변화 · 제구', L_TABLE['투수'][3].cmp + ':' + L_TABLE['투수'][3].gain.join(','), 's:ctl,s,c,ctl');
+  eqs('타자 Lv5 줄 — 인내 비교 → 인내 · 주루 · 인내 · 정확', L_TABLE['타자'][0].cmp + ':' + L_TABLE['타자'][0].gain.join(','), 'n:n,run,n,a');
+  eqs('타자 Lv20 줄 — 파워 비교 → 선구 · 파워 · 정확 · 선구', L_TABLE['타자'][3].cmp + ':' + L_TABLE['타자'][3].gain.join(','), 'p:e,p,a,e');
+  const src = (lv, v) => ({ lv, v });
+  eqs('차이 5 면 없음', gs(L_gains(false, { vel: 100 }, [src(5, { vel: 105 })])), '');
+  eqs('차이 6 이면 구속 +1', gs(L_gains(false, { vel: 100 }, [src(5, { vel: 106 })])), 'vel1');
+  eqs('차이 21 이면 구속 +2 · 지구력 +1 · 변화 +1', gs(L_gains(false, { vel: 100 }, [src(5, { vel: 121 })])), 'c1 sta1 vel2');
+  eqs('레벨 9 는 Lv5 줄만 (제구 차이는 안 봄)', gs(L_gains(false, { vel: 100, ctl: 100 }, [src(9, { vel: 106, ctl: 130 })])), 'vel1');
+  eqs('리더보다 높으면 없음', gs(L_gains(false, { vel: 150 }, [src(20, { vel: 120 })])), '');
+  eq('레벨 0 ~ 21 로 자름 · 숫자 아니면 0', L_lv(25) * 100 + L_lv('x') + L_lv(-3), 2100);
+
+  /* Y 덱(11-19 LD플레이어, 한화) — 주장 폰세 · 투수조장 류현진 Lv10, 유니폼 변 2 · 구 2. 게임 종합 · 라커룸 줄 그대로.
+     받는 선수 값 = 종합 − 라커룸 + 유니폼(리더 버프만 뺀 값). 라커룸 − 유니폼 = 리더 몫 이어야 한다. 순서 [구속, 변화, 구위, 제구, 지구력, 수비] */
+  const KEY = ['vel', 'c', 's', 'ctl', 'sta', 'def'], UNI = [0, 2, 2, 0, 0, 0];
+  const Y = { '안우진': [[137, 147, 155, 141, 139, 128], [1, 2, 3, 1, 1, 1]], '폰세': [[143, 159, 163, 164, 143, 132], [3, 4, 4, 2, 2, 2]],
+    '정민철': [[128, 136, 157, 144, 137, 135], [2, 2, 3, 1, 2, 1]], '류현진': [[121, 140, 158, 143, 131, 110], [2, 4, 4, 2, 2, 2]],
+    '송진우': [[118, 136, 153, 133, 129, 112], [2, 3, 3, 2, 3, 1]], '문동주': [[132, 139, 152, 132, 129, 111], [1, 2, 3, 2, 3, 1]],
+    '박상원': [[124, 134, 155, 132, 126, 108], [2, 3, 3, 2, 3, 1]], '한용덕': [[122, 131, 151, 132, 134, 115], [2, 3, 3, 2, 3, 1]],
+    '이태양': [[135, 133, 151, 138, 132, 129], [1, 2, 3, 1, 2, 1]], '정우주': [[141, 152, 144, 138, 137, 130], [0, 2, 3, 1, 2, 1]],
+    '김서현': [[128, 122, 130, 123, 128, 120], [2, 2, 4, 2, 3, 2]], '구대성': [[120, 138, 157, 136, 128, 114], [2, 3, 3, 1, 3, 1]] };
+  const obj = (a) => { const o = {}; KEY.forEach((k, i) => { o[k] = a[i]; }); return o; };
+  const leaders = [src(10, obj(Y['폰세'][0])), src(10, obj(Y['류현진'][0]))];
+  const bad = [];
+  Object.keys(Y).filter((n) => n !== '폰세' && n !== '류현진').forEach((n) => {
+    const [fin, lr] = Y[n];
+    const mine = obj(fin.map((v, i) => v - lr[i] + UNI[i]));
+    const g = L_gains(false, mine, leaders);
+    const got = KEY.map((k) => g[k] || 0).join(','), want = lr.map((v, i) => v - UNI[i]).join(',');
+    if (got !== want) bad.push(n + ' ' + got + ' / 게임 ' + want);
+  });
+  eqs('Y 덱 투수 10명 라커룸(리더 몫) 6칸 모두 게임과 같다', bad.join(' | ') || '10명 모두 같음', '10명 모두 같음');
+
+  /* 아래 시험은 개인 보너스를 직접 넣은 값으로 본다 — 실제 레벨 표(LEADER_SELF_BONUS)는 잠시 비우고 끝에 되돌린다 */
+  const SELF_KEEP = JSON.parse(JSON.stringify(L_SELF)); Object.keys(L_SELF).forEach((k) => { L_SELF[k] = {}; });
+  /* 라인업 계산 — computeLineupSetDeck 이 리더 값을 구하고 calcSDBonus 가 받는 선수에게 더한다 */
+  const mk = (id, extra) => Object.assign({ id, role: '투수', position: '선발', cardType: '시그니처', team: '한화', year: 2020, hand: '우',
+    change: 100, stuff: 100, control: 100, speed: 100, stars: 5, enhance: '10강' }, extra || {});
+  const P = { SP1: mk('L', { speed: 130, control: 120 }), SP2: mk('R'), SP3: mk('L2', { speed: 128, change: 140 }), RP1: mk('Q', { position: '중계', subPosition: 'RP1' }),
+    C: mk('B', { role: '타자', position: '포수', power: 100, accuracy: 100, eye: 100, patience: 130 }),
+    '1B': mk('T', { role: '타자', position: '1루수', power: 100, accuracy: 100, eye: 100, patience: 100 }),
+    BN1: mk('Z', { speed: 90 }) };
+  const pick = (s) => P[s] || null;
+  const pt0 = { pt_SP1: { level: 0 }, pt_SP2: { level: 0 }, pt_SP3: { level: 0 }, pt_RP1: { level: 0 }, pt_C: { level: 0 }, pt_1B: { level: 0 } };
+  const run = (extra) => { const sd = Object.assign({ teamName: '한화' }, pt0, extra); const tsp = L_csd(pick, sd); return { sd, b: (pl, s) => L_sdb(pl, s, sd, tsp, s === 'C' ? 0 : s === '1B' ? 1 : undefined) }; };
+  let r = run({ capPitId: 'L', capPitLv: 0 });
+  eq('리더 레벨 0 이면 영향력 없음 (예전 점수 그대로)', r.sd._lead === null ? 1 : 0, 1);
+  r = run({ capPitId: 'L', capPitLv: 10 });
+  /* R: 구속 30 · 제구 20 낮음 → Lv5 구속 +2 · 지구력 +1 · 변화 +1 / Lv10 지구력 +1 · 제구 +1 · 수비 +1 */
+  eqs('투수 주장 Lv10 — 받는 투수', gs(r.b(P.SP2, 'SP2').lead), 'c1 ctl1 def1 sta2 vel2');
+  eq('… 화면 구속에 +2 가 들어간다', r.b(P.SP2, 'SP2').vel - run({ capPitId: 'L', capPitLv: 0 }).b(P.SP2, 'SP2').vel, 2);
+  eqs('… 중계(RP1)도 받는다', gs(r.b(P.RP1, 'RP1').lead), 'c1 ctl1 def1 sta2 vel2');
+  eq('… 리더 본인은 안 받는다', r.b(P.SP1, 'SP1').lead === null ? 1 : 0, 1);
+  eq('… 후보는 안 받는다', r.b(P.BN1, 'BN1').lead === null ? 1 : 0, 1);
+  eq('… 타자는 투수 리더 몫을 안 받는다', r.b(P['1B'], '1B').lead === null ? 1 : 0, 1);
+  eq('… 점수: 변화 +1 · 제구 +1 만큼 (구속 가중치 0)', L_pit(P.SP2, L_lu(P.SP2), r.b(P.SP2, 'SP2')).total - L_pit(P.SP2, L_lu(P.SP2), run({ capPitId: 'L', capPitLv: 0 }).b(P.SP2, 'SP2')).total, 1.0 + 0.25, 0.006);
+  /* 두 리더 — 주장 L2(투수) Lv5 + 투수 주장 L Lv10. 리더끼리는 안 받는다 */
+  r = run({ capBatId: 'L2', capLv: 5, capPitId: 'L', capPitLv: 10 });
+  eqs('두 리더 몫을 다 받는다 (L2 구속 28 차 → 구속 +2 · 지구력 +1 · 변화 +1 더)', gs(r.b(P.SP2, 'SP2').lead), 'c2 ctl1 def1 sta3 vel4');
+  eq('… 주장 L2 는 투수 주장 L 의 몫을 안 받는다', r.b(P.SP3, 'SP3').lead === null ? 1 : 0, 1);
+  eq('… 구속 줄이 열리면 구속이 점수에 영향 (velCounts)', L_vc(r.sd) ? 1 : 0, 1);
+  const R2 = Object.assign({}, P.SP2, { trainC: 10, trainS: 10, trainCtl: 5 });
+  eqs('… 랭챌 구간 · 훈련 미입력이 구속 훈련도 본다', L_rtm(R2, 'SP2', r.sd).join(','), '구속');
+  eqs('… 리더 레벨 0 이면 구속 훈련은 안 본다', L_rtm(R2, 'SP2', run({ capPitId: 'L', capPitLv: 0 }).sd).join(','), '');
+  /* 타자 주장 — 타자 표 */
+  r = run({ capBatId: 'B', capLv: 5 });
+  eqs('타자 주장 Lv5 — 인내 30 차 → 인내 +2 · 주루 +1 · 정확 +1', gs(r.b(P['1B'], '1B').lead), 'a1 n2 run1');
+  eq('… 투수는 타자 주장 몫을 안 받는다', r.b(P.SP2, 'SP2').lead === null ? 1 : 0, 1);
+  /* 레벨별 개인 보너스 표 — 그 레벨 값이 있으면 직접 넣은 값 대신 */
+  r = run({ capPitId: 'L', capPitLv: 10, capPitC: 7, capPitVel: 7 });
+  const manualVel = r.b(P.SP1, 'SP1').vel;
+  L_SELF['투수조장'][10] = { c: 2, s: 2, ctl: 2, vel: 2, sta: 2, def: 2 };
+  r = run({ capPitId: 'L', capPitLv: 10, capPitC: 7, capPitVel: 7 });
+  eq('표에 레벨 10 값이 있으면 그 값 (직접 넣은 7 대신 2)', manualVel - r.b(P.SP1, 'SP1').vel, 5);
+  const vTab = r.sd._lead.pit[0].v.vel;
+  delete L_SELF['투수조장'][10];
+  const vNone = run({ capPitId: 'L', capPitLv: 10 }).sd._lead.pit[0].v.vel;
+  L_SELF['투수조장'][10] = { c: 2, s: 2, ctl: 2, vel: 2, sta: 2, def: 2 };
+  eq('… 표 값도 개인 보너스라 리더 구속이 2 오른다 (받는 선수와 차이도 2 커짐)', vTab - vNone, 2);
+  delete L_SELF['투수조장'][10];
+  eq('표에 없는 레벨은 직접 넣은 값', run({ capPitId: 'L', capPitLv: 10, capPitVel: 7 }).b(P.SP1, 'SP1').vel, manualVel);
+  Object.keys(SELF_KEEP).forEach((k) => { L_SELF[k] = SELF_KEEP[k]; });
+  /* 실제 레벨 표 — 레벨이 오르는데 줄어드는 칸이 없어야 한다 (자료 옮길 때 실수 막기) */
+  const down = []; Object.keys(L_SELF).forEach((k) => { const ls = Object.keys(L_SELF[k]).map(Number).sort((x, y) => x - y);
+    ls.slice(1).forEach((lv, i) => { const a0 = L_SELF[k][ls[i]], b0 = L_SELF[k][lv]; Object.keys(a0).forEach((st) => { if ((b0[st] || 0) < a0[st]) down.push(k + ' ' + ls[i] + '→' + lv + ' ' + st); }); }); });
+  eqs('레벨 표 — 레벨이 오르면 줄지 않는다', down.join(', ') || '없음', '없음');
+  /* 11-24 사용자: 주장(타자 · 투수) · 투수조장 모두 21렙까지 — 세 표 1 ~ 21렙 빈틈 없이, 21 위는 사이트에 안 옮김 */
+  eq('사이트 최대 리더 레벨 21', L_MAX, 21);
+  const holes = []; Object.keys(L_SELF).forEach((k) => { for (let lv = 1; lv <= L_MAX; lv++) if (!L_SELF[k][lv]) holes.push(k + ' ' + lv);
+    Object.keys(L_SELF[k]).forEach((lv) => { if (+lv > L_MAX) holes.push(k + ' ' + lv + '(최대 넘음)'); }); });
+  eqs('세 표 모두 1 ~ 21렙 빈칸 없음', holes.join(', ') || '없음', '없음');
+  const sumBad = []; for (let lv = 1; lv <= L_MAX; lv++) { const ss = Object.keys(L_SELF).map((k) => Object.values(L_SELF[k][lv] || {}).reduce((x, y) => x + y, 0));
+    if (new Set(ss).size !== 1) sumBad.push(lv + ':' + ss.join('/')); }
+  eqs('레벨마다 세 표 합계가 같다 (10:12 · 15:20 · 20:36 · 21:38)', sumBad.join(' ') || '같음', '같음');
+  eq('21렙 합계 38', Object.values(L_SELF['주장(타자)'][21]).reduce((x, y) => x + y, 0), 38);
+  eq('레벨 21 은 그대로 21', L_lv(21), 21);
+  eqs('21렙 영향력 = 20렙 줄까지 (25 · 30 줄은 모름)', gs(L_gains(false, { vel: 100, ctl: 100, c: 100, s: 100 }, [src(21, { vel: 130, ctl: 130, c: 130, s: 130 })])),
+    gs(L_gains(false, { vel: 100, ctl: 100, c: 100, s: 100 }, [src(20, { vel: 130, ctl: 130, c: 130, s: 130 })])));
+  /* 21렙 투수 주장(게임의 투수조장) — 직접 넣은 값(구속 1) 대신 표 값이 리더 본인에게 */
+  const r21 = run({ capPitId: 'L', capPitLv: 21, capPitVel: 1, capPitC: 1 }), r0 = run({ capPitId: 'L', capPitLv: 0 });
+  eq('투수 주장 21렙 — 리더 구속에 표 값(조장 21렙 구속 6)', r21.b(P.SP1, 'SP1').vel - r0.b(P.SP1, 'SP1').vel, L_SELF['투수조장'][21].vel);
+}
+{
+  /* 타순 가중치 v2 (2026-11-21 사용자 확정) — 신버전 타자 몫 = Σ 능력치 점수 × 그 능력치의 타순 가중치 + 그 밖의 점수 × 타순 가중치.
+     화면의 한 숫자(×1.19)는 대표 가중치 = 몫 ÷ 선수 점수. 구버전(v10) 점수는 예전 타순 × 강함 순위 배율 그대로 */
+  console.log('\n[타순 가중치 v2] 능력치별 타순 가중치 — 줄마다 합 10 · 강함 순위 배율 없음 (2026-11-21 사용자 확정)');
+  const eqs = (label, got, want) => { if (got === want) { pass++; console.log(`  ok   ${label}  = ${got}`); } else { fail++; console.log(`  FAIL ${label}  got ${got}, want ${want}`); } };
+  eqs('가중치 줄 다섯 (파 · 정 · 선 · 인 · 그 밖)', BAT_ORDER_KEYS.join(), 'p,a,e,n,etc');
+  for (const k of BAT_ORDER_KEYS) {
+    eqs(k + ' 줄이 확정본과 같다', BAT_ORDER_W[k].join(), BATW2[k].join());
+    eq(k + ' 줄 합 10.00', BAT_ORDER_W[k].reduce((a, b) => a + b, 0), 10, 1e-9);
+  }
+  eq('그 밖: 2 ~ 4번이 1번보다 높거나 같다', [1, 2, 3].every((k) => batOrderW('etc', k) >= batOrderW('etc', 0)) ? 1 : 0, 1);
+  eq('그 밖: 1 ~ 4번 차이는 0.02 안 (타석 수와 타석당 가치가 거의 상쇄)', Math.max(...BATW2.etc.slice(0, 4)) - Math.min(...BATW2.etc.slice(0, 4)), 0.02, 1e-9);
+  eq('파워는 4번이 가장 높다', BATW2.p.indexOf(Math.max(...BATW2.p)), 3);
+  eq('선구는 1번이 가장 높다', BATW2.e.indexOf(Math.max(...BATW2.e)), 0);
+  eq('타순 밖(없는 번호)은 마지막 값', batOrderW('p', 12), 0.97);
+  eq('타순을 모르면(undefined) 마지막 값', batOrderW('etc', undefined), 0.99);
+  /* 몫 나누기 — 손으로 센 예: 능력치 점수 166 · 131.75 · 60.4 · 21.3, 선수 점수 450, 1번 타순 */
+  const ex = batShare({ total: 450, ab: [166, 131.75, 60.4, 21.3] }, 0);
+  eq('그 밖의 점수 = 450 − 379.45', ex.etc, 70.55, 1e-9);
+  eq('파워 몫 166 × 1.14', ex.parts[0], 189.24, 1e-9);
+  eq('정확 몫 131.75 × 1.20', ex.parts[1], 158.1, 1e-9);
+  eq('선구 몫 60.4 × 1.27', ex.parts[2], 76.708, 1e-9);
+  eq('인내 몫 21.3 × 1.22', ex.parts[3], 25.986, 1e-9);
+  eq('그 밖 몫 70.55 × 1.18', ex.parts[4], 83.249, 1e-9);
+  eq('몫 합 533.283', ex.share, 533.283, 1e-9);
+  eq('대표 가중치 = 몫 ÷ 점수', ex.w, 533.283 / 450, 1e-12);
+  eq('batShareOf 는 같은 합', batShareOf({ total: 450, ab: [166, 131.75, 60.4, 21.3] }, 0), 533.283, 1e-9);
+  eq('4번 타순이면 파워 몫이 가장 크게 (166 × 1.21)', batShare({ total: 450, ab: [166, 131.75, 60.4, 21.3] }, 3).parts[0], 200.86, 1e-9);
+  eq('빈 값은 0', batShareOf(null, 0), 0);
+  eq('점수 0 이면 대표 가중치는 그 밖 줄 값', batShare({ total: 0 }, 2).w, 1.20);
+  /* calcBat 이 능력치 점수(ab)를 돌려준다 — 화면 능력치 × 능력치 가중치, 국대에이스는 파워 · 정확에 */
+  const wv = getW();
+  const mk = (n, o) => Object.assign({ name: n, role: '타자', cardType: '골든글러브', team: '기아', year: '2024', hand: '우', stars: 5, power: 150, accuracy: 140, eye: 130, patience: 120, enhance: '9각성' }, o || {});
+  const c0 = calcBat(mk('x'), {}, null);
+  eq('ab 파워 = 화면 파워 × 능력치 가중치', c0.ab[0], c0.power * wv.p, 1e-9);
+  eq('ab 정확', c0.ab[1], c0.accuracy * wv.a, 1e-9);
+  eq('ab 선구', c0.ab[2], c0.eye * wv.e, 1e-9);
+  eq('ab 인내', c0.ab[3], c0.patience * wv.n, 1e-9);
+  const cN = calcBat(mk('x'), {}, { p: 0, a: 0, e: 0, n: 0, _sdState: { natBat: '6렙' } });
+  eq('국대에이스 6렙 — 점수 +2 × (파워 + 정확 가중치)', cN.total - c0.total, 2 * (wv.p + wv.a), 1e-9);
+  eq('국대에이스 6렙 — ab 파워 +2', cN.ab[0] - c0.ab[0], 2 * wv.p, 1e-9);
+  eq('국대에이스 6렙 — ab 정확 +2', cN.ab[1] - c0.ab[1], 2 * wv.a, 1e-9);
+  eq('국대에이스는 그 밖의 점수에 안 섞인다', (cN.total - cN.ab.reduce((a, b) => a + b, 0)) - (c0.total - c0.ab.reduce((a, b) => a + b, 0)), 0, 1e-9);
+  /* 라인업 TOTAL 의 타자 몫 — 유형이 다른 아홉 명 */
+  const sd = { teamName: '기아', bpcIdx: 4 };
+  const SL = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+  const P = {};
+  SL.forEach((sl, i) => { P[sl] = mk('abcdefghi'[i], { power: 110 + 9 * ((i * 4) % 9), accuracy: 150 - 4 * i, eye: 105 + 7 * ((i * 5) % 9), patience: 95 + 6 * ((i * 2) % 9),
+    skill1: i % 3 === 0 ? '정밀타격' : '', s1Lv: 7, sLvManual: true, hand: i % 4 === 0 ? '좌' : '우' }); });
+  const pk = (sl) => P[sl] || null;
+  const o = lineupOpts(sd, 0);
+  let ref = 0; o.batOrder.forEach((sl, i) => { ref += batShareRef(lineupBat(P[sl], sl, sd, o), i); });
+  eq('신버전 TOTAL(타자만) = Σ 능력치 점수 × 타순 가중치 + 그 밖 × 타순 가중치', calcLineupTotal(pk, sd, o), Math.round(ref * 100) / 100, 1e-9);
+  const scOld = o.batOrder.map((sl) => withScoreVer('v10', () => lineupBat(P[sl], sl, sd, o).total)), rkOld = strRanks(scOld);
+  let refOld = 0; scOld.forEach((x, i) => { refOld += x * batMult(i) * strMult(rkOld[i]); });
+  eq('구버전 TOTAL(타자만)은 예전 타순 × 강함 순위 배율 그대로', withScoreVer('v10', () => calcLineupTotal(pk, sd, o)), Math.round(refOld * 100) / 100, 1e-9);
+  /* 점수 하락 안내가 쓰는 '예전 방식 TOTAL' (o.batOld) — 신버전 선수 점수에 예전 타순 × 강함 순위 배율 */
+  const scNew = o.batOrder.map((sl) => lineupBat(P[sl], sl, sd, o).total), rkNew = strRanks(scNew);
+  let refPrev = 0; scNew.forEach((x, i) => { refPrev += x * batMult(i) * strMult(rkNew[i]); });
+  eq('예전 방식 TOTAL(batOld) = 신버전 점수 × 예전 타순 × 강함 순위 배율', calcLineupTotal(pk, sd, Object.assign({}, o, { batOld: true })), Math.round(refPrev * 100) / 100, 1e-9);
+  eq('batOld 를 안 주면 새 방식 (둘은 다르다)', Math.abs(calcLineupTotal(pk, sd, o) - calcLineupTotal(pk, sd, Object.assign({}, o, { batOld: true }))) > 1 ? 1 : 0, 1);
+  eq('batOld 는 준 옵션을 바꾸지 않는다', o.batOld === undefined ? 1 : 0, 1);
+  const sumScore = o.batOrder.reduce((t, sl) => t + lineupBat(P[sl], sl, sd, o).total, 0);
+  const avgW = calcLineupTotal(pk, sd, o) / sumScore;
+  eq('타자 몫 ÷ 점수 합 은 0.97 ~ 1.27 사이 (가중치 범위 안)', avgW > 0.97 && avgW < 1.27 ? 1 : 0, 1);
+  /* 타순 줄(batOrderRow) — 신버전은 몫, 구버전은 점수 */
+  const row = batOrderRow2(P.C, 'C', sd, o);
+  eq('신버전 타순 줄 = 그 타순에 설 때의 몫', row.every((v, k) => Math.abs(v - batShareRef(lineupBat(P.C, 'C', sd, Object.assign({}, o, { batOrder: SL.map((x, j) => (j === k ? 'C' : '_' + j)) })), k)) < 1e-9) ? 1 : 0, 1);
+  eq('구버전 타순 줄 = 선수 점수', withScoreVer('v10', () => batOrderRow2(P.C, 'C', sd, o)[3]), withScoreVer('v10', () => lineupBat(P.C, 'C', sd, o).total), 1e-9);
+  /* 배정 DP — 9! 전수와 같은 합 (무작위 표 20개, 씨앗 고정) */
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const bruteMax = (S) => { const n = S.length, used = []; let best = -Infinity; const rec = (i, t) => { if (i === n) { if (t > best) best = t; return; } for (let k = 0; k < n; k++) { if (used[k]) continue; used[k] = 1; rec(i + 1, t + S[i][k]); used[k] = 0; } }; rec(0, 0); return best; };
+  let dpOk = 1, permOk = 1;
+  for (let tcase = 0; tcase < 20; tcase++) {
+    const S = []; for (let i = 0; i < 9; i++) { const base = 400 + 100 * rnd(), row2 = []; for (let k = 0; k < 9; k++) row2.push(base * (0.95 + 0.3 * rnd())); S.push(row2); }
+    const r = bestOrderAssign(S, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    if (Math.abs(r.total - bruteMax(S)) > 1e-9) dpOk = 0;
+    if (r.pos.slice().sort().join() !== '0,1,2,3,4,5,6,7,8') permOk = 0;
+  }
+  eq('배정 DP = 9! 전수 최고 합 (무작위 표 20개)', dpOk, 1);
+  eq('배정 결과는 아홉 타순을 한 번씩', permOk, 1);
+  const flat = []; for (let i = 0; i < 9; i++) flat.push([100, 100, 100, 100, 100, 100, 100, 100, 100]);
+  eqs('몫이 모두 같으면 지금 타순 그대로', bestOrderAssign(flat, [3, 1, 4, 0, 8, 2, 7, 5, 6]).pos.join(), '3,1,4,0,8,2,7,5,6');
+  const two = flat.map((r2) => r2.slice()); two[0][5] = 101;   /* 0번 타자만 6번 타순이 1점 높다 */
+  const rTwo = bestOrderAssign(two, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  eq('한 명만 옮기면 되는 판 — 그 선수는 6번으로', rTwo.pos[0], 5);
+  eq('나머지는 최대한 제자리 (7명)', rTwo.pos.filter((x, i) => x === i).length, 7);
+  eq('빈 표는 0', bestOrderAssign([], []).total, 0);
+  /* 최고 점수 타순 · 덱 연구소 타순 — 전수와 같은 점수 */
+  const best = bestBatOrder(pk, sd, o);
+  const tot = (ord) => calcLineupTotal(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: ord }), 0));
+  const Sall = SL.map((sl) => batOrderRow2(P[sl], sl, sd, o));
+  eq('최고 점수 타순 = 9! 전수 최고 (유형이 다른 덱)', tot(best.order), Math.round(bruteMax(Sall) * 100) / 100, 0.011);
+  eqs('덱 연구소 타순(labBestOrder)도 같은 타순', labBestOrder2(pk, sd, 0).join(), bestBatOrder(pk, sd, lineupOpts(Object.assign({}, sd, { batOrder: SL.slice() }), 0)).order.join());
+  eq('덱 연구소 타순의 점수 = 전수 최고', tot(labBestOrder2(pk, sd, 0)), Math.round(bruteMax(Sall) * 100) / 100, 0.011);
+  /* 센 순서대로 1번부터 세우는 것과 견줌 — 최고 타순이 낮을 수 없다 */
+  const desc = SL.slice().sort((x, y) => lineupBat(P[y], y, sd, o).total - lineupBat(P[x], x, sd, o).total);
+  eq('최고 타순 ≥ 센 순서대로 1번부터', tot(best.order) >= tot(desc) - 1e-9 ? 1 : 0, 1);
+  /* 선구가 높은 타자와 파워가 높은 타자 — 점수가 같아도 선구형은 1번, 파워형은 4번에서 몫이 크다 */
+  const eyeGuy = { total: 400, ab: [120, 110, 80, 20] }, powGuy = { total: 400, ab: [190, 100, 40, 15] };
+  eq('선구형은 1번 몫 > 4번 몫', batShareOf(eyeGuy, 0) > batShareOf(eyeGuy, 3) ? 1 : 0, 1);
+  eq('파워형은 4번 몫 > 1번 몫', batShareOf(powGuy, 3) > batShareOf(powGuy, 0) ? 1 : 0, 1);
 }
 __setScoreVer('v10');
 

@@ -230,9 +230,13 @@ function deckCounts(deck) {
   return c;
 }
 var CT_SHORT = { "골든글러브": "골글", "시그니처": "시그", "임팩트": "임팩", "국가대표": "국대", "올스타": "올스타", "라이브": "라이브", "시즌": "시즌" };
-/* 점수 기준 — 제구 반영 업데이트(v1.1) 뒤에 만든 덱 요약본에는 sv 가 실린다. 없으면 옛 기준으로 센 점수다 */
-var OLD_SCORE_TIP = "제구 반영 업데이트(2026년 10월) 전 기준으로 센 점수예요. 덱 주인이 사이트에서 그 덱을 다시 열면 새 점수로 바뀌어요.";
-function isOldScore(deck) { return !!deck && typeof deck === "object" && !deck.sv; }
+/* 점수 기준 — 덱 요약본에는 그 점수를 센 기준(sv)이 실린다. 지금 기준(CLUB_SCORE_TAG)과 다르거나 없으면 옛 기준으로 센 점수다.
+   "v11" 제구 반영(2026-10) → "v11b" 타자 타순 가중치 v2(2026-11-21 — 같은 덱 TOTAL 이 100점 안팎 내려간다).
+   같은 덱의 점수가 크게 달라지는 업데이트 때 올린다 — 서버(클럽 6차 SQL)는 sv 가 바뀐 요약본이 올라오면 주간 변화 기준점을 다시 잡는다.
+   deck-manager.jsx 가 이 값을 들여와 요약본에 싣는다 (scoreTag) */
+export var CLUB_SCORE_TAG = "v11b";
+var OLD_SCORE_TIP = "점수 계산이 바뀌기 전 기준으로 센 점수예요 (2026년 11월 타자 타순 가중치 · 10월 제구 반영). 덱 주인이 사이트에서 그 덱을 다시 열면 새 점수로 바뀌어요.";
+function isOldScore(deck) { return !!deck && typeof deck === "object" && deck.sv !== CLUB_SCORE_TAG; }
 function deckScoreText(deck) {
   if (!deck) return "";
   var old = isOldScore(deck) ? " · 구버전 기준" : "";
