@@ -2405,7 +2405,7 @@ function leaderState(pick, sd, tsp) {
   if (own(sd.capBatId)) out.ids[sd.capBatId] = 1;
   if (own(sd.capPitId)) out.ids[sd.capPitId] = 1;
   var add = function (id, lv, onlyPit) {
-    if (!id || lv < 5) return;
+    if (!id || lv < 5 || (sd._noLead && sd._noLead[id])) return;   /* _noLead — 그 리더의 영향력만 빼고 셀 때(라커룸 '영향력 +x점', 2026-11-25) */
     var f = find(id); if (!f || !leaderOwn(f.pl, sd)) return;
     var isBat = f.pl.role === "타자";
     if (onlyPit && isBat) return;

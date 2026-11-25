@@ -4347,6 +4347,11 @@ __setScoreVer('v11');
     eq('… 타팀 투수 주장 L 은 리더가 아님 — 자팀 주장 L2 만 리더', r.sd._lead && r.sd._lead.pit.length === 1 && r.sd._lead.pit[0].id === 'L2' && !r.sd._lead.ids.L ? 1 : 0, 1);
     eq('… 다른 투수는 L2 의 영향력만 받는다', r.b(P.SP2, 'SP2').lead !== null ? 1 : 0, 1);
     P.SP1 = keep; }
+  /* 11-25 — _noLead: 한 리더의 영향력만 빼고 센다 (라커룸 '영향력 +x점') */
+  r = run({ capPitId: 'L', capPitLv: 10, _noLead: { L: 1 } });
+  eq('_noLead — 그 리더뿐이면 영향력 없음', r.sd._lead === null ? 1 : 0, 1);
+  r = run({ capBatId: 'L2', capLv: 5, capPitId: 'L', capPitLv: 10, _noLead: { L: 1 } });
+  eq('_noLead — 다른 리더(L2) 영향력은 남음 · 리더끼리 안 받기는 그대로', r.sd._lead && r.sd._lead.pit.length === 1 && r.sd._lead.pit[0].id === 'L2' && r.sd._lead.ids.L === 1 ? 1 : 0, 1);
   /* 타자 주장 — 타자 표 */
   r = run({ capBatId: 'B', capLv: 5 });
   eqs('타자 주장 Lv5 — 인내 30 차 → 인내 +2 · 주루 +1 · 정확 +1', gs(r.b(P['1B'], '1B').lead), 'a1 n2 run1');

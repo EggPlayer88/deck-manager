@@ -1204,7 +1204,7 @@ function leaderState(pick, sd, tsp) {
   if (own(sd.capBatId)) out.ids[sd.capBatId] = 1;
   if (own(sd.capPitId)) out.ids[sd.capPitId] = 1;
   var add = function (id, lv, onlyPit) {
-    if (!id || lv < 5) return;
+    if (!id || lv < 5 || (sd._noLead && sd._noLead[id])) return;   /* _noLead — 그 리더의 영향력만 빼고 셀 때(라커룸 '영향력 +x점', 2026-11-25) */
     var f = find(id); if (!f || !leaderOwn(f.pl, sd)) return;
     var isBat = f.pl.role === "타자";
     if (onlyPit && isBat) return;
@@ -9031,7 +9031,12 @@ function LockerRoomPage(p) {
           var best = tops.filter(function (r) { return r.id === curId; })[0] || tops[0];
           return { best: best, cur: cur, flat: false, more: tops.length - 1 };
         };
-        setCapRec({ bat: one("capBatId", capCands, sdState.capPitId), pit: one("capPitId", pitCands, sdState.capBatId) });
+        /* 영향력 점수 — 그 리더의 영향력만 뺀 TOTAL 과의 차이 = 같은 쪽 선수들 능력치가 오른 몫(리더 본인 보너스는 빼고). 레벨 5 미만 · 타팀 리더는 없음 */
+        var totalSd = function (extra) { var sd2 = Object.assign({}, sdState, extra); var tsp = computeLineupSetDeck(pk, sd2); return calcLineupTotal(pk, sd2, lineupOpts(sd2, tsp)); };
+        var tNow = totalSd({});
+        var infOf = function (id, lv) { if (!id || leaderLv(lv) < 5 || !capOwn(byId(id))) return null; var o = {}; o[id] = 1; return tNow - totalSd({ _noLead: o }); };
+        setCapRec({ bat: one("capBatId", capCands, sdState.capPitId), pit: one("capPitId", pitCands, sdState.capBatId),
+          infBat: infOf(sdState.capBatId, sdState.capLv), infPit: sdState.capPitId !== sdState.capBatId ? infOf(sdState.capPitId, sdState.capPitLv) : null });
       } catch (e) { setCapRec(null); }
     }, 350);
     return function () { clearTimeout(timer); };
@@ -9071,7 +9076,10 @@ function LockerRoomPage(p) {
       <select value={String(lv)} onChange={function (e) { upd(key, parseInt(e.target.value, 10) || 0); }} style={{ padding: "3px 6px", fontSize: 13, background: "#1e293b", border: "1px solid #334155", borderRadius: 4, color: "#e2e8f0", fontFamily: "var(--m)", fontWeight: 700, outline: "none" }}>
         {LV_OPTS.map(function (v) { return (<option key={v} value={v}>{v}</option>); })}
       </select>
-      <span style={{ fontSize: 11, color: "var(--td)" }}>{lv >= 5 ? "영향력 " + Math.floor(lv / 5) + "줄" : "영향력은 5부터"}</span>
+      {(function () { var inf = capRec ? (key === "capLv" ? capRec.infBat : capRec.infPit) : null;
+        if (inf === null || inf === undefined || lv < 5) return null;
+        return (<span title={"리더 영향력으로 오른 같은 쪽 선수들의 능력치를 TOTAL 점수로 바꾼 값이에요 (리더 본인 보너스는 빼고)"}
+          style={{ marginLeft: 6, fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: inf > 0.05 ? "var(--vf-ok)" : "var(--td)", cursor: "help" }}>{"영향력 " + (inf >= 0 ? "+" : "−") + Math.abs(inf).toFixed(1) + "점"}</span>); })()}
     </div>);
   };
   /* 레벨 표에 그 레벨 값이 있으면 개인 보너스는 표 값(직접 입력 대신) */
