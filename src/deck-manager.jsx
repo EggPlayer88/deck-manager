@@ -10,6 +10,7 @@ import { autoPublish as clubAutoPublish, addComment as clubAddComment, loadAlert
 import FeedbackPage from "./feedback-board.jsx";
 import HelpGuide from "./help-guide.jsx";
 import In100Page from "./in100.jsx";
+import { SKILL_SPLIT } from "./skill-split-data.js";
 /* 게임 계정 인증 · 덱 최신화 — 화면은 account-verify.jsx, 서버 일은 verify-api.js, 도착한 덱 얹기 계산은 verify-apply.js (2026-11) */
 import VerifyModal, { VerifyMenuButton } from "./account-verify.jsx";
 import { loadAlerts as verifyLoadAlerts, closeRefresh as verifyCloseRefresh } from "./verify-api.js";
@@ -3121,7 +3122,7 @@ function PotmBadge(p) {
   );
 }
 function GS(p){return(<div style={{fontSize:p.size||16,fontWeight:900,fontFamily:"var(--h)",fontVariantNumeric:"tabular-nums",background:p.grad||"linear-gradient(135deg,#FFD54F,#FF8F00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"transparent"}}>{p.val}</div>);}
-function SH(p){return(<div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"linear-gradient(90deg,"+p.color+"15,transparent)",borderLeft:"3px solid "+p.color,borderBottom:"1px solid var(--bd)"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:15,fontWeight:800,color:"var(--t1)",fontFamily:"var(--h)",letterSpacing:1}}>{p.title}</span><span style={{fontSize:12,color:"var(--td)",fontFamily:"var(--m)"}}>{"("+p.count+")"}</span>{p.right?(<span style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>{p.right}</span>):null}</div>);}
+function SH(p){return(<div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"linear-gradient(90deg,"+p.color+"15,transparent)",borderLeft:"3px solid "+p.color,borderBottom:"1px solid var(--bd)"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:15,fontWeight:800,color:"var(--t1)",fontFamily:"var(--h)",letterSpacing:1}}>{p.title}</span><span className={p.cntCls} style={{fontSize:12,color:"var(--td)",fontFamily:"var(--m)"}}>{"("+p.count+")"}</span>{p.right?(<span style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>{p.right}</span>):null}</div>);}
 
 function Bar(p){var h=p.h||6;var mx=p.max||200;return(<div style={{width:p.w||"100%",flexShrink:0,height:h,background:"var(--bar)",borderRadius:h/2,overflow:"hidden"}}><div style={{width:Math.min((p.value/mx)*100,100)+"%",height:"100%",borderRadius:h/2,background:"linear-gradient(90deg,"+p.color+"77,"+p.color+")",transition:"width 0.5s ease"}}/></div>);}
 
@@ -3175,10 +3176,149 @@ function MiniLine(p) {
   </span>);
 }
 
+/* ── 스킬분해 보기 (시안 2026-11-26) ───────────────────────────
+   라인업 머리의 '🧪 스킬분해'를 켜면 스킬 이름 · 스킬점수 칸이 사라지고, 스킬 효과를 능력치로 바꿔 능력치에 더해 보여 준다.
+   지금 사이트 기준(임시 — 약 1달 뒤 스킬 점수 · 가중치 정식 개편 전까지, 2026-11-26 사용자): 스킬 몫 = 옛 분해표 v1.1 의 능력치 변화 × 상황,
+   그 레벨의 사이트 스킬 점수와 같아지게 비율을 맞춘 값. 상대 깎기는 맞서는 능력치로 사이트 가중치 기준 환산(점수 보존):
+   타자 = 상대 구위↓ → 파워(× 1.18 × 1.1) · 상대 변화↓ → 정확(× 0.97 × 1.1 ÷ 0.85) / 투수 = 상대 파워↓ → 구위(× 1.1 ÷ 구위 가중치) · 상대 정확↓ → 변화(× 0.85 × 1.1 ÷ 변화 가중치).
+   그래서 합친 몫에 가중치를 곱해 더하고 따로 둔 것을 보태면 화면의 스킬 점수와 같다. 구속은 점수에 안 들어가 2판의 구속 몫을 그대로 보여 준다.
+   그 밖(타자의 상대 제구↓ · 투수의 상대 선구 · 인내↓ · 팀 버프 · 능력치 아닌 효과 · 분해 안 한 스킬)은 오른쪽 작은 표로. 점수 · TOTAL 은 그대로 */
+var LINEUP_COLS_SPLIT = "minmax(0,30px) minmax(0,68px) minmax(56px,1fr) minmax(0,84px) minmax(0,346px) minmax(0,62px) minmax(0,54px) minmax(0,0px) minmax(0,0px) minmax(0,92px)";
+var SPLIT_GOLD = "#FFC93C";
+var SPLIT_EASE = "cubic-bezier(.4,0,.2,1)";
+var SPLIT_MERGE = {
+  "타자": { stats: ["파", "정", "선", "인"] },
+  "투수": { stats: ["속", "변", "구", "제"] }
+};
+var SPLIT_FULL = { "파": "파워", "정": "정확", "선": "선구", "인": "인내", "속": "구속", "변": "변화", "구": "구위", "제": "제구" };
+function skillSplitEntry(name, lv, cat) {
+  if (!name || !(lv >= 5) || !SKILL_SPLIT) return null;
+  var nm = buffName(canonSkillName(name, cat), cat, false);
+  var t = SKILL_SPLIT[cat] || {}, L = t[nm];
+  if (!L) { var al = SKILL_ALIAS[cat] && SKILL_ALIAS[cat][nm]; if (typeof al === "string") L = t[al]; }
+  if (!L) { for (var c in SKILL_SPLIT) { if (SKILL_SPLIT[c][nm]) { L = SKILL_SPLIT[c][nm]; break; } } }
+  return L ? (L[lv - 5] || null) : null;
+}
+/* skills = [[이름, 레벨], ...] → 능력치마다 더할 몫(d) · 그 몫을 낸 스킬(who) · 따로 둘 것(left 상대 깎기 · team · etc 점수 · raw 분해 안 한 스킬) */
+function skillSplitOf(skills, cat) {
+  var M = SPLIT_MERGE[cat === "타자" ? "타자" : "투수"];
+  var d = {}, who = {}, left = {}, team = 0, etc = 0, raw = [];
+  M.stats.forEach(function (st) { d[st] = 0; who[st] = []; });
+  skills.forEach(function (sk) {
+    var e = skillSplitEntry(sk[0], sk[1], cat), label = String(sk[0]).replace(/\(.*?\)/g, "").trim();
+    if (!e) { var sc = getSkillScore(sk[0], sk[1], cat); if (sc) raw.push([label, sc]); return; }
+    if (e[4] === 9) { if (e[3]) raw.push([label, e[3]]); return; }          /* 분해 없음 — 스킬 점수 그대로 */
+    var m = e[0] || {}, lf = e[1] || {};
+    M.stats.forEach(function (st) {
+      var v = m[st] || 0;
+      if (v) { d[st] += v; if (who[st].indexOf(label) < 0) who[st].push(label); }
+    });
+    Object.keys(lf).forEach(function (o) { left[o] = (left[o] || 0) + lf[o]; });
+    team += e[2] || 0; etc += e[3] || 0;
+  });
+  return { d: d, who: who, left: left, team: team, etc: etc, raw: raw };
+}
+function splitReduce() { try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; } }
+var SPLIT_SLOW = (typeof window !== "undefined" && window.__splitSlow) || 1;   /* 시안 찍기용 — 움직임을 느리게 */
+/* 숫자 올라가기 — from → to (끝은 반올림 정수) */
+function CountUp(p) {
+  var _v = useState(p.from); var v = _v[0], setV = _v[1];
+  useEffect(function () {
+    var from = p.from, to = p.to, dur = (p.dur || 520) * SPLIT_SLOW, t0 = null, raf = 0, tm = 0;
+    if (splitReduce() || from === to) { setV(to); return undefined; }
+    setV(from);
+    var step = function (ts) { if (t0 === null) t0 = ts; var k = Math.min(1, (ts - t0) / dur); setV(from + (to - from) * (1 - Math.pow(1 - k, 3))); if (k < 1) raf = requestAnimationFrame(step); };
+    tm = setTimeout(function () { raf = requestAnimationFrame(step); }, (p.delay || 0) * SPLIT_SLOW);
+    return function () { clearTimeout(tm); cancelAnimationFrame(raf); };
+  }, [p.from, p.to]);
+  return (<span>{Math.round(v)}</span>);
+}
+/* 따로 둔 것 — 상대 깎기(맞서는 능력치 없음) · 팀 버프 · 능력치 아닌 효과 · 분해 안 한 스킬 */
+function splitChips(sp, mini) {
+  var c = [];
+  Object.keys(sp.left).forEach(function (o) { var v = Math.round(sp.left[o]); if (v >= 1) c.push(["▼", "상대 " + (mini ? o : SPLIT_FULL[o]) + " " + v, "상대 " + SPLIT_FULL[o] + "을(를) 평균 " + v + " 깎아요 — 맞서는 능력치가 없어 따로 적었어요", "#90A4AE"]); });
+  if (sp.team >= 0.05) c.push(["👥", "팀 +" + sp.team.toFixed(1), "동료 능력치를 올려 주는 몫(점수) — 이 선수 능력치에는 안 더했어요", "#81D4FA"]);
+  if (sp.etc >= 0.05) c.push(["＋", "기타 +" + sp.etc.toFixed(1), "능력치로 바꿀 수 없는 효과(점수)", "#B0BEC5"]);
+  sp.raw.forEach(function (r) { c.push(["·", r[0] + " +" + r[1], "아직 분해하지 않은 스킬 — 스킬 점수 그대로", "#B0BEC5"]); });
+  return c;
+}
+function SplitChip(p) {
+  var c = p.c;
+  return (<span title={c[2]} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: p.mini ? 10 : 11, lineHeight: 1.5, color: c[3], background: "var(--inner)", border: "1px solid var(--bd)", borderRadius: 4, padding: "0 5px", whiteSpace: "nowrap", fontFamily: "var(--m)" }}>{c[0] + " " + c[1]}</span>);
+}
+/* 스킬분해 숫자 — 막대에 새긴 식 (사용자 11-26 C 확정): 막대 속에 기본(금색 칸과 맞닿는 이음매에), 금색 칸 바로 뒤에 +스킬, 끝에 큰 합친 값.
+   막대 길이 = 값 ÷ (라인업 최댓값 ÷ 0.8) — 가장 긴 막대도 트랙의 80%(폰 76%)에서 끝나 오른쪽 여백이 늘 +스킬 글자 자리다.
+   효과: 줄마다 시차(물결) · 금색 칸이 자란 뒤 빛이 한 번 지나감 · 숫자는 기본 → 합친 값으로 올라가 한 번 빛남. 움직임 줄이기 설정이면 바로 끝 모습 */
+function splitDeltaTxt(dr) { return dr > 0 ? "+" + dr : dr < 0 ? "−" + (-dr) : ""; }
+function splitDeltaCol(dr) { return dr < 0 ? "var(--vf-err)" : "var(--vf-gold)"; }
+/* 줄마다 칸 값 — 기본 · 합친 값(반올림) · 몫 · 풀이 */
+function splitCells(items, sp) {
+  return items.map(function (it, i) {
+    var lab = it[0], base = it[1] || 0, col = it[2], dlt = sp.d[lab] || 0, who = sp.who[lab] || [];
+    var tot = Math.round(base + dlt), dr = tot - base;
+    var tip = SPLIT_FULL[lab] + " " + tot + " = 기본 " + base + (dr > 0 ? " + 스킬 " + dr : dr < 0 ? " − 스킬 " + (-dr) : "") + (who.length ? " (" + who.join(" · ") + ")" : "");
+    return { lab: lab, base: base, col: col, tot: tot, dr: dr, tip: tip, i: i };
+  });
+}
+/* 한 능력치 줄 — [이름표] [막대: 기본 칸 · 금색 스킬 칸 · 글자] [합친 값]. mini = 폰 */
+function SplitLine(p) {
+  var c = p.c, m = p.m, S = SPLIT_SLOW, mini = !!p.mini, h = mini ? 14 : 16, fs = mini ? 9.5 : 10.5;
+  var k = (mini ? 0.76 : 0.8) / Math.max(1, p.max || 200);
+  var b = Math.min(c.base * k, 1) * 100, t = Math.min(Math.max(c.tot, 0) * k, 1) * 100;
+  var lo = Math.min(b, t), up = Math.max(0, t - b), cut = Math.max(0, b - t), end = Math.max(b, t);
+  var d0 = (p.row || 0) * 0.035 + c.i * 0.05;                        /* 줄 · 능력치 시차 */
+  var tr = function (prop, dur, dl) { return prop + " " + (dur * S) + "s cubic-bezier(.2,.8,.2,1) " + ((dl + d0) * S) + "s"; };
+  return (<React.Fragment>
+    <span title={c.tip} style={{ fontSize: mini ? 11 : 13, fontWeight: 700, color: c.col, lineHeight: 1 }}>{c.lab}</span>
+    <div title={c.tip} className="sk-bar" style={{ position: "relative", height: h, borderRadius: h / 2, background: "var(--bar)", overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: lo + "%", borderRadius: h / 2, background: "linear-gradient(90deg," + c.col + "66," + c.col + ")" }} />
+      {cut > 0 && (<div style={{ position: "absolute", left: lo + "%", top: 0, bottom: 0, width: cut + "%", background: "repeating-linear-gradient(135deg,rgba(239,83,80,0.65) 0 2px,transparent 2px 4px)" }} />)}
+      {up > 0 && (<div className="sk-anim" style={{ position: "absolute", left: b + "%", top: 0, bottom: 0, width: (m ? up : 0) + "%", overflow: "hidden", borderRadius: "0 " + h / 2 + "px " + h / 2 + "px 0",
+        background: "linear-gradient(90deg,#FFE9A8," + SPLIT_GOLD + ")", boxShadow: "0 0 8px rgba(255,201,60,0.75)", transition: tr("width", 0.55, 0.2) }}>
+        {m && (<div className="sk-shine" style={{ animationDelay: ((0.62 + d0) * S) + "s", animationDuration: (0.8 * S) + "s" }} />)}
+      </div>)}
+      <span className="sk-anim" style={{ position: "absolute", right: (100 - lo) + "%", top: 0, lineHeight: h + "px", paddingRight: 4, fontSize: fs, fontWeight: 800, fontFamily: "var(--m)", color: "#fff",
+        textShadow: "0 1px 2px rgba(0,0,0,0.7)", whiteSpace: "nowrap", opacity: m ? 1 : 0, transition: tr("opacity", 0.3, 0.1) }}>{c.base}</span>
+      {c.dr ? (<span className="sk-anim" style={{ position: "absolute", left: "calc(" + end + "% + 3px)", top: 0, lineHeight: h + "px", fontSize: fs, fontWeight: 800, fontFamily: "var(--m)",
+        color: splitDeltaCol(c.dr), whiteSpace: "nowrap", opacity: m ? 1 : 0, transform: m ? "none" : "translateX(-6px)", transition: tr("opacity", 0.3, 0.55) + ", " + tr("transform", 0.35, 0.55) }}>{splitDeltaTxt(c.dr)}</span>) : null}
+    </div>
+    <span title={c.tip} className={m && c.dr ? "sk-glow" : undefined} style={{ textAlign: "right", fontSize: mini ? 13 : 15, fontWeight: 800, fontFamily: "var(--m)", lineHeight: 1, color: c.dr ? "var(--t1)" : "var(--t2)",
+      animationDelay: ((0.78 + d0) * S) + "s", animationDuration: (0.9 * S) + "s" }}><CountUp from={c.base} to={c.tot} delay={(200 + d0 * 1000)} /></span>
+  </React.Fragment>);
+}
+/* 스킬분해 능력치 칸(PC) — 네 줄 + 오른쪽 작은 표(칸이 좁으면 @container 규칙이 아래로 내림). 켤 때 한 번만 움직인다 */
+function SplitStatBox(p) {
+  var _m = useState(false); var m = _m[0], setM = _m[1];
+  var _m2 = useState(false); var m2 = _m2[0], setM2 = _m2[1];
+  useEffect(function () { var id = setTimeout(function () { setM(true); }, 30), id2 = setTimeout(function () { setM2(true); }, 480 * SPLIT_SLOW); return function () { clearTimeout(id); clearTimeout(id2); }; }, []);
+  var sp = p.sp, chips = splitChips(sp), S = SPLIT_SLOW, cells = splitCells(p.items, sp);
+  return (<div className="sk-box">
+    <div style={{ flexShrink: 0, display: "grid", gridTemplateColumns: "13px 172px 34px", columnGap: 6, rowGap: p.pit ? 6 : 5, alignItems: "center" }}>
+      {cells.map(function (c) { return (<SplitLine key={c.lab} c={c} m={m} max={p.max} row={p.row} />); })}
+    </div>
+    {chips.length > 0 && m2 && (<div className="sk-chips sk-fadein" style={{ animationDuration: (0.35 * S) + "s", animationDelay: (0.2 * S) + "s" }}>
+      {chips.map(function (c, i) { return (<SplitChip key={i} c={c} />); })}
+    </div>)}
+  </div>);
+}
+/* 폰 — 같은 막대 네 줄(이름표 · 막대 · 합친 값). 막대는 가운데 칸 폭을 따라 늘고 줄어든다 */
+function SplitMini(p) {
+  var _m = useState(false); var m = _m[0], setM = _m[1];
+  useEffect(function () { var id = setTimeout(function () { setM(true); }, 30); return function () { clearTimeout(id); }; }, []);
+  var cells = splitCells(p.items, p.sp);
+  return (<div style={{ display: "grid", gridTemplateColumns: "12px minmax(0,1fr) 30px", columnGap: 5, rowGap: 4, alignItems: "center", margin: "2px 0", paddingRight: 6 }}>
+    {cells.map(function (c) { return (<SplitLine key={c.lab} c={c} m={m} max={p.max} row={p.row} mini={true} />); })}
+  </div>);
+}
 /* 목록 맨 위 열 제목 — 줄마다 라벨을 되풀이하지 않으려고 한 번만 놓는다 */
 function LineupHead(p){
-  var cell = function(t, k){ return (<div key={k} style={{fontSize:11,color:"var(--td)",letterSpacing:1,textAlign:k <= 2 ? "left" : "center"}}>{t}</div>); };
-  return (<div style={{display:"grid",gridTemplateColumns:LINEUP_COLS,gap:LINEUP_GAP,padding:"5px 10px 4px",borderBottom:"1px solid var(--bd)",background:"rgba(255,255,255,0.015)"}}>
+  var sp = !!p.split;
+  var cell = function(t, k){
+    var gone = sp && (k === 7 || k === 8);
+    var how = "막대 속 기본 · 금색 스킬 → 끝의 합친 값";
+    var tt = sp && k === 4 ? (<span style={{whiteSpace:"nowrap"}}>{t}<b style={{color:"var(--vf-gold)",fontWeight:800,marginLeft:4}}>{"+ 스킬"}</b><span style={{marginLeft:8,letterSpacing:0,fontSize:10}}>{how}</span></span>) : t;
+    return (<div key={k} className="sk-anim" style={{fontSize:11,color:"var(--td)",letterSpacing:1,textAlign:k <= 2 ? "left" : sp && k === 4 ? "left" : "center",overflow:"hidden",whiteSpace:"nowrap",opacity:gone?0:1,transition:"opacity 0.25s ease"}}>{tt}</div>); };
+  return (<div className="sk-anim" style={{display:"grid",gridTemplateColumns:sp ? LINEUP_COLS_SPLIT : LINEUP_COLS,gap:LINEUP_GAP,padding:"5px 10px 4px",borderBottom:"1px solid var(--bd)",background:"rgba(255,255,255,0.015)",transition:"grid-template-columns " + (0.45 * SPLIT_SLOW) + "s " + SPLIT_EASE}}>
     {["", "", p.first || "선수", "점수", p.stat || "능력치", "훈련", "특훈", "스킬", "스킬점수", "잠재"].map(cell)}
   </div>);
 }
@@ -6889,6 +7029,8 @@ function LineupPage(p) {
   /* 베스트 라인업 — 미리 보기 창에 띄울 계획 · 계산 중 표시 */
   var _bl = useState(null); var blView = _bl[0]; var setBlView = _bl[1];
   var _blBusy = useState(false); var blBusy = _blBusy[0]; var setBlBusy = _blBusy[1];
+  /* 스킬분해 보기 (시안) — 화면 상태만, 덱에는 저장 안 함 */
+  var _skSplit = useState(false); var skSplit = _skSplit[0]; var setSkSplit = _skSplit[1];
   /* KBO 구단주 홍보 배너 — 메뉴 링크와 같은 조건(구글 로그인)·같은 주소. 게스트는 게임에 못 들어가 뺀다.
      숨김 여부는 첫 그림부터 정해 두어 화면이 뒤늦게 밀리지 않게 한다 */
   var _promo = useState(function () { return !kboPromoHidden(); }); var promoOpen = _promo[0]; var setPromoOpen = _promo[1];
@@ -7191,6 +7333,40 @@ function LineupPage(p) {
       {blBusy ? "계산 중…" : "⚡ 베스트 라인업"}
     </button>);
   };
+  /* 🧩 스킬분해 — 타선 · 선발 · 중계 · 마무리 머리에 같은 단추(한 번 누르면 모든 표가 같이 바뀜) */
+  var splitBtn = function (tight) {   /* tight — 폰에서 베스트 라인업 적용 중이면 아이콘만(머리 한 줄 유지) */
+    var on = skSplit;
+    return (<button onClick={function () { setSkSplit(!on); }} aria-pressed={on} aria-label="스킬분해" className={tight ? "sk-btn-tight" : undefined}
+      title={on ? "스킬분해 끄기 — 스킬 이름 · 스킬점수를 다시 보여 줘요" : "스킬 점수를 능력치로 바꿔 능력치에 더해 보여 줘요 (지금 스킬 점수 기준 — 스킬 효과 × 발동 비율). 상대를 깎는 효과는 맞서는 능력치로 — 파워↔구위 · 정확↔변화(가중치로 환산). 점수 · TOTAL 은 그대로예요"}
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: mob ? "4px 8px" : "4px 10px", fontSize: 12, fontWeight: 800, borderRadius: 7, whiteSpace: "nowrap", fontFamily: "inherit", cursor: "pointer",
+        border: "1px solid " + (on ? SPLIT_GOLD : "rgba(255,201,60,0.4)"), color: on ? "#1a1300" : SPLIT_GOLD,
+        background: on ? "linear-gradient(135deg,#FFE08A," + SPLIT_GOLD + ")" : "rgba(255,201,60,0.06)", boxShadow: on ? "0 0 12px rgba(255,201,60,0.45)" : "none", transition: "all 0.25s ease" }}>
+      {"🧩"}<span className="sk-btn-txt">{mob ? "분해" : "스킬분해"}</span>
+    </button>);
+  };
+
+  /* 받는 팀 버프 (사용자 11-26 '3번') — 국대에이스(타 · 투) · 포수리드는 같은 쪽 모든 선수에게 똑같이 걸려 TOTAL 에 들어가고 능력치 칸엔 안 보인다.
+     스킬분해를 켜면 표 머리 아래 한 줄로 알린다 (줄마다 넣으면 모든 줄이 같은 만큼 늘어 비교엔 도움이 안 되고 화면만 복잡) */
+  var pitBuffTxt = function (o) { var nm = { vel: "속", c: "변", s: "구", ctl: "제" }, by = {};
+    ["vel", "c", "s", "ctl"].forEach(function (k) { var v = o[k] || 0; if (v) (by[v] = by[v] || []).push(nm[k]); });
+    return Object.keys(by).sort(function (x, y) { return y - x; }).map(function (v) { return by[v].join(" · ") + " +" + v; }).join(" / "); };
+  var rcvStrip = function (side) {
+    if (!skSplit) return null;
+    var sd = sdCalc, lvOf = function (k, ak) { return sd[k] || sd[ak] || "없음"; }, parts = [];
+    if (side === "bat") { var nb = lvOf("natBat", "_autoNatBat"); if (nb === "5렙" || nb === "6렙") parts.push(["국대에이스 " + nb, "파 · 정 +" + (nb === "6렙" ? 2 : 1)]); }
+    else {
+      var np = lvOf("natPit", "_autoNatPit"); if (NAT_ACE_PIT[np]) parts.push(["국대에이스 " + np, pitBuffTxt(NAT_ACE_PIT[np])]);
+      var cl = lvOf("catchLead", "_autoCatch"); if (CATCH_LEAD_PIT[cl]) parts.push(["포수리드 " + cl, pitBuffTxt(CATCH_LEAD_PIT[cl])]);
+    }
+    if (!parts.length) return null;
+    return (<div title={(side === "bat" ? "모든 타자" : "모든 투수") + "에게 똑같이 걸리는 팀 버프예요 — TOTAL 에는 들어가고, 아래 능력치 칸에는 더하지 않았어요"}
+      style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: mob ? "5px 10px" : "5px 14px", fontSize: 12, color: "var(--t2)", background: "rgba(129,212,250,0.07)", borderBottom: "1px solid var(--bd)", cursor: "help" }}>
+      <span style={{ color: "var(--vf-info)", fontWeight: 800 }}>{"👥 받는 팀 버프"}</span>
+      {parts.map(function (x) { return (<span key={x[0]} style={{ whiteSpace: "nowrap" }}><b style={{ color: "var(--t1)", fontWeight: 700 }}>{x[0]}</b>{" " + x[1]}</span>); })}
+      {!mob && (<span style={{ marginLeft: "auto", fontSize: 11, color: "var(--td)" }}>{"모든 " + (side === "bat" ? "타자" : "투수") + " · TOTAL 에만"}</span>)}
+    </div>);
+  };
+
   /* sd 를 안 주면 화면 기준(고점판독 중이면 고점 버프) */
   var calcBatSD = function(pl, slot, sd) { return lineupBat(pl, slot, sd || sdCalc, luOpts); };
   var calcPitSD = function(pl, slot, sd) { return lineupPit(pl, slot, sd || sdCalc, luOpts); };
@@ -7230,6 +7406,10 @@ function LineupPage(p) {
   /* 막대 길이 기준 — 이 라인업에서 가장 높은 능력치. 200 고정이면 다들 반쯤 차서 차이가 안 보인다 */
   var barMaxOf = function(list) { var m = 0; list.forEach(function(v) { if (v > m) m = v; }); return Math.max(120, Math.ceil(m * 1.04)); };
   var batBarMax = barMaxOf(lBats.map(function(x) { if (!x.pl) return 0; var c = calcBatSD(x.pl, x.slot); return Math.max(c.power, c.accuracy, c.eye, c.patience || 0); }));
+  /* 스킬분해 — 줄마다 스킬 몫 · 막대 기준은 합친 값의 최댓값 */
+  var batSkillsOf = function (pl, slot, idx) { var oa = orderAdjust(pl, idx), ep = oa ? oa.pl : pl; return [1,2,3].map(function (k) { var nm = ep["skill" + k]; if (!nm) return null; return [nm, effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), cardLvType(pl), k, "타자", (sdState["pts_" + slot] || []))]; }).filter(Boolean); };
+  var batSplitMax = skSplit ? barMaxOf(lBats.map(function (x, i) { if (!x.pl) return 0; var c = calcBatSD(x.pl, x.slot), d = skillSplitOf(batSkillsOf(x.pl, x.slot, i), "타자").d; return Math.max(c.power + d["파"], c.accuracy + d["정"], c.eye + d["선"], (c.patience || 0) + d["인"]); })) : 0;
+
 
   /* 전체 투수 스킬/훈련 점수 배열 계산 */
   var allPitSlots = lSP.concat(lRP).concat([lCP]);
@@ -7243,6 +7423,10 @@ function LineupPage(p) {
   }).filter(function(v){return v!==null;});
 
   var pitBarMax = barMaxOf(allPitSlots.map(function(x) { if (!x.pl) return 0; var c = calcPitSD(x.pl, x.slot); return Math.max(c.change, c.stuff, c.control || 0, c.speed || 0); }));
+  var pitCatSplit = function (pl) { return pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계"; };
+  var pitSkillsOf = function (pl, slot) { var pc = pitCatSplit(pl); return [1,2,3].map(function (k) { var nm = pl["skill" + k]; if (!nm) return null; return [nm, effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), cardLvType(pl), k, pc, (sdState["pts_" + slot] || []))]; }).filter(Boolean); };
+  var pitSplitMax = skSplit ? barMaxOf(allPitSlots.map(function (x) { if (!x.pl) return 0; var c = calcPitSD(x.pl, x.slot), d = skillSplitOf(pitSkillsOf(x.pl, x.slot), pitCatSplit(x.pl)).d; return Math.max((c.speed || 0) + d["속"], c.change + d["변"], c.stuff + d["구"], (c.control || 0) + d["제"]); })) : 0;
+
 
   /* Calculate total score */
   /* 타자는 타순 가중치 v2(batShare — 능력치별 타순 가중치)라 강함 순위를 쓰지 않는다 (2026-11-21) */
@@ -7386,6 +7570,9 @@ function LineupPage(p) {
     var oAdj = orderAdjust(pl, idx);
     var epl = oAdj ? oAdj.pl : pl;
     var isSel = selId === pl.id;
+    var bsp = skSplit ? skillSplitOf(batSkillsOf(pl, slot, idx), "타자") : null;
+    var bItems = [["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]];
+    var skHide = { opacity: skSplit ? 0 : 1, transform: skSplit ? "translateX(-22px) scale(0.92)" : "none", filter: skSplit ? "blur(2px)" : "none", transition: "opacity " + (0.26 * SPLIT_SLOW) + "s ease, transform " + (0.4 * SPLIT_SLOW) + "s " + SPLIT_EASE + ", filter " + (0.26 * SPLIT_SLOW) + "s ease", pointerEvents: skSplit ? "none" : undefined };
     return (
       <React.Fragment key={pl.id}>
         <div draggable={true}
@@ -7395,7 +7582,7 @@ function LineupPage(p) {
           onDrop={function(e) { e.preventDefault(); if (dragSlot !== null && dragSlot !== idx) swapOrder(dragSlot, idx); }}
           onDragEnd={function() { setDragSlot(null); setDragOverSlot(null); }}
           onClick={function() { setSelId(isSel ? null : pl.id); }} className="lu-row"
-          style={{ display: "grid", gridTemplateColumns: mob ? LINEUP_COLS_MOB : LINEUP_COLS, alignItems: "center", gap: mob ? LINEUP_GAP_MOB : LINEUP_GAP, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s" }}>
+          style={{ display: "grid", gridTemplateColumns: mob ? LINEUP_COLS_MOB : skSplit ? LINEUP_COLS_SPLIT : LINEUP_COLS, alignItems: "center", gap: mob ? LINEUP_GAP_MOB : LINEUP_GAP, padding: "8px 10px", background: dragOverSlot === idx ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: "grab", borderLeft: dragOverSlot === idx ? "3px solid var(--acc)" : isSel ? "3px solid var(--acc)" : "3px solid transparent", transition: "background 0.15s, grid-template-columns " + (0.45 * SPLIT_SLOW) + "s " + SPLIT_EASE }}>
           <div style={{ textAlign: "center", fontSize: 18, fontWeight: 900, color: "var(--acc)", fontFamily: "var(--h)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             {idx > 0 && (<span className="lu-arrow" title={"타순 바꾸기"} onClick={function(e) { e.stopPropagation(); swapOrder(idx, idx-1); }} style={{ fontSize: 12, cursor: "pointer", color: "var(--td)", lineHeight: 1 }}>{"▲"}</span>)}
             <span>{idx + 1}</span>
@@ -7407,15 +7594,16 @@ function LineupPage(p) {
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "타·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
             {/* 좁은 화면에서는 이름 아래로 접어 넣는다 — 능력치 · 스킬(네 글자) · 훈련/특훈 · 스킬점수/잠재 */}
             {mob && (<div style={{ marginTop: 3, display: "flex", flexDirection: "column", gap: 2 }}>
-              <StatBox mini={true} cols={4} items={[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]]} />
-              <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+              {bsp ? (<SplitMini sp={bsp} items={bItems} max={batSplitMax} row={idx} />) : (<StatBox mini={true} cols={4} items={bItems} />)}
+              {bsp && splitChips(bsp).length > 0 && (<div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>{splitChips(bsp, true).map(function (c, i) { return (<SplitChip key={i} c={c} mini={true} />); })}</div>)}
+              <div className="sk-anim" style={{ display: "flex", gap: 3, flexWrap: "wrap", maxHeight: skSplit ? 0 : 60, opacity: skSplit ? 0 : 1, overflow: "hidden", transition: "max-height " + (0.35 * SPLIT_SLOW) + "s ease, opacity " + (0.22 * SPLIT_SLOW) + "s ease" }}>
                 {[1,2,3].map(function(k){ var nm = epl["skill" + k]; if(!nm) return null;
                   return (<MiniSk key={k} name={nm} lv={effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), cardLvType(pl), k, "타자", (sdState["pts_" + slot] || []))} />); })}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <MiniLine label="훈" value={[pl.trainP||0, pl.trainA||0, pl.trainE||0, pl.trainN||0].join("·")} />
                 <MiniLine label="특" value={[pl.specPower||0, pl.specAccuracy||0, pl.specEye||0, pl.specPatience||0].join("·")} />
-                <MiniLine label="스" value={calc.skillScore || 0} bold={true} />
+                {!skSplit && (<MiniLine label="스" value={calc.skillScore || 0} bold={true} />)}
                 <span style={{ display: "inline-flex", gap: 4, fontSize: 11, fontFamily: "var(--m)" }}>
                   <PotVal label="풀" grade={pl.pot1} /><PotVal label="클" grade={pl.pot2} />
                   {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<PotVal label={awkShort(pl.potType3)} grade={pl.pot3} />)}
@@ -7426,14 +7614,14 @@ function LineupPage(p) {
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} />{wtTag(slot, idx, true, calc.total, true, calc)}</div>) : null}
           {!mob && (<React.Fragment>
             <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} />{wtTag(slot, idx, true, calc.total, false, calc)}</div>
-            <StatBox max={batBarMax} items={[["파", calc.power, "#EF5350"], ["정", calc.accuracy, "#42A5F5"], ["선", calc.eye, "#66BB6A"], ["인", calc.patience, "#FFA726"]]} />
+            {bsp ? (<div style={{ minWidth: 0, overflow: "hidden", containerType: "inline-size" }}><SplitStatBox sp={bsp} items={bItems} max={batSplitMax} row={idx} /></div>) : (<StatBox max={batBarMax} items={bItems} />)}
             <div title={"훈련 (파·정 / 선·인)"} style={{ minWidth: 0 }}>
               <NumBox items={[[pl.trainP || 0, "#EF5350"], [pl.trainA || 0, "#42A5F5"], [pl.trainE || 0, "#66BB6A"], [pl.trainN || 0, "#FFA726"]]} />
             </div>
             <div title={"특훈 (파·정 / 선·인)"} style={{ minWidth: 0 }}>
               <NumBox items={[[pl.specPower || 0, "#EF5350"], [pl.specAccuracy || 0, "#42A5F5"], [pl.specEye || 0, "#66BB6A"], [pl.specPatience || 0, "#FFA726"]]} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }}>
+            <div style={Object.assign({ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }, skHide)}>
               {[1,2,3].map(function(k){
                 var nm = epl["skill" + k]; if(!nm) return null;
                 var lv = effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), cardLvType(pl), k, "타자", (sdState["pts_" + slot] || []));
@@ -7443,7 +7631,7 @@ function LineupPage(p) {
             </div>
             {(function(){
               var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
-              return (<div style={{ textAlign: "center", fontSize: 17, fontWeight: 800, color: pctColor(skSc, allBatSkillScores, "gold"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
+              return (<div style={Object.assign({ textAlign: "center", fontSize: 17, fontWeight: 800, color: pctColor(skSc, allBatSkillScores, "gold"), fontFamily: "var(--m)", overflow: "hidden" }, skHide)}>{skSc||""}</div>);
             })()}
             <div style={{ minWidth: 0, textAlign: "center" }}>
               <div style={{ fontSize: 16, fontFamily: "var(--m)", display: "flex", gap: 8, justifyContent: "center" }}><PotVal label={"풀"} grade={pl.pot1} /><PotVal label={"클"} grade={pl.pot2} /></div>
@@ -7552,17 +7740,21 @@ function LineupPage(p) {
     );
     var calc = calcPitSD(pl, slot);
     var isSel = selId === pl.id;
+    var psp = skSplit ? skillSplitOf(pitSkillsOf(pl, slot), pitCatSplit(pl)) : null;
+    var pItems = [["속", calc.speed || 0, VEL_COLOR], ["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"]];
+    var pkHide = { opacity: skSplit ? 0 : 1, transform: skSplit ? "translateX(-22px) scale(0.92)" : "none", filter: skSplit ? "blur(2px)" : "none", transition: "opacity " + (0.26 * SPLIT_SLOW) + "s ease, transform " + (0.4 * SPLIT_SLOW) + "s " + SPLIT_EASE + ", filter " + (0.26 * SPLIT_SLOW) + "s ease", pointerEvents: skSplit ? "none" : undefined };
     return (
       <React.Fragment key={pl.id}>
-        <div {...rowDrag} onClick={function() { setSelId(isSel ? null : pl.id); }} style={{ display: "grid", gridTemplateColumns: mob ? LINEUP_COLS_MOB : LINEUP_COLS, alignItems: "center", gap: mob ? LINEUP_GAP_MOB : LINEUP_GAP, padding: "8px 10px", background: rowOver ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: spRow ? "grab" : "pointer", borderLeft: rowOver ? "3px solid var(--acc)" : isSel ? "3px solid var(--acp)" : "3px solid transparent", opacity: rowFrom ? 0.4 : 1 }}>
+        <div {...rowDrag} onClick={function() { setSelId(isSel ? null : pl.id); }} className="sk-anim" style={{ display: "grid", gridTemplateColumns: mob ? LINEUP_COLS_MOB : skSplit ? LINEUP_COLS_SPLIT : LINEUP_COLS, alignItems: "center", gap: mob ? LINEUP_GAP_MOB : LINEUP_GAP, padding: "8px 10px", background: rowOver ? "rgba(255,213,79,0.12)" : isSel ? "var(--ta)" : (idx % 2 === 0 ? "var(--re)" : "transparent"), borderBottom: "1px solid var(--bd)", cursor: spRow ? "grab" : "pointer", borderLeft: rowOver ? "3px solid var(--acc)" : isSel ? "3px solid var(--acp)" : "3px solid transparent", opacity: rowFrom ? 0.4 : 1, transition: "grid-template-columns " + (0.45 * SPLIT_SLOW) + "s " + SPLIT_EASE }}>
           {pitNo(slot, idx, true)}
           <PlayerCard player={(function(){ var ph=getPhotos(pl.name,pl.team); var url=pl.photoUrl||(ph&&ph.length>0?ph[0]:''); return url!==pl.photoUrl?Object.assign({},pl,{photoUrl:url}):pl; })()} size={mob?"sm":"md"} showPhoto={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}><Badge type={pl.cardType} /><span style={{ fontWeight: 700, color: "var(--t1)", fontSize: 16 }}>{pl.name}</span><PotmBadge pl={pl} sdState={sdState} size="sm" /></div>
             <div style={{ fontSize: 14, color: "var(--td)", marginTop: 2 }}>{pl.hand + "투·" + (pl.enhance || "") + (pl.cardType==="임팩트" && pl.impactType ? " · "+pl.impactType : pl.year ? " · "+pl.year : "")}</div>
             {mob && (<div style={{ marginTop: 3, display: "flex", flexDirection: "column", gap: 2 }}>
-              <StatBox mini={true} cols={4} items={[["속", calc.speed || 0, VEL_COLOR], ["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"]]} />
-              <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+              {psp ? (<SplitMini sp={psp} items={pItems} max={pitSplitMax} row={idx} />) : (<StatBox mini={true} cols={4} items={pItems} />)}
+              {psp && splitChips(psp).length > 0 && (<div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>{splitChips(psp, true).map(function (c, i) { return (<SplitChip key={i} c={c} mini={true} />); })}</div>)}
+              <div className="sk-anim" style={{ display: "flex", gap: 3, flexWrap: "wrap", maxHeight: skSplit ? 0 : 60, opacity: skSplit ? 0 : 1, overflow: "hidden", transition: "max-height " + (0.35 * SPLIT_SLOW) + "s ease, opacity " + (0.22 * SPLIT_SLOW) + "s ease" }}>
                 {[1,2,3].map(function(k){ var nm = pl["skill" + k]; if(!nm) return null;
                   var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
                   return (<MiniSk key={k} name={nm} lv={effSkillLv(nm, pl["s"+k+"Lv"], isLvManual(pl), cardLvType(pl), k, pcat, (sdState["pts_" + slot] || []))} />); })}
@@ -7570,7 +7762,7 @@ function LineupPage(p) {
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <span title={ctlMissing(pl) ? CTL_MISS_TIP : undefined}><MiniLine label="훈" value={ctlMissing(pl) ? (<React.Fragment>{(velMissing(pl, sdState) ? "?" : (pl.trainVel||0)) + "·" + (pl.trainC||0) + "·" + (pl.trainS||0) + "·"}<span style={{ color: CTL_MISS_COLOR, fontWeight: 800 }}>{"?"}</span></React.Fragment>) : [velMissing(pl, sdState) ? "?" : (pl.trainVel||0), pl.trainC||0, pl.trainS||0, pl.trainCtl||0].join("·")} /></span>
                 <MiniLine label="특" value={[pl.specVel||0, pl.specChange||0, pl.specStuff||0, pl.specControl||0].join("·")} />
-                <MiniLine label="스" value={calc.skillScore || 0} bold={true} />
+                {!skSplit && (<MiniLine label="스" value={calc.skillScore || 0} bold={true} />)}
                 <span style={{ display: "inline-flex", gap: 4, fontSize: 11, fontFamily: "var(--m)" }}>
                   <PotVal label="장" grade={pl.pot1} /><PotVal label="침" grade={pl.pot2} />
                   {pl.pot3 && pl.potType3 && !NO_AWAKEN_CARDS[pl.cardType] && (<PotVal label={awkShort(pl.potType3)} grade={pl.pot3} />)}
@@ -7581,14 +7773,14 @@ function LineupPage(p) {
           {mob ? (<div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={20} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, true)}</div>) : null}
           {!mob && (<React.Fragment>
             <div style={{ textAlign: "center" }}><GS val={calc.total.toFixed(1)} size={28} grad="linear-gradient(135deg,#CE93D8,#7B1FA2)" />{wtTag(slot, idx, false, calc.total, false)}</div>
-            <StatBox barH={8} max={pitBarMax} items={[["속", calc.speed || 0, VEL_COLOR], ["변", calc.change, "#AB47BC"], ["구", calc.stuff, "#FF7043"], ["제", calc.control || 0, "#26A69A"]]} />
+            {psp ? (<div style={{ minWidth: 0, overflow: "hidden", containerType: "inline-size" }}><SplitStatBox sp={psp} items={pItems} max={pitSplitMax} pit={true} row={idx} /></div>) : (<StatBox barH={8} max={pitBarMax} items={pItems} />)}
             <div title={ctlMissing(pl) ? "훈련 (속·변·구·제) — " + CTL_MISS_TIP : velMissing(pl, sdState) ? "훈련 (속·변·구·제) — " + VEL_MISS_TIP : "훈련 (속·변·구·제)"} style={{ minWidth: 0, cursor: (ctlMissing(pl) || velMissing(pl, sdState)) ? "help" : undefined }}>
               <NumBox items={[velMissing(pl, sdState) ? ["?", CTL_MISS_COLOR] : [pl.trainVel || 0, VEL_COLOR], [pl.trainC || 0, "#AB47BC"], [pl.trainS || 0, "#FF7043"], ctlMissing(pl) ? ["?", CTL_MISS_COLOR] : [pl.trainCtl || 0, "#26A69A"]]} />
             </div>
             <div title={"특훈 (속·변·구·제)"} style={{ minWidth: 0 }}>
               <NumBox items={[[pl.specVel || 0, VEL_COLOR], [pl.specChange || 0, "#AB47BC"], [pl.specStuff || 0, "#FF7043"], [pl.specControl || 0, "#26A69A"]]} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }}>
+            <div style={Object.assign({ display: "flex", flexDirection: "column", gap: 1, overflow: "hidden" }, pkHide)}>
               {[1,2,3].map(function(k){
                 var nm = pl["skill" + k]; if(!nm) return null;
                 var pcat = pl.position === "선발" ? "선발" : pl.position === "마무리" ? "마무리" : "중계";
@@ -7601,7 +7793,7 @@ function LineupPage(p) {
             </div>
             {(function(){
               var skSc=calc.skillScore;  /* 포지션 특훈 스킬 보너스 포함 */
-              return (<div style={{ textAlign: "center", fontSize: 17, fontWeight: 800, color: pctColor(skSc, allPitSkillScores, "blue"), fontFamily: "var(--m)" }}>{skSc||""}</div>);
+              return (<div style={Object.assign({ textAlign: "center", fontSize: 17, fontWeight: 800, color: pctColor(skSc, allPitSkillScores, "blue"), fontFamily: "var(--m)", overflow: "hidden" }, pkHide)}>{skSc||""}</div>);
             })()}
             <div style={{ minWidth: 0, textAlign: "center" }}>
               <div style={{ fontSize: 16, fontFamily: "var(--m)", display: "flex", gap: 8, justifyContent: "center" }}><PotVal label={"장"} grade={pl.pot1} /><PotVal label={"침"} grade={pl.pot2} /></div>
@@ -7803,20 +7995,20 @@ function LineupPage(p) {
 
       {/* Tables */}
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
-        <SH title="타선" icon="⚔️" count={diamondPl + "/9"} color="#FFD54F" right={blHeadEl(realTotal)} />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="타자" />)}{lBats.map(function(x, i) { return batRow(x.slot, x.pl, i); })}</div>
+        <SH title="타선" icon="⚔️" count={diamondPl + "/9"} cntCls={mob && blUndo ? "sk-hide" : "sk-cnt-n"} color="#FFD54F" right={<React.Fragment>{splitBtn(mob && !!blUndo)}{blHeadEl(realTotal)}</React.Fragment>} />{rcvStrip("bat")}{skSplit && mob && (<div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", fontSize: 11, color: "var(--td)", borderBottom: "1px solid var(--bd)" }}><i style={{ display: "inline-block", width: 14, height: 7, borderRadius: 4, background: "linear-gradient(90deg,#EF535066,#EF5350)" }} />{"막대 속 기본"}<i style={{ display: "inline-block", width: 10, height: 7, borderRadius: 4, background: "linear-gradient(90deg,#FFE9A8," + SPLIT_GOLD + ")", marginLeft: 4 }} /><b style={{ color: "var(--vf-gold)" }}>{"+스킬"}</b>{"→ 끝의 합친 값"}</div>)}
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="타자" split={skSplit} />)}{lBats.map(function(x, i) { return batRow(x.slot, x.pl, i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
-        <SH title="선발 로테이션" icon="🔥" count={spPl.length + "/5"} color="#AB47BC" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="선발" stat="속·변·구·제" />)}{lSP.map(function(x, i) { return pitRow(x.slot, x.pl, i); })}</div>
+        <SH title="선발 로테이션" icon="🔥" count={spPl.length + "/5"} color="#AB47BC" right={splitBtn()} />{rcvStrip("pit")}
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="선발" stat="속·변·구·제" split={skSplit} />)}{lSP.map(function(x, i) { return pitRow(x.slot, x.pl, i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
-        <SH title="중계진" icon="💪" count={rpPl.length + "/" + rpSlotsNow.length} color="#42A5F5" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="중계" stat="속·변·구·제" />)}{rpAp.seq.map(function(s, i) { return pitRow(s, pick(s), i); })}</div>
+        <SH title="중계진" icon="💪" count={rpPl.length + "/" + rpSlotsNow.length} color="#42A5F5" right={splitBtn()} />{rcvStrip("pit")}
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="중계" stat="속·변·구·제" split={skSplit} />)}{rpAp.seq.map(function(s, i) { return pitRow(s, pick(s), i); })}</div>
       </div>
       <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--bd)", overflow: "hidden", marginBottom: 12 }}>
-        <SH title="마무리" icon="🔒" count={cpPl.length + "/1"} color="#EF5350" />
-        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="마무리" stat="속·변·구·제" />)}{pitRow("CP", lCP.pl, 0)}</div>
+        <SH title="마무리" icon="🔒" count={cpPl.length + "/1"} color="#EF5350" right={splitBtn()} />{rcvStrip("pit")}
+        <div style={{ overflowX: "auto" }}>{!mob && (<LineupHead first="마무리" stat="속·변·구·제" split={skSplit} />)}{pitRow("CP", lCP.pl, 0)}</div>
       </div>
 
       {/* 후보선수 */}
@@ -15102,6 +15294,7 @@ export default function App(){
     .light input::placeholder{color:var(--td);}\
     @media (max-width:340px){.nav-beta{display:none;}}.lu-arrow{opacity:0;transition:opacity 0.15s;}.lu-row:hover .lu-arrow{opacity:1;}@media (hover:none){.lu-arrow{opacity:0.45;}}\
     .dm-drag{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}.dm-drag img{-webkit-user-drag:none;pointer-events:none;}\
+    @keyframes skGlow{0%{text-shadow:0 0 0 rgba(255,201,60,0);}35%{text-shadow:0 0 12px rgba(255,201,60,0.95),0 0 2px rgba(255,201,60,0.9);}100%{text-shadow:0 0 0 rgba(255,201,60,0);}}.sk-glow{animation:skGlow 0.9s ease-out both;}.sk-btn-tight .sk-btn-txt{display:none;}.sk-box{display:flex;align-items:center;column-gap:10px;row-gap:5px;width:100%;}.sk-chips{display:flex;flex-direction:column;gap:3px;min-width:0;}@keyframes skFade{from{opacity:0;}to{opacity:1;}}.sk-fadein{animation:skFade 0.35s ease both;}.sk-shine{position:absolute;top:0;bottom:0;left:0;width:60%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.75),transparent);transform:translateX(-120%);animation:skShine 0.8s ease-out both;}@keyframes skShine{from{transform:translateX(-120%);}to{transform:translateX(260%);}}@media (hover:hover){.sk-bar:hover{filter:brightness(1.12);}}@container (max-width:339px){.sk-box{flex-wrap:wrap;}.sk-chips{flex-direction:row;flex-wrap:wrap;flex-basis:100%;}}.sk-hide{display:none;}@media (max-width:359px){.sk-btn-txt{display:none;}.sk-cnt-n{display:none;}}@media (prefers-reduced-motion:reduce){.sk-anim{transition:none!important;}.sk-glow,.sk-fadein{animation:none!important;}.sk-shine{display:none;}}\
     select{-webkit-appearance:none;appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;}\
     input[type=number]{-moz-appearance:textfield;}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}\
   "}</style>);
