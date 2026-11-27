@@ -1,5 +1,5 @@
 -- ================================================================
--- 비공개 스킬점수표 미리보기 (2026-11) — 게임 계정 인증을 마친 유저 가운데 관리자가 고른 사람만
+-- 비공개 스킬점수표 미리보기 (2026-11) — 관리자와 관리자가 고른 계정만 (11-27: 게임 계정 인증과 상관없이 — 클럽 도파민 · 엔도르핀 가입자 등)
 -- Supabase SQL 편집기에서 한 번 실행한다 (다시 실행해도 된다).
 -- account_verify.sql 이 먼저 적용돼 있어야 한다 (gv_is_admin · gv_operator · game_accounts 를 쓴다).
 --
@@ -19,8 +19,9 @@
 -- 권한 원칙
 --   · 세 표 모두 RLS 를 켜고 정책을 두지 않으며 anon · authenticated 권한도 모두 회수한다
 --     → 표로는 누구도 못 읽는다. 표 내용은 사이트 코드(JS)에도 없고, 아래 함수로만 나간다
---   · 볼 수 있는 사람 = 관리자, 또는 (권한 줄이 있고 · 기한 안이고 · 게임 계정 인증이 살아 있는 사람)
---     인증을 스스로 풀거나(gv_unlink) 관리자가 해제하면(gv_revoke) 권한 줄이 남아 있어도 바로 못 본다
+--   · 볼 수 있는 사람 = 관리자, 또는 (권한 줄이 있고 · 기한 안인 사람) — 게임 계정 인증은 조건이 아니다(11-27 사용자:
+--     "내가 특정 유저들에게만 특별히 보여주고 싶은 정보"). 거두면(skp_revoke) 바로 못 본다
+--   · 권한을 줄 수 있는 계정 = 사이트에서 확인되는 계정(게임 계정 인증 · 클럽 가입 회원 · 가입한 계정(profiles))
 --   · 권한 주기 · 거두기 · 목록 · 표 올리기는 운영자(관리자 로그인 · service_role)만
 --   · 권한이 없는 사람에게는 '없음'만 돌려준다 — 판 이름 · 날짜 · 다른 사람 권한 여부도 안 알려 준다
 --
@@ -82,12 +83,11 @@ do $$ begin
 end $$;
 
 -- ── 판정 (안쪽에서만 쓴다 — 아무에게도 실행 권한을 주지 않는다) ─────
-
+/* 권한 줄이 있고 기한 안이면 본다 — 게임 계정 인증은 보지 않는다(11-27) */
 create or replace function public.skp_can_view(p_user uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select p_user is not null and exists (
     select 1 from public.skill_preview_access a
-      join public.game_accounts g on g.user_id = a.user_id
      where a.user_id = p_user and (a.expires_at is null or a.expires_at > now()))
 $$;
 
@@ -116,7 +116,7 @@ begin
 end $$;
 
 /* ② 표 받기 — 권한이 없으면 오류. 관리자가 아니면 열람 기록을 남긴다(같은 판은 10분에 한 번).
-   viewer = 내 게임 닉네임(화면 워터마크용 — 본인 화면에만 보인다) */
+   viewer = 내 게임 닉네임, 없으면 클럽 닉네임(화면 워터마크용 — 본인 화면에만 보인다) */
 create or replace function public.skp_get() returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
 declare v_admin boolean; r public.skill_preview%rowtype; v_nick text;
@@ -133,6 +133,7 @@ begin
     insert into public.skill_preview_views (user_id, version) values (auth.uid(), r.version);
   end if;
   select nickname into v_nick from public.game_accounts where user_id = auth.uid();
+  if v_nick is null then select nickname into v_nick from public.club_members where user_id = auth.uid() and status = 'active'; end if;
   return jsonb_build_object('version', r.version, 'updated_at', r.updated_at, 'payload', r.payload,
                             'viewer', coalesce(v_nick, case when v_admin then '운영자' else '' end));
 end $$;
@@ -200,13 +201,15 @@ end $$;
 
 -- ── 운영자 함수 ────────────────────────────────────────────────
 
-/* ③ 권한 주기 · 고치기 — 게임 계정 인증이 된 계정만. p_days 비우면 무기한(1 ~ 366일) */
+/* ③ 권한 주기 · 고치기 — 사이트에서 확인되는 계정(게임 계정 인증 · 클럽 가입 회원 · 가입한 계정). p_days 비우면 무기한(1 ~ 366일) */
 create or replace function public.skp_grant(p_user uuid, p_note text default '', p_days int default null) returns void
 language plpgsql volatile security definer set search_path = public as $$
 begin
   if not public.gv_operator() then raise exception '관리자만 할 수 있어요'; end if;
-  if p_user is null or not exists (select 1 from public.game_accounts where user_id = p_user) then
-    raise exception '게임 계정 인증을 마친 계정만 열 수 있어요';
+  if p_user is null or not (exists (select 1 from public.game_accounts where user_id = p_user)
+                         or exists (select 1 from public.club_members where user_id = p_user and status = 'active')
+                         or exists (select 1 from public.profiles where id = p_user)) then
+    raise exception '사이트 계정을 찾을 수 없어요';
   end if;
   if p_days is not null and (p_days < 1 or p_days > 366) then raise exception '기한은 1 ~ 366일이에요'; end if;
   insert into public.skill_preview_access (user_id, note, granted_by, expires_at)
@@ -225,32 +228,33 @@ begin
   if not found then raise exception '열람 권한이 없는 계정이에요'; end if;
 end $$;
 
-/* ⑤ 목록 — 인증된 계정 전부 + 권한 여부 · 열람 수 · 마지막 열람 · 내 가중치 계산 수.
-   권한 줄은 있는데 인증이 풀린 계정도 보여 준다(linked = false — 지금은 못 봄) */
+/* ⑤ 목록 — 고를 수 있는 계정(게임 계정 인증 · 클럽 가입 회원) + 권한 준 계정, 권한 여부 · 열람 수 · 마지막 열람 · 내 가중치 계산 수.
+   nickname = 게임 닉네임(없으면 클럽 닉네임) · team = 게임 구단(없으면 클럽 이름) · club = 가입한 클럽 · verified = 게임 계정 인증.
+   linked 는 옛 화면(b948b8d)과 맞추려고 늘 true — 11-27 부터 인증이 열람 조건이 아니라 '인증이 풀려 못 봄' 표시가 뜨면 안 된다 */
 drop function if exists public.skp_list();
 create or replace function public.skp_list()
 returns table (user_id uuid, nickname text, team text, linked boolean, linked_at timestamptz,
-               granted boolean, note text, granted_at timestamptz, expires_at timestamptz, views int, last_view timestamptz, customs int)
+               granted boolean, note text, granted_at timestamptz, expires_at timestamptz, views int, last_view timestamptz, customs int,
+               club text, verified boolean)
 language plpgsql stable security definer set search_path = public as $$
 #variable_conflict use_column
 begin
   if not public.gv_operator() then raise exception '관리자만 볼 수 있어요'; end if;
   return query
     with v as (select vv.user_id, count(*)::int n, max(vv.viewed_at) last_at from public.skill_preview_views vv group by vv.user_id),
-         c as (select cc.user_id, count(*)::int n from public.skill_preview_customs cc group by cc.user_id)
-    select g.user_id, g.nickname, g.team, true, g.linked_at,
-           a.user_id is not null, coalesce(a.note, ''), a.granted_at, a.expires_at, coalesce(v.n, 0), v.last_at, coalesce(c.n, 0)
-      from public.game_accounts g
-      left join public.skill_preview_access a on a.user_id = g.user_id
-      left join v on v.user_id = g.user_id
-      left join c on c.user_id = g.user_id
-    union all
-    select a.user_id, '', '', false, null::timestamptz,
-           true, a.note, a.granted_at, a.expires_at, coalesce(v.n, 0), v.last_at, coalesce(c.n, 0)
-      from public.skill_preview_access a
-      left join v on v.user_id = a.user_id
-      left join c on c.user_id = a.user_id
-     where not exists (select 1 from public.game_accounts g where g.user_id = a.user_id);
+         c as (select cc.user_id, count(*)::int n from public.skill_preview_customs cc group by cc.user_id),
+         cm as (select m.user_id, m.nickname, cl.name as club from public.club_members m join public.clubs cl on cl.id = m.club_id where m.status = 'active'),
+         ids as (select g.user_id from public.game_accounts g union select cm.user_id from cm union select a.user_id from public.skill_preview_access a)
+    select i.user_id, coalesce(g.nickname, cm.nickname, ''), coalesce(g.team, cm.club, ''), true, g.linked_at,
+           a.user_id is not null, coalesce(a.note, ''), a.granted_at, a.expires_at, coalesce(v.n, 0), v.last_at, coalesce(c.n, 0),
+           coalesce(cm.club, ''), g.user_id is not null
+      from ids i
+      left join public.game_accounts g on g.user_id = i.user_id
+      left join cm on cm.user_id = i.user_id
+      left join public.skill_preview_access a on a.user_id = i.user_id
+      left join v on v.user_id = i.user_id
+      left join c on c.user_id = i.user_id
+     order by (a.user_id is not null) desc, coalesce(g.nickname, cm.nickname, '');
 end $$;
 
 /* ⑥ 표 올리기 — 같은 줄('current')을 바꿔 끼운다. 모양 · 크기만 확인한다(내용 검사는 운영자 도구가 한다).

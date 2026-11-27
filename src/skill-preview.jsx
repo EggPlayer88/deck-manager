@@ -218,7 +218,7 @@ function SkpAdmin(p) {
   var load = function () { setErr(""); skpList().then(function (L) { setList(L || []); }).catch(function (e) { setErr(e.message); }); };
   React.useEffect(function () { if (open && !list) load(); }, [open]);
   var granted = (list || []).filter(function (x) { return x.granted; });
-  var verified = (list || []).filter(function (x) { return x.linked; });
+  var verified = (list || []);      /* 고를 수 있는 계정 전부(게임 계정 인증 · 클럽 가입 회원) — 11-27 부터 인증은 열람 조건이 아님 */
   var qq = ns(q).toLowerCase();
   var pool = verified.filter(function (x) { return !x.granted && (!qq || ns(x.nickname + x.team).toLowerCase().indexOf(qq) >= 0); });
   var act = function (id, fn) { setBusy(id); setErr(""); fn().then(function () { setForm(null); return skpList(); }).then(function (L) { setList(L || []); })
@@ -247,11 +247,11 @@ function SkpAdmin(p) {
       <span style={{ fontSize: 14 }}>{"👥"}</span>
       <span style={{ fontSize: 13.5, fontWeight: 800 }}>{"열람 권한 관리"}</span>
       <span style={{ fontSize: 11, color: "var(--acp)", fontWeight: 700 }}>{"관리자"}</span>
-      <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--t2)", fontFamily: "var(--m)" }}>{list ? ("허용 " + granted.filter(function (x) { return x.linked; }).length + " / 인증 " + verified.length) : ""}</span>
+      <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--t2)", fontFamily: "var(--m)" }}>{list ? ("허용 " + granted.length + " / 계정 " + verified.length) : ""}</span>
       <span style={{ fontSize: 11, color: "var(--td)" }}>{open ? "▲" : "▼"}</span>
     </button>
     {open && (<div style={{ padding: mob ? "0 12px 12px" : "0 14px 14px" }}>
-      <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.5, marginBottom: 8 }}>{"게임 계정 인증을 마친 사람만 고를 수 있어요. 인증이 풀리면 권한 줄이 남아 있어도 바로 못 봐요. 거둬도 열람 기록은 남아요."}</div>
+      <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.5, marginBottom: 8 }}>{"게임 계정 인증을 했거나 클럽에 가입한 계정에서 골라요(인증은 열람 조건이 아니에요). 거두면 바로 못 봐요 — 열람 기록은 남아요."}</div>
       {err && <div style={{ fontSize: 12, color: "var(--vf-err)", marginBottom: 8 }}>{err}</div>}
       {!list && !err && <div style={{ fontSize: 12, color: "var(--td)", padding: "6px 0" }}>{"불러오는 중…"}</div>}
       {list && (<React.Fragment>
@@ -260,8 +260,8 @@ function SkpAdmin(p) {
         {granted.map(function (x) {
           return (<div key={x.user_id} style={{ borderTop: "1px solid var(--bd)", padding: "7px 0" }}>
             <div style={{ display: "grid", gridTemplateColumns: mob ? "minmax(0,1fr) auto" : "minmax(0,1.1fr) 56px minmax(0,1.4fr) 92px minmax(0,1.2fr) auto", columnGap: 10, rowGap: 3, alignItems: "center" }}>
-              <span style={Object.assign({}, cell, { color: x.linked ? "var(--t1)" : "var(--td)", fontWeight: 700 })}>{x.linked ? x.nickname : ("계정 " + String(x.user_id).slice(0, 8))}</span>
-              {!mob && <span style={cell}>{x.team || "—"}</span>}
+              <span style={Object.assign({}, cell, { color: x.nickname ? "var(--t1)" : "var(--td)", fontWeight: 700 })}>{x.nickname || ("계정 " + String(x.user_id).slice(0, 8))}</span>
+              {!mob && <span style={cell} title={x.club ? "클럽 " + x.club : ""}>{x.team || "—"}</span>}
               {!mob && <span style={cell} title={x.note}>{x.note || "메모 없음"}</span>}
               {!mob && <span style={cell}>{x.expires_at ? "~" + md(x.expires_at) : "기한 없음"}</span>}
               {!mob && <span style={cell} title={x.customs ? "내 가중치 계산 " + x.customs + "회" : ""}>{(x.views ? ("열람 " + x.views + "회 · " + md(x.last_view, true)) : "아직 안 봄") + (x.customs ? " · 맞춤 " + x.customs : "")}</span>}
@@ -274,13 +274,12 @@ function SkpAdmin(p) {
               </span>
               {mob && <span style={Object.assign({}, cell, { gridColumn: "1 / -1", fontSize: 11 })}>{[x.team, x.note || "메모 없음", x.expires_at ? "~" + md(x.expires_at) : "기한 없음", x.views ? "열람 " + x.views + "회" : "아직 안 봄", x.customs ? "맞춤 " + x.customs + "회" : ""].filter(Boolean).join(" · ")}</span>}
             </div>
-            {!x.linked && <div style={{ fontSize: 11, color: "var(--vf-warn)", marginTop: 3 }}>{"⚠ 게임 계정 인증이 풀려 지금은 못 봐요"}</div>}
             {form && form.id === x.user_id && formEl()}
           </div>);
         })}
         <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 6px" }}>
-          <span style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)" }}>{"인증된 사람에서 고르기"}</span>
-          <input value={q} onChange={function (e) { setQ(e.target.value); }} placeholder="닉네임 · 구단" style={{ marginLeft: "auto", width: mob ? 130 : 180, padding: "5px 9px", fontSize: 12, background: "var(--bg)", border: "1px solid var(--bd)", borderRadius: 7, color: "var(--t1)" }} />
+          <span style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)" }}>{"계정 고르기"}</span>
+          <input value={q} onChange={function (e) { setQ(e.target.value); }} placeholder="닉네임 · 구단 · 클럽" style={{ marginLeft: "auto", width: mob ? 130 : 180, padding: "5px 9px", fontSize: 12, background: "var(--bg)", border: "1px solid var(--bd)", borderRadius: 7, color: "var(--t1)" }} />
         </div>
         <div style={{ maxHeight: 260, overflowY: "auto", borderTop: "1px solid var(--bd)" }}>
           {pool.length === 0 && <div style={{ fontSize: 12, color: "var(--td)", padding: "8px 0" }}>{qq ? "찾는 사람이 없어요" : "고를 사람이 없어요"}</div>}
@@ -289,7 +288,7 @@ function SkpAdmin(p) {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={Object.assign({}, cell, { color: "var(--t1)", fontWeight: 600, flex: "1 1 auto", minWidth: 0 })}>{x.nickname}</span>
                 <span style={Object.assign({}, cell, { width: 44 })}>{x.team}</span>
-                {!mob && <span style={Object.assign({}, cell, { width: 90 })}>{"인증 " + md(x.linked_at)}</span>}
+                {!mob && <span style={Object.assign({}, cell, { width: 90 })}>{x.verified ? "인증 " + md(x.linked_at) : (x.club ? "클럽 회원" : "")}</span>}
                 <button type="button" style={btn(true)} onClick={function () { setForm({ id: x.user_id, note: "", days: "" }); }}>{"허용"}</button>
               </div>
               {form && form.id === x.user_id && formEl()}
@@ -403,7 +402,7 @@ export default function SkillPreviewPage(p) {
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 9 }}>
       {data && data.version && <Pill color="var(--t2)" style={{ fontWeight: 600 }}>{"판 " + data.version}</Pill>}
       {T && <Pill color="var(--t2)" style={{ fontWeight: 600 }}>{"스킬 " + T.rows.length + "개 · Lv5 ~ 10"}</Pill>}
-      <Pill color="var(--acp)" style={{ fontWeight: 600 }}>{acc.admin ? "관리자 보기" : "초대된 인증 유저 전용"}</Pill>
+      <Pill color="var(--acp)" style={{ fontWeight: 600 }}>{acc.admin ? "관리자 보기" : "초대된 유저 전용"}</Pill>
       {acc.until && <Pill color="var(--vf-warn)" style={{ fontWeight: 600 }}>{"열람 기한 ~" + md(acc.until)}</Pill>}
     </div>
     <div style={{ fontSize: 11.5, color: "var(--td)", lineHeight: 1.55, marginTop: 9 }}>{"🔏 이 화면에는 내 닉네임이 옅게 깔려 있어요. 캡처해 올리거나 다른 곳에 옮기지 말아 주세요."}</div>

@@ -12805,7 +12805,7 @@ function DataCenterPage(p) {
   var lineupMap = p.lineupMap || {};
   var sdState = p.sdState || {};
   var _tab = React.useState(p.initTab || "analysis"); var dcTab = _tab[0]; var setDcTab = _tab[1];
-  /* 🔒 스킬점수표(비공개) — 열람 권한(관리자, 또는 게임 계정 인증 + 관리자가 허용)이 있을 때만 탭이 보인다. 권한이 사라지면 그 탭에 머물지 않게 */
+  /* 🔒 스킬점수표(비공개) — 열람 권한(관리자, 또는 관리자가 허용한 계정 — 11-27 부터 게임 계정 인증은 조건 아님)이 있을 때만 탭이 보인다. 권한이 사라지면 그 탭에 머물지 않게 */
   var hasSkp = !!(p.skp && p.skp.ok);
   React.useEffect(function(){ if (dcTab === "skp" && !hasSkp) setDcTab("analysis"); }, [dcTab, hasSkp]);
   /* 내 라인업 선수의 스킬 — { 보직: { 이름(빈칸 뺌): [{ slot, lv, nm }] } } (레벨은 라인업 점수와 같은 유효 레벨) */
@@ -12883,7 +12883,7 @@ function DataCenterPage(p) {
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
         {[{id:"analysis",label:"📈 라인업 분석"},{id:"sktable",label:"📋 스킬점수표",tip:"지금 사이트 스킬 점수 — 라인업 · 내 선수 점수와 같은 표(보직 · 레벨별)"},{id:"skill",label:"🎯 스킬 계산기"},{id:"train",label:"🏋️ 훈재분 계산기"},{id:"top",label:mob?"👑 in100":"👑 in100 덱 정보"}].concat(hasSkp?[{id:"skp",label:"🔒 스킬점수표(비공개)",skp:true}]:[]).map(function(t){
           var a = dcTab===t.id;
-          return (<button key={t.id} onClick={function(){setDcTab(t.id);}} title={t.skp?"새 가중치 · 새 산정 근거로 매긴 스킬점수표 — 관리자와 관리자가 고른 인증 유저만 보여요":t.tip} style={{padding:"8px 16px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":(t.skp?"1px dashed var(--acp)":"1px solid var(--bd)"),borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
+          return (<button key={t.id} onClick={function(){setDcTab(t.id);}} title={t.skp?"새 가중치 · 새 산정 근거로 매긴 스킬점수표 — 관리자와 관리자가 고른 계정만 보여요":t.tip} style={{padding:"8px 16px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":(t.skp?"1px dashed var(--acp)":"1px solid var(--bd)"),borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
         })}
       </div>
       {dcTab==="analysis" && <LineupAnalysis mobile={mob} players={players} lineupMap={lineupMap} skills={skills} sdState={sdState} isAdmin={p.isAdmin} />}
