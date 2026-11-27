@@ -10,6 +10,12 @@ import { autoPublish as clubAutoPublish, addComment as clubAddComment, loadAlert
 import FeedbackPage from "./feedback-board.jsx";
 import HelpGuide from "./help-guide.jsx";
 import In100Page from "./in100.jsx";
+/* 🔒 비공개 새 스킬표 — 권한 확인만 여기서(가벼운 RPC). 화면 코드는 권한이 있어 탭을 열 때만 받고(React.lazy),
+   표 내용은 그 화면이 서버(skp_get)에서 받는다 — 사이트 코드에는 새 점수가 없다 (supabase/skill_preview.sql) */
+import { skpAccess } from "./skill-preview-api.js";
+var SkillPreviewPage = React.lazy(function () { return import("./skill-preview.jsx"); });
+/* 📋 스킬점수표(모두) — 데이터센터에서 탭을 열 때만 받는다 (2026-11-27) */
+var SkillTablePage = React.lazy(function () { return import("./skill-table.jsx"); });
 import { SKILL_SPLIT } from "./skill-split-data.js";
 /* 게임 계정 인증 · 덱 최신화 — 화면은 account-verify.jsx, 서버 일은 verify-api.js, 도착한 덱 얹기 계산은 verify-apply.js (2026-11) */
 import VerifyModal, { VerifyMenuButton } from "./account-verify.jsx";
@@ -12780,6 +12786,18 @@ function SkillManagePage(p) {
 /* ================================================================
    DATA CENTER PAGE
    ================================================================ */
+/* 스킬 이름 → 지금 스킬표(v1.1)의 { 보직, 이름 } — getSkillScore 와 같은 길(정식 이름 · 버프 뺀 이름 · 옛 이름 · 다른 보직 표).
+   📋 스킬점수표 · 🔒 스킬점수표(비공개)의 '내 선수' 표시에만 쓴다 (비공개 새 표도 v1.1 이름과 같은 이름으로 만들었다) */
+function skillTableKey(name, pt) {
+  if (!name || !SKILLS_V11) return null;
+  var nm = buffName(canonSkillName(name, pt), pt, false), t = SKILLS_V11[pt];
+  if (t && Array.isArray(t[nm])) return { cat: pt, key: nm };
+  var al = SKILL_ALIAS[pt] && SKILL_ALIAS[pt][nm];
+  if (t && typeof al === "string" && Array.isArray(t[al])) return { cat: pt, key: al };
+  for (var k in SKILLS_V11) { if (SKILL_CATS.indexOf(k) >= 0 && SKILLS_V11[k] && Array.isArray(SKILLS_V11[k][nm])) return { cat: k, key: nm }; }
+  return null;
+}
+
 function DataCenterPage(p) {
   var mob = p.mobile;
   var skills = p.skills || {};
@@ -12787,6 +12805,29 @@ function DataCenterPage(p) {
   var lineupMap = p.lineupMap || {};
   var sdState = p.sdState || {};
   var _tab = React.useState(p.initTab || "analysis"); var dcTab = _tab[0]; var setDcTab = _tab[1];
+  /* 🔒 스킬점수표(비공개) — 열람 권한(관리자, 또는 게임 계정 인증 + 관리자가 허용)이 있을 때만 탭이 보인다. 권한이 사라지면 그 탭에 머물지 않게 */
+  var hasSkp = !!(p.skp && p.skp.ok);
+  React.useEffect(function(){ if (dcTab === "skp" && !hasSkp) setDcTab("analysis"); }, [dcTab, hasSkp]);
+  /* 내 라인업 선수의 스킬 — { 보직: { 이름(빈칸 뺌): [{ slot, lv, nm }] } } (레벨은 라인업 점수와 같은 유효 레벨) */
+  var skMine = React.useMemo(function(){
+    if (!(dcTab === "sktable" || (dcTab === "skp" && hasSkp))) return null;
+    var byId = {}; players.forEach(function(x){ if (x && x.id) byId[x.id] = x; });
+    var out = { "타자": {}, "선발": {}, "중계": {}, "마무리": {} };
+    Object.keys(lineupMap).forEach(function(sl){
+      if (!/^(C|1B|2B|3B|SS|LF|CF|RF|DH|SP[1-5]|RP[1-8]|CP)$/.test(sl)) return;
+      var x = byId[lineupMap[sl]]; if (!x) return;
+      var cat = /^SP/.test(sl) ? "선발" : /^RP/.test(sl) ? "중계" : sl === "CP" ? "마무리" : "타자";
+      var mn = isLvManual(x), lt = cardLvType(x);
+      [[x.skill1, x.s1Lv], [x.skill2, x.s2Lv], [x.skill3, x.s3Lv]].forEach(function(q, i){
+        if (!q[0]) return;
+        var k = skillTableKey(q[0], cat); if (!k || !out[k.cat]) return;
+        var lv = effSkillLv(q[0], q[1], mn, lt, i + 1, cat, []); if (!(lv >= 5)) return;
+        var nk = String(k.key).replace(/\s+/g, "");
+        (out[k.cat][nk] = out[k.cat][nk] || []).push({ slot: sl, lv: Math.min(10, lv), nm: x.name || "" });
+      });
+    });
+    return out;
+  }, [dcTab, hasSkp, players, lineupMap]);
   React.useEffect(function(){ if (dcTab === "top" && p.onIn100Seen) p.onIn100Seen(); }, [dcTab]);
   /* in100 — 내 덱(자리 → 도감 id) · 가진 카드 · 카드 표기 도구 */
   var in100Tools = React.useMemo(function(){ return { card: findCard, PlayerCard: PlayerCard, photo: getPhotoUrl, logo: function(tm){ return getTeamLogoUrl(tm, 1); }, ctColor: CARD_COLORS, sdRows: SD_ROWS, sdPick: sdPick }; }, []);
@@ -12837,17 +12878,21 @@ function DataCenterPage(p) {
   }, [players, lineupMap]);
 
   return (
-    <div style={{padding:mob?12:18,maxWidth:dcTab==="top"?1180:800,paddingBottom:mob?PAGE_BOTTOM:18}}>
+    <div style={{padding:mob?12:18,maxWidth:dcTab==="top"?1180:(dcTab==="skp"||dcTab==="sktable")?1060:800,paddingBottom:mob?PAGE_BOTTOM:18}}>
       <h2 style={{fontSize:18,fontWeight:900,fontFamily:"var(--h)",letterSpacing:2,color:"var(--t1)",margin:"0 0 14px"}}>{"📊 데이터 센터"}</h2>
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
-        {[{id:"analysis",label:"📈 라인업 분석"},{id:"skill",label:"🎯 스킬 계산기"},{id:"train",label:"🏋️ 훈재분 계산기"},{id:"top",label:mob?"👑 in100":"👑 in100 덱 정보"}].map(function(t){
+        {[{id:"analysis",label:"📈 라인업 분석"},{id:"sktable",label:"📋 스킬점수표",tip:"지금 사이트 스킬 점수 — 라인업 · 내 선수 점수와 같은 표(보직 · 레벨별)"},{id:"skill",label:"🎯 스킬 계산기"},{id:"train",label:"🏋️ 훈재분 계산기"},{id:"top",label:mob?"👑 in100":"👑 in100 덱 정보"}].concat(hasSkp?[{id:"skp",label:"🔒 스킬점수표(비공개)",skp:true}]:[]).map(function(t){
           var a = dcTab===t.id;
-          return (<button key={t.id} onClick={function(){setDcTab(t.id);}} style={{padding:"8px 16px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":"1px solid var(--bd)",borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
+          return (<button key={t.id} onClick={function(){setDcTab(t.id);}} title={t.skp?"새 가중치 · 새 산정 근거로 매긴 스킬점수표 — 관리자와 관리자가 고른 인증 유저만 보여요":t.tip} style={{padding:"8px 16px",fontSize:13,fontWeight:a?800:500,background:a?"var(--ta)":"var(--inner)",border:a?"1px solid var(--acc)":(t.skp?"1px dashed var(--acp)":"1px solid var(--bd)"),borderRadius:8,color:a?"var(--acc)":"var(--t2)",cursor:"pointer"}}>{t.label}</button>);
         })}
       </div>
       {dcTab==="analysis" && <LineupAnalysis mobile={mob} players={players} lineupMap={lineupMap} skills={skills} sdState={sdState} isAdmin={p.isAdmin} />}
       {dcTab==="skill" && <SkillCalculator mobile={mob} skills={skills} />}
       {dcTab==="train" && <TrainSimulator mobile={mob} skills={skills} />}
+      {dcTab==="sktable" && (<React.Suspense fallback={<div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"36px 20px",textAlign:"center",color:"var(--td)",fontSize:13}}>{"스킬점수표를 여는 중…"}</div>}>
+        <SkillTablePage mobile={mob} table={SKILLS_V11} mine={skMine} /></React.Suspense>)}
+      {dcTab==="skp" && hasSkp && (<React.Suspense fallback={<div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"36px 20px",textAlign:"center",color:"var(--td)",fontSize:13}}>{"비공개 스킬점수표를 여는 중…"}</div>}>
+        <SkillPreviewPage mobile={mob} acc={p.skp} mine={skMine} /></React.Suspense>)}
       {dcTab==="top" && !in100Snap && <div style={{background:"var(--card)",borderRadius:12,border:"1px solid var(--bd)",padding:"36px 20px",textAlign:"center",color:"var(--td)",fontSize:13}}>{in100Err || "in100 자료를 불러오는 중…"}</div>}
       {dcTab==="top" && in100Snap && <In100Page key={in100Snap.id} snaps={IN100_SNAPS} onSnap={setIn100Id} mobile={mob} velUse={velWeighted()} snap={in100Snap} tools={in100Tools} myTeam={sdState.teamName||""} mySd={sdState} mySlots={in100My.slots} ownSet={in100My.own} myCards={in100My.cards}
         onLab={p.onOpenLab ? function(d){ var bn = d.bench || {}; var arr = Array.isArray(bn) ? bn : Object.keys(bn).sort().map(function(k){ return bn[k]; });
@@ -14896,6 +14941,13 @@ export default function App(){
   },[isGoogle,isAdmin,userId]);
   useEffect(function(){ if(!isGoogle){vAlertRef.current.seq++;setVerifyAlerts(null);setVerifyOpen(false);return;} refreshVerifyAlerts(true); },[isGoogle,isAdmin,userId]);
   useEffect(function(){ refreshVerifyAlerts(); },[tab]);
+  /* 🔒 새 스킬표 열람 권한 — 구글 로그인일 때만 묻는다(가벼운 RPC · 실패하면 권한 없음으로).
+     데이터센터에 들어갈 때마다 다시 물어, 관리자가 새로 열어 준 권한도 새로 고침 없이 보이게 */
+  var _skp=useState(null);var skpAcc=_skp[0];var setSkpAcc=_skp[1];
+  var skpSeq=React.useRef(0);
+  var refreshSkp=function(){ var my=++skpSeq.current; if(!isGoogle){setSkpAcc(null);return;} skpAccess().then(function(a){ if(my===skpSeq.current)setSkpAcc(a&&a.ok?a:null); }); };
+  useEffect(function(){ refreshSkp(); },[isGoogle,userId,isAdmin]);
+  useEffect(function(){ if(tab==="datacenter")refreshSkp(); },[tab]);
   var openVerify=function(toArrived){ setVerifyToArrived(!!toArrived); setVerifyOpen(true); };
   var closeVerify=function(){ setVerifyOpen(false); setVerifyToArrived(false); refreshVerifyAlerts(true); };
   var clubTools={
@@ -15371,13 +15423,13 @@ export default function App(){
   else if(tab==="db"&&isAdmin)pg=(<PlayerDBPage mobile={mob} players={store.players} savePlayers={store.savePlayers}/>);
   else if(tab==="skills"&&isAdmin)pg=(<SkillManagePage mobile={mob} skills={store.skills} saveSkills={store.saveSkills}/>);
   else if(tab==="enhance"&&isAdmin)pg=(<EnhancePage mobile={mob}/>);
-  else if(tab==="datacenter")pg=(<DataCenterPage key={"dc"+(dcInit||"")} mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin} onOpenLab={openInLab} initTab={dcInit} onIn100Seen={markIn100Seen}/>);
+  else if(tab==="datacenter")pg=(<DataCenterPage key={"dc"+(dcInit||"")} mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin} onOpenLab={openInLab} initTab={dcInit} onIn100Seen={markIn100Seen} skp={skpAcc}/>);
   else if(tab==="clublounge")pg=(<ClubLoungePage mobile={mob} userId={userId} authType={isGoogle?"google":authType} isAdmin={isAdmin}
     decks={decks} curDeckId={curDeckId} labSaves={store.labSaves} tools={clubTools} onOpenLab={openInLab}
     draft={clubDraft} onDraftUsed={function(){setClubDraft(null);}} focusPostId={clubFocus} onFocusUsed={function(){setClubFocus(null);}} onAlerts={function(){refreshClubAlerts(true);}}/>);
   else if(tab==="board")pg=(<FeedbackPage mobile={mob} isAdmin={isAdmin} authType={isGoogle?"google":authType} userId={userId}
     onSeen={markBoardSeen} onAlerts={function(){refreshBoardAlerts(true);}}/>);
-  else pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin}/>);
+  else pg=(<DataCenterPage mobile={mob} skills={store.skills} players={store.players} lineupMap={store.lineupMap} sdState={sdStateWithTeam} isAdmin={isAdmin} skp={skpAcc}/>);
 
   /* 구단 없는 덱(예전 '내 덱')은 구단을 고를 때까지 선택 창을 띄운다 — 세트덱 선택 팀·드림/나눔이 덱 구단을 따른다 */
   var needTeam=!!curDeckObj&&KBO_TEAMS.indexOf(teamKey(curDeckObj.teamName))<0;
